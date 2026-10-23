@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ActivityBar } from './components/ActivityBar'
 import { CommandPalette } from './components/CommandPalette'
 import { ContextMenuHost } from './components/ContextMenu'
+import { PromptHost } from './components/PromptHost'
+import './lib/actions'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
@@ -45,8 +47,9 @@ export function App(): React.JSX.Element {
         </div>
       </div>
       <StatusBar home={home} />
-      <CommandPalette home={home} />
+      <CommandPalette />
       <ContextMenuHost />
+      <PromptHost />
     </div>
   )
 }

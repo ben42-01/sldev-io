@@ -1,10 +1,13 @@
 {
   "name": "sldev-io",
   "productName": "sldev",
+  "desktopName": "sldev.desktop",
   "version": "0.1.0",
   "description": "Agentic coding workspace: terminals, agents, runtimes, skills, workflows.",
   "main": "out/main/index.js",
   "license": "UNLICENSED",
+  "author": { "name": "sldev", "email": "team.agora.hub@gmail.com" },
+  "homepage": "https://github.com/sldev-io/sldev",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
@@ -19,27 +22,36 @@
     "dist:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
-    "node-pty": "1.1.0"
+    "node-pty": "1.1.0",
+    "ssh2": "1.17.0"
   },
   "devDependencies": {
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language-data": "6.5.2",
+    "@codemirror/theme-one-dark": "6.1.3",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ssh2": "1.15.6",
     "@vitejs/plugin-react": "6.1.2",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "0.16.0",
     "@xterm/addon-web-links": "0.12.0",
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/xterm": "6.0.0",
+    "codemirror": "6.0.2",
     "dockview": "8.6.1",
     "dockview-react": "8.6.1",
+    "dompurify": "3.4.17",
     "electron": "45.0.0",
     "electron-builder": "26.15.3",
     "electron-vite": "6.0.0",
     "lucide-react": "1.61.0",
+    "marked": "18.1.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "typescript": "7.0.2",
-    "vite": "8.3.5"
+    "vite": "8.3.5",
+    "yaml": "2.9.1"
   }
 }

@@ -1,9 +1,10 @@
 import { DEFAULT_SETTINGS } from '@shared/types'
-import { activeTerminalId, closeActive, openTerminal, splitActive } from '../dock/dockApi'
-import { pickRootFolder, preferredEditor, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
+import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
+import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
+import { showPicker, type PickItem } from '../state/picker'
 import { openInEditor } from './actions'
-import { applyTerminalFont } from './terminals'
-import { tildify } from './paths'
+import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
+import { basename, dirname, shellQuote, tildify } from './paths'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -13,6 +14,8 @@ export interface Command {
   category?: string
   /** e.g. { mac: 'Cmd+T', other: 'Ctrl+Shift+T' } */
   keys?: { mac: string; other: string }
+  /** shortcut only fires (and is only swallowed) when this returns true */
+  when?: () => boolean
   run: () => void
 }
 
@@ -24,7 +27,7 @@ interface Chord {
   code: string
 }
 
-const CODE_ALIASES: Record<string, string> = { '`': 'Backquote', '=': 'Equal', '-': 'Minus', ',': 'Comma', '.': 'Period', '/': 'Slash' }
+const CODE_ALIASES: Record<string, string> = { '`': 'Backquote', '=': 'Equal', '-': 'Minus', ',': 'Comma', '.': 'Period', '/': 'Slash', Space: 'Space' }
 
 function parseChord(s: string): Chord {
   const parts = s.split('+')
@@ -48,7 +51,7 @@ const VIEWS: Array<[ViewId, string]> = [
   ['skills', 'Skills'],
   ['workflows', 'GitHub Workflows'],
   ['notes', 'Notes'],
-  ['remote', 'Remote Connections']
+  ['remote', 'Remote']
 ]
 
 export function showView(view: ViewId): void {
@@ -65,9 +68,69 @@ function changeFontSize(delta: number | null): void {
   applyTerminalFont(w.terminalFontFamily, size)
 }
 
+export function showCommandPalette(): void {
+  const cmds = [...staticCommands().filter((c) => c.id !== 'palette.show'), ...dynamicCommands()]
+  showPicker({
+    placeholder: 'Type a command…',
+    items: cmds.map((c): PickItem => ({ id: c.id, label: c.title, category: c.category, kbd: shortcutLabel(c), run: c.run }))
+  })
+}
+
+export function showQuickOpen(): void {
+  const root = workspace.get().rootFolder
+  if (!root) return void pickRootFolder()
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/'
+  showPicker({
+    placeholder: `Open file in ${basename(root)}…`,
+    hint: 'Enter: open in editor · Alt+Enter: paste path into terminal · Ctrl+Enter: terminal in its folder',
+    items: window.api.fs.listFiles(root).then((files) =>
+      files.map((rel): PickItem => {
+        const abs = `${root}${sep}${rel.split('/').join(sep)}`
+        const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
+        return {
+          id: rel,
+          label: rel.split('/').pop()!,
+          detail: dir,
+          run: () => void openInEditor(abs),
+          alt: () => {
+            const t = activeTerminalId()
+            if (t) {
+              writeToTerminal(t, shellQuote(abs) + ' ')
+              focusTerminal(t)
+            }
+          },
+          ctrl: () => void openTerminal({ cwd: dirname(abs) })
+        }
+      })
+    )
+  })
+}
+
+export function showBranchPicker(): void {
+  const root = workspace.get().rootFolder
+  if (!root) return
+  const current = workspace.get().branch
+  showPicker({
+    placeholder: 'Switch branch…',
+    items: window.api.git.branches(root).then((bs) =>
+      bs.map((b): PickItem => ({
+        id: b,
+        label: b,
+        detail: b === current ? 'current' : undefined,
+        run: () => void window.api.git.switch(root, b).then(refreshBranch, (e) => alert(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')))
+      }))
+    )
+  })
+}
+
+export function openSettings(): void {
+  openPanel('settings', 'settings', 'Settings')
+}
+
 export function staticCommands(): Command[] {
   return [
-    { id: 'palette.show', title: 'Show all commands', keys: { mac: 'Cmd+Shift+P', other: 'Ctrl+Shift+P' }, run: () => workspace.set({ paletteOpen: true }) },
+    { id: 'palette.show', title: 'Show all commands', keys: { mac: 'Cmd+Shift+P', other: 'Ctrl+Shift+P' }, run: showCommandPalette },
+    { id: 'quickopen', category: 'Go', title: 'Quick open file…', keys: { mac: 'Cmd+P', other: 'Ctrl+Alt+P' }, run: showQuickOpen },
     { id: 'terminal.new', category: 'Terminal', title: 'New terminal', keys: { mac: 'Cmd+T', other: 'Ctrl+Shift+T' }, run: () => openTerminal() },
     { id: 'terminal.splitRight', category: 'Terminal', title: 'Split terminal right', keys: { mac: 'Cmd+D', other: 'Ctrl+Shift+D' }, run: () => splitActive('right') },
     { id: 'terminal.splitDown', category: 'Terminal', title: 'Split terminal down', keys: { mac: 'Cmd+Shift+D', other: 'Ctrl+Alt+Shift+D' }, run: () => splitActive('below') },
@@ -78,15 +141,32 @@ export function staticCommands(): Command[] {
       category: 'Terminal',
       title: 'Find in terminal',
       keys: { mac: 'Cmd+F', other: 'Ctrl+Shift+F' },
+      when: () => !!activeTerminalId(),
       run: () => {
         const id = activeTerminalId()
         if (id) window.dispatchEvent(new CustomEvent('sldev:find', { detail: id }))
       }
     },
+    {
+      id: 'terminal.broadcast',
+      category: 'Terminal',
+      title: 'Toggle broadcast input to all visible terminals',
+      keys: { mac: 'Cmd+Shift+B', other: 'Ctrl+Alt+B' },
+      run: () => void toggleBroadcast(visibleTerminalIds())
+    },
     { id: 'terminal.fontUp', category: 'Terminal', title: 'Increase font size', keys: { mac: 'Cmd+=', other: 'Ctrl+Shift+=' }, run: () => changeFontSize(1) },
     { id: 'terminal.fontDown', category: 'Terminal', title: 'Decrease font size', keys: { mac: 'Cmd+-', other: 'Ctrl+Shift+-' }, run: () => changeFontSize(-1) },
     { id: 'terminal.fontReset', category: 'Terminal', title: 'Reset font size', keys: { mac: 'Cmd+0', other: 'Ctrl+Shift+0' }, run: () => changeFontSize(null) },
     { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => updateSettings({ sidebarVisible: !workspace.get().sidebarVisible }) },
+    { id: 'missions.new', category: 'Agents', title: 'New Claude mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => {
+        showView('agents')
+        // let the Missions view mount before asking it to open the form
+        setTimeout(() => window.dispatchEvent(new Event('sldev:new-mission')), 50)
+      } },
+    { id: 'missions.board', category: 'Agents', title: 'Open mission board', run: () => openPanel('missions', 'mission-board', 'Missions') },
+    { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
+    { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
+    { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
     { id: 'folder.open', category: 'Workspace', title: 'Open folder…', keys: { mac: 'Cmd+O', other: 'Ctrl+Shift+O' }, run: () => void pickRootFolder() },
     {
       id: 'folder.openInEditor',
@@ -119,8 +199,11 @@ export function staticCommands(): Command[] {
   ]
 }
 
+let home = ''
+void window.api.fs.home().then((h) => (home = h))
+
 /** Commands that depend on current state: recent folders, installed editors. */
-export function dynamicCommands(home: string): Command[] {
+export function dynamicCommands(): Command[] {
   const w = workspace.get()
   return [
     ...w.recentFolders.map((f): Command => ({ id: `recent.${f}`, category: 'Open recent', title: tildify(f, home), run: () => setRootFolder(f) })),
@@ -137,7 +220,7 @@ export function matchShortcut(e: KeyboardEvent, commands: Command[]): Command | 
   for (const c of commands) {
     if (!c.keys) continue
     const k = parseChord(isMac ? c.keys.mac : c.keys.other)
-    if (k.code === e.code && k.ctrl === e.ctrlKey && k.shift === e.shiftKey && k.alt === e.altKey && k.meta === e.metaKey) return c
+    if (k.code === e.code && k.ctrl === e.ctrlKey && k.shift === e.shiftKey && k.alt === e.altKey && k.meta === e.metaKey && (!c.when || c.when())) return c
   }
   return undefined
 }
@@ -151,10 +234,11 @@ export function fuzzyScore(query: string, text: string): number {
   let score = 0
   let streak = 0
   for (const ch of q) {
+    if (ch === ' ') continue
     const found = t.indexOf(ch, ti)
     if (found < 0) return -1
     streak = found === ti ? streak + 1 : 0
-    score += 1 + streak * 2 + (found === 0 || /[\s/:.-]/.test(t[found - 1]) ? 3 : 0)
+    score += 1 + streak * 2 + (found === 0 || /[\s/:._-]/.test(t[found - 1]) ? 3 : 0)
     ti = found + 1
   }
   return score - t.length * 0.01

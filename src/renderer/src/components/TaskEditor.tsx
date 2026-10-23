@@ -5,10 +5,7 @@ import { buildTaskCommand } from '../state/tasks'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
-
-const MODELS = ['', 'opus', 'sonnet', 'haiku', 'fable']
-const PERMISSION_MODES = ['', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'manual', 'bypassPermissions']
-const EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max']
+import { ClaudeOptionsFields } from './ClaudeOptionsFields'
 
 export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSave: (t: Task, run: boolean) => void; onCancel: () => void }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -57,37 +54,10 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
             <span>Prompt</span>
             <textarea rows={6} value={t.prompt ?? ''} placeholder="Run the test suite, find the failures and fix them…" onChange={(e) => set({ prompt: e.target.value })} />
           </label>
-          <div className="field-row">
-            <label className="field">
-              <span>Model</span>
-              <select value={t.claude?.model ?? ''} onChange={(e) => setClaude({ model: e.target.value || undefined })}>
-                {MODELS.map((m) => <option key={m} value={m}>{m || 'default'}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Effort</span>
-              <select value={t.claude?.effort ?? ''} onChange={(e) => setClaude({ effort: e.target.value || undefined })}>
-                {EFFORTS.map((m) => <option key={m} value={m}>{m || 'default'}</option>)}
-              </select>
-            </label>
-          </div>
-          <label className="field">
-            <span>Permission mode</span>
-            <select value={t.claude?.permissionMode ?? ''} onChange={(e) => setClaude({ permissionMode: e.target.value || undefined })}>
-              {PERMISSION_MODES.map((m) => <option key={m} value={m}>{m || 'default'}</option>)}
-            </select>
-          </label>
+          <ClaudeOptionsFields value={t.claude ?? {}} onChange={setClaude} />
           <label className="check">
             <input type="checkbox" checked={!!t.claude?.worktree} onChange={(e) => setClaude({ worktree: e.target.checked || undefined })} />
-            <span>Run in a fresh git worktree</span>
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={!!t.claude?.print} onChange={(e) => setClaude({ print: e.target.checked || undefined })} />
-            <span>Non-interactive (print result and exit)</span>
-          </label>
-          <label className="field">
-            <span>Extra arguments</span>
-            <input className="mono" value={t.claude?.extraArgs ?? ''} placeholder="--add-dir ../shared" onChange={(e) => setClaude({ extraArgs: e.target.value || undefined })} />
+            <span>Run in a new git worktree (review & merge afterwards)</span>
           </label>
         </>
       ) : (
@@ -114,6 +84,7 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
       <div className="field">
         <span>Runs</span>
         <pre className="cmd-preview">{command || '…'}</pre>
+        {t.kind === 'claude' && <span className="hint">Runs as a mission: live status, notifications and diff review{t.claude?.worktree ? ', in its own worktree' : ''}.</span>}
       </div>
 
       <div className="form-actions">

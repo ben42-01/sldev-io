@@ -20,7 +20,14 @@ interface Session {
   paused: boolean
 }
 
+let shellOverride: string | null = null
+
+export function setShellOverride(shell: string | null): void {
+  shellOverride = shell?.trim() || null
+}
+
 export function defaultShell(): { shell: string; args: string[] } {
+  if (shellOverride) return { shell: shellOverride, args: process.platform === 'win32' ? [] : ['-l'] }
   if (process.platform === 'win32') {
     return { shell: process.env.COMSPEC?.toLowerCase().includes('pwsh') ? 'pwsh.exe' : 'powershell.exe', args: [] }
   }
@@ -31,6 +38,10 @@ export function defaultShell(): { shell: string; args: string[] } {
 
 export class PtyManager {
   private sessions = new Map<string, Session>()
+
+  has(id: string): boolean {
+    return this.sessions.has(id)
+  }
 
   create(owner: WebContents, id: string, opts: PtyCreateOptions): PtyInfo {
     this.kill(id)

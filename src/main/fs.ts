@@ -24,6 +24,31 @@ export async function readDir(dir: string): Promise<DirEntry[]> {
   )
 }
 
+/** Which of these paths are existing files (for clickable paths in terminal output). */
+export async function existingFiles(paths: string[]): Promise<string[]> {
+  const res = await Promise.all(paths.slice(0, 200).map((p) => fsp.stat(p).then((s) => (s.isFile() ? p : null), () => null)))
+  return res.filter((p): p is string => !!p)
+}
+
+const SKIP = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'target', '.next', '.venv', 'venv', '__pycache__', '.cache'])
+
+/** Relative file list for quick open when the folder isn't a git repo. */
+export async function walkFiles(root: string, limit = 20000): Promise<string[]> {
+  const out: string[] = []
+  const queue = ['']
+  while (queue.length && out.length < limit) {
+    const rel = queue.shift()!
+    const entries = await fsp.readdir(join(root, rel), { withFileTypes: true }).catch(() => [])
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        if (!SKIP.has(e.name) && !e.name.startsWith('.')) queue.push(r)
+      } else out.push(r)
+    }
+  }
+  return out
+}
+
 /** Ref-counted, debounced, non-recursive directory watchers (one per expanded folder in the tree). */
 export class DirWatchers {
   private watchers = new Map<string, { w: FSWatcher; refs: number; timer: NodeJS.Timeout | null }>()

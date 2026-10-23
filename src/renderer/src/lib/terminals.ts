@@ -47,6 +47,11 @@ export interface TerminalOptions {
   command?: string
   /** false: wait for Enter before running `command` (used when a layout is restored) */
   autostart?: boolean
+  env?: Record<string, string>
+  /** open a shell on this saved SSH connection instead of a local pty */
+  sshConnectionId?: string
+  /** what to echo instead of `command` (e.g. without internal flags) */
+  displayCommand?: string
 }
 
 interface Listeners {
@@ -83,6 +88,9 @@ interface Session {
   cwd?: string
   initialInput?: string
   command?: string
+  displayCommand?: string
+  env?: Record<string, string>
+  ssh?: string
   autostart: boolean
   /** bumped on every (re)start so stale timers/events from an old process are ignored */
   gen: number
@@ -163,6 +171,9 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
     cwd: opts.cwd,
     initialInput: opts.initialInput,
     command: opts.command,
+    displayCommand: opts.displayCommand,
+    env: opts.env,
+    ssh: opts.sshConnectionId,
     autostart: opts.autostart ?? true,
     gen: 0,
     ports: new Set(),
@@ -176,11 +187,14 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
   s.observer.observe(host)
 
   term.onData((d) => {
-    if (s.status === 'running') window.api.pty.write(id, d)
+    if (s.status === 'running' && broadcast.has(id)) {
+      for (const bid of broadcast) if (sessions.get(bid)?.status === 'running') window.api.pty.write(bid, d)
+    } else if (s.status === 'running') window.api.pty.write(id, d)
     else if ((s.status === 'exited' || s.status === 'idle') && d === '\r') void startPty(s)
   })
   term.onBinary((d) => s.status === 'running' && window.api.pty.write(id, d))
   term.onTitleChange((t) => s.listeners.onTitle?.(t))
+  term.registerLinkProvider(fileLinkProvider(s))
   term.attachCustomKeyEventHandler((e) => handleKey(s, e))
   // OSC 7 (shell reports its cwd) lets "split here" open in the directory you're actually in.
   term.parser.registerOscHandler(7, (data) => {
@@ -244,6 +258,7 @@ export function disposeTerminal(id: string): void {
   clearTimeout(s.resizeTimer)
   cancelAnimationFrame(s.raf)
   window.api.pty.kill(id)
+  broadcast.delete(id)
   s.term.dispose()
   s.host.remove()
   emit({ type: 'closed', id })
@@ -276,7 +291,10 @@ export function terminalInfo(id: string): { status: TerminalStatus; exitCode?: n
 export function restartTerminal(id: string, command?: string): void {
   const s = sessions.get(id)
   if (!s) return
-  if (command !== undefined && s.command !== undefined) s.command = command
+  if (command !== undefined && s.command !== undefined) {
+    s.command = command
+    s.displayCommand = undefined
+  }
   if (s.status === 'running' || s.status === 'starting') {
     window.api.pty.kill(id)
     s.term.write('\r\n\x1b[2m[restarting]\x1b[0m\r\n')
@@ -327,10 +345,11 @@ async function startPty(s: Session): Promise<void> {
   s.exitCode = undefined
   s.ports.clear()
   setStatus(s, 'starting')
-  if (s.command) s.term.write(`\x1b[2m$ ${s.command}\x1b[0m\r\n`)
+  if (s.command) s.term.write(`\x1b[2m$ ${s.displayCommand ?? s.command}\x1b[0m\r\n`)
   const { cols, rows } = s.term
   try {
-    await window.api.pty.create(s.id, { cwd: s.cwd, cols, rows, command: s.command })
+    if (s.ssh) await window.api.ssh.openShell(s.id, s.ssh, cols, rows)
+    else await window.api.pty.create(s.id, { cwd: s.cwd, cols, rows, command: s.command, env: s.env })
     if (s.gen !== gen) return // restarted again while spawning
     if (!sessions.has(s.id)) {
       // panel was closed while the shell was spawning
@@ -340,6 +359,7 @@ async function startPty(s: Session): Promise<void> {
     s.ptyCols = cols
     s.ptyRows = rows
     setStatus(s, 'running')
+    if (document.activeElement === document.body && s.host.isConnected) s.term.focus()
     if (s.initialInput) {
       window.api.pty.write(s.id, s.initialInput)
       s.initialInput = undefined
@@ -347,7 +367,8 @@ async function startPty(s: Session): Promise<void> {
     fitNow(s) // the panel may have been resized while spawning
   } catch (err) {
     setStatus(s, 'exited')
-    s.term.write(`\r\n\x1b[31mFailed to start shell: ${String(err)}\x1b[0m\r\n`)
+    const msg = String(err).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
+    s.term.write(`\r\n\x1b[31m${s.ssh ? 'Connection failed' : 'Failed to start shell'}: ${msg}\x1b[0m\r\n\x1b[2m[Press Enter to retry]\x1b[0m\r\n`)
   }
 }
 
@@ -415,4 +436,90 @@ function handleKey(s: Session, e: KeyboardEvent): boolean {
     return false
   }
   return true
+}
+
+// ── broadcast input ──────────────────────────────────────────────
+
+const broadcast = new Set<string>()
+
+/** Toggle typing into all of `ids` at once. Returns whether broadcast is now on for them. */
+export function toggleBroadcast(ids: string[]): boolean {
+  const on = !ids.every((id) => broadcast.has(id))
+  for (const id of ids) {
+    if (on) broadcast.add(id)
+    else broadcast.delete(id)
+  }
+  workspace.set({ broadcastCount: broadcast.size })
+  return on
+}
+
+// ── clickable file paths (path:line:col) ─────────────────────────
+
+let openFileAt: (path: string, line?: number, col?: number) => void = () => {}
+let home = ''
+void window.api.fs.home().then((h) => (home = h))
+
+export function setFileLinkOpener(fn: typeof openFileAt): void {
+  openFileAt = fn
+}
+
+const FILE_RE = /(?:[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/]|[\\/])?(?:[\w.@+-]+[\\/])*[\w@+-][\w.@+-]*\.[A-Za-z][A-Za-z0-9]{0,9}(?::(\d+)(?::(\d+))?)?/g
+const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi
+const existsCache = new Map<string, { ok: boolean; t: number }>()
+
+function resolvePath(p: string, cwd: string | undefined): string | null {
+  if (p.startsWith('~')) return home ? home + p.slice(1) : null
+  if (/^([A-Za-z]:)?[\\/]/.test(p)) return p
+  if (!cwd) return null
+  const sep = cwd.includes('\\') && !cwd.includes('/') ? '\\' : '/'
+  const parts = [...cwd.split(/[\\/]/), ...p.split(/[\\/]/)]
+  const out: string[] = []
+  for (const part of parts) {
+    if (part === '..') out.pop()
+    else if (part !== '.') out.push(part)
+  }
+  return out.join(sep) || sep
+}
+
+async function existing(paths: string[]): Promise<Set<string>> {
+  const now = Date.now()
+  const unknown = paths.filter((p) => {
+    const c = existsCache.get(p)
+    return !c || now - c.t > 5000
+  })
+  if (unknown.length) {
+    const found = new Set(await window.api.fs.existingFiles(unknown))
+    for (const p of unknown) existsCache.set(p, { ok: found.has(p), t: now })
+  }
+  return new Set(paths.filter((p) => existsCache.get(p)?.ok))
+}
+
+function fileLinkProvider(s: Session): Parameters<Terminal['registerLinkProvider']>[0] {
+  return {
+    provideLinks(y, callback) {
+      const line = s.term.buffer.active.getLine(y - 1)?.translateToString(true)
+      if (!line || s.ssh) return callback(undefined)
+      const urls = [...line.matchAll(URL_RE)].map((m) => [m.index!, m.index! + m[0].length])
+      const cands: Array<{ start: number; text: string; path: string; line?: number; col?: number }> = []
+      for (const m of line.matchAll(FILE_RE)) {
+        const start = m.index!
+        if (urls.some(([a, b]) => start >= a && start < b) || cands.length > 20) continue
+        const raw = m[0].replace(/:\d+(:\d+)?$/, '')
+        const path = resolvePath(raw, s.cwd)
+        if (path) cands.push({ start, text: m[0], path, line: m[1] ? Number(m[1]) : undefined, col: m[2] ? Number(m[2]) : undefined })
+      }
+      if (!cands.length) return callback(undefined)
+      void existing(cands.map((c) => c.path)).then((ok) => {
+        const links = cands
+          .filter((c) => ok.has(c.path))
+          .map((c) => ({
+            range: { start: { x: c.start + 1, y }, end: { x: c.start + c.text.length, y } },
+            text: c.text,
+            decorations: { underline: true, pointerCursor: true },
+            activate: () => openFileAt(c.path, c.line, c.col)
+          }))
+        callback(links.length ? links : undefined)
+      })
+    }
+  }
 }

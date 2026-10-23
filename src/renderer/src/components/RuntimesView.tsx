@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { CustomRuntime, RuntimeDef, RuntimeSource } from '@shared/types'
 import { ChevronRight, Pencil, Play, Plus, RefreshCw, RotateCw, Square, SquareTerminal, Trash2 } from 'lucide-react'
-import { focusPanel } from '../dock/dockApi'
+import { focusPanel, openPanel } from '../dock/dockApi'
 import { isActive, useRun } from '../state/runs'
 import { customToDef, loadRuntimes, restartRuntime, runRuntime, runtimes, saveCustomRuntimes, stopRuntime } from '../state/runtimes'
 import { useStore } from '../state/store'
@@ -136,7 +136,13 @@ function RuntimeRow({ def, onEdit, onDelete }: { def: RuntimeDef; onEdit?: () =>
         {active && !!run?.ports.length && (
           <div className="rt-ports">
             {run.ports.map((p) => (
-              <button key={p} className="port-chip" title={`Open http://localhost:${p}`} onClick={() => void window.api.shell.openExternal(`http://localhost:${p}`)}>
+              <button
+                key={p}
+                className="port-chip"
+                title={`Preview http://localhost:${p} (right-click: open in browser)`}
+                onClick={() => openPanel('preview', `preview-${p}`, `localhost:${p}`, { url: `http://localhost:${p}` }, 'right')}
+                onContextMenu={(e) => (e.stopPropagation(), showContextMenu(e, [{ label: 'Open in browser', run: () => void window.api.shell.openExternal(`http://localhost:${p}`) }, { label: 'Open preview panel', run: () => openPanel('preview', `preview-${p}`, `localhost:${p}`, { url: `http://localhost:${p}` }, 'right') }]))}
+              >
                 :{p}
               </button>
             ))}

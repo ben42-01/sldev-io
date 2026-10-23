@@ -1,11 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { homedir } from 'os'
 import { join } from 'path'
 import { DEFAULT_SETTINGS, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
-import { PtyManager } from './pty'
-import { DirWatchers, readDir } from './fs'
-import { detectEditors, openInEditor, terminalEditorCommand } from './editors'
-import { gitBranch } from './git'
+import { PtyManager, setShellOverride } from './pty'
+import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
+import { detectEditors, openInEditor, terminalEditorCommand, terminalEditorGoto } from './editors'
+import * as git from './git'
+import * as gh from './github'
+import * as notes from './notes'
+import * as vault from './vault'
+import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
+import { hookInfo, startHookServer } from './hooks'
+import { importSshConfig, SshManager } from './ssh'
+import type { CredentialInput, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
 import { detectRuntimes } from './runtimes'
 import { loadShellEnv } from './shellEnv'
@@ -15,6 +22,7 @@ const BG = '#141414'
 
 let win: BrowserWindow | null = null
 const ptys = new PtyManager()
+const ssh = new SshManager(() => stores.connections.get().connections)
 const watchers = new DirWatchers(() => win?.webContents ?? null)
 let settings: JsonStore<AppSettings>
 let layout: JsonStore<{ layout: unknown }>
@@ -42,8 +50,12 @@ function createWindow(): void {
 
   win.once('ready-to-show', () => win?.show())
   const wc = win.webContents
-  wc.on('destroyed', () => ptys.killOwnedBy(wc))
-  wc.on('render-process-gone', () => ptys.killOwnedBy(wc))
+  const cleanup = (): void => {
+    ptys.killOwnedBy(wc)
+    ssh.killOwnedBy(wc)
+  }
+  wc.on('destroyed', cleanup)
+  wc.on('render-process-gone', cleanup)
   wc.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url)
     return { action: 'deny' }
@@ -74,10 +86,23 @@ function buildMenu(): void {
 function registerIpc(): void {
   // terminals
   ipcMain.handle('pty:create', (e, id: string, opts: PtyCreateOptions) => ptys.create(e.sender, id, opts))
-  ipcMain.on('pty:write', (_e, id: string, data: string) => ptys.write(id, data))
-  ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) => ptys.resize(id, cols, rows))
-  ipcMain.on('pty:ack', (_e, id: string, bytes: number) => ptys.ack(id, bytes))
-  ipcMain.on('pty:kill', (_e, id: string) => ptys.kill(id))
+  // write/resize/ack/kill go to whichever backend (local pty or SSH shell) owns the id
+  const backend = (id: string): PtyManager | SshManager => (ssh.has(id) ? ssh : ptys)
+  ipcMain.on('pty:write', (_e, id: string, data: string) => backend(id).write(id, data))
+  ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) => backend(id).resize(id, cols, rows))
+  ipcMain.on('pty:ack', (_e, id: string, bytes: number) => backend(id).ack(id, bytes))
+  ipcMain.on('pty:kill', (_e, id: string) => {
+    ptys.kill(id)
+    ssh.kill(id)
+  })
+  ipcMain.handle('ssh:openShell', async (e, id: string, connId: string, cols: number, rows: number) => {
+    try {
+      await ssh.openShell(e.sender, id, connId, cols, rows)
+    } catch (err) {
+      ssh.kill(id)
+      throw err
+    }
+  })
 
   // filesystem
   ipcMain.handle('fs:readDir', (_e, dir: string) => readDir(dir))
@@ -86,23 +111,91 @@ function registerIpc(): void {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
     return r.canceled ? null : r.filePaths[0]
   })
+  ipcMain.handle('fs:existingFiles', (_e, paths: string[]) => existingFiles(paths))
+  ipcMain.handle('fs:listFiles', async (_e, root: string) => ((await git.isRepo(root)) ? git.listFiles(root) : walkFiles(root)))
   ipcMain.on('fs:watch', (_e, dir: string) => watchers.watch(dir))
   ipcMain.on('fs:unwatch', (_e, dir: string) => watchers.unwatch(dir))
 
   // editors & OS integration
   ipcMain.handle('editors:list', () => detectEditors())
-  ipcMain.handle('editors:open', (_e, id: string, target: string) => openInEditor(id, target))
+  ipcMain.handle('editors:open', (_e, id: string, target: string, line?: number, col?: number) => openInEditor(id, target, line, col))
   ipcMain.handle('editors:terminalCommand', (_e, id: string) => terminalEditorCommand(id))
+  ipcMain.handle('editors:terminalGoto', (_e, id: string, file: string, line: number) => terminalEditorGoto(id, file, line))
   ipcMain.handle('shell:reveal', (_e, p: string) => shell.showItemInFolder(p))
   ipcMain.handle('shell:openPath', (_e, p: string) => shell.openPath(p))
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
-  ipcMain.handle('git:branch', (_e, cwd: string) => gitBranch(cwd))
+  ipcMain.handle('app:focus', () => {
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+
+  // git
+  ipcMain.handle('git:branch', (_e, cwd: string) => git.gitBranch(cwd))
+  ipcMain.handle('git:head', (_e, cwd: string) => git.head(cwd))
+  ipcMain.handle('git:isRepo', (_e, cwd: string) => git.isRepo(cwd))
+  ipcMain.handle('git:branches', (_e, cwd: string) => git.branches(cwd))
+  ipcMain.handle('git:switch', (_e, cwd: string, b: string) => git.switchBranch(cwd, b))
+  ipcMain.handle('git:addWorktree', (_e, root: string, slug: string, base: string) => git.addWorktree(root, slug, base))
+  ipcMain.handle('git:removeWorktree', (_e, wt: WorktreeInfo, del: boolean) => git.removeWorktree(wt, del))
+  ipcMain.handle('git:diff', (_e, cwd: string, base: string) => git.diff(cwd, base))
+  ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
+  ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
+  ipcMain.handle('git:merge', (_e, repo: string, branch: string) => git.merge(repo, branch))
+  ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string) => git.pushAndCreatePr(cwd, branch, base, title))
+
+  // missions (Claude Code hooks)
+  ipcMain.handle('missions:hookInfo', () => hookInfo())
+
+  // Claude assets
+  ipcMain.handle('claude:assets', (_e, root: string | null) => listClaudeAssets(root))
+  ipcMain.handle('claude:createSkill', (_e, scope: 'user' | 'project', root: string | null, name: string, desc: string, body: string) => createSkill(scope, root, name, desc, body))
+  ipcMain.handle('claude:mcpList', (_e, cwd: string) => listMcpServers(cwd))
+
+  // GitHub
+  ipcMain.handle('gh:repo', (_e, cwd: string) => gh.repoInfo(cwd))
+  ipcMain.handle('gh:workflows', (_e, cwd: string) => gh.listWorkflows(cwd))
+  ipcMain.handle('gh:runs', (_e, cwd: string, wf?: string) => gh.listRuns(cwd, wf))
+  ipcMain.handle('gh:inputs', (_e, cwd: string, path: string) => gh.workflowInputs(cwd, path))
+  ipcMain.handle('gh:dispatch', (_e, cwd: string, id: number, ref: string, inputs: Record<string, string>) => gh.dispatchWorkflow(cwd, id, ref, inputs))
+  ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
+  ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
+  ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
+
+  // notes
+  ipcMain.handle('notes:list', (_e, scope: string | null) => notes.listNotes(scope))
+  ipcMain.handle('notes:create', (_e, scope: string | null, title: string) => notes.createNote(scope, title))
+  ipcMain.handle('notes:read', (_e, p: string) => notes.readNote(p))
+  ipcMain.handle('notes:write', (_e, p: string, text: string) => notes.writeNote(p, text))
+  ipcMain.handle('notes:delete', (_e, p: string) => notes.deleteNote(p))
+  ipcMain.handle('notes:openFolder', (_e, scope: string | null) => notes.openNotesFolder(scope))
+
+  // credentials & SSH
+  ipcMain.handle('vault:status', () => vault.vaultStatus())
+  ipcMain.handle('vault:list', () => vault.listCredentials())
+  ipcMain.handle('vault:save', (_e, input: CredentialInput) => vault.saveCredential(input))
+  ipcMain.handle('vault:delete', (_e, id: string) => vault.deleteCredential(id))
+  ipcMain.handle('ssh:importConfig', () => importSshConfig(stores.connections.get().connections))
+  ipcMain.handle('ssh:connected', () => ssh.connectedIds())
+  ipcMain.handle('ssh:disconnect', (_e, connId: string) => ssh.disconnect(connId))
+  ipcMain.handle('ssh:home', (e, connId: string) => ssh.home(e.sender, connId))
+  ipcMain.handle('ssh:list', (e, connId: string, path: string) => ssh.list(e.sender, connId, path))
+  ipcMain.handle('ssh:download', (e, connId: string, path: string) => ssh.download(e.sender, connId, path))
+  ipcMain.handle('ssh:forwards', () => ssh.activeForwards())
+  ipcMain.handle('ssh:startForward', (e, connId: string, fwd: PortForward) => ssh.startForward(e.sender, connId, fwd))
+  ipcMain.handle('ssh:stopForward', (_e, connId: string, fwdId: string) => ssh.stopForward(connId, fwdId))
 
   // persistence
   ipcMain.handle('settings:get', () => settings.get())
-  ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => settings.set(patch))
+  ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => {
+    const next = settings.set(patch)
+    if ('shell' in patch) setShellOverride(next.shell)
+    if ('globalHotkey' in patch) registerHotkey(next.globalHotkey)
+    return next
+  })
   ipcMain.handle('layout:load', () => layout.get().layout)
   ipcMain.handle('layout:save', (_e, data: unknown) => void layout.set({ layout: data }))
   ipcMain.handle('store:get', (_e, name: keyof StoreFiles) => (Object.hasOwn(stores, name) ? stores[name].get() : null))
@@ -119,19 +212,46 @@ app.whenReady().then(async () => {
   layout = new JsonStore<{ layout: unknown }>('layout', { layout: null })
   stores = {
     tasks: new JsonStore<StoreFiles['tasks']>('tasks', { tasks: [] }),
-    runtimes: new JsonStore<StoreFiles['runtimes']>('runtimes', { custom: {} })
+    runtimes: new JsonStore<StoreFiles['runtimes']>('runtimes', { custom: {} }),
+    missions: new JsonStore<StoreFiles['missions']>('missions', { missions: [] }),
+    connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] })
   }
+  vault.initVault()
+  setShellOverride(settings.get().shell)
+  await startHookServer(() => win?.webContents ?? null)
   await loadShellEnv()
   buildMenu()
   registerIpc()
   createWindow()
+  registerHotkey(settings.get().globalHotkey)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
+function registerHotkey(accel: string | null): void {
+  globalShortcut.unregisterAll()
+  if (!accel) return
+  try {
+    globalShortcut.register(accel, () => {
+      if (!win) return createWindow()
+      if (win.isFocused()) win.hide()
+      else {
+        win.show()
+        win.focus()
+      }
+    })
+  } catch {
+    // invalid accelerator or unsupported (e.g. some Wayland sessions)
+  }
+}
+
+app.on('will-quit', () => globalShortcut.unregisterAll())
+
 app.on('before-quit', () => {
   ptys.killAll()
+  ssh.disconnectAll()
+  vault.flushVault()
   settings?.flush()
   layout?.flush()
   if (stores) Object.values(stores).forEach((s) => s.flush())

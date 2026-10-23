@@ -11,6 +11,7 @@ asarUnpack:
 npmRebuild: true
 linux:
   target: [AppImage, deb, rpm]
+  syncDesktopName: true
   category: Development
   maintainer: sldev
 mac:

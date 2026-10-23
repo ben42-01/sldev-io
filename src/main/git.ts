@@ -1,9 +1,113 @@
 import { execFile } from 'child_process'
+import { existsSync, mkdirSync } from 'fs'
+import { basename, dirname, join } from 'path'
+import type { DiffStat, WorktreeInfo } from '@shared/types'
 
-export function gitBranch(cwd: string): Promise<string | null> {
+interface ExecResult {
+  code: number
+  stdout: string
+  stderr: string
+}
+
+export function run(cmd: string, args: string[], cwd: string, timeout = 30000): Promise<ExecResult> {
   return new Promise((resolve) => {
-    execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, timeout: 3000 }, (err, stdout) =>
-      resolve(err ? null : stdout.trim() || null)
+    execFile(cmd, args, { cwd, timeout, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1' } }, (err, stdout, stderr) =>
+      resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout, stderr: stderr || (err && !stderr ? String(err.message) : '') })
     )
   })
+}
+
+const git = (args: string[], cwd: string): Promise<ExecResult> => run('git', args, cwd)
+
+async function ok(args: string[], cwd: string): Promise<string> {
+  const r = await git(args, cwd)
+  if (r.code !== 0) throw new Error(r.stderr.trim() || `git ${args[0]} failed`)
+  return r.stdout
+}
+
+export async function gitBranch(cwd: string): Promise<string | null> {
+  const r = await git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+  return r.code === 0 ? r.stdout.trim() || null : null
+}
+
+export async function head(cwd: string): Promise<string | null> {
+  const r = await git(['rev-parse', 'HEAD'], cwd)
+  return r.code === 0 ? r.stdout.trim() : null
+}
+
+export async function isRepo(cwd: string): Promise<boolean> {
+  return (await git(['rev-parse', '--is-inside-work-tree'], cwd)).stdout.trim() === 'true'
+}
+
+export async function branches(cwd: string): Promise<string[]> {
+  const r = await git(['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads'], cwd)
+  return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : []
+}
+
+export async function switchBranch(cwd: string, branch: string): Promise<void> {
+  await ok(['switch', branch], cwd)
+}
+
+/** Create an isolated worktree for a mission next to the repo: ../.sldev-worktrees/<repo>/<slug> */
+export async function addWorktree(root: string, slug: string, base: string): Promise<WorktreeInfo> {
+  const top = (await ok(['rev-parse', '--show-toplevel'], root)).trim()
+  const dir = join(dirname(top), '.sldev-worktrees', basename(top))
+  mkdirSync(dir, { recursive: true })
+  let path = join(dir, slug)
+  let branch = `sldev/${slug}`
+  for (let i = 2; existsSync(path) || (await git(['rev-parse', '--verify', '--quiet', branch], top)).code === 0; i++) {
+    path = join(dir, `${slug}-${i}`)
+    branch = `sldev/${slug}-${i}`
+  }
+  await ok(['worktree', 'add', '-b', branch, path, base], top)
+  return { path, branch, base, repo: top }
+}
+
+export async function removeWorktree(wt: WorktreeInfo, deleteBranch: boolean): Promise<void> {
+  if (existsSync(wt.path)) await ok(['worktree', 'remove', '--force', wt.path], wt.repo)
+  else await git(['worktree', 'prune'], wt.repo)
+  if (deleteBranch) await git(['branch', '-D', wt.branch], wt.repo)
+}
+
+/** Unified diff of everything that changed since `base` (committed, staged, unstaged and untracked). */
+export async function diff(cwd: string, base: string): Promise<string> {
+  const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
+  const tracked = await ok(['diff', '--no-color', '--no-ext-diff', mergeBase], cwd)
+  const untracked = (await git(['ls-files', '--others', '--exclude-standard'], cwd)).stdout.split('\n').filter(Boolean).slice(0, 100)
+  const nul = process.platform === 'win32' ? 'NUL' : '/dev/null'
+  const parts = await Promise.all(untracked.map((f) => git(['diff', '--no-color', '--no-index', '--', nul, f], cwd).then((r) => r.stdout)))
+  return tracked + parts.join('')
+}
+
+export async function diffStat(cwd: string, base: string): Promise<DiffStat> {
+  const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
+  const r = await git(['diff', '--shortstat', mergeBase], cwd)
+  const untracked = (await git(['ls-files', '--others', '--exclude-standard'], cwd)).stdout.split('\n').filter(Boolean)
+  const nul = process.platform === 'win32' ? 'NUL' : '/dev/null'
+  const added = await Promise.all(
+    untracked.slice(0, 100).map((f) => git(['diff', '--numstat', '--no-index', '--', nul, f], cwd).then((x) => Number(x.stdout.split('\t')[0]) || 0))
+  )
+  const n = (re: RegExp): number => Number(re.exec(r.stdout)?.[1] ?? 0)
+  return { files: n(/(\d+) files? changed/) + untracked.length, insertions: n(/(\d+) insertions?/) + added.reduce((a, b) => a + b, 0), deletions: n(/(\d+) deletions?/) }
+}
+
+export async function commitAll(cwd: string, message: string): Promise<string> {
+  await ok(['add', '-A'], cwd)
+  return ok(['commit', '-m', message], cwd)
+}
+
+export async function merge(repo: string, branch: string): Promise<string> {
+  return ok(['merge', '--no-ff', '--no-edit', branch], repo)
+}
+
+export async function pushAndCreatePr(cwd: string, branch: string, base: string, title: string): Promise<string> {
+  await ok(['push', '-u', 'origin', branch], cwd)
+  const r = await run('gh', ['pr', 'create', '--head', branch, '--base', base, '--title', title, '--fill'], cwd, 60000)
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'gh pr create failed')
+  return r.stdout.trim().split('\n').pop() ?? ''
+}
+
+export async function listFiles(cwd: string): Promise<string[]> {
+  const r = await git(['ls-files', '--cached', '--others', '--exclude-standard'], cwd)
+  return r.code === 0 ? r.stdout.split('\n').filter(Boolean).slice(0, 50000) : []
 }

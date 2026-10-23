@@ -1,5 +1,6 @@
 import { Search } from 'lucide-react'
 import { workspace } from '../state/workspace'
+import { showCommandPalette } from '../lib/commands'
 import { useStore } from '../state/store'
 import { basename } from '../lib/paths'
 
@@ -10,7 +11,7 @@ export function TitleBar(): React.JSX.Element {
   return (
     <div className={`titlebar${isMac ? ' mac' : ''}`}>
       <div className="titlebar-brand">sldev</div>
-      <button className="titlebar-search" onClick={() => workspace.set({ paletteOpen: true })}>
+      <button className="titlebar-search" onClick={showCommandPalette}>
         <Search size={13} />
         <span>{root ? basename(root) : 'Search commands'}</span>
         <kbd>{isMac ? '⌘⇧P' : 'Ctrl+Shift+P'}</kbd>

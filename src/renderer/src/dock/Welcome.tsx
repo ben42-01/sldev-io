@@ -1,9 +1,9 @@
 import { FolderOpen, SquareTerminal, Command as CommandIcon } from 'lucide-react'
 import { openTerminal } from './dockApi'
-import { shortcutLabel, staticCommands } from '../lib/commands'
-import { pickRootFolder, workspace } from '../state/workspace'
+import { shortcutLabel, showCommandPalette, staticCommands } from '../lib/commands'
+import { pickRootFolder } from '../state/workspace'
 
-const SHOWN = ['terminal.new', 'terminal.splitRight', 'palette.show', 'folder.open', 'sidebar.toggle', 'terminal.find']
+const SHOWN = ['terminal.new', 'terminal.splitRight', 'palette.show', 'quickopen', 'missions.new', 'folder.open', 'sidebar.toggle', 'settings.open']
 
 export function Welcome(): React.JSX.Element {
   const cmds = staticCommands()
@@ -19,7 +19,7 @@ export function Welcome(): React.JSX.Element {
           <button className="btn" onClick={() => void pickRootFolder()}>
             <FolderOpen size={15} /> Open folder
           </button>
-          <button className="btn" onClick={() => workspace.set({ paletteOpen: true })}>
+          <button className="btn" onClick={showCommandPalette}>
             <CommandIcon size={15} /> Commands
           </button>
         </div>

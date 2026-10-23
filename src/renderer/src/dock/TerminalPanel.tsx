@@ -3,6 +3,7 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { attachTerminal, detachTerminal, ensureTerminal, focusTerminal, setTerminalListeners as setListeners } from '../lib/terminals'
 import { consumeFresh, type TerminalPanelParams } from './dockApi'
 import { linkPanel } from '../state/runs'
+import { linkMissionPanel, missionEnv, missionResumeCommand } from '../state/missions'
 import { TerminalSearch } from './TerminalSearch'
 import { basename } from '../lib/paths'
 
@@ -11,12 +12,17 @@ export function TerminalPanel(props: IDockviewPanelProps<TerminalPanelParams>): 
   const id = props.api.id
 
   useEffect(() => {
-    const { cwd, initialInput, command, runtimeId, taskId } = props.params
+    const { cwd, initialInput, runtimeId, taskId, missionId, env, sshConnectionId, displayCommand } = props.params
+    const fresh = consumeFresh(id)
+    // restored mission panels resume the Claude session instead of re-sending the prompt
+    const command = missionId && !fresh ? (missionResumeCommand(missionId) ?? props.params.command) : props.params.command
     // a restored runtime/task panel waits for Enter instead of re-running its command on app start
-    ensureTerminal(id, { cwd, initialInput, command, autostart: !command || consumeFresh(id) })
+    // hook port/token change every app start, so missions always get a fresh env
+    ensureTerminal(id, { cwd, initialInput, command, displayCommand: command === props.params.command ? displayCommand : undefined, env: missionId ? missionEnv(missionId) : env, sshConnectionId, autostart: (!command && !sshConnectionId) || fresh })
     linkPanel(id, { runtimeId, taskId })
+    if (missionId) linkMissionPanel(missionId, id)
     const baseTitle = props.api.title ?? 'terminal'
-    setTerminalListeners({ id, keepTitle: !!command, baseTitle, setTitle: (t) => props.api.setTitle(t) })
+    setTerminalListeners({ id, keepTitle: !!command || !!sshConnectionId, baseTitle, setTitle: (t) => props.api.setTitle(t) })
     attachTerminal(id, ref.current!)
     const active = props.api.onDidActiveChange((e) => e.isActive && focusTerminal(id))
     // Sessions are disposed when the panel is *closed* (see Dock), not on unmount,

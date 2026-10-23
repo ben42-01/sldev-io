@@ -14,6 +14,10 @@ export interface TerminalPanelParams {
   command?: string
   runtimeId?: string
   taskId?: string
+  missionId?: string
+  env?: Record<string, string>
+  sshConnectionId?: string
+  displayCommand?: string
 }
 
 export const TERMINAL_PREFIX = 'term-'
@@ -38,6 +42,10 @@ export interface OpenTerminalOptions {
   command?: string
   runtimeId?: string
   taskId?: string
+  missionId?: string
+  env?: Record<string, string>
+  sshConnectionId?: string
+  displayCommand?: string
 }
 
 export function openTerminal(opts: OpenTerminalOptions = {}): string | null {
@@ -45,7 +53,17 @@ export function openTerminal(opts: OpenTerminalOptions = {}): string | null {
   const id = `${TERMINAL_PREFIX}${Date.now().toString(36)}${(++counter).toString(36)}`
   const cwd = opts.cwd ?? workspace.get().rootFolder ?? undefined
   const title = opts.title ?? (cwd ? basename(cwd) : 'terminal')
-  const params: TerminalPanelParams = { cwd, initialInput: opts.initialInput, command: opts.command, runtimeId: opts.runtimeId, taskId: opts.taskId }
+  const params: TerminalPanelParams = {
+    cwd,
+    initialInput: opts.initialInput,
+    command: opts.command,
+    runtimeId: opts.runtimeId,
+    taskId: opts.taskId,
+    missionId: opts.missionId,
+    env: opts.env,
+    sshConnectionId: opts.sshConnectionId,
+    displayCommand: opts.displayCommand
+  }
   fresh.add(id)
   const ref = opts.referencePanel ?? api.activePanel?.id
 
@@ -67,6 +85,26 @@ export function splitActive(direction: 'right' | 'below'): void {
   const active = api?.activePanel
   const cwd = active?.id.startsWith(TERMINAL_PREFIX) ? terminalCwd(active.id) : undefined
   openTerminal({ cwd, direction })
+}
+
+/** Open (or focus) a non-terminal panel such as a diff, note, preview or settings. */
+export function openPanel(component: string, id: string, title: string, params: object = {}, direction?: 'right' | 'below'): void {
+  if (!api) return
+  const existing = api.getPanel(id)
+  if (existing) {
+    existing.api.updateParameters(params)
+    existing.api.setActive()
+    return
+  }
+  const ref = api.activePanel?.id
+  if (ref && direction) api.addPanel({ id, component, title, params, position: { referencePanel: ref, direction } })
+  else if (ref) api.addPanel({ id, component, title, params, position: { referencePanel: ref, direction: 'within' } })
+  else api.addPanel({ id, component, title, params })
+}
+
+/** Ids of the terminals currently on screen (the visible tab of every group). */
+export function visibleTerminalIds(): string[] {
+  return (api?.groups ?? []).map((g) => g.activePanel?.id).filter((id): id is string => !!id?.startsWith(TERMINAL_PREFIX))
 }
 
 export function consumeFresh(id: string): boolean {

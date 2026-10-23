@@ -1,5 +1,31 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AppSettings, DirEntry, EditorInfo, PtyCreateOptions, PtyInfo, RuntimeDef, StoreFiles } from '../shared/types'
+import type {
+  AppSettings,
+  ClaudeAsset,
+  CredentialInput,
+  CredentialMeta,
+  DiffStat,
+  DirEntry,
+  EditorInfo,
+  GhPr,
+  GhRepoInfo,
+  GhRun,
+  GhWorkflow,
+  GhWorkflowInput,
+  HookEvent,
+  McpServer,
+  NoteMeta,
+  PortForward,
+  PtyCreateOptions,
+  PtyInfo,
+  RemoteEntry,
+  RuntimeDef,
+  SshConnection,
+  SshPrompt,
+  StoreFiles,
+  VaultStatus,
+  WorktreeInfo
+} from '../shared/types'
 
 type Unsubscribe = () => void
 
@@ -27,20 +53,85 @@ const api = {
     watch: (dir: string): void => ipcRenderer.send('fs:watch', dir),
     unwatch: (dir: string): void => ipcRenderer.send('fs:unwatch', dir),
     onChanged: (cb: (dir: string) => void): Unsubscribe => on('fs:changed', cb),
-    pathForFile: (file: File): string => webUtils.getPathForFile(file)
+    pathForFile: (file: File): string => webUtils.getPathForFile(file),
+    existingFiles: (paths: string[]): Promise<string[]> => ipcRenderer.invoke('fs:existingFiles', paths),
+    listFiles: (root: string): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', root)
   },
   editors: {
     list: (): Promise<EditorInfo[]> => ipcRenderer.invoke('editors:list'),
-    open: (id: string, target: string): Promise<boolean> => ipcRenderer.invoke('editors:open', id, target),
-    terminalCommand: (id: string): Promise<string | null> => ipcRenderer.invoke('editors:terminalCommand', id)
+    open: (id: string, target: string, line?: number, col?: number): Promise<boolean> => ipcRenderer.invoke('editors:open', id, target, line, col),
+    terminalCommand: (id: string): Promise<string | null> => ipcRenderer.invoke('editors:terminalCommand', id),
+    terminalGoto: (id: string, file: string, line: number): Promise<string | null> => ipcRenderer.invoke('editors:terminalGoto', id, file, line)
   },
   shell: {
     reveal: (p: string): Promise<void> => ipcRenderer.invoke('shell:reveal', p),
     openPath: (p: string): Promise<string> => ipcRenderer.invoke('shell:openPath', p),
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
   },
+  app: {
+    focus: (): Promise<void> => ipcRenderer.invoke('app:focus')
+  },
   git: {
-    branch: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:branch', cwd)
+    branch: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:branch', cwd),
+    head: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:head', cwd),
+    isRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),
+    branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),
+    switch: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', cwd, branch),
+    addWorktree: (root: string, slug: string, base: string): Promise<WorktreeInfo> => ipcRenderer.invoke('git:addWorktree', root, slug, base),
+    removeWorktree: (wt: WorktreeInfo, deleteBranch: boolean): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, deleteBranch),
+    diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
+    diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
+    commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
+    merge: (repo: string, branch: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch),
+    pushAndPr: (cwd: string, branch: string, base: string, title: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title)
+  },
+  missions: {
+    hookInfo: (): Promise<{ port: number; token: string; settingsPath: string } | null> => ipcRenderer.invoke('missions:hookInfo'),
+    onHook: (cb: (e: HookEvent) => void): Unsubscribe => on('mission:hook', cb)
+  },
+  claude: {
+    assets: (root: string | null): Promise<ClaudeAsset[]> => ipcRenderer.invoke('claude:assets', root),
+    createSkill: (scope: 'user' | 'project', root: string | null, name: string, description: string, body: string): Promise<string> =>
+      ipcRenderer.invoke('claude:createSkill', scope, root, name, description, body),
+    mcpList: (cwd: string): Promise<{ servers: McpServer[]; raw: string }> => ipcRenderer.invoke('claude:mcpList', cwd)
+  },
+  gh: {
+    repo: (cwd: string): Promise<GhRepoInfo> => ipcRenderer.invoke('gh:repo', cwd),
+    workflows: (cwd: string): Promise<GhWorkflow[]> => ipcRenderer.invoke('gh:workflows', cwd),
+    runs: (cwd: string, workflow?: string): Promise<GhRun[]> => ipcRenderer.invoke('gh:runs', cwd, workflow),
+    inputs: (cwd: string, path: string): Promise<GhWorkflowInput[] | null> => ipcRenderer.invoke('gh:inputs', cwd, path),
+    dispatch: (cwd: string, id: number, ref: string, inputs: Record<string, string>): Promise<void> => ipcRenderer.invoke('gh:dispatch', cwd, id, ref, inputs),
+    rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
+    cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
+    pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd)
+  },
+  notes: {
+    list: (scope: string | null): Promise<NoteMeta[]> => ipcRenderer.invoke('notes:list', scope),
+    create: (scope: string | null, title: string): Promise<string> => ipcRenderer.invoke('notes:create', scope, title),
+    read: (path: string): Promise<string> => ipcRenderer.invoke('notes:read', path),
+    write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('notes:write', path, text),
+    remove: (path: string): Promise<void> => ipcRenderer.invoke('notes:delete', path),
+    openFolder: (scope: string | null): Promise<string> => ipcRenderer.invoke('notes:openFolder', scope)
+  },
+  vault: {
+    status: (): Promise<VaultStatus> => ipcRenderer.invoke('vault:status'),
+    list: (): Promise<CredentialMeta[]> => ipcRenderer.invoke('vault:list'),
+    save: (input: CredentialInput): Promise<CredentialMeta> => ipcRenderer.invoke('vault:save', input),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('vault:delete', id)
+  },
+  ssh: {
+    openShell: (id: string, connId: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('ssh:openShell', id, connId, cols, rows),
+    importConfig: (): Promise<SshConnection[]> => ipcRenderer.invoke('ssh:importConfig'),
+    connected: (): Promise<string[]> => ipcRenderer.invoke('ssh:connected'),
+    disconnect: (connId: string): Promise<void> => ipcRenderer.invoke('ssh:disconnect', connId),
+    home: (connId: string): Promise<string> => ipcRenderer.invoke('ssh:home', connId),
+    list: (connId: string, path: string): Promise<RemoteEntry[]> => ipcRenderer.invoke('ssh:list', connId, path),
+    download: (connId: string, path: string): Promise<string> => ipcRenderer.invoke('ssh:download', connId, path),
+    forwards: (): Promise<string[]> => ipcRenderer.invoke('ssh:forwards'),
+    startForward: (connId: string, fwd: PortForward): Promise<void> => ipcRenderer.invoke('ssh:startForward', connId, fwd),
+    stopForward: (connId: string, fwdId: string): Promise<void> => ipcRenderer.invoke('ssh:stopForward', connId, fwdId),
+    onPrompt: (cb: (p: SshPrompt) => void): Unsubscribe => on('ssh:prompt', cb),
+    reply: (requestId: string, answer: string[] | null): void => ipcRenderer.send('ssh:prompt-reply', requestId, answer)
   },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),

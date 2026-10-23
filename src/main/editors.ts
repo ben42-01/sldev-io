@@ -63,17 +63,34 @@ export function detectEditors(): EditorInfo[] {
   return detected.map(({ id, name, kind }) => ({ id, name, kind }))
 }
 
+/** Arguments that open `file` at `line:col` for each editor family. */
+function gotoArgs(id: string, file: string, line: number, col: number): string[] {
+  if (['cursor', 'vscode', 'vscode-insiders', 'windsurf'].includes(id)) return ['-g', `${file}:${line}:${col}`]
+  if (['zed', 'sublime'].includes(id)) return [`${file}:${line}:${col}`]
+  if (['idea', 'webstorm', 'pycharm', 'goland', 'rustrover'].includes(id)) return ['--line', String(line), '--column', String(col), file]
+  return [file]
+}
+
+/** Shell command for terminal editors at a line (renderer runs it in a terminal panel). */
+export function terminalEditorGoto(id: string, file: string, line: number): string | null {
+  const cmd = terminalEditorCommand(id)
+  if (!cmd) return null
+  const q = JSON.stringify(file)
+  return cmd === 'hx' || cmd === 'helix' ? `${cmd} ${JSON.stringify(`${file}:${line}`)}` : `${cmd} +${line} ${q}`
+}
+
 /** Command line for terminal editors, which the renderer runs inside a terminal panel. */
 export function terminalEditorCommand(id: string): string | null {
   const e = (detected ?? []).find((d) => d.id === id)
   return e && e.kind === 'terminal' ? e.bins[0] : null
 }
 
-export function openInEditor(id: string, target: string): boolean {
+export function openInEditor(id: string, target: string, line?: number, col = 1): boolean {
   if (!detected) detectEditors()
   const e = detected!.find((d) => d.id === id)
   if (!e || e.kind === 'terminal') return false
-  const [cmd, args] = e.bin ? [e.bin, [target]] : ['open', ['-a', e.app!, target]]
+  const fileArgs = line ? gotoArgs(id, target, line, col) : [target]
+  const [cmd, args] = e.bin ? [e.bin, fileArgs] : ['open', ['-a', e.app!, target]]
   const child = spawn(cmd, args, {
     detached: true,
     stdio: 'ignore',

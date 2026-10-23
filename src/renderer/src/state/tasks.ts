@@ -1,7 +1,8 @@
 import type { Task } from '@shared/types'
 import { openTerminal, focusPanel } from '../dock/dockApi'
 import { restartTerminal } from '../lib/terminals'
-import { shellQuote } from '../lib/paths'
+import { claudeCommand } from '../lib/claude'
+import { startMission } from './missions'
 import { findRun, isActive } from './runs'
 import { createStore } from './store'
 import { workspace } from './workspace'
@@ -34,17 +35,7 @@ export function newTaskId(): string {
 /** The command line a task runs. Shown live in the editor so there's no magic. */
 export function buildTaskCommand(task: Task): string {
   if (task.kind === 'shell') return task.command?.trim() ?? ''
-  const o = task.claude ?? {}
-  const parts = ['claude']
-  if (o.print) parts.push('-p')
-  if (o.worktree) parts.push('-w')
-  if (o.model) parts.push('--model', shellQuote(o.model))
-  if (o.permissionMode) parts.push('--permission-mode', o.permissionMode)
-  if (o.effort) parts.push('--effort', o.effort)
-  if (!o.print && task.name) parts.push('-n', shellQuote(task.name))
-  if (o.extraArgs?.trim()) parts.push(o.extraArgs.trim())
-  if (task.prompt?.trim()) parts.push(shellQuote(task.prompt.trim()))
-  return parts.join(' ')
+  return claudeCommand(task.claude ?? {}, task.prompt, task.name)
 }
 
 export function taskCwd(task: Task): string | undefined {
@@ -58,6 +49,12 @@ export function runTask(task: Task): void {
   const command = buildTaskCommand(task)
   if (!command) return
   saveTask({ ...task, lastRunAt: Date.now() })
+  const root = task.scope ?? workspace.get().rootFolder
+  if (task.kind === 'claude' && root) {
+    // Claude tasks run as missions: tracked status, notifications, optional worktree, diff review
+    void startMission({ prompt: task.prompt ?? '', title: task.name, root, cwd: taskCwd(task) ?? root, options: task.claude ?? {}, worktree: !!task.claude?.worktree, taskId: task.id })
+    return
+  }
   const run = findRun('taskId', task.id)
   // a finished run of the same task is reused; a running one is just focused
   if (run && focusPanel(run.panelId)) {

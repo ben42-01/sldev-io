@@ -5,21 +5,30 @@ import { openInEditor } from '../lib/actions'
 import { basename, tildify } from '../lib/paths'
 import { pickRootFolder, preferredEditor, setRootFolder, updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
-import { VIEW_META } from './ActivityBar'
 import { FileTree, type FileTreeHandle } from './FileTree'
-import { PlaceholderView } from './PlaceholderView'
 import { RuntimesView } from './RuntimesView'
 import { TasksView } from './TasksView'
+import { MissionsView } from './MissionsView'
+import { SkillsView } from './SkillsView'
+import { WorkflowsView } from './WorkflowsView'
+import { NotesView } from './NotesView'
+import { RemoteView } from './RemoteView'
 
 export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
   const visible = useStore(workspace, (w) => w.sidebarVisible)
   const width = useStore(workspace, (w) => w.sidebarWidth)
   const view = useStore(workspace, (w) => w.activeView)
   if (!visible) return null
-  const label = VIEW_META.find((v) => v.id === view)?.label ?? ''
   return (
     <aside className="sidebar" style={{ width }}>
-      {view === 'explorer' ? <Explorer home={home} /> : view === 'runtimes' ? <RuntimesView /> : view === 'tasks' ? <TasksView /> : <PlaceholderView view={view} title={label} />}
+      {view === 'explorer' && <Explorer home={home} />}
+      {view === 'runtimes' && <RuntimesView />}
+      {view === 'agents' && <MissionsView />}
+      {view === 'tasks' && <TasksView />}
+      {view === 'skills' && <SkillsView />}
+      {view === 'workflows' && <WorkflowsView />}
+      {view === 'notes' && <NotesView />}
+      {view === 'remote' && <RemoteView />}
       <ResizeHandle />
     </aside>
   )

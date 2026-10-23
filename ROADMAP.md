@@ -4,7 +4,7 @@ A desktop workspace for agentic coding through CLIs (Claude Code, Codex, Gemini,
 It looks and feels like Cursor but is not an IDE: terminals are the main surface, and everything
 else exists to launch, organise and watch what runs in them.
 
-Status: ✅ done · 🔜 next · ⬜ planned
+Status: ✅ done · ⬜ planned
 
 ## Phase 1 · Shell & terminals
 - ✅ Electron + React + TypeScript app, Cursor-style dark UI, custom title bar
@@ -32,36 +32,49 @@ Status: ✅ done · 🔜 next · ⬜ planned
 - ⬜ Chain and schedule tasks
 
 ## Phase 3 · Agent missions & skills (Claude Code first)
-- ⬜ Mission launcher: agent CLI + prompt + folder, optional isolated git worktree
-- ⬜ Status detection (running · waiting for input · done · failed) via output heuristics and
-     shell integration (OSC 133/633), with desktop notifications when an agent needs you
-- ⬜ Mission board: all running agents at a glance
-- ⬜ Diff review when a mission finishes; commit / open PR via gh
-- ⬜ Skills: list ~/.claude/skills, project .claude/skills and plugins; create, edit, run
-- ⬜ MCP server manager: list, enable and configure MCP servers for each agent CLI
-- ⬜ Prompt library / snippets you can send to any terminal
-- ⬜ Broadcast input to several terminals at once
+- ✅ Mission launcher: prompt + model/effort/permission mode, optional isolated git worktree
+     (`../.sldev-worktrees/<repo>/<slug>` on branch `sldev/<slug>`)
+- ✅ Live status from Claude Code hooks (passed via `--settings`, your own settings untouched):
+     working (with current tool) · needs you (permission prompts) · ready for you · ended/failed
+- ✅ Desktop notifications when a mission needs you or finishes; status-bar counter; tab dots
+- ✅ Mission board panel; resume any past session (`claude --resume`) from its card
+- ✅ Diff review panel: per-file unified diff (incl. untracked files), commit, merge into base,
+     push & open PR via gh, remove worktree
+- ✅ Claude tasks run as missions
+- ✅ Skills browser: user, project, synced and plugin skills, commands and agents; create skills;
+     run in a new session or type the invocation into the active terminal
+- ✅ MCP servers: list with health (`claude mcp list`), add/remove/details
+- ✅ Broadcast input to all visible terminals
 
 ## Phase 4 · GitHub & notes
-- ⬜ Workflows via gh: list, dispatch with inputs, watch runs live, re-run failed jobs, logs
-- ⬜ PRs and checks for the current branch
-- ⬜ Notes: global and per-project Markdown files; send a note to an agent as a prompt
+- ✅ Workflows via gh: list, dispatch with typed inputs (choice/boolean/text), live run list with
+     polling, watch / logs in a terminal, re-run failed or all, cancel, open in browser
+- ✅ PR card for the current branch with check summary
+- ✅ Notes: global and per-project Markdown (CodeMirror editor, autosave, split preview);
+     paste into the active terminal or start a mission from a note
 
 ## Phase 5 · Remote
-- ⬜ SSH connections (host, user, port, jump host), import from ~/.ssh/config, ssh-agent support
-- ⬜ Credential vault: reusable passwords, keys, key + passphrase; encrypted with the OS keychain
-     (Electron safeStorage); secrets never reach the renderer
-- ⬜ Remote terminals in the dock; SFTP file browser; port forwarding; known-hosts management
+- ✅ SSH connections (host, port, user, jump host, start folder), import from ~/.ssh/config
+- ✅ Auth via ssh-agent/Pageant, saved credential, or password prompt; keyboard-interactive / 2FA
+- ✅ Credential vault: reusable passwords, private keys, key files + passphrases, encrypted with the
+     OS keychain (Electron safeStorage); secrets never reach the renderer
+- ✅ Host key verification with trust-on-first-use and a loud warning on key change
+- ✅ Remote terminals in the dock (shared connection per host), SFTP browser with download,
+     local port forwards
 
-## More ideas
-- ⬜ Clickable `path:line` in terminal output, opening the editor at that line (great for agent output)
-- ⬜ Quick open (fuzzy file finder): open in editor or insert the path into the active terminal
-- ⬜ Multiple projects/workspaces, each with its own saved layout
-- ⬜ Git panel: branch switcher, status, worktree manager
-- ⬜ Embedded browser preview panel for dev servers
-- ⬜ .env / secrets manager injecting variables into runtimes and missions
-- ⬜ Agent usage and cost tracker
-- ⬜ Searchable terminal history across sessions; keep shells alive across app restarts
-- ⬜ Docker containers panel; per-terminal CPU/memory
-- ⬜ Global hotkey drop-down terminal
-- ⬜ Settings UI, themes, custom keybindings, auto-update
+## Extras
+- ✅ Clickable `path:line:col` in terminal output → opens your editor at that line
+- ✅ Quick open (fuzzy file finder): open, paste path into terminal, or open a terminal there
+- ✅ Branch switcher (status bar), embedded browser preview for dev servers (port chips)
+- ✅ Settings panel (fonts, shell, editor, notifications, global hotkey), global show/hide hotkey
+- ✅ App icon; Linux AppImage / deb / rpm verified locally
+
+## Next ideas
+- ⬜ Chain and schedule tasks
+- ⬜ Agent usage and cost tracker (from Claude Code transcripts)
+- ⬜ Multiple projects/workspaces open at once, each with its own layout
+- ⬜ Keep shells alive across app restarts (background pty host)
+- ⬜ SFTP upload / edit-in-place, remote port forward (-R), dynamic SOCKS (-D)
+- ⬜ Other agent CLIs (Codex, Gemini, Aider) as mission backends
+- ⬜ Code signing + notarization, auto-update
+- ⬜ Custom keybindings and themes

@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import { createStore } from './store'
 import { loadRuntimes } from './runtimes'
 import { loadTasks } from './tasks'
+import { loadMissions } from './missions'
 
 export type ViewId = 'explorer' | 'runtimes' | 'agents' | 'tasks' | 'skills' | 'workflows' | 'notes' | 'remote'
 
@@ -10,8 +11,8 @@ export interface WorkspaceState extends AppSettings {
   ready: boolean
   activeView: ViewId
   editors: EditorInfo[]
-  paletteOpen: boolean
   terminalCount: number
+  broadcastCount: number
   branch: string | null
 }
 
@@ -20,8 +21,8 @@ export const workspace = createStore<WorkspaceState>({
   ready: false,
   activeView: 'explorer',
   editors: [],
-  paletteOpen: false,
   terminalCount: 0,
+  broadcastCount: 0,
   branch: null
 })
 
@@ -36,6 +37,7 @@ export async function initWorkspace(): Promise<void> {
   workspace.set({ ...settings, editors, ready: true })
   if (settings.rootFolder) void refreshBranch()
   void loadTasks()
+  void loadMissions()
   void loadRuntimes(settings.rootFolder)
 }
 

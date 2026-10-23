@@ -2,6 +2,12 @@ import { DockviewDefaultTab, DockviewReact, type IDockviewPanelHeaderProps, type
 import 'dockview/dist/styles/dockview.css'
 import { Columns2, Plus, Rows2 } from 'lucide-react'
 import { TerminalPanel } from './TerminalPanel'
+import { DiffPanel } from './DiffPanel'
+import { NotePanel } from './NotePanel'
+import { MissionBoardPanel } from './MissionBoardPanel'
+import { PreviewPanel } from './PreviewPanel'
+import { SettingsPanel } from './SettingsPanel'
+import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
 import { onPanelRemoved, openTerminal, setDockApi } from './dockApi'
 import { runs } from '../state/runs'
@@ -9,14 +15,18 @@ import { useStore } from '../state/store'
 import { StatusDot } from '../components/StatusDot'
 
 const theme: DockviewTheme = { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 }
-const components = { terminal: TerminalPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionBoardPanel, preview: PreviewPanel, settings: SettingsPanel }
 
-/** Default tab plus a status dot for panels running a runtime or task. */
+/** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   const run = useStore(runs, (s) => s.byPanel[props.api.id])
+  const missionStatus = useStore(missions, (s) => {
+    const id = Object.keys(s.panels).find((k) => s.panels[k] === props.api.id)
+    return id ? s.list.find((m) => m.id === id)?.status : undefined
+  })
   return (
     <div className="tab-wrap">
-      {run && <StatusDot run={run} />}
+      {missionStatus ? <span className={`mission-dot ${missionStatus}`} title={missionStatus} /> : run && <StatusDot run={run} />}
       <DockviewDefaultTab {...props} />
     </div>
   )
