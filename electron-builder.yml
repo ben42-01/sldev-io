@@ -1,0 +1,24 @@
+appId: io.sldev.app
+productName: sldev
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - node_modules/node-pty/**
+npmRebuild: true
+linux:
+  target: [AppImage, deb, rpm]
+  category: Development
+  maintainer: sldev
+mac:
+  target: [dmg, zip]
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

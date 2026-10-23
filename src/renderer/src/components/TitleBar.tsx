@@ -1,0 +1,21 @@
+import { Search } from 'lucide-react'
+import { workspace } from '../state/workspace'
+import { useStore } from '../state/store'
+import { basename } from '../lib/paths'
+
+const isMac = window.api.platform === 'darwin'
+
+export function TitleBar(): React.JSX.Element {
+  const root = useStore(workspace, (w) => w.rootFolder)
+  return (
+    <div className={`titlebar${isMac ? ' mac' : ''}`}>
+      <div className="titlebar-brand">sldev</div>
+      <button className="titlebar-search" onClick={() => workspace.set({ paletteOpen: true })}>
+        <Search size={13} />
+        <span>{root ? basename(root) : 'Search commands'}</span>
+        <kbd>{isMac ? '⌘⇧P' : 'Ctrl+Shift+P'}</kbd>
+      </button>
+      <div className="titlebar-spacer" />
+    </div>
+  )
+}
