@@ -607,8 +607,14 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 | Personal product (€10.99, 3 activations) | `290c2831-7c65-43a0-8645-33f0463daa89` | `7c2938d3-5332-43ec-8cc8-0675d275d6d5` |
 | Team product (€50, 15 activations) | `b5bbfcf4-58b3-466a-bc4c-25524d343cc1` | `e6901d0f-06ad-4d3d-9cf0-c75603f6486c` |
 
-Checkout links: sandbox ones for testing; live ones are created on launch day and go into
-`checkoutUrl` in `pricing.json`. Access tokens are secrets and live only in Vercel.
+| Checkout link, Personal | [sandbox](https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_eV3DN4OtqGOyiKR3VowNavcL4q7acuGTOAbei4b9uPI/redirect) | `https://buy.polar.sh/polar_cl_rcckqPVuJv8HQEn5zMUj73onQJ01SRdX7WGbR1M8nmE` |
+| Checkout link, Team | [sandbox](https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_z7dRZP1VJJpbb6YRug68aYRZHsi6ipK8aHZBS0sYukY/redirect) | `https://buy.polar.sh/polar_cl_kOosNrPOzIGDsN9zKPY6aUF8xmBWurk50AFnj24k7S9` |
+
+The live checkout links go into `checkoutUrl` in `pricing.json` **on launch day only**: anyone
+with them can buy, and the app accepts live keys only once `POLAR_ACCESS_TOKEN` (live) and
+`LICENSE_SIGNING_KEY` are set for Production. Success URL on all four:
+`https://sldev-io.vercel.app/thanks?checkout_id={CHECKOUT_ID}`. Access tokens are secrets and
+live only in Vercel.
 
 ### Secrets and environment variables
 
