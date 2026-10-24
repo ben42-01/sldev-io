@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Connect, type Plugin } from 'vite'
 import { GET as download } from './api/download'
 
 /**
@@ -45,17 +45,31 @@ function downloadRedirect(): Plugin {
   }
 }
 
+const legalPages = ['terms', 'privacy', 'refunds']
+
+/** /terms → /terms/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
+function legalRoutes(): Plugin {
+  const rewrite: Connect.NextHandleFunction = (req, _res, next) => {
+    const [path, query] = (req.url ?? '').split('?')
+    if (legalPages.includes(path.slice(1))) req.url = `${path}/${query ? `?${query}` : ''}`
+    next()
+  }
+  return {
+    name: 'legal-routes',
+    configureServer: (server) => void server.middlewares.use(rewrite),
+    configurePreviewServer: (server) => void server.middlewares.use(rewrite)
+  }
+}
+
 const page = (path: string): string => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
-  plugins: [react(), betaJson(), downloadRedirect()],
+  plugins: [react(), betaJson(), downloadRedirect(), legalRoutes()],
   build: {
     rollupOptions: {
       input: {
         main: page('./index.html'),
-        terms: page('./terms/index.html'),
-        privacy: page('./privacy/index.html'),
-        refunds: page('./refunds/index.html')
+        ...Object.fromEntries(legalPages.map((p) => [p, page(`./${p}/index.html`)]))
       }
     }
   }
