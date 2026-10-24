@@ -6,6 +6,7 @@
   "downloadUrl": "https://sldev-io.vercel.app/#download",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
   "contactEmail": "team.agora.hub@gmail.com",
+  "maker": "Ben",
   "platforms": [
     "Linux",
     "Windows",
@@ -25,7 +26,6 @@
     "address": "",
     "country": "",
     "updatedAt": "2026-10-24",
-    "personalMachines": 3,
-    "updateYears": 1
+    "personalMachines": 3
   }
 }

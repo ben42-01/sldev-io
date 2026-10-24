@@ -34,7 +34,7 @@ function Contact(): ReactNode {
 const terms: LegalPage = {
   id: 'terms',
   title: 'License terms and terms of sale',
-  summary: `You buy a license to use sldev-io: one person, up to ${legal.personalMachines} machines, ${legal.updateYears} year of updates, and the version you have keeps working forever.`,
+  summary: `You pay once for a license to use sldev-io: one person, up to ${legal.personalMachines} machines, every future update included.`,
   body: (
     <>
       <h2>1. Who we are</h2>
@@ -61,8 +61,8 @@ const terms: LegalPage = {
 
       <h2>3. Updates</h2>
       <p>
-        A license includes every update released within {legal.updateYears} year of your purchase. Versions released in that period
-        keep working for as long as you like, also after it ends. Renewing for another year of updates is optional.
+        A license includes every update we release, with no subscription and no renewal fee. We may change the price of new licenses
+        at any time; that never affects a license you already bought.
       </p>
 
       <h2>4. Free beta</h2>

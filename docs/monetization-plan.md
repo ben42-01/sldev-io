@@ -84,10 +84,9 @@ every ~14 days: POST /api/license/refresh; offline grace 30 days; refunds/revoca
   dates). It goes in main because the renderer is untrusted. Add a `license` IPC group, a
   `LicenseGate` screen, a Settings → License section (status, machine, deactivate this
   machine) and a status-bar chip.
-- **Updates policy** (decision): a one-time price with *unlimited* updates doesn't fund keeping up
-  with agent CLIs that change monthly. Common fair model (Sublime, Tower, JetBrains fallback):
-  **pay once, keep the version forever, 1 year of updates included**, renewal optional and
-  discounted. The token carries `updatesUntil`, and the app compares it with each build's release date.
+- **Updates policy** (decided): **pay once, every future update included**, no renewals. Revenue
+  grows through new buyers and price increases for new licenses, not renewals. The token needs no
+  `updatesUntil`.
 
 ### 4. Trial after launch
 
@@ -109,8 +108,7 @@ doesn't reset it. When the trial ends, the same "ended" screen appears with Buy 
 Any client-side check in an Electron app can be patched by someone determined: the code ships in
 an asar archive. The goal is to keep honest users honest and make paying the easy path.
 Signed tokens stop key sharing and config edits; obfuscation and DRM aren't worth the time or
-the false positives. Beta testers deserve goodwill: give a **launch discount code** to everyone
-who used the beta, sent by email from the purchase/download list or shown on the "beta ended" screen.
+the false positives. Beta testers got the app free during the beta; there are no discount codes (decided).
 
 ## Phases
 
@@ -127,7 +125,6 @@ who used the beta, sent by email from the purchase/download list or shown on the
 1. ~~Beta end date~~: decided, free 2026-10-24 to 2026-12-31, launch around 2027-01-01.
 2. ~~Provider~~: decided, Polar.
 3. ~~Prices~~: decided, €10.99 Personal at launch.
-4. ~~Updates policy~~: decided, 1 year of updates with a perpetual fallback (in `/terms`).
+4. ~~Updates policy~~: decided, every future update included, no renewals (in `/terms`).
 5. ~~Machines per Personal license~~: decided, 3.
-6. **Beta-tester discount**: how much, and for how long.
-7. **Renewal price** for another year of updates.
+6. ~~Beta-tester discount~~: decided, none. Donations maybe later.

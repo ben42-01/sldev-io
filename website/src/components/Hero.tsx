@@ -19,8 +19,8 @@ export function Hero() {
           <span className="brand-text">One workspace.</span>
         </h1>
         <p className="lead">
-          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side in dockable terminals.
-          Watch each mission live, review the diff, open the PR. Not an IDE: your editor stays yours.
+          A desktop app for running Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side.
+          See which agent needs you, review what it changed and open the pull request, all from one window.
         </p>
         <div className="hero-cta">
           <DownloadButton />

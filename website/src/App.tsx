@@ -5,6 +5,7 @@ import { AgentStrip, Hero } from './components/Hero'
 import { Nav } from './components/Nav'
 import { FaqSection, Pricing } from './components/Pricing'
 import { Spotlight } from './components/Spotlight'
+import { MakerNote, WhySection } from './components/Story'
 
 export function App() {
   return (
@@ -13,8 +14,10 @@ export function App() {
       <main>
         <Hero />
         <AgentStrip />
+        <WhySection />
         <Features />
         <Spotlight />
+        <MakerNote />
         <Pricing />
         <DownloadSection />
         <FaqSection />

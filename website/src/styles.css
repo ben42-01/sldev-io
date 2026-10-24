@@ -257,6 +257,26 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .footer a:hover { color: var(--fg); }
 .footer .nav-logo { color: var(--fg); }
 
+/* why + maker */
+.why { align-items: start; }
+.why .section-lead + .section-lead { margin-top: 14px; }
+.why-note { margin-top: 20px; padding-left: 14px; border-left: 2px solid var(--border-strong); color: var(--fg-muted); font-size: 15px; max-width: 620px; }
+.compare { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.compare-col { padding: 24px 26px; background: var(--bg); }
+.compare-col.with { background: var(--bg-elev); }
+.compare-h { font: 500 12px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-subtle); margin-bottom: 14px; }
+.compare-col.with .compare-h { color: var(--fg); }
+.compare ul { display: grid; gap: 10px; font-size: 14.5px; }
+.compare li { display: flex; gap: 10px; align-items: flex-start; color: var(--fg-subtle); }
+.compare li svg { flex: none; margin-top: 4px; }
+.compare-col.with li { color: var(--fg); }
+.compare-col.with li svg { color: var(--green); }
+.maker { max-width: 720px; margin: 0 auto; padding: 36px 40px; background: var(--bg-elev); }
+.maker blockquote { margin: 0; font-size: 18px; line-height: 1.65; color: var(--fg); }
+.maker blockquote p + p { margin-top: 14px; }
+.maker figcaption { margin-top: 22px; font: 13px var(--font-mono); color: var(--fg-muted); }
+.maker figcaption a { color: var(--fg-muted); text-decoration: underline; text-decoration-color: var(--fg-subtle); text-underline-offset: 3px; }
+
 /* download */
 .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 44px; }
 .download-card { display: flex; flex-direction: column; padding: 28px; background: var(--bg-elev); border: 1px solid var(--border); }
@@ -307,6 +327,8 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
   .mock-search { display: none; }
   .plan { padding: 24px; }
   .plans { grid-template-columns: 1fr; }
+  .maker { padding: 26px 22px; }
+  .maker blockquote { font-size: 16.5px; }
   .downloads { grid-template-columns: 1fr; }
   .mock pre { font-size: 11px; }
 }

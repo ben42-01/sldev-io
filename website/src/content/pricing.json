@@ -1,7 +1,7 @@
 {
   "currency": "EUR",
   "billing": "one-time",
-  "announcement": "Free while in beta. Every license below becomes a one-time payment at launch.",
+  "announcement": "Free while in beta. At launch, each license becomes a single payment with every future update included.",
   "beta": {
     "startsAt": "2026-10-24",
     "endsAt": "2026-12-31",
@@ -26,7 +26,7 @@
         "Skills, MCP servers, runtimes and tasks",
         "SSH, SFTP, credential vault and Docker",
         "Linux, Windows and macOS",
-        "1 year of updates included, and your version keeps working forever"
+        "Every future update included, no renewals"
       ]
     },
     {
@@ -43,7 +43,7 @@
       "features": [
         "Everything in Personal",
         "5 seats on a single license, up to 3 machines each",
-        "1 year of updates included, and your version keeps working forever",
+        "Every future update included, no renewals",
         "Priority support by email",
         "Invoice and VAT receipt"
       ]
@@ -52,7 +52,7 @@
   "faq": [
     {
       "q": "Is it really a one-time payment?",
-      "a": "Yes. No subscription and no monthly fee. A license includes one year of updates. After that, the version you have keeps working forever, and renewing for another year of updates is optional."
+      "a": "Yes. You pay once and get every future update. No subscription, no renewal fee. Prices may go up as sldev-io grows, but never for licenses you already own."
     },
     {
       "q": "What does it cost today?",

@@ -85,7 +85,8 @@ confirmed on the provider's site when you get there.
 - Payment provider: **Polar** (merchant of record, built-in license keys). Plain Stripe would make
   you the seller of record (VAT registration and filing), and Stripe Managed Payments has no license keys.
 - **3 machines** per Personal license; Team = 5 people × 3 machines (15 activations).
-- Updates: **1 year of updates included**, the bought version works forever, renewal optional.
+- Updates: **every future update included**, no renewals, no subscription. Prices may rise later for new buyers only.
+- **No discount codes** (beta testers had it free). Donations: maybe later, not planned.
 - No telemetry. The website self-hosts its fonts and loads nothing from third parties.
 
 ### Decisions still open
@@ -93,8 +94,6 @@ confirmed on the provider's site when you get there.
 | Decision | Recommendation | Needed by |
 |---|---|---|
 | Trial length for paid builds | 14 days | Phase 4 |
-| Beta-tester discount | e.g. 30% for the first month after launch | Phase 7 |
-| Renewal price for another year of updates | e.g. 50% of the license price | Phase 4 |
 | Apple Developer account ($99/year) | Before launch: removes the Gatekeeper warning and enables macOS auto-update | Phase 6 |
 
 ---
@@ -532,14 +531,12 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 - [ ] Phases 1–6 done (Windows signing optional)
 - [ ] Decide the launch date. Set `beta.endsAt` to the day **before** launch, so beta builds
       start showing the 14-day banner now
-- [ ] Create a beta-tester discount code in the provider (e.g. 30%, valid 30 days)
 - [ ] Write the launch post and the email to beta testers (if you collected emails)
 
 ### One week before (T-7)
 
 - [ ] Release candidate: `npm version 1.0.0-rc.1`, push `release/1.0.0-rc.1`, install, test
       purchase in test mode end to end
-- [ ] 🤖 "Add the beta-tester discount code to the beta-ended screen and banner"
 - [ ] Legal pages live
 
 ### Launch day (T-0)
@@ -571,7 +568,7 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 | Refund request | Refund in the provider dashboard. The key is revoked; the app stops working at its next refresh (within ~14 days + grace) |
 | Ship an update | `npm version 1.0.1`, push `release/1.0.1`. Users auto-update |
 | Change the price | Edit `listPrice`/`price` in `pricing.json` (site) **and** the product price in the provider. Existing keys are unaffected |
-| Run a sale | Create a discount code in the provider; mention it in `announcement` |
+| Raise the price | New buyers only: change `price`/`listPrice` in `pricing.json` and the product price in Polar. Existing licenses keep all updates |
 | Token expiring | `RELEASES_TOKEN` expires after a year: create a new one (Phase 1, 2.3) and replace the secret |
 | Signing certificate expiring | Renew with Apple/the CA; replace the `CSC_*` secrets |
 | Suspected key leak | Disable the key in the provider dashboard; issue the customer a new one |
