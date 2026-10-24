@@ -27,12 +27,13 @@ case "$(uname -s)" in
     fetch linux "$tmp/sldev-io.deb"
     say "Installing (you may be asked for your password)"
     if command -v apt-get >/dev/null 2>&1; then
-      # apt-get resolves the package's dependencies, dpkg alone doesn't
-      $sudo apt-get install -y "$tmp/sldev-io.deb"
+      # apt-get resolves the package's dependencies, dpkg alone doesn't. --allow-downgrades: the
+      # website's version is the one to have, and betas (0.1.0~beta.3) sort below a local 0.1.0 build
+      $sudo apt-get install -y --allow-downgrades "$tmp/sldev-io.deb"
     else
       $sudo dpkg -i "$tmp/sldev-io.deb"
     fi
-    say "Done. Start sldev-io from your app menu or run: sldev-io"
+    say "Installed sldev-io $(dpkg-query -W -f='${Version}' sldev-io 2>/dev/null | sed 's/~/-/'). Start it from your app menu or run: sldev-io"
     ;;
   Darwin)
     case "$(uname -m)" in
