@@ -26,7 +26,7 @@ same mechanism. Before any of this matters, installers have to be downloadable b
 
 | Problem | Fix |
 |---|---|
-| The repo is **private**, so `site.downloadUrl` (GitHub Releases) is a 404 for everyone else | Publish installers to a separate **public** `ben42-01/sldev-io-releases` repo (the release workflow pushes there with a fine-grained token secret). It's free and works with electron-updater. The source stays private. |
+| The repo is **private**, so `site.downloadUrl` (GitHub Releases) is a 404 for everyone else | Publish installers to a separate **public** `ben42-01/downloads.sldev.io` repo (the release workflow pushes there with a fine-grained token secret). It's free and works with electron-updater. The source stays private. |
 | No auto-update | `electron-updater` with the GitHub provider pointed at the releases repo: a beta channel for `-beta.N` versions, stable for the rest. Beta users get the expiry-aware build and later the paid build automatically. |
 | `v0.1.0-beta.1` has **no expiry** and would work forever | Don't distribute it. The first public build is `0.1.0-beta.2`, with expiry. |
 | Unsigned builds | Fine for a free beta, but paying users shouldn't see SmartScreen or Gatekeeper warnings. macOS needs an Apple Developer account (yearly fee) for signing and notarization. For Windows, Azure Trusted Signing is the cheapest current option. Both need your accounts, so start them early because verification takes days. |

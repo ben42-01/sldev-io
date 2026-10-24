@@ -1,7 +1,10 @@
 name: Release
 
 # Push to a release branch (release/0.2.0, release/next, …) to build installers for every OS
-# and publish them on a GitHub release tagged v<package.json version>.
+# and publish them on a GitHub release tagged v<package.json version>:
+#   - in the PUBLIC downloads repo (what users and the website download), using the
+#     RELEASES_TOKEN secret (fine-grained token: Contents read/write on that repo only)
+#   - in this private repo too, with generated notes, as an internal record
 on:
   push:
     branches: ['release/**']
@@ -14,6 +17,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  DOWNLOADS_REPO: ben42-01/downloads.sldev.io
 
 concurrency:
   group: release-${{ github.ref }}
@@ -89,6 +95,9 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/*.exe
+            dist/*.blockmap
+            dist/*.yml
+            !dist/builder-debug.yml
 
   release:
     needs: [check, build]
@@ -102,13 +111,46 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      - name: Create or update release
+      - name: Publish to the public downloads repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_REPO: ${{ env.DOWNLOADS_REPO }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASES_TOKEN secret is missing (see docs/go-to-production.md, Phase 1)"
+            exit 1
+          fi
+          # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
+          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          cat > notes.md <<EOF
+          Download the installer for your system below.
+
+          | System | File |
+          |---|---|
+          | Windows | \`.exe\` |
+          | macOS (Apple Silicon) | \`-arm64.dmg\` |
+          | macOS (Intel) | \`.dmg\` without \`arm64\` |
+          | Linux | \`.AppImage\` (any distro), \`.deb\` (Debian/Ubuntu), \`.rpm\` (Fedora/RHEL) |
+
+          Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
+          right-click the app and choose **Open** the first time. Checksums are in \`SHA256SUMS.txt\`.
+
+          More at https://sldev.io
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            # the downloads repo has no source, so the tag points at its default branch
+            gh release create "$TAG" dist/* --title "sldev-io $TAG" --notes-file notes.md $PRE
+          fi
+
+      - name: Record the release in this repo
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: v${{ needs.check.outputs.version }}
         run: |
-          # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
           case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber

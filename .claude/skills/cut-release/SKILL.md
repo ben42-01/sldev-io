@@ -6,7 +6,9 @@ description: Publish a new sldev-io release with installers for Linux, Windows a
 # Cut a release
 
 The `.github/workflows/release.yml` workflow runs on pushes to `release/**`. It builds every OS and
-attaches the installers plus `SHA256SUMS.txt` to the GitHub release `v<package.json version>`.
+publishes the installers, `SHA256SUMS.txt` and update metadata as release `v<package.json version>`
+in the **public** repo `ben42-01/downloads.sldev.io` (needs the `RELEASES_TOKEN` secret), plus a
+copy in the private source repo.
 
 Pushing is outward-facing. Confirm the version and the go-ahead with the user before pushing.
 
@@ -18,7 +20,8 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 4. Create and push the branch: `git switch -c release/X.Y.Z && git push -u origin release/X.Y.Z`.
 5. Watch it: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
    If a single OS fails, fix it on the branch and push again. Assets are replaced (`--clobber`).
-6. Check `gh release view vX.Y.Z` lists AppImage, deb, rpm, exe, dmg (x64 + arm64), zip and checksums.
+6. Check `gh release view vX.Y.Z --repo ben42-01/downloads.sldev.io` lists AppImage, deb, rpm, exe,
+   dmg (x64 + arm64), zip, `SHA256SUMS.txt`, `latest*.yml` and `.blockmap` files.
 7. Switch back to master.
 
 **Betas:** use a prerelease version such as `0.2.0-beta.1` (`npm version 0.2.0-beta.1 --no-git-tag-version`)

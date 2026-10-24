@@ -46,7 +46,7 @@ confirmed on the provider's site when you get there.
               │ uploads installers                 │  • /beta.json (beta dates)│
               ▼                                    │  • /api/license/* (later) │
 ┌───────────────────────────┐                      └──────┬──────────────┬─────┘
-│ sldev-io-releases (PUBLIC)│◄── "Download" button ───────┘              │
+│ downloads.sldev.io (PUBLIC)│◄── "Download" button ───────┘              │
 │ only installers, no code  │                                            │
 └─────────────┬─────────────┘                                            │
               │ download + auto-update                                    │
@@ -67,7 +67,7 @@ confirmed on the provider's site when you get there.
 | Website with pricing from JSON | ✅ (not yet deployed, as far as this repo knows) |
 | "Limited time" labels and beta countdown on the site | ✅ |
 | Configurable beta window (`/beta.json` → app chip, banner, "beta ended" screen) | ✅ |
-| Publishing installers to the **public** releases repo | 🤖 to build (Phase 2) |
+| Publishing installers to the **public** downloads repo `ben42-01/downloads.sldev.io` | ✅ (needs the `RELEASES_TOKEN` secret and a first commit in that repo) |
 | Auto-update in the app | 🤖 to build (Phase 2) |
 | License keys: server + app screen + trial | 🤖 to build (Phase 4) |
 | Payment provider products | 🧑 to set up (Phase 3) |
@@ -77,8 +77,7 @@ confirmed on the provider's site when you get there.
 ### Decisions already made
 
 - Price: **Personal €10.99 one-time** (Team €50 for 5 seats, from `pricing.json`).
-- Downloads: a **public GitHub repo** that you create (e.g. `ben42-01/sldev-io-releases`). The
-  source repo stays private.
+- Downloads: the **public GitHub repo** `ben42-01/downloads.sldev.io`. The source repo stays private.
 - `v0.1.0-beta.1` stays unpublished. The first public build is `0.1.0-beta.2`.
 - The beta window is controlled from the website, never baked into builds.
 
@@ -126,24 +125,23 @@ From now on, every push to `master` that touches `website/` redeploys the site.
 
 ### 2.3 🧑 Public downloads repo
 
-1. GitHub → **New repository**: `sldev-io-releases`, **Public**, add a README. Example README
-   text: "Installers for sldev-io. Get it at https://sldev.io".
+1. The repo `ben42-01/downloads.sldev.io` exists and is public. It needs **at least one commit**
+   because GitHub can't attach releases to an empty repo: open it on GitHub and click **Add a
+   README**, e.g. "Installers for sldev-io. Get it at https://sldev.io", then commit to `main`.
+   Optional: Settings → turn off Wiki and Projects; keep Issues on if you want bug reports there.
 2. Create a token the release workflow can use to upload there:
    1. GitHub → your avatar → **Settings → Developer settings → Personal access tokens →
       Fine-grained tokens → Generate new token**.
    2. Name: `sldev-io release upload`. Expiration: 1 year (put a reminder in your calendar).
-   3. **Repository access → Only select repositories → `sldev-io-releases`**.
+   3. **Repository access → Only select repositories → `downloads.sldev.io`**.
    4. **Permissions → Repository permissions → Contents: Read and write**. Leave everything
       else as "No access".
    5. Generate and copy the token. It's shown only once.
 3. Save it in the **source** repo: `ben42-01/sldev-io` → **Settings → Secrets and variables →
    Actions → New repository secret**. Name: `RELEASES_TOKEN`. Value: the token.
-4. Update `website/src/content/site.json`:
-   ```json
-   "downloadUrl": "https://github.com/ben42-01/sldev-io-releases/releases/latest"
-   ```
-   While only beta (pre-release) versions exist, "latest" shows nothing, so use
-   `https://github.com/ben42-01/sldev-io-releases/releases` until the first stable release.
+4. ✅ `website/src/content/site.json` → `downloadUrl` is
+   `https://github.com/ben42-01/downloads.sldev.io/releases`. After the first **stable** release,
+   change it to `…/releases/latest`; until then "latest" shows nothing, because betas are pre-releases.
 
 > Never paste the token into chat, a file, or a commit. Only into the GitHub secret field.
 
@@ -167,7 +165,7 @@ Needed before paying macOS users arrive. Enrolment can take a few days. See
 
 - [ ] Domain owned; `site.json` → `url` correct
 - [ ] Website live on the domain; `/beta.json` reachable
-- [ ] `sldev-io-releases` public repo created
+- [ ] `downloads.sldev.io` public repo created
 - [ ] `RELEASES_TOKEN` secret added to `sldev-io`
 - [ ] `site.json` → `downloadUrl` points at the releases repo
 - [ ] Support email working; `site.json` → `contactEmail` set
@@ -180,20 +178,20 @@ Needed before paying macOS users arrive. Enrolment can take a few days. See
 **Goal:** anyone can download `0.1.0-beta.2`; it updates itself; you control when the free beta
 starts and ends.
 
-### 3.1 🤖 Build: publish to the public repo + auto-update
+### 3.1 Publishing ✅ and 🤖 auto-update
 
-Paste into a new Claude session:
+✅ The release workflow publishes to `ben42-01/downloads.sldev.io` (pre-releases for `-beta`
+versions) and also keeps a record in the private repo. Builds include the update metadata
+(`latest*.yml`, `.blockmap`) and the downloads location for auto-update.
 
-> Read AGENTS.md and docs/go-to-production.md (Phase 2). Change the release workflow so installers
-> are published to the public repo `ben42-01/sldev-io-releases` using the `RELEASES_TOKEN`
-> secret (pre-release for `-beta` versions), keeping the private repo's release optional. Add
-> auto-update with electron-updater from that repo: beta builds follow pre-releases, stable
-> builds follow stable releases; check on start and every few hours, download in the
-> background, and offer "Restart to update" in the status bar. Add an e2e or unit test where
+🤖 Do auto-update **before** the first public beta, so beta testers get fixes without
+re-downloading:
+
+> Read AGENTS.md and docs/go-to-production.md (Phase 2). Add auto-update with electron-updater
+> from the GitHub downloads repo already configured in electron-builder.yml: beta builds follow
+> pre-releases, stable builds follow stable releases; check on start and every few hours,
+> download in the background, and offer "Restart to update" in the status bar. Add tests where
 > possible, update the README release section, then show me the diff before pushing.
-
-What you'll get: the same `release/<version>` flow as today, but the files land in the public
-repo, and installed apps update themselves.
 
 ### 3.2 🧑 Set the beta window
 
@@ -252,7 +250,7 @@ asks before pushing.
 
 ### 3.4 🧑 Verify before announcing
 
-- [ ] The release in `sldev-io-releases` lists: `.AppImage`, `.deb`, `.rpm`, `.exe`, `.dmg` (x64 and
+- [ ] The release in `downloads.sldev.io` lists: `.AppImage`, `.deb`, `.rpm`, `.exe`, `.dmg` (x64 and
       arm64), `.zip`, `SHA256SUMS.txt`, and (after 3.1) the `latest*.yml` files auto-update reads
 - [ ] The website's Download button opens that page
 - [ ] Install on at least one machine per OS you can reach; the app opens and shows the right
