@@ -592,6 +592,17 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 | | `announcement`, `faq` | Banner above the plans; FAQ entries |
 | `package.json` | `version` | App version; `-beta.N` = beta build (beta window applies) |
 
+### Polar IDs (not secret)
+
+| | Sandbox (`sldev-io-sbx`, sandbox.polar.sh) | Live (`sldev-io`) |
+|---|---|---|
+| Organization | `44affab5-d66f-4a87-89dc-e854ffe79dcb` | `0a93fdbe-37be-4c87-b67d-bb55bd519a02` |
+| Personal product (€10.99, 3 activations) | `290c2831-7c65-43a0-8645-33f0463daa89` | `7c2938d3-5332-43ec-8cc8-0675d275d6d5` |
+| Team product (€50, 15 activations) | `b5bbfcf4-58b3-466a-bc4c-25524d343cc1` | `e6901d0f-06ad-4d3d-9cf0-c75603f6486c` |
+
+Checkout links: sandbox ones for testing; live ones are created on launch day and go into
+`checkoutUrl` in `pricing.json`. Access tokens are secrets and live only in Vercel.
+
 ### Secrets and environment variables
 
 | Name | Where | Phase |
