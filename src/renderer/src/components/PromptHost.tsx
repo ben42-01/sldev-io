@@ -18,7 +18,7 @@ export function PromptHost(): React.JSX.Element | null {
   return (
     <div className="palette-backdrop">
       <form
-        className={`modal ${p.kind}`}
+        className={`modal brand-frame ${p.kind}`}
         onSubmit={(e) => {
           e.preventDefault()
           answer(p.kind === 'secret' ? values : ['yes'])

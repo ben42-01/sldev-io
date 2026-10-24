@@ -2,6 +2,7 @@ import { FolderOpen, SquareTerminal, Command as CommandIcon } from 'lucide-react
 import { openTerminal } from './dockApi'
 import { shortcutLabel, showCommandPalette, staticCommands } from '../lib/commands'
 import { pickRootFolder } from '../state/workspace'
+import { Logo } from '../components/Logo'
 
 const SHOWN = ['terminal.new', 'terminal.splitRight', 'palette.show', 'quickopen', 'missions.new', 'folder.open', 'sidebar.toggle', 'settings.open']
 
@@ -10,7 +11,10 @@ export function Welcome(): React.JSX.Element {
   return (
     <div className="welcome">
       <div className="welcome-inner">
-        <h1>sldev</h1>
+        <div className="welcome-logo">
+          <Logo size={56} stroke={1} />
+          <h1>sldev</h1>
+        </div>
         <p className="welcome-sub">Agentic coding workspace</p>
         <div className="welcome-actions">
           <button className="btn primary" onClick={() => openTerminal()}>

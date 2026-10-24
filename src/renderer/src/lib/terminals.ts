@@ -16,16 +16,16 @@ const isMac = window.api.platform === 'darwin'
 export const PATH_MIME = 'application/x-sldev-paths'
 
 export const TERMINAL_THEME: ITheme = {
-  background: '#141414',
+  background: '#0a0a0a',
   foreground: '#d6d6dd',
   cursor: '#e4e4e4',
-  cursorAccent: '#141414',
-  selectionBackground: '#3a4a6b99',
+  cursorAccent: '#0a0a0a',
+  selectionBackground: '#ffffff33',
   black: '#2a2a2a',
   red: '#f14c4c',
   green: '#3fb950',
   yellow: '#e5c07b',
-  blue: '#5ea1ff',
+  blue: '#4d8dff',
   magenta: '#c678dd',
   cyan: '#56b6c2',
   white: '#d6d6dd',

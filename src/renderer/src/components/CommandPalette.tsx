@@ -52,7 +52,7 @@ function Picker(): React.JSX.Element {
 
   return (
     <div className="palette-backdrop" onMouseDown={close}>
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="palette brand-frame" onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={input}
           className="palette-input"
