@@ -13,7 +13,7 @@ export function TitleBar(): React.JSX.Element {
     <div className={`titlebar${isMac ? ' mac' : ''}`}>
       <div className="titlebar-brand">
         <Logo size={16} />
-        sldev
+        sldev-io
       </div>
       <button className="titlebar-search" onClick={showCommandPalette}>
         <Search size={13} />

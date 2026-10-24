@@ -1,7 +1,8 @@
-import type { ClaudeTaskOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
+import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal } from '../dock/dockApi'
-import { claudeCommand, slugify } from '../lib/claude'
+import { agentCommand, slugify } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
+import { getAgent } from './agents'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
 
@@ -49,10 +50,14 @@ export function missionEnv(id: string): Record<string, string> {
   return hook ? { SLDEV_MISSION_ID: id, SLDEV_HOOK_PORT: String(hook.port), SLDEV_HOOK_TOKEN: hook.token } : { SLDEV_MISSION_ID: id }
 }
 
+/** Resume the mission's session: by id when hooks reported one, else the agent's "continue latest" (if it has one). */
 export function missionResumeCommand(id: string): string | undefined {
   const m = getMission(id)
-  if (!m?.sessionId) return undefined
-  return claudeCommand(m.options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId })
+  if (!m) return undefined
+  const agent = getAgent(m.options.agent)
+  if (agent.hooks && m.sessionId) return agentCommand(agent, m.options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId })
+  if (!agent.hooks && agent.canResume && m.status !== 'starting') return agentCommand(agent, m.options, undefined, m.title, { resume: true })
+  return undefined
 }
 
 export function linkMissionPanel(missionId: string, panelId: string): void {
@@ -64,7 +69,7 @@ export interface StartMissionInput {
   title?: string
   root: string
   cwd?: string
-  options: ClaudeTaskOptions
+  options: AgentOptions
   worktree: boolean
   base?: string
   taskId?: string
@@ -72,7 +77,8 @@ export interface StartMissionInput {
 
 export async function startMission(input: StartMissionInput): Promise<Mission> {
   if (!hook) hook = await window.api.missions.hookInfo()
-  const title = input.title?.trim() || input.prompt.trim().split('\n')[0].slice(0, 60) || 'Claude session'
+  const agent = getAgent(input.options.agent)
+  const title = input.title?.trim() || input.prompt.trim().split('\n')[0].slice(0, 60) || `${agent.name} session`
   const id = `m-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   let cwd = input.cwd ?? input.root
   let worktree: Mission['worktree']
@@ -91,7 +97,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     worktree,
     // without a worktree, review shows changes since the commit the mission started from
     baseCommit: !worktree && repo ? ((await window.api.git.head(cwd)) ?? undefined) : undefined,
-    options: input.options,
+    options: { ...input.options, agent: agent.id },
     status: 'starting',
     taskId: input.taskId,
     createdAt: Date.now(),
@@ -102,8 +108,8 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   openTerminal({
     cwd,
     title,
-    command: claudeCommand(input.options, input.prompt, title, { settingsPath: hook?.settingsPath }),
-    displayCommand: claudeCommand(input.options, input.prompt, title),
+    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath }),
+    displayCommand: agentCommand(agent, input.options, input.prompt, title),
     env: missionEnv(id),
     missionId: id
   })
@@ -116,10 +122,11 @@ export function focusOrResume(id: string): void {
   const panel = missions.get().panels[id]
   if (panel && focusPanel(panel)) return
   const resume = missionResumeCommand(id)
+  const agent = getAgent(m.options.agent)
   openTerminal({
     cwd: m.cwd,
     title: m.title,
-    command: resume ?? claudeCommand(m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath }),
+    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath }),
     env: missionEnv(id),
     missionId: id
   })
@@ -196,7 +203,7 @@ window.api.missions.onHook((e: HookEvent) => {
     }
     case 'stop': {
       const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text ?? m.lastMessage, notification: undefined })
-      if (next) notify(next, `${m.title} finished`, e.text ?? 'Claude is waiting for your next message')
+      if (next) notify(next, `${m.title} finished`, e.text ?? `${getAgent(m.options.agent).name} is waiting for your next message`)
       void refreshStats(m.id)
       break
     }
@@ -207,12 +214,48 @@ window.api.missions.onHook((e: HookEvent) => {
   }
 })
 
+// Agents without hooks are tracked from their terminal: output means working, a quiet spell
+// means it's your turn, and a bell / OSC 9 notification means it needs you.
+const IDLE_MS = 5000
+const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function onAgentActivity(m: Mission): void {
+  clearTimeout(idleTimers.get(m.id))
+  if (m.status !== 'working' && m.status !== 'needs-input') update(m.id, { status: 'working', notification: undefined })
+  idleTimers.set(
+    m.id,
+    setTimeout(() => {
+      idleTimers.delete(m.id)
+      const cur = getMission(m.id)
+      if (cur?.status !== 'working') return
+      const next = update(m.id, { status: 'waiting' })
+      // updatedAt is when it started working: don't ping for a quick redraw, only after a real stretch of work
+      if (next && Date.now() - cur.updatedAt > 2 * IDLE_MS) notify(next, `${m.title} is waiting`, `${getAgent(m.options.agent).name} went quiet; it's probably your turn`)
+      void refreshStats(m.id)
+    }, IDLE_MS)
+  )
+}
+
+function onAgentAttention(m: Mission, text?: string): void {
+  clearTimeout(idleTimers.get(m.id))
+  const message = text || `${getAgent(m.options.agent).name} needs your attention`
+  const next = update(m.id, { status: 'needs-input', notification: message })
+  if (next) notify(next, `${m.title} needs you`, message)
+}
+
 onTerminalEvent((e) => {
   const entry = Object.entries(missions.get().panels).find(([, p]) => p === e.id)
   if (!entry) return
   const [missionId] = entry
   const m = getMission(missionId)
+  if (m && (e.type === 'activity' || e.type === 'attention')) {
+    if (getAgent(m.options.agent).hooks || !isLive(m.status)) return
+    if (e.type === 'activity') onAgentActivity(m)
+    else onAgentAttention(m, e.text)
+    return
+  }
   if (e.type === 'closed') {
+    clearTimeout(idleTimers.get(missionId))
     missions.set((s) => {
       const panels = { ...s.panels }
       delete panels[missionId]
@@ -220,6 +263,7 @@ onTerminalEvent((e) => {
     })
     if (m && isLive(m.status)) update(missionId, { status: 'ended' })
   } else if (e.type === 'status' && e.status === 'exited' && m && isLive(m.status)) {
+    clearTimeout(idleTimers.get(missionId))
     const failed = e.exitCode !== undefined && e.exitCode !== 0 && e.exitCode !== 130
     update(missionId, { status: failed ? 'failed' : 'ended' })
     void refreshStats(missionId)

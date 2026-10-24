@@ -14,7 +14,7 @@ export function TerminalPanel(props: IDockviewPanelProps<TerminalPanelParams>): 
   useEffect(() => {
     const { cwd, initialInput, runtimeId, taskId, missionId, env, sshConnectionId, displayCommand } = props.params
     const fresh = consumeFresh(id)
-    // restored mission panels resume the Claude session instead of re-sending the prompt
+    // restored mission panels resume the agent session instead of re-sending the prompt
     const command = missionId && !fresh ? (missionResumeCommand(missionId) ?? props.params.command) : props.params.command
     // a restored runtime/task panel waits for Enter instead of re-running its command on app start
     // hook port/token change every app start, so missions always get a fresh env

@@ -1954,3 +1954,53 @@ a {
 .modal input:focus {
   border-color: var(--accent);
 }
+
+.mission-agent {
+  font-size: 10.5px;
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+}
+.agent-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.agent-chip code {
+  margin-left: auto;
+  font: 11px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--fg-subtle);
+}
+.agent-dot.on {
+  border-color: transparent;
+  background: var(--brand-green);
+}
+.custom-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.custom-agent .field-row input {
+  flex: 1;
+}

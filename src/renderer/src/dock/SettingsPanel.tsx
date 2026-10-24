@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { VaultStatus } from '@shared/types'
+import type { CustomAgent, VaultStatus } from '@shared/types'
+import { Plus, Trash2 } from 'lucide-react'
+import { useAgents } from '../state/agents'
 import { applyTerminalFont } from '../lib/terminals'
 import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
@@ -48,6 +50,7 @@ export function SettingsPanel(): React.JSX.Element {
       </section>
       <section>
         <h3>Agents</h3>
+        <AgentSettings />
         <label className="check">
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />
           <span>Desktop notifications when a mission needs you or finishes</span>
@@ -72,5 +75,64 @@ export function SettingsPanel(): React.JSX.Element {
         </div>
       </section>
     </div>
+  )
+}
+
+function AgentSettings(): React.JSX.Element {
+  const agents = useAgents()
+  const defaultAgent = useStore(workspace, (w) => w.defaultAgent)
+  const saved = useStore(workspace, (w) => w.customAgents)
+  const [custom, setCustom] = useState<CustomAgent[]>(saved)
+  const save = (list: CustomAgent[]): void => {
+    setCustom(list)
+    updateSettings({ customAgents: list })
+  }
+  const edit = (id: string, patch: Partial<CustomAgent>): void => setCustom((l) => l.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  const add = (): void => save([...custom, { id: `custom-${Date.now().toString(36)}`, name: '', command: '' }])
+
+  return (
+    <>
+      <label className="field">
+        <span>Default agent for new missions and tasks</span>
+        <select value={defaultAgent} onChange={(e) => updateSettings({ defaultAgent: e.target.value })}>
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+              {a.installed === false ? ' (not installed)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="agent-grid">
+        {agents
+          .filter((a) => !a.custom)
+          .map((a) => (
+            <div key={a.id} className="agent-chip" title={a.installed === false && a.install ? `Install: ${a.install}` : a.bin}>
+              <span className={`agent-dot${a.installed ? ' on' : ''}`} />
+              <span>{a.name}</span>
+              <code>{a.bin}</code>
+            </div>
+          ))}
+      </div>
+      <div className="field">
+        <span>Custom agents: any CLI. In commands, {'{prompt}'} {'{model}'} {'{name}'} are filled in; without {'{prompt}'} the prompt is appended.</span>
+        {custom.map((c) => (
+          <div key={c.id} className="custom-agent" onBlur={() => updateSettings({ customAgents: custom })}>
+            <div className="field-row">
+              <input value={c.name} placeholder="Name (e.g. Aider)" onChange={(e) => edit(c.id, { name: e.target.value })} />
+              <button type="button" className="icon-btn" title="Remove" onClick={() => save(custom.filter((x) => x.id !== c.id))}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+            <input className="mono" value={c.command} placeholder="Interactive command, e.g. aider" onChange={(e) => edit(c.id, { command: e.target.value })} />
+            <input className="mono" value={c.printCommand ?? ''} placeholder="Non-interactive (optional): aider --message {prompt} --yes" onChange={(e) => edit(c.id, { printCommand: e.target.value || undefined })} />
+            <input className="mono" value={c.resumeCommand ?? ''} placeholder="Continue last session (optional): aider --restore-chat-history" onChange={(e) => edit(c.id, { resumeCommand: e.target.value || undefined })} />
+          </div>
+        ))}
+        <button type="button" className="btn sm" onClick={add}>
+          <Plus size={13} /> Add custom agent
+        </button>
+      </div>
+    </>
   )
 }

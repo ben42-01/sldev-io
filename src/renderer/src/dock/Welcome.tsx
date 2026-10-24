@@ -13,7 +13,7 @@ export function Welcome(): React.JSX.Element {
       <div className="welcome-inner">
         <div className="welcome-logo">
           <Logo size={56} stroke={1} />
-          <h1>sldev</h1>
+          <h1>sldev-io</h1>
         </div>
         <p className="welcome-sub">Agentic coding workspace</p>
         <div className="welcome-actions">

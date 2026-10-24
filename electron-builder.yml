@@ -1,5 +1,5 @@
 appId: io.sldev.app
-productName: sldev
+productName: sldev-io
 directories:
   output: dist
   buildResources: build
@@ -13,7 +13,7 @@ linux:
   target: [AppImage, deb, rpm]
   syncDesktopName: true
   category: Development
-  maintainer: sldev
+  maintainer: sldev-io
 mac:
   target: [dmg, zip]
   category: public.app-category.developer-tools

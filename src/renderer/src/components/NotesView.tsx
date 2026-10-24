@@ -30,7 +30,7 @@ export async function missionFromNote(path: string, title: string): Promise<void
   const root = workspace.get().rootFolder
   if (!root) return
   const prompt = (await window.api.notes.read(path)).replace(/^#.*\n+/, '').trim()
-  if (prompt) await startMission({ prompt, title, root, options: {}, worktree: false })
+  if (prompt) await startMission({ prompt, title, root, options: { agent: workspace.get().defaultAgent }, worktree: false })
 }
 
 export function NotesView(): React.JSX.Element {

@@ -8,6 +8,7 @@ import { isActive, useRun } from '../state/runs'
 import { useStore } from '../state/store'
 import { buildTaskCommand, deleteTask, newTaskId, runTask, saveTask, tasks } from '../state/tasks'
 import { workspace } from '../state/workspace'
+import { getAgent } from '../state/agents'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot } from './StatusDot'
 import { ViewShell } from './RuntimesView'
@@ -34,7 +35,7 @@ export function TasksView(): React.JSX.Element {
     )
   }
 
-  const blank = (): Task => ({ id: newTaskId(), name: '', scope: root, kind: 'claude', cwd: '', prompt: '', claude: {}, createdAt: 0 })
+  const blank = (): Task => ({ id: newTaskId(), name: '', scope: root, kind: 'agent', cwd: '', prompt: '', agent: { agent: workspace.get().defaultAgent }, createdAt: 0 })
   const project = root ? list.filter((t) => t.scope === root) : []
   const global = list.filter((t) => t.scope === null)
 
@@ -77,7 +78,7 @@ function Section({ label, tasks, onEdit, empty }: { label: string; tasks: Task[]
 function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JSX.Element {
   const run = useRun('taskId', task.id)
   const active = isActive(run)
-  const subtitle = task.kind === 'claude' ? task.prompt?.split('\n')[0] || 'claude' : task.command
+  const subtitle = task.kind === 'agent' ? task.prompt?.split('\n')[0] || getAgent(task.agent?.agent).name : task.command
   const menu = (): MenuItem[] => [
     { label: 'Run', icon: <Play size={13} />, run: () => runTask(task) },
     { label: 'Stop', icon: <Square size={13} />, disabled: !active, run: () => run && stopTerminal(run.panelId) },
@@ -91,7 +92,7 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JS
   ]
   return (
     <div className="rt-row" onDoubleClick={() => runTask(task)} onContextMenu={(e) => showContextMenu(e, menu())} title={buildTaskCommand(task)}>
-      {run ? <StatusDot run={run} /> : <span className="task-kind">{task.kind === 'claude' ? <Bot size={14} /> : <Terminal size={14} />}</span>}
+      {run ? <StatusDot run={run} /> : <span className="task-kind">{task.kind === 'agent' ? <Bot size={14} /> : <Terminal size={14} />}</span>}
       <div className="rt-main">
         <div className="rt-name">{task.name}</div>
         <div className="rt-cmd">{subtitle}</div>

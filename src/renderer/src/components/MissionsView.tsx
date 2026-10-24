@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ClaudeTaskOptions } from '@shared/types'
+import type { AgentOptions } from '@shared/types'
 import { LayoutGrid, Plus, Rocket } from 'lucide-react'
 import { openPanel } from '../dock/dockApi'
 import { isLive, missions, startMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
-import { ClaudeOptionsFields } from './ClaudeOptionsFields'
+import { AgentOptionsFields } from './AgentOptionsFields'
+import { getAgent } from '../state/agents'
 import { MissionCard } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 
@@ -42,7 +43,7 @@ export function MissionsView(): React.JSX.Element {
     >
       <div className="view-scroll">
         {!root ? (
-          <div className="empty-state"><p>Open a folder to launch Claude Code missions in it.</p></div>
+          <div className="empty-state"><p>Open a folder to launch agent missions in it.</p></div>
         ) : creating ? (
           <NewMissionForm root={root} onDone={() => setCreating(false)} />
         ) : (
@@ -58,7 +59,7 @@ export function MissionsView(): React.JSX.Element {
         <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} />)}</div>
         {root && !mine.length && !creating && (
           <div className="muted-note">
-            A mission runs Claude Code on a prompt, optionally in its own git worktree. sldev tracks when it's working, when it needs you, and lets you review and merge the diff when it's done.
+            A mission runs a coding agent (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini or your own CLI) on a prompt, optionally in its own git worktree. sldev-io tracks when it's working, when it needs you, and lets you review and merge the diff when it's done.
           </div>
         )}
       </div>
@@ -69,7 +70,7 @@ export function MissionsView(): React.JSX.Element {
 function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
   const [title, setTitle] = useState('')
-  const [options, setOptions] = useState<ClaudeTaskOptions>({})
+  const [options, setOptions] = useState<AgentOptions>(() => ({ agent: workspace.get().defaultAgent }))
   const [isRepo, setIsRepo] = useState(false)
   const [worktree, setWorktree] = useState(true)
   const [branches, setBranches] = useState<string[]>([])
@@ -113,7 +114,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
       }}
     >
       <label className="field">
-        <span>What should Claude do?</span>
+        <span>What should {getAgent(options.agent).name} do?</span>
         <textarea autoFocus rows={6} value={prompt} placeholder="Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
       </label>
       <label className="field">
@@ -136,7 +137,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
           )}
         </>
       )}
-      <ClaudeOptionsFields value={options} onChange={(p) => setOptions((o) => ({ ...o, ...p }))} showPrint={false} />
+      <AgentOptionsFields value={options} onChange={(p) => setOptions((o) => ({ ...o, ...p }))} showPrint={false} />
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn" onClick={onDone}>Cancel</button>

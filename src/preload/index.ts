@@ -57,6 +57,10 @@ const api = {
     existingFiles: (paths: string[]): Promise<string[]> => ipcRenderer.invoke('fs:existingFiles', paths),
     listFiles: (root: string): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', root)
   },
+  agents: {
+    /** which of these executables are on PATH */
+    installed: (bins: string[]): Promise<string[]> => ipcRenderer.invoke('agents:installed', bins)
+  },
   editors: {
     list: (): Promise<EditorInfo[]> => ipcRenderer.invoke('editors:list'),
     open: (id: string, target: string, line?: number, col?: number): Promise<boolean> => ipcRenderer.invoke('editors:open', id, target, line, col),

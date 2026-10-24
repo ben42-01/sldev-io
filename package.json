@@ -1,12 +1,15 @@
 {
   "name": "sldev-io",
-  "productName": "sldev",
-  "desktopName": "sldev.desktop",
+  "productName": "sldev-io",
+  "desktopName": "sldev-io.desktop",
   "version": "0.1.0",
   "description": "Agentic coding workspace: terminals, agents, runtimes, skills, workflows.",
   "main": "out/main/index.js",
   "license": "UNLICENSED",
-  "author": { "name": "sldev", "email": "team.agora.hub@gmail.com" },
+  "author": {
+    "name": "sldev-io",
+    "email": "team.agora.hub@gmail.com"
+  },
   "homepage": "https://github.com/sldev-io/sldev",
   "private": true,
   "scripts": {
@@ -19,7 +22,8 @@
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win"
+    "dist:win": "npm run build && electron-builder --win",
+    "test": "vitest run"
   },
   "dependencies": {
     "node-pty": "1.1.0",
@@ -52,6 +56,7 @@
     "react-dom": "19.3.1",
     "typescript": "7.0.2",
     "vite": "8.3.5",
+    "vitest": "5.0.3",
     "yaml": "2.9.1"
   }
 }

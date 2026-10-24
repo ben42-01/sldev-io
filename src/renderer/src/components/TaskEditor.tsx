@@ -1,19 +1,20 @@
 import { useState } from 'react'
-import type { ClaudeTaskOptions, Task } from '@shared/types'
+import type { AgentOptions, Task } from '@shared/types'
 import { Bot, Terminal } from 'lucide-react'
 import { buildTaskCommand } from '../state/tasks'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
-import { ClaudeOptionsFields } from './ClaudeOptionsFields'
+import { AgentOptionsFields } from './AgentOptionsFields'
+import { getAgent } from '../state/agents'
 
 export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSave: (t: Task, run: boolean) => void; onCancel: () => void }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const [t, setT] = useState<Task>(initial)
   const set = (p: Partial<Task>): void => setT((x) => ({ ...x, ...p }))
-  const setClaude = (p: Partial<ClaudeTaskOptions>): void => setT((x) => ({ ...x, claude: { ...x.claude, ...p } }))
+  const setAgent = (p: Partial<AgentOptions>): void => setT((x) => ({ ...x, agent: { ...x.agent, ...p } }))
   const command = buildTaskCommand(t)
-  const valid = !!t.name.trim() && (t.kind === 'claude' ? !!t.prompt?.trim() || !!t.claude?.extraArgs : !!t.command?.trim())
+  const valid = !!t.name.trim() && (t.kind === 'agent' ? !!t.prompt?.trim() || !!t.agent?.extraArgs : !!t.command?.trim())
 
   const submit = (run: boolean): void => {
     if (valid) onSave({ ...t, name: t.name.trim(), createdAt: t.createdAt || Date.now() }, run)
@@ -35,8 +36,8 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
       }}
     >
       <div className="seg">
-        <button type="button" className={t.kind === 'claude' ? 'on' : ''} onClick={() => set({ kind: 'claude' })}>
-          <Bot size={14} /> Claude
+        <button type="button" className={t.kind === 'agent' ? 'on' : ''} onClick={() => set({ kind: 'agent' })}>
+          <Bot size={14} /> Agent
         </button>
         <button type="button" className={t.kind === 'shell' ? 'on' : ''} onClick={() => set({ kind: 'shell' })}>
           <Terminal size={14} /> Shell
@@ -45,18 +46,18 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
 
       <label className="field">
         <span>Name</span>
-        <input autoFocus value={t.name} placeholder={t.kind === 'claude' ? 'Fix failing tests' : 'Build & test'} onChange={(e) => set({ name: e.target.value })} />
+        <input autoFocus value={t.name} placeholder={t.kind === 'agent' ? 'Fix failing tests' : 'Build & test'} onChange={(e) => set({ name: e.target.value })} />
       </label>
 
-      {t.kind === 'claude' ? (
+      {t.kind === 'agent' ? (
         <>
           <label className="field">
             <span>Prompt</span>
             <textarea rows={6} value={t.prompt ?? ''} placeholder="Run the test suite, find the failures and fix them…" onChange={(e) => set({ prompt: e.target.value })} />
           </label>
-          <ClaudeOptionsFields value={t.claude ?? {}} onChange={setClaude} />
+          <AgentOptionsFields value={t.agent ?? {}} onChange={setAgent} />
           <label className="check">
-            <input type="checkbox" checked={!!t.claude?.worktree} onChange={(e) => setClaude({ worktree: e.target.checked || undefined })} />
+            <input type="checkbox" checked={!!t.agent?.worktree} onChange={(e) => setAgent({ worktree: e.target.checked || undefined })} />
             <span>Run in a new git worktree (review & merge afterwards)</span>
           </label>
         </>
@@ -84,7 +85,7 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
       <div className="field">
         <span>Runs</span>
         <pre className="cmd-preview">{command || '…'}</pre>
-        {t.kind === 'claude' && <span className="hint">Runs as a mission: live status, notifications and diff review{t.claude?.worktree ? ', in its own worktree' : ''}.</span>}
+        {t.kind === 'agent' && <span className="hint">Runs as a {getAgent(t.agent?.agent).name} mission: live status, notifications and diff review{t.agent?.worktree ? ', in its own worktree' : ''}.</span>}
       </div>
 
       <div className="form-actions">

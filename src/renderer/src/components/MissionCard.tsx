@@ -2,6 +2,7 @@ import type { Mission } from '@shared/types'
 import { Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal } from 'lucide-react'
 import { focusOrResume, isLive, missions, removeMission, reviewMission, stopMission } from '../state/missions'
 import { useStore } from '../state/store'
+import { getAgent } from '../state/agents'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
@@ -43,6 +44,7 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
+        <span className="mission-agent">{getAgent(m.options.agent).name}</span>
         <span className="mission-time">{ago(m.updatedAt)}</span>
       </div>
       <div className="mission-title" title={m.prompt}>{m.title}</div>

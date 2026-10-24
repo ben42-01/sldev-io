@@ -67,7 +67,7 @@ export class PtyManager {
         ...(process.env as Record<string, string>),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        TERM_PROGRAM: 'sldev',
+        TERM_PROGRAM: 'sldev-io',
         ...opts.env
       }
     })

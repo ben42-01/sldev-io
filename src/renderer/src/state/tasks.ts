@@ -1,7 +1,8 @@
 import type { Task } from '@shared/types'
 import { openTerminal, focusPanel } from '../dock/dockApi'
 import { restartTerminal } from '../lib/terminals'
-import { claudeCommand } from '../lib/claude'
+import { agentCommand } from '../lib/agents'
+import { getAgent } from './agents'
 import { startMission } from './missions'
 import { findRun, isActive } from './runs'
 import { createStore } from './store'
@@ -11,7 +12,15 @@ export const tasks = createStore<{ list: Task[]; loaded: boolean }>({ list: [], 
 
 export async function loadTasks(): Promise<void> {
   const store = await window.api.store.get('tasks')
-  tasks.set({ list: store?.tasks ?? [], loaded: true })
+  tasks.set({ list: (store?.tasks ?? []).map(migrateTask), loaded: true })
+}
+
+/** Tasks saved before agents were pluggable were `kind: 'claude'` with options under `claude`. */
+function migrateTask(t: Task): Task {
+  const legacy = t as Omit<Task, 'kind'> & { kind: string; claude?: Task['agent'] }
+  if (legacy.kind !== 'claude') return t
+  const { claude, ...rest } = legacy
+  return { ...rest, kind: 'agent', agent: { ...claude, agent: 'claude' } }
 }
 
 function persist(list: Task[]): void {
@@ -35,7 +44,8 @@ export function newTaskId(): string {
 /** The command line a task runs. Shown live in the editor so there's no magic. */
 export function buildTaskCommand(task: Task): string {
   if (task.kind === 'shell') return task.command?.trim() ?? ''
-  return claudeCommand(task.claude ?? {}, task.prompt, task.name)
+  const o = task.agent ?? {}
+  return agentCommand(getAgent(o.agent), o, task.prompt, task.name)
 }
 
 export function taskCwd(task: Task): string | undefined {
@@ -50,9 +60,9 @@ export function runTask(task: Task): void {
   if (!command) return
   saveTask({ ...task, lastRunAt: Date.now() })
   const root = task.scope ?? workspace.get().rootFolder
-  if (task.kind === 'claude' && root) {
-    // Claude tasks run as missions: tracked status, notifications, optional worktree, diff review
-    void startMission({ prompt: task.prompt ?? '', title: task.name, root, cwd: taskCwd(task) ?? root, options: task.claude ?? {}, worktree: !!task.claude?.worktree, taskId: task.id })
+  if (task.kind === 'agent' && root) {
+    // agent tasks run as missions: tracked status, notifications, optional worktree, diff review
+    void startMission({ prompt: task.prompt ?? '', title: task.name, root, cwd: taskCwd(task) ?? root, options: task.agent ?? {}, worktree: !!task.agent?.worktree, taskId: task.id })
     return
   }
   const run = findRun('taskId', task.id)

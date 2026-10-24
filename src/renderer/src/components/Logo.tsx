@@ -4,7 +4,7 @@ import { useId } from 'react'
 export function Logo({ size = 16, stroke = 1.5 }: { size?: number; stroke?: number }): React.JSX.Element {
   const id = useId()
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-label="sldev">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-label="sldev-io">
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#4d8dff" />

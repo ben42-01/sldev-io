@@ -42,6 +42,21 @@ export interface AppSettings {
   shell: string | null
   /** Electron accelerator that shows/hides the window from anywhere; null = off */
   globalHotkey: string | null
+  /** agent preselected for new missions and tasks */
+  defaultAgent: string
+  /** user-defined agent CLIs */
+  customAgents: CustomAgent[]
+}
+
+export interface CustomAgent {
+  id: string
+  name: string
+  /** interactive command; {prompt} {model} {name} are filled in, the prompt is appended if {prompt} is absent */
+  command: string
+  /** non-interactive variant, if the CLI has one */
+  printCommand?: string
+  /** command that continues the most recent session */
+  resumeCommand?: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -55,7 +70,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace',
   notifications: true,
   shell: null,
-  globalHotkey: 'CommandOrControl+Shift+Space'
+  globalHotkey: 'CommandOrControl+Shift+Space',
+  defaultAgent: 'claude',
+  customAgents: []
 }
 
 export type RuntimeSource = 'npm' | 'make' | 'just' | 'cargo' | 'python' | 'compose' | 'go' | 'deno' | 'custom'
@@ -81,13 +98,16 @@ export interface CustomRuntime {
   cwd: string
 }
 
-export interface ClaudeTaskOptions {
+export interface AgentOptions {
+  /** agent id (claude, codex, cursor, copilot, opencode, gemini or a custom id); unset = claude */
+  agent?: string
   model?: string
+  /** the agent's approval / permission mode */
   permissionMode?: string
   effort?: string
-  /** run in a fresh git worktree (`claude -w`) */
+  /** run in a fresh git worktree */
   worktree?: boolean
-  /** non-interactive (`claude -p`) */
+  /** non-interactive: print the result and exit */
   print?: boolean
   extraArgs?: string
 }
@@ -97,12 +117,12 @@ export interface Task {
   name: string
   /** project root this task belongs to, or null for a global task */
   scope: string | null
-  kind: 'shell' | 'claude'
+  kind: 'shell' | 'agent'
   /** relative to the scope root ('' = root); absolute for global tasks ('' = home) */
   cwd: string
   command?: string
   prompt?: string
-  claude?: ClaudeTaskOptions
+  agent?: AgentOptions
   createdAt: number
   lastRunAt?: number
 }
@@ -147,7 +167,7 @@ export interface Mission {
   worktree?: WorktreeInfo
   /** for missions without a worktree: HEAD when the mission started */
   baseCommit?: string
-  options: ClaudeTaskOptions
+  options: AgentOptions
   status: MissionStatus
   sessionId?: string
   taskId?: string

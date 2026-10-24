@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { existsSync, renameSync } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { DEFAULT_SETTINGS, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { PtyManager, setShellOverride } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
-import { detectEditors, openInEditor, terminalEditorCommand, terminalEditorGoto } from './editors'
+import { detectEditors, findOnPath, openInEditor, terminalEditorCommand, terminalEditorGoto } from './editors'
 import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
@@ -18,7 +19,20 @@ import { detectRuntimes } from './runtimes'
 import { loadShellEnv } from './shellEnv'
 
 const isMac = process.platform === 'darwin'
-const BG = '#141414'
+
+// The app was called "sldev" before; carry its data dir over once (connections, settings, notes…).
+function migrateLegacyUserData(): void {
+  const current = app.getPath('userData')
+  const legacy = join(app.getPath('appData'), 'sldev')
+  if (basename(current) !== 'sldev-io' || existsSync(current) || !existsSync(legacy)) return
+  try {
+    renameSync(legacy, current)
+  } catch (err) {
+    console.error('could not migrate legacy user data', err)
+  }
+}
+migrateLegacyUserData()
+const BG = '#0a0a0a'
 
 let win: BrowserWindow | null = null
 const ptys = new PtyManager()
@@ -36,7 +50,7 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     backgroundColor: BG,
-    title: 'sldev',
+    title: 'sldev-io',
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 12, y: 12 } }
@@ -118,6 +132,7 @@ function registerIpc(): void {
 
   // editors & OS integration
   ipcMain.handle('editors:list', () => detectEditors())
+  ipcMain.handle('agents:installed', (_e, bins: string[]) => bins.filter((b) => !!b && findOnPath(b)))
   ipcMain.handle('editors:open', (_e, id: string, target: string, line?: number, col?: number) => openInEditor(id, target, line, col))
   ipcMain.handle('editors:terminalCommand', (_e, id: string) => terminalEditorCommand(id))
   ipcMain.handle('editors:terminalGoto', (_e, id: string, file: string, line: number) => terminalEditorGoto(id, file, line))

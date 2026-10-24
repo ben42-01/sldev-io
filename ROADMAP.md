@@ -1,4 +1,4 @@
-# sldev roadmap
+# sldev-io roadmap
 
 A desktop workspace for agentic coding through CLIs (Claude Code, Codex, Gemini, Aider, DeepSeek…).
 It looks and feels like Cursor but is not an IDE: terminals are the main surface, and everything
@@ -75,6 +75,8 @@ Status: ✅ done · ⬜ planned
 - ⬜ Multiple projects/workspaces open at once, each with its own layout
 - ⬜ Keep shells alive across app restarts (background pty host)
 - ⬜ SFTP upload / edit-in-place, remote port forward (-R), dynamic SOCKS (-D)
-- ⬜ Other agent CLIs (Codex, Gemini, Aider) as mission backends
+- ✅ Any agent CLI as a mission backend: Claude Code, Codex, Cursor Agent, Copilot, OpenCode, Gemini, custom templates
+- ⬜ Richer status for non-Claude agents via their own hooks (Codex `notify`, Gemini hooks…)
+- ✅ CI (typecheck, tests, build) and release-branch installer builds for Linux, Windows, macOS
 - ⬜ Code signing + notarization, auto-update
 - ⬜ Custom keybindings and themes

@@ -65,6 +65,10 @@ export type TerminalEvent =
   | { type: 'status'; id: string; status: TerminalStatus; exitCode?: number }
   | { type: 'port'; id: string; port: number }
   | { type: 'closed'; id: string }
+  /** program output that isn't just the echo of a keystroke (throttled) */
+  | { type: 'activity'; id: string }
+  /** the program rang the bell or sent an OSC 9 / 777 desktop notification */
+  | { type: 'attention'; id: string; text?: string }
 
 const eventListeners = new Set<(e: TerminalEvent) => void>()
 
@@ -101,6 +105,8 @@ interface Session {
   resizeTimer: ReturnType<typeof setTimeout> | undefined
   raf: number
   listeners: Listeners
+  lastInput: number
+  lastActivity: number
 }
 
 const sessions = new Map<string, Session>()
@@ -111,7 +117,18 @@ window.api.pty.onData((id, data) => {
   if (!s) return window.api.pty.ack(id, data.length)
   s.term.write(data, () => window.api.pty.ack(id, data.length))
   if (s.command && s.ports.size < 4) scanPorts(s, data)
+  if (s.command) noteActivity(s)
 })
+
+const ECHO_MS = 250
+const ACTIVITY_THROTTLE_MS = 1000
+
+function noteActivity(s: Session): void {
+  const now = Date.now()
+  if (now - s.lastInput < ECHO_MS || now - s.lastActivity < ACTIVITY_THROTTLE_MS) return
+  s.lastActivity = now
+  emit({ type: 'activity', id: s.id })
+}
 
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g
@@ -181,12 +198,15 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
     ptyRows: 0,
     resizeTimer: undefined,
     raf: 0,
-    listeners: {}
+    listeners: {},
+    lastInput: 0,
+    lastActivity: 0
   }
   sessions.set(id, s)
   s.observer.observe(host)
 
   term.onData((d) => {
+    s.lastInput = Date.now()
     if (s.status === 'running' && broadcast.has(id)) {
       for (const bid of broadcast) if (sessions.get(bid)?.status === 'running') window.api.pty.write(bid, d)
     } else if (s.status === 'running') window.api.pty.write(id, d)
@@ -197,6 +217,18 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
   term.registerLinkProvider(fileLinkProvider(s))
   term.attachCustomKeyEventHandler((e) => handleKey(s, e))
   // OSC 7 (shell reports its cwd) lets "split here" open in the directory you're actually in.
+  term.onBell(() => emit({ type: 'attention', id }))
+  // OSC 9 (iTerm/ConEmu style) and OSC 777;notify;title;body: desktop notifications from TUIs
+  term.parser.registerOscHandler(9, (data) => {
+    // ConEmu uses OSC 9;<digit>;… for progress etc.; those aren't notifications
+    if (!/^\d;/.test(data)) emit({ type: 'attention', id, text: data })
+    return true
+  })
+  term.parser.registerOscHandler(777, (data) => {
+    const [kind, title, body] = data.split(';')
+    if (kind === 'notify') emit({ type: 'attention', id, text: [title, body].filter(Boolean).join(': ') })
+    return true
+  })
   term.parser.registerOscHandler(7, (data) => {
     try {
       s.cwd = decodeURIComponent(new URL(data).pathname)

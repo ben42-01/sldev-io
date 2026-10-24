@@ -26,7 +26,7 @@ const EDITORS: EditorDef[] = [
   { id: 'vim', name: 'Vim', kind: 'terminal', bins: ['vim'] }
 ]
 
-function findOnPath(bin: string): string | null {
+export function findOnPath(bin: string): string | null {
   const exts = process.platform === 'win32' ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';') : ['']
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     if (!dir) continue

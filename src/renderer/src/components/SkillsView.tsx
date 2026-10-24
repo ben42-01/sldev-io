@@ -121,7 +121,7 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
   const [worktree, setWorktree] = useState(false)
   const run = (): void => {
     if (!root) return
-    void startMission({ prompt: `${asset.invocation} ${args}`.trim(), title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: {}, worktree })
+    void startMission({ prompt: `${asset.invocation} ${args}`.trim(), title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: { agent: 'claude' }, worktree })
     onDone()
   }
   return (

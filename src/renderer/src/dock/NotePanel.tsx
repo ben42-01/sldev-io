@@ -97,7 +97,7 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
           <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')} title="Preview"><Eye size={12} /></button>
         </div>
         <button className="btn sm" title="Paste this note into the active terminal" onClick={() => void sendNoteToTerminal(path)}><SendHorizontal size={12} /> To terminal</button>
-        <button className="btn sm" title="Start a Claude mission with this note as the prompt" onClick={() => void missionFromNote(path, props.api.title ?? 'Note')}><Rocket size={12} /> Mission</button>
+        <button className="btn sm" title="Start an agent mission with this note as the prompt" onClick={() => void missionFromNote(path, props.api.title ?? 'Note')}><Rocket size={12} /> Mission</button>
       </div>
       {error && <div className="form-error pad">{error}</div>}
       <div className={`note-body ${mode}`}>
