@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { ClaudeAsset } from '@shared/types'
+import { COLLAPSE_OVER, groupAssets, isGroupOpen } from '@renderer/lib/assets'
 import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, skillPrompt, slugify } from '@renderer/lib/agents'
 
 const agent = (id: string) => findAgent(id)
@@ -88,5 +90,23 @@ describe('skillPrompt', () => {
     expect(p).toContain('read /home/u/.claude/skills/review/SKILL.md')
     expect(p).toMatch(/Task: the auth module$/)
     expect(skillPrompt(agent('gemini'), skill, '')).not.toContain('Task:')
+  })
+})
+
+describe('groupAssets', () => {
+  const asset = (name: string, source: ClaudeAsset['source'], plugin?: string): ClaudeAsset => ({ kind: 'skill', name, description: '', source, plugin, path: `/${source}/${plugin ?? ''}/${name}`, invocation: `/${name}` })
+  const many = Array.from({ length: COLLAPSE_OVER + 1 }, (_, i) => asset(`s${i}`, 'synced'))
+  const groups = groupAssets([asset('zeta', 'user'), ...many, asset('b', 'plugin', 'tools'), asset('a', 'plugin', 'docs'), asset('mine', 'project'), asset('alpha', 'user')])
+
+  it('groups by where assets were found, project first and synced last', () => {
+    expect(groups.map((g) => g.key)).toEqual(['project', 'user', 'plugin:docs', 'plugin:tools', 'synced'])
+    expect(groups[1].assets.map((a) => a.name)).toEqual(['alpha', 'zeta'])
+  })
+  it('collapses large groups unless the user opened them or a filter is active', () => {
+    const synced = groups.at(-1)!
+    expect(isGroupOpen(synced, undefined, false)).toBe(false)
+    expect(isGroupOpen(synced, true, false)).toBe(true)
+    expect(isGroupOpen(synced, false, true)).toBe(true)
+    expect(isGroupOpen(groups[1], undefined, false)).toBe(true)
   })
 })

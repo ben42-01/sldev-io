@@ -1653,27 +1653,6 @@ a {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.src-badge {
-  font-size: 10px;
-  padding: 0 5px;
-  border-radius: var(--radius);
-  background: #ffffff10;
-  color: var(--fg-muted);
-  margin-left: 4px;
-  vertical-align: 1px;
-}
-.src-badge.project {
-  background: #3fb95022;
-  color: #56d364;
-}
-.src-badge.plugin {
-  background: #c678dd22;
-  color: #d896ec;
-}
-.src-badge.synced {
-  background: #5ea1ff22;
-  color: #82b8ff;
-}
 
 /* ── workflows ─────────────────────────────── */
 .gh-repo {

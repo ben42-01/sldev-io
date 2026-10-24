@@ -48,6 +48,8 @@ export interface AppSettings {
   customAgents: CustomAgent[]
   /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
   setupSeen: boolean
+  /** Skills view groups the user opened (true) or closed (false), keyed by `${tab}:${group}` */
+  assetGroups: Record<string, boolean>
 }
 
 export interface CustomAgent {
@@ -75,7 +77,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
   customAgents: [],
-  setupSeen: false
+  setupSeen: false,
+  assetGroups: {}
 }
 
 export type RuntimeSource = 'npm' | 'make' | 'just' | 'cargo' | 'python' | 'compose' | 'go' | 'deno' | 'custom'

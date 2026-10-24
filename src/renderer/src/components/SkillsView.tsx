@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ClaudeAsset, McpServer } from '@shared/types'
-import { Copy, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal } from 'lucide-react'
+import { ChevronRight, Copy, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal } from 'lucide-react'
 import { activeTerminalId, openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
 import { writeToTerminal, focusTerminal } from '../lib/terminals'
 import { skillPrompt } from '../lib/agents'
+import { groupAssets, isGroupOpen } from '../lib/assets'
 import { getAgent, useAgents } from '../state/agents'
 import { startMission } from '../state/missions'
 import { useStore } from '../state/store'
-import { workspace } from '../state/workspace'
+import { updateSettings, workspace } from '../state/workspace'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { ViewShell } from './RuntimesView'
 
@@ -33,6 +34,9 @@ export function SkillsView(): React.JSX.Element {
     const f = filter.toLowerCase()
     return (assets ?? []).filter((a) => a.kind === tab && (!f || `${a.name} ${a.description} ${a.plugin ?? ''}`.toLowerCase().includes(f)))
   }, [assets, tab, filter])
+  const groups = useMemo(() => groupAssets(shown), [shown])
+  const saved = useStore(workspace, (w) => w.assetGroups)
+  const toggle = (key: string, open: boolean): void => updateSettings({ assetGroups: { ...workspace.get().assetGroups, [`${tab}:${key}`]: !open } })
 
   return (
     <ViewShell
@@ -67,9 +71,19 @@ export function SkillsView(): React.JSX.Element {
           </div>
           <div className="view-scroll">
             {assets === null && <div className="muted-note">Scanning…</div>}
-            {shown.map((a) => (
-              <AssetRow key={a.path} asset={a} onRun={() => setRunning(a)} />
-            ))}
+            {groups.map((g) => {
+              const open = isGroupOpen(g, saved[`${tab}:${g.key}`], !!filter)
+              return (
+                <div key={g.key} className="rt-group asset-group" data-group={g.key}>
+                  <button className="rt-group-header" title={g.location} onClick={() => toggle(g.key, open)}>
+                    <ChevronRight size={13} className={`chev${open ? ' open' : ''}`} />
+                    <span>{g.label}</span>
+                    <span className="rt-source">{g.assets.length}</span>
+                  </button>
+                  {open && g.assets.map((a) => <AssetRow key={a.path} asset={a} onRun={() => setRunning(a)} />)}
+                </div>
+              )
+            })}
             {assets && !shown.length && <div className="muted-note">{filter ? 'Nothing matches.' : `No ${tab}s found in ~/.claude, this project or installed plugins.`}</div>}
           </div>
         </>
@@ -102,7 +116,7 @@ function AssetRow({ asset: a, onRun }: { asset: ClaudeAsset; onRun: () => void }
     <div className="rt-row asset-row" onDoubleClick={() => (a.kind === 'agent' ? openInEditor(a.path) : onRun())} onContextMenu={(e) => showContextMenu(e, menu())} title={a.description}>
       <div className="rt-main">
         <div className="rt-name">
-          {a.name} <span className={`src-badge ${a.source}`}>{a.plugin ?? a.source}</span>
+          {a.name}
         </div>
         <div className="asset-desc">{a.description}</div>
       </div>

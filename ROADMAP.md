@@ -43,7 +43,8 @@ Status: ✅ done · ⬜ planned
 - ✅ Diff review panel: per-file unified diff (incl. untracked files), commit, merge into base,
      push & open PR via gh, remove worktree
 - ✅ Claude tasks run as missions
-- ✅ Skills browser: user, project, synced and plugin skills, commands and agents; create skills;
+- ✅ Skills browser: user, project, synced and plugin skills, commands and agents, grouped by where
+     they were found (big groups start collapsed, open/closed is remembered); create skills;
      run a skill with any agent (Claude Code via `/name`, others are pointed at its SKILL.md) or
      type the invocation into the active terminal
 - ✅ MCP servers: list with health (`claude mcp list`), add/remove/details
