@@ -136,7 +136,7 @@ jobs:
           Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
           right-click the app and choose **Open** the first time. Checksums are in \`SHA256SUMS.txt\`.
 
-          More at https://sldev.io
+          More at https://sldev-io.vercel.app
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
