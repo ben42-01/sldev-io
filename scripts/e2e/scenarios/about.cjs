@@ -4,11 +4,14 @@ const text = (h, sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.t
 
 module.exports = async (h) => {
   await h.openFixture()
-  await h.click('.statusbar .status-item[title="Settings"]')
+  const version = await h.js('window.api.app.info().then(i => i.version)')
+  h.expect((await text(h, '.titlebar-version')) === `v${version}`, 'title bar shows the version')
+  await h.shot('0-titlebar')
+  await h.click('.titlebar-version')
   await h.wait(600)
   await h.js(`document.getElementById('settings-about')?.scrollIntoView({ block: 'start' })`)
   await h.wait(300)
-  const version = await h.js('window.api.app.info().then(i => i.version)')
+  h.expect(await h.js(`!!document.getElementById('settings-about')`), 'clicking the version opens Settings → About')
   h.expect((await text(h, '.about-name')).includes(version), `About shows the version (${version})`)
   h.expect((await text(h, '.about-details')).includes('Electron'), 'About lists Electron and system details')
   h.expect((await text(h, '#settings-about')).includes('not in development builds'), 'unpacked build: updates reported as unsupported')

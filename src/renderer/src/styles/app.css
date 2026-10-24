@@ -196,7 +196,22 @@ svg.lucide {
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--fg);
-  width: 120px;
+  width: 200px;
+}
+.titlebar-version {
+  -webkit-app-region: no-drag;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  font: 400 11px var(--font-mono);
+  letter-spacing: 0;
+  color: var(--fg-subtle);
+  cursor: pointer;
+}
+.titlebar-version:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
 }
 .titlebar-search {
   -webkit-app-region: no-drag;
@@ -224,7 +239,8 @@ svg.lucide {
   white-space: nowrap;
 }
 .titlebar-spacer {
-  width: 120px;
+  /* same as .titlebar-brand, so the search box stays centred */
+  width: 200px;
 }
 
 /* ── activity bar ──────────────────────────── */

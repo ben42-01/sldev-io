@@ -130,7 +130,7 @@ export function openSettings(): void {
   openPanel('settings', 'settings', 'Settings')
 }
 
-function showAbout(): void {
+export function showAbout(): void {
   openSettings()
   requestAnimationFrame(() => document.getElementById('settings-about')?.scrollIntoView({ block: 'start' }))
 }
