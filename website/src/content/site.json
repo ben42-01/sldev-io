@@ -1,7 +1,7 @@
 {
   "name": "sldev-io",
   "tagline": "The terminal-first workspace for agentic coding.",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "url": "https://sldev-io.vercel.app",
   "downloadUrl": "https://github.com/ben42-01/downloads.sldev.io/releases",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
