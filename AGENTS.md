@@ -51,7 +51,7 @@ src/renderer/src/
   components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/license/* (Polar), public/install.sh,
-                  legal pages (/terms, /privacy, /refunds) from src/content/legal.tsx
+                  pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx)
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```

@@ -13,7 +13,7 @@ interface BetaState {
 
 export const beta = createStore<BetaState>({ status: null, locked: false, dismissed: false })
 
-export const pricingUrl = (): string => `${__SITE_URL__}/#pricing`
+export const pricingUrl = (): string => `${__SITE_URL__}/pricing`
 
 /** Called once at startup, before the workspace renders. */
 export async function initBeta(): Promise<void> {

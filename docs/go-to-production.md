@@ -117,7 +117,7 @@ reviews take days.
 > it stay fine. Then switch `url` and the `og:` tags in `website/index.html` to the new domain.
 
 1. Make sure you own `sldev.io` (or choose the domain you'll use). The app reads
-   `https://<domain>/beta.json`, and links to `https://<domain>/#pricing`.
+   `https://<domain>/beta.json`, and links to `https://<domain>/pricing`.
 2. If the domain is **not** `sldev.io`, change `url` in `website/src/content/site.json`.
    That one field feeds both the website and the app build.
 

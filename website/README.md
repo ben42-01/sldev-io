@@ -59,10 +59,18 @@ redirects.
 (`curl -fsSL https://sldev-io.vercel.app/install.sh | sh`): it downloads the .deb (installed with
 apt) or the right .dmg (copied into /Applications, quarantine flag removed) through those redirects.
 
+## Pages
+
+`/` is the landing page (`src/App.tsx`). Every other page has a `<name>/index.html` with
+`data-page="<name>"`, rendered by `src/pages.tsx` inside the shared `Layout` (nav, footer) with a
+`PageHeader`: `/features`, `/pricing` (plans + FAQ), `/download`, the legal pages and `/thanks`.
+To add one: add the HTML file, an entry in `pages.tsx`, the name in `pages` in `vite.config.ts`
+and a rewrite in `vercel.json`. Old one-page links (`/#download`, `/#pricing`, …) redirect to
+their page (`src/main.tsx`).
+
 ## Legal pages
 
-`/terms`, `/privacy` and `/refunds` are separate HTML entries (`terms/index.html`, …) rendered from
-[`src/content/legal.tsx`](src/content/legal.tsx). The seller name, address, governing-law country,
+`/terms`, `/privacy` and `/refunds` are rendered from [`src/content/legal.tsx`](src/content/legal.tsx). The seller name, address, governing-law country,
 machines per license, years of updates and the "last updated" date come from `legal` in
 [`src/content/site.json`](src/content/site.json). The app links to them from Settings → About.
 Fonts are self-hosted (`src/fonts.ts`), so the site loads nothing from third parties; keep it

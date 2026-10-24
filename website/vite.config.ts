@@ -33,8 +33,10 @@ function downloadRedirect(): Plugin {
   return {
     name: 'download-redirect',
     configureServer(server) {
-      server.middlewares.use('/download/', (req, res) => {
+      server.middlewares.use('/download/', (req, res, next) => {
         const os = encodeURIComponent((req.url ?? '').replace(/^\//, '').split('?')[0])
+        // /download itself is the download page
+        if (!os || os === 'index.html') return next()
         void download(new Request(`http://localhost/api/download?os=${os}`)).then((r) => {
           res.statusCode = r.status
           res.setHeader('Location', r.headers.get('Location') ?? '/')
@@ -46,7 +48,7 @@ function downloadRedirect(): Plugin {
 }
 
 // extra HTML pages next to index.html (each has <name>/index.html)
-const pages = ['terms', 'privacy', 'refunds', 'thanks']
+const pages = ['features', 'pricing', 'download', 'terms', 'privacy', 'refunds', 'thanks']
 
 /** /terms → /terms/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
 function pageRoutes(): Plugin {

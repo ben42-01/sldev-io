@@ -37,14 +37,12 @@ function PlanCard({ plan }: { plan: Plan }) {
   )
 }
 
-export function Pricing() {
+/** The plan cards with the beta announcement; the /pricing page supplies the heading. */
+export function PricingPlans() {
   const beta = betaStatus()
   return (
-    <section className="section alt" id="pricing">
+    <section className="section page-first" id="plans">
       <div className="container">
-        <p className="eyebrow center">Pricing</p>
-        <h2 className="center">Pay once. Own it.</h2>
-        <p className="section-lead center">No subscription, no seat meter. A single {pricing.billing} payment per license.</p>
         <p className="announce">{pricing.announcement}</p>
         {(beta.active || beta.ended) && (
           <p className={`beta-countdown${beta.ended ? ' ended' : ''}`}>
@@ -79,7 +77,7 @@ const generalFaq: Faq[] = [
 
 export function FaqSection() {
   return (
-    <section className="section" id="faq">
+    <section className="section alt" id="faq">
       <div className="container narrow">
         <p className="eyebrow center">FAQ</p>
         <h2 className="center">Questions, answered.</h2>

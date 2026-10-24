@@ -90,9 +90,31 @@ svg [stroke-width] { stroke-width: 1.5; }
 .nav-inner { display: flex; align-items: center; gap: 28px; height: 56px; }
 .nav-logo { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.01em; }
 .nav-links { display: flex; gap: 24px; margin-left: auto; font-size: 14px; color: var(--fg-muted); }
-.nav-links a:hover { color: var(--fg); }
+.nav-links a:hover, .nav-links a[aria-current='page'] { color: var(--fg); }
 .nav-cta-mobile, .nav-toggle { display: none; }
 .nav-toggle { background: none; border: 0; color: var(--fg); padding: 6px; cursor: pointer; margin-left: auto; }
+
+/* sub-page header: the hero's grid and glow, smaller */
+.page-head { position: relative; overflow: hidden; padding: 88px 0 56px; text-align: center; border-bottom: 1px solid var(--border); }
+.page-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 60% 70% at 50% 0%, #000 15%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 0%, #000 15%, transparent 75%);
+  opacity: 0.45;
+}
+.page-head .hero-glow { top: -300px; opacity: 0.8; }
+.page-head-inner { position: relative; }
+.page-head h1 { margin-top: 0; font-size: clamp(36px, 6vw, 60px); }
+.page-head .eyebrow { margin-bottom: 18px; }
+.section.page-first { padding-top: 64px; }
+.page-first .grid, .page-first .downloads, .page-first .announce { margin-top: 0; }
+/* short pages: footer at the bottom of the window */
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+#root > main { flex: 1; }
 
 /* hero */
 .hero { position: relative; overflow: hidden; padding: 84px 0 40px; text-align: center; }
@@ -192,6 +214,12 @@ h1 { margin-top: 26px; font-size: clamp(40px, 7.4vw, 76px); line-height: 1.04; l
 h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.03em; font-weight: 700; }
 .section-lead { max-width: 620px; margin: 16px 0 0; color: var(--fg-muted); font-size: 17px; }
 .section-lead.center { margin-inline: auto; }
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.section-head h2 { max-width: 640px; }
+.more-link { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: var(--fg-muted); white-space: nowrap; }
+.more-link:hover { color: var(--fg); }
+.more-link svg { transition: transform 0.15s; }
+.more-link:hover svg { transform: translateX(3px); }
 
 .strip { padding: 28px 0 8px; }
 .strip .eyebrow { margin-bottom: 18px; }
@@ -227,7 +255,7 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .plan h3 { font-size: 20px; letter-spacing: -0.02em; }
 .plan-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .limited { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font: 500 11.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); white-space: nowrap; }
-.beta-countdown { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font: 500 13px var(--font-mono); color: var(--amber); }
+.beta-countdown { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font: 500 13px var(--font-mono); color: var(--amber); text-align: center; }
 .beta-countdown.ended { color: var(--fg-muted); }
 .beta-date { color: var(--fg-muted); font-weight: 400; }
 .pill-limited { color: var(--amber); }
@@ -325,6 +353,8 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
   .nav-cta-mobile { display: inline-flex; margin-top: 8px; }
   .hero { padding-top: 56px; }
   .section { padding: 72px 0; }
+  .page-head { padding: 56px 0 40px; }
+  .section.page-first { padding-top: 40px; }
   .grid, .steps { grid-template-columns: 1fr; }
   .mock-search { display: none; }
   .plan { padding: 24px; }

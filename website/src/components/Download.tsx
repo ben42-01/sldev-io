@@ -10,7 +10,7 @@ export function DownloadButton({ className = 'btn primary lg', size = 16 }: { cl
       <DownloadIcon size={size} /> Download for {platformLabels[platform]}
     </a>
   ) : (
-    <a className={className} href="/#download">
+    <a className={className} href="/download">
       <DownloadIcon size={size} /> Download
     </a>
   )
@@ -57,15 +57,13 @@ function CopyCommand() {
   )
 }
 
-export function DownloadSection() {
+/** Installer per OS plus the terminal install; the /download page supplies the heading. */
+export function DownloadOptions() {
   const detected = detectPlatform()
   const current = detected === 'mac-intel' ? 'mac' : detected
   return (
-    <section className="section" id="download">
+    <section className="section page-first">
       <div className="container">
-        <p className="eyebrow center">Download</p>
-        <h2 className="center">Get sldev-io</h2>
-        <p className="section-lead center">Free during the beta. Pick your system, or install from a terminal.</p>
         <div className="downloads">
           {cards.map((c) => (
             <article key={c.id} className={`download-card${c.id === current ? ' current brand-frame' : ''}`}>

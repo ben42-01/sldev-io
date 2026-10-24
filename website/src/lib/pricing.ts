@@ -81,5 +81,5 @@ export function planCta(plan: Plan): { label: string; href: string; external: bo
   const paid = plan.price > 0 && plan.checkoutUrl !== ''
   return paid
     ? { label: plan.ctaLabelPaid, href: plan.checkoutUrl, external: true }
-    : { label: plan.ctaLabel, href: '#download', external: false }
+    : { label: plan.ctaLabel, href: '/download', external: false }
 }

@@ -4,6 +4,18 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/download",
+      "destination": "/download/index.html"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/pricing/index.html"
+    },
+    {
+      "source": "/features",
+      "destination": "/features/index.html"
+    },
+    {
       "source": "/download/:os",
       "destination": "/api/download?os=:os"
     },

@@ -48,7 +48,7 @@ export function BetaEnded(): React.JSX.Element {
               <ExternalLink size={14} /> Buy a license
             </button>
           ) : (
-            <button className="btn primary" onClick={() => void window.api.shell.openExternal(`${__SITE_URL__}/#download`)}>
+            <button className="btn primary" onClick={() => void window.api.shell.openExternal(`${__SITE_URL__}/download`)}>
               <ExternalLink size={14} /> Download the latest version
             </button>
           )}

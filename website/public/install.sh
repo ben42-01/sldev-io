@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs sldev-io on Linux (Debian/Ubuntu, .deb) or macOS (.dmg into /Applications).
 #   curl -fsSL https://sldev-io.vercel.app/install.sh | sh
-# Windows: download the installer from https://sldev-io.vercel.app/#download
+# Windows: download the installer from https://sldev-io.vercel.app/download
 set -eu
 
 SITE="${SLDEV_SITE_URL:-https://sldev-io.vercel.app}"
@@ -21,7 +21,7 @@ fetch() {
 case "$(uname -s)" in
   Linux)
     [ "$(uname -m)" = x86_64 ] || die "only x86_64 Linux builds are available for now"
-    command -v dpkg >/dev/null 2>&1 || die "this installer needs a Debian-based distro (dpkg). Other distros: $SITE/#download"
+    command -v dpkg >/dev/null 2>&1 || die "this installer needs a Debian-based distro (dpkg). Other distros: $SITE/download"
     sudo=""
     [ "$(id -u)" -eq 0 ] || sudo="sudo"
     fetch linux "$tmp/sldev-io.deb"
@@ -54,6 +54,6 @@ case "$(uname -s)" in
     say "Done. Open sldev-io from Launchpad or run: open -a sldev-io"
     ;;
   *)
-    die "unsupported system. Windows: download the installer from $SITE/#download"
+    die "unsupported system. Windows: download the installer from $SITE/download"
     ;;
 esac

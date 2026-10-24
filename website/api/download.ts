@@ -50,7 +50,7 @@ function redirect(location: string, cacheSeconds: number): Response {
 
 export async function GET(request: Request): Promise<Response> {
   const os = new URL(request.url).searchParams.get('os')
-  if (!isPlatform(os)) return redirect('/#download', 3600)
+  if (!isPlatform(os)) return redirect('/download', 3600)
   try {
     const headers: Record<string, string> = { Accept: 'application/vnd.github+json', 'User-Agent': 'sldev-io-website' }
     if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`

@@ -8,7 +8,7 @@ export function Hero() {
     <section className="hero" id="top">
       <div className="hero-glow" aria-hidden="true" />
       <div className="container hero-inner">
-        <a className="pill" href="#pricing">
+        <a className="pill" href="/pricing">
           <span className="pill-dot" /> v{site.version} · free during the beta
           {betaStatus().active && <span className="pill-limited">· {betaMessage().toLowerCase()}</span>}
           <ArrowRight size={12} />
@@ -24,12 +24,12 @@ export function Hero() {
         </p>
         <div className="hero-cta">
           <DownloadButton />
-          <a className="btn lg" href="#features">
+          <a className="btn lg" href="/features">
             See how it works
           </a>
         </div>
         <p className="platforms">
-          <a href="#download">{site.platforms.join(' · ')}</a> · one-time license, no subscription
+          <a href="/download">{site.platforms.join(' · ')}</a> · one-time license, no subscription
         </p>
         <div className="hero-shot">
           <AppMockup />

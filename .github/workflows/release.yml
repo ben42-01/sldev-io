@@ -135,7 +135,7 @@ jobs:
           # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
           case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
           cat > notes.md <<EOF
-          The easiest way to install is https://sldev-io.vercel.app/#download, which picks the right
+          The easiest way to install is https://sldev-io.vercel.app/download, which picks the right
           file for your system. On macOS and Linux you can also run:
 
               curl -fsSL https://sldev-io.vercel.app/install.sh | sh

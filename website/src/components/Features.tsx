@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   Boxes,
   GitPullRequest,
   KeyRound,
@@ -29,17 +30,41 @@ const features: Feature[] = [
   { icon: NotebookPen, title: 'Notes that act', text: 'Markdown notes per project or global. Paste one into a terminal or turn it straight into a mission.' }
 ]
 
-export function Features() {
+/** The full grid, for /features. */
+export function FeatureGrid() {
   return (
-    <section className="section" id="features">
+    <section className="section page-first">
       <div className="container">
-        <p className="eyebrow">Features</p>
-        <h2>Everything around the agent, nothing in the way.</h2>
-        <p className="section-lead">
-          The terminal is the main surface. Everything else exists to launch, organise and watch what runs in it.
-        </p>
         <div className="grid">
           {features.map(({ icon: Icon, title, text }) => (
+            <article className="card" key={title}>
+              <Icon size={20} />
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Three features on the home page, linking to the rest. */
+export function FeatureHighlights() {
+  return (
+    <section className="section alt" id="features">
+      <div className="container">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">Features</p>
+            <h2>Everything around the agent, nothing in the way.</h2>
+          </div>
+          <a className="more-link" href="/features">
+            All features <ArrowRight size={15} />
+          </a>
+        </div>
+        <div className="grid">
+          {features.slice(0, 3).map(({ icon: Icon, title, text }) => (
             <article className="card" key={title}>
               <Icon size={20} />
               <h3>{title}</h3>
