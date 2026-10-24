@@ -10,7 +10,7 @@
     "name": "sldev-io",
     "email": "team.agora.hub@gmail.com"
   },
-  "homepage": "https://github.com/sldev-io/sldev",
+  "homepage": "https://github.com/ben42-01/sldev-io",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
@@ -58,5 +58,9 @@
     "vite": "8.3.5",
     "vitest": "5.0.3",
     "yaml": "2.9.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ben42-01/sldev-io.git"
   }
 }
