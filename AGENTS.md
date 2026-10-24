@@ -113,6 +113,12 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
   installers and attach them to GitHub release `v<package.json version>`. Bump the version
   first. Builds are unsigned for now.
 
+## Production docs
+
+`docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks) and
+`docs/monetization-plan.md` has the reasoning. Keep them in sync when you change releases, the
+beta window, licensing or pricing.
+
 ## Skills
 
 Step-by-step playbooks live in `.claude/skills/*/SKILL.md`. Claude Code loads them automatically;

@@ -74,6 +74,10 @@ node-pty is native, so each OS builds its own installer.
 
 ## CI and releases
 
+Launching (downloads, beta window, payments, licensing, signing): see
+[docs/go-to-production.md](docs/go-to-production.md).
+
+
 - **CI** (`.github/workflows/ci.yml`) runs on every push and PR: typecheck, unit tests, build.
 - **Release** (`.github/workflows/release.yml`) runs when you push a `release/**` branch
   (e.g. `release/0.2.0`). It builds Linux (AppImage, deb, rpm), Windows (NSIS) and macOS
