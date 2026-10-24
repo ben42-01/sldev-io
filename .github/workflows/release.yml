@@ -48,7 +48,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # oldest supported runner: native modules (node-pty, ssh2) link against the build
+          # machine's glibc, and ubuntu-latest (26.04, glibc 2.42) breaks Ubuntu 24.04 and older
+          - os: ubuntu-22.04
             name: linux
             args: --linux
           - os: windows-latest
@@ -83,6 +85,12 @@ jobs:
         env:
           # unsigned builds until signing secrets (CSC_LINK, APPLE_ID, …) are configured
           CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Check native modules run on older Linux (glibc <= 2.35)
+        if: env.skip != '1' && matrix.name == 'linux'
+        run: |
+          max=$(find dist/linux-unpacked -name '*.node' -path '*/build/Release/*' -exec objdump -T {} + | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+          echo "highest glibc symbol: $max"
+          [ "$(printf '%s\n' "$max" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35 ]
       - uses: actions/upload-artifact@v4
         if: env.skip != '1'
         with:
