@@ -92,8 +92,11 @@ const daysFromNow = (n) => new Date(Date.now() + n * 86_400_000).toISOString().s
 betaServer.listen(0, '127.0.0.1', () => {
   process.env.SLDEV_BETA_CONFIG_URL = `http://127.0.0.1:${betaServer.address().port}/beta.json`
   licenseServer.listen(0, '127.0.0.1', () => {
-    process.env.SLDEV_LICENSE_API = `http://127.0.0.1:${licenseServer.address().port}/api/license`
-    process.env.SLDEV_LICENSE_PUBLIC_KEY = licenseKeys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64')
+    // a scenario that sets SLDEV_LICENSE_API talks to that server with the app's built-in public key
+    if (!process.env.SLDEV_LICENSE_API) {
+      process.env.SLDEV_LICENSE_API = `http://127.0.0.1:${licenseServer.address().port}/api/license`
+      process.env.SLDEV_LICENSE_PUBLIC_KEY = licenseKeys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64')
+    }
     require(path.join(repoRoot, 'out/main/index.js'))
   })
 })

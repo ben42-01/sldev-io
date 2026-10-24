@@ -19,7 +19,7 @@ function Thanks() {
           <article className="legal-body">
             <ol className="thanks-steps">
               <li>
-                <b>Find your key</b> in the receipt email from Polar, our payment provider. It looks like <code>SLDEV-…</code>. Not there
+                <b>Find your key</b> in the receipt email from Polar, our payment provider. It starts with <code>SLDEV</code>. Not there
                 after a few minutes? Check your spam folder.
               </li>
               <li>

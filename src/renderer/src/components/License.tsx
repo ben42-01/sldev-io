@@ -29,7 +29,7 @@ export function LicenseForm({ autoFocus = false }: { autoFocus?: boolean }): Rea
   return (
     <form className="license-form" onSubmit={(e) => void submit(e)}>
       <div className="license-row">
-        <input className="mono" value={key} autoFocus={autoFocus} spellCheck={false} placeholder="SLDEV-XXXX-XXXX-XXXX" onChange={(e) => setKey(e.target.value)} />
+        <input className="mono" value={key} autoFocus={autoFocus} spellCheck={false} placeholder="Paste your license key" onChange={(e) => setKey(e.target.value)} />
         <button type="submit" className="btn primary" disabled={busy || !key.trim()}>
           <KeyRound size={13} /> {busy ? 'Activating…' : 'Activate'}
         </button>
