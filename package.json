@@ -24,7 +24,9 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "test": "vitest run",
-    "e2e": "npm run build && electron --no-sandbox scripts/e2e/run.cjs"
+    "e2e": "npm run build && electron --no-sandbox scripts/e2e/run.cjs",
+    "website": "npm --prefix website run dev",
+    "website:build": "npm --prefix website run build"
   },
   "dependencies": {
     "node-pty": "1.1.0",
