@@ -17,6 +17,9 @@ fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out, { recursive: true })
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sldev-io-e2e-'))
 app.setPath('userData', path.join(tmp, 'userdata'))
+// skip the first-run setup panel unless a scenario turns it back on (openFixture({ setupSeen: false }))
+fs.mkdirSync(path.join(tmp, 'userdata'), { recursive: true })
+fs.writeFileSync(path.join(tmp, 'userdata', 'settings.json'), JSON.stringify({ setupSeen: true }))
 
 // fixture project: a git repo with a package.json so runtimes, missions and diffs have something to work on
 const fixture = path.join(tmp, 'project')

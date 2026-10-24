@@ -5,11 +5,12 @@ import { loadRemote, newId, openSshTerminal, refreshRemoteState, reloadCredentia
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { ViewShell } from './RuntimesView'
+import { Containers } from './Containers'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
 export function RemoteView(): React.JSX.Element {
-  const [tab, setTab] = useState<'connections' | 'credentials'>('connections')
+  const [tab, setTab] = useState<'connections' | 'credentials' | 'containers'>('connections')
   const [vault, setVault] = useState<VaultStatus | null>(null)
   const loaded = useStore(remote, (r) => r.loaded)
 
@@ -25,14 +26,15 @@ export function RemoteView(): React.JSX.Element {
       <div className="tabs">
         <button className={tab === 'connections' ? 'on' : ''} onClick={() => setTab('connections')}>Connections</button>
         <button className={tab === 'credentials' ? 'on' : ''} onClick={() => setTab('credentials')}>Credentials</button>
+        <button className={tab === 'containers' ? 'on' : ''} onClick={() => setTab('containers')}>Containers</button>
       </div>
-      {vault && !vault.encrypted && (
+      {vault && !vault.encrypted && tab !== 'containers' && (
         <div className="warn-banner">
           <ShieldAlert size={14} />
           <span>No OS keychain found (backend: {vault.backend}). Saved passwords and keys can't be encrypted securely; install/unlock a keyring (e.g. gnome-keyring) or use ssh-agent.</span>
         </div>
       )}
-      {tab === 'connections' ? <Connections onNeedCredential={() => setTab('credentials')} /> : <Credentials />}
+      {tab === 'connections' ? <Connections onNeedCredential={() => setTab('credentials')} /> : tab === 'credentials' ? <Credentials /> : <Containers />}
     </ViewShell>
   )
 }

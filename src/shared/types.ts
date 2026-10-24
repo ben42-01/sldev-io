@@ -46,6 +46,8 @@ export interface AppSettings {
   defaultAgent: string
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
+  /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
+  setupSeen: boolean
 }
 
 export interface CustomAgent {
@@ -72,7 +74,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shell: null,
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
-  customAgents: []
+  customAgents: [],
+  setupSeen: false
 }
 
 export type RuntimeSource = 'npm' | 'make' | 'just' | 'cargo' | 'python' | 'compose' | 'go' | 'deno' | 'custom'
@@ -314,3 +317,53 @@ export interface VaultStatus {
   encrypted: boolean
   backend: string
 }
+
+export type PackageManager = 'brew' | 'winget' | 'apt' | 'dnf' | 'pacman' | 'zypper'
+
+export type SetupLevel = 'required' | 'recommended' | 'optional'
+
+export interface SetupCheck {
+  id: string
+  name: string
+  /** what the app uses it for */
+  why: string
+  level: SetupLevel
+  state: 'ok' | 'missing' | 'not-ready'
+  version?: string
+  /** installs it on this machine; run in a terminal so the user sees sudo/UAC prompts */
+  install?: string
+  /** finishes setup when installed but not ready, e.g. `gh auth login` */
+  fix?: string
+  docs: string
+  detail?: string
+}
+
+export interface SetupReport {
+  platform: string
+  packageManager: PackageManager | null
+  checks: SetupCheck[]
+}
+
+export interface DockerContainer {
+  id: string
+  name: string
+  image: string
+  /** running, exited, paused, created, restarting, dead */
+  state: string
+  /** human status, e.g. "Up 3 hours" */
+  status: string
+  ports: string
+  /** host ports published on localhost */
+  hostPorts: number[]
+  /** docker compose project and service, from labels */
+  project?: string
+  service?: string
+}
+
+export interface DockerList {
+  available: boolean
+  error?: string
+  containers: DockerContainer[]
+}
+
+export type DockerAction = 'start' | 'stop' | 'restart' | 'rm'

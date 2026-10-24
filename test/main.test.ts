@@ -4,6 +4,7 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { workflowInputs } from '../src/main/github'
 import { detectRuntimes } from '../src/main/runtimes'
+import { parseContainers } from '../src/main/docker'
 
 function project(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'sldev-io-test-'))
@@ -58,5 +59,19 @@ describe('detectRuntimes', () => {
     expect(byId['npm::dev']?.command).toBe('pnpm run dev')
     expect(byId['npm:packages/api:start']).toMatchObject({ command: 'pnpm run start', group: 'packages/api/package.json' })
     expect(found.some((r) => r.source === 'make' && r.name === 'build')).toBe(true)
+  })
+})
+
+describe('parseContainers', () => {
+  it('reads compose labels and published host ports', () => {
+    const out = [
+      '{"ID":"aaaaaaaaaaaa","Names":"shop-web-1","Image":"node:22","State":"running","Status":"Up 2 hours","Ports":"0.0.0.0:3000->3000/tcp, :::3000->3000/tcp, 9229/tcp","Labels":"com.docker.compose.project=shop,com.docker.compose.service=web"}',
+      'WARNING: not json',
+      '{"ID":"cccccccccccc","Names":"redis","Image":"redis:7","State":"exited","Status":"Exited (0)","Ports":"","Labels":""}'
+    ].join('\n')
+    const [web, redis] = parseContainers(out)
+    expect(web).toMatchObject({ name: 'shop-web-1', project: 'shop', service: 'web', hostPorts: [3000] })
+    expect(redis).toMatchObject({ name: 'redis', state: 'exited', hostPorts: [] })
+    expect(redis.project).toBeUndefined()
   })
 })

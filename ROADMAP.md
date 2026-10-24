@@ -19,6 +19,8 @@ Status: ✅ done · ⬜ planned
 - ✅ Command palette, app shortcuts, find in terminal, font zoom
 - ✅ Layout, sidebar and settings persist across restarts
 - ✅ Installer config (AppImage/deb/rpm, dmg, NSIS) and CI to build on all three OSes
+- ✅ First-run setup check: git, gh (+ login), Node.js, Docker, OpenSSH and agent CLIs, with
+     one-click install/fix commands for apt, dnf, pacman, zypper, Homebrew and winget
 
 ## Phase 2 · Runtimes & tasks
 - ✅ Detect package.json scripts (npm/pnpm/yarn/bun), Makefile, justfile, Cargo, uv/Poetry scripts,
@@ -42,7 +44,8 @@ Status: ✅ done · ⬜ planned
      push & open PR via gh, remove worktree
 - ✅ Claude tasks run as missions
 - ✅ Skills browser: user, project, synced and plugin skills, commands and agents; create skills;
-     run in a new session or type the invocation into the active terminal
+     run a skill with any agent (Claude Code via `/name`, others are pointed at its SKILL.md) or
+     type the invocation into the active terminal
 - ✅ MCP servers: list with health (`claude mcp list`), add/remove/details
 - ✅ Broadcast input to all visible terminals
 
@@ -61,6 +64,8 @@ Status: ✅ done · ⬜ planned
 - ✅ Host key verification with trust-on-first-use and a loud warning on key change
 - ✅ Remote terminals in the dock (shared connection per host), SFTP browser with download,
      local port forwards
+- ✅ Containers: local Docker containers grouped by compose project, start/stop/restart/remove,
+     shell (`docker exec`) and followed logs in terminal panels, open published ports
 
 ## Extras
 - ✅ Clickable `path:line:col` in terminal output → opens your editor at that line

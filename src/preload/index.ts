@@ -5,6 +5,8 @@ import type {
   CredentialInput,
   CredentialMeta,
   DiffStat,
+  DockerAction,
+  DockerList,
   DirEntry,
   EditorInfo,
   GhPr,
@@ -20,6 +22,7 @@ import type {
   PtyInfo,
   RemoteEntry,
   RuntimeDef,
+  SetupReport,
   SshConnection,
   SshPrompt,
   StoreFiles,
@@ -137,6 +140,10 @@ const api = {
     onPrompt: (cb: (p: SshPrompt) => void): Unsubscribe => on('ssh:prompt', cb),
     reply: (requestId: string, answer: string[] | null): void => ipcRenderer.send('ssh:prompt-reply', requestId, answer)
   },
+  docker: {
+    list: (): Promise<DockerList> => ipcRenderer.invoke('docker:list'),
+    action: (id: string, action: DockerAction): Promise<void> => ipcRenderer.invoke('docker:action', id, action)
+  },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
     set: (patch: Partial<AppSettings>): Promise<AppSettings> => ipcRenderer.invoke('settings:set', patch)
@@ -147,6 +154,10 @@ const api = {
   },
   runtimes: {
     detect: (root: string): Promise<RuntimeDef[]> => ipcRenderer.invoke('runtimes:detect', root)
+  },
+  setup: {
+    /** reloadEnv: re-read the login-shell PATH first, to find tools installed since startup */
+    check: (reloadEnv = false): Promise<SetupReport> => ipcRenderer.invoke('setup:check', reloadEnv)
   },
   layout: {
     load: (): Promise<unknown> => ipcRenderer.invoke('layout:load'),

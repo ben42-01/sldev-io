@@ -2004,3 +2004,114 @@ a {
 .custom-agent .field-row input {
   flex: 1;
 }
+
+/* ── setup check ───────────────────────────── */
+.setup .panel-page-head .muted {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.setup-recheck {
+  margin-left: auto;
+}
+.setup-intro {
+  max-width: 640px;
+  margin: 0 0 20px;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.setup section {
+  gap: 0;
+}
+.setup-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  margin-bottom: 6px;
+}
+.setup-row.is-bad {
+  border-left-color: #f14c4c;
+}
+.setup-row.is-warn {
+  border-left-color: #e5c07b;
+}
+.setup-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--fg-subtle);
+}
+.setup-dot.is-ok {
+  border-color: transparent;
+  background: var(--brand-green);
+}
+.setup-dot.is-warn {
+  border-color: transparent;
+  background: #e5c07b;
+}
+.setup-dot.is-bad {
+  border-color: transparent;
+  background: #f14c4c;
+}
+.setup-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.setup-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.setup-title code {
+  font: 11px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.setup-state {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.setup-state.is-ok {
+  color: #3fb950;
+}
+.setup-state.is-warn {
+  color: #e5c07b;
+}
+.setup-state.is-bad {
+  color: #f14c4c;
+}
+.setup-why {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.setup-cmd {
+  font: 11.5px var(--font-mono);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  overflow-wrap: anywhere;
+}
+.setup-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.skill-prompt {
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

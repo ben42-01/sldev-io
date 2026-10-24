@@ -13,10 +13,12 @@ import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
 import { importSshConfig, SshManager } from './ssh'
-import type { CredentialInput, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
+import type { CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
 import { detectRuntimes } from './runtimes'
 import { loadShellEnv } from './shellEnv'
+import { checkSetup } from './setup'
+import { containerAction, listContainers } from './docker'
 
 const isMac = process.platform === 'darwin'
 
@@ -203,6 +205,10 @@ function registerIpc(): void {
   ipcMain.handle('ssh:startForward', (e, connId: string, fwd: PortForward) => ssh.startForward(e.sender, connId, fwd))
   ipcMain.handle('ssh:stopForward', (_e, connId: string, fwdId: string) => ssh.stopForward(connId, fwdId))
 
+  // docker
+  ipcMain.handle('docker:list', () => listContainers())
+  ipcMain.handle('docker:action', (_e, id: string, action: DockerAction) => containerAction(id, action))
+
   // persistence
   ipcMain.handle('settings:get', () => settings.get())
   ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => {
@@ -220,6 +226,9 @@ function registerIpc(): void {
 
   // runtimes
   ipcMain.handle('runtimes:detect', (_e, root: string) => detectRuntimes(root))
+
+  // first-run setup check
+  ipcMain.handle('setup:check', (_e, reloadEnv: boolean) => checkSetup(!!reloadEnv))
 }
 
 app.whenReady().then(async () => {

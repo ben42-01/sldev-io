@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
 import { CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
+import { openSetup } from '../state/setup'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
@@ -68,7 +69,7 @@ export function WorkflowsView(): React.JSX.Element {
         {repo?.error && (
           <div className="empty-state">
             <p>{repo.error}</p>
-            {!repo.authed && <button className="btn" onClick={() => openTerminal({ cwd: root, title: 'gh auth', command: 'gh auth login' })}>Log in with gh</button>}
+            {!repo.authed && <button className="btn" onClick={openSetup}>Set up the GitHub CLI</button>}
           </div>
         )}
         {repo?.repo && (

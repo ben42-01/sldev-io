@@ -2,8 +2,8 @@
 
 Agentic coding workspace for CLI agents: Claude Code, Codex, Cursor Agent, GitHub Copilot,
 OpenCode, Gemini CLI or any CLI you add. Dockable terminals, a file explorer, runtimes, agent
-missions with live status and diff review, skills and MCP, GitHub workflows, notes and SSH with an
-encrypted credential vault. See [ROADMAP.md](ROADMAP.md).
+missions with live status and diff review, skills and MCP, GitHub workflows, notes, SSH with an
+encrypted credential vault, and Docker containers (shells, logs, start/stop) under Remote. See [ROADMAP.md](ROADMAP.md).
 
 ## Key shortcuts (Linux/Windows · macOS)
 
@@ -19,6 +19,16 @@ encrypted credential vault. See [ROADMAP.md](ROADMAP.md).
 | Copy / paste in terminal | `Ctrl+Shift+C` / `Ctrl+Shift+V` · `⌘C` / `⌘V` |
 | Settings | `Ctrl+,` · `⌘,` |
 | Show/hide window from anywhere | `Ctrl+Shift+Space` (configurable) |
+
+## First-run setup
+
+sldev-io drives tools that are already on your machine. On first start (and whenever a required tool
+is missing) it opens a **Setup** panel that checks git (required), the GitHub CLI and its login,
+Node.js/npm, Docker, the OpenSSH client and every agent CLI. Missing tools get an **Install** button
+with the right command for your machine (apt, dnf, pacman, zypper, Homebrew or winget), and tools
+that need a login or a running daemon get **Fix**. Commands run in a visible terminal so you can
+answer sudo/UAC prompts, and the check reruns when they finish. Reopen it any time with
+*Check setup* in the command palette or Settings → Setup.
 
 ## How missions track agents
 

@@ -20,6 +20,8 @@ export interface AgentDef {
   efforts: string[]
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
+  /** runs skills and commands from ~/.claude and .claude as `/name` */
+  claudeSkills?: boolean
   canPrint: boolean
   canResume: boolean
   build: (o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra) => string[]
@@ -54,6 +56,7 @@ const claude: AgentDef = {
   ],
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   hooks: true,
+  claudeSkills: true,
   canPrint: true,
   canResume: true,
   build: (o, prompt, name, { settingsPath, resume }) => [
@@ -243,4 +246,14 @@ export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | 
 
 export function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'mission'
+}
+
+/**
+ * Prompt that runs a skill. Claude Code knows the skill by its slash invocation; any other agent
+ * is pointed at the SKILL.md (skills are plain Markdown plus files next to it).
+ */
+export function skillPrompt(agent: AgentDef, skill: { name: string; invocation: string; path: string }, args: string): string {
+  if (agent.claudeSkills) return `${skill.invocation} ${args.trim()}`.trim()
+  const task = args.trim() ? `\n\nTask: ${args.trim()}` : ''
+  return `Use the "${skill.name}" skill: read ${skill.path} and follow its instructions (files it mentions are relative to that folder).${task}`
 }

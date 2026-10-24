@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, slugify } from '@renderer/lib/agents'
+import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, skillPrompt, slugify } from '@renderer/lib/agents'
 
 const agent = (id: string) => findAgent(id)
 
@@ -75,5 +75,18 @@ describe('slugify', () => {
     expect(slugify('  Add OAuth login (v2)! ')).toBe('add-oauth-login-v2')
     expect(slugify('!!!')).toBe('mission')
     expect(slugify('x'.repeat(80))).toHaveLength(40)
+  })
+})
+
+describe('skillPrompt', () => {
+  const skill = { name: 'review', invocation: '/review', path: '/home/u/.claude/skills/review/SKILL.md' }
+  it('uses the slash invocation for Claude Code', () => {
+    expect(skillPrompt(agent('claude'), skill, ' the auth module ')).toBe('/review the auth module')
+  })
+  it('points other agents at the SKILL.md', () => {
+    const p = skillPrompt(agent('codex'), skill, 'the auth module')
+    expect(p).toContain('read /home/u/.claude/skills/review/SKILL.md')
+    expect(p).toMatch(/Task: the auth module$/)
+    expect(skillPrompt(agent('gemini'), skill, '')).not.toContain('Task:')
   })
 })

@@ -1,9 +1,11 @@
-import { Bell, GitBranch, Radio, Settings, SquareTerminal } from 'lucide-react'
+import { Bell, GitBranch, Radio, Settings, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { openSettings, showBranchPicker, showView } from '../lib/commands'
 import { missions } from '../state/missions'
 import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { tildify } from '../lib/paths'
+import { blockers } from '../lib/setup'
+import { openSetup, setup } from '../state/setup'
 
 export function StatusBar({ home }: { home: string }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -12,6 +14,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
   const broadcast = useStore(workspace, (w) => w.broadcastCount)
   const needsYou = useStore(missions, (s) => s.list.filter((m) => m.status === 'needs-input').length)
   const working = useStore(missions, (s) => s.list.filter((m) => m.status === 'working').length)
+  const missing = useStore(setup, (s) => blockers(s.report).length)
   return (
     <footer className="statusbar">
       {branch && (
@@ -29,6 +32,11 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
       {(needsYou > 0 || working > 0) && (
         <button className={`status-item clickable${needsYou ? ' attention' : ''}`} onClick={() => showView('agents')} title="Agent missions">
           <Bell size={12} /> {needsYou ? `${needsYou} need${needsYou === 1 ? 's' : ''} you` : `${working} working`}
+        </button>
+      )}
+      {missing > 0 && (
+        <button className="status-item clickable attention" title="Required tools are missing" onClick={openSetup}>
+          <TriangleAlert size={12} /> setup needed
         </button>
       )}
       <span className="status-item" title="Open terminals">

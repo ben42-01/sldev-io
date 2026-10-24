@@ -1,0 +1,27 @@
+#!/bin/sh
+# Fake Docker for e2e: two compose containers and one standalone. Actions are appended to
+# $FAKE_DOCKER_LOG, and `stop` marks the container stopped so the list changes.
+log=${FAKE_DOCKER_LOG:-/dev/null}
+stopped="$log.stopped"
+row() { # id name image state status ports labels
+  st=$4; s=$5
+  if [ -f "$stopped" ] && grep -q "$1" "$stopped"; then st=exited; s="Exited (0) 1 second ago"; fi
+  printf '{"ID":"%s","Names":"%s","Image":"%s","State":"%s","Status":"%s","Ports":"%s","Labels":"%s"}\n' "$1" "$2" "$3" "$st" "$s" "$6" "$7"
+}
+case "$1" in
+  --version) echo "Docker version 29.0.0-fake, build e2e" ;;
+  info) echo "29.0.0-fake" ;;
+  ps)
+    row aaaaaaaaaaaa shop-web-1 node:22 running "Up 2 hours" "0.0.0.0:3000->3000/tcp, :::3000->3000/tcp" "com.docker.compose.project=shop,com.docker.compose.service=web"
+    row bbbbbbbbbbbb shop-db-1 postgres:17 running "Up 2 hours" "0.0.0.0:5432->5432/tcp" "com.docker.compose.project=shop,com.docker.compose.service=db"
+    row cccccccccccc redis-cache redis:7 exited "Exited (0) 3 days ago" "" ""
+    ;;
+  start | stop | restart | rm)
+    echo "$1 $2" >> "$log"
+    [ "$1" = stop ] && echo "$2" >> "$stopped"
+    echo "$2"
+    ;;
+  exec) echo "$*" >> "$log"; echo "fake shell in $3" ;;
+  logs) echo "$*" >> "$log"; echo "fake logs for $4" ;;
+  *) echo "fake docker: $*" >&2; exit 1 ;;
+esac

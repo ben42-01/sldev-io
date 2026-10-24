@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
+case "$1 $2" in
+  "--version "*) echo "gh version 2.0.0-fake (e2e)" ;;
+  "auth status") echo "You are not logged into any GitHub hosts." >&2; exit 1 ;;
+  "auth login") echo "fake gh: logged in"; echo ok > gh-login-marker.txt ;;
+  *) echo "fake gh: $*" >&2; exit 1 ;;
+esac

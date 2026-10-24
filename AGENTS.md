@@ -33,6 +33,8 @@ src/main/       Electron main process (Node): everything privileged
   hooks.ts        loopback HTTP server receiving Claude Code hook events (token-protected)
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
+  docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
+  setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …)
 src/renderer/src/
@@ -68,7 +70,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   tracked from terminal activity: output means working, 5 s quiet means ready, and a bell or
   OSC 9/777 means needs you. Agent-specific behaviour belongs in `lib/agents.ts`, never `if (agent === …)`
   scattered through the UI. The app is agent-agnostic: don't add Claude-only UI unless the
-  feature is Claude-only by nature (skills, MCP).
+  feature is Claude-only by nature (slash commands, subagents, MCP). Skills are plain SKILL.md
+  folders, so any agent can run them (`skillPrompt` in `lib/agents.ts`).
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.

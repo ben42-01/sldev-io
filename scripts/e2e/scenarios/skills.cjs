@@ -1,0 +1,27 @@
+// Skills run with any agent: Codex (fake) gets a prompt pointing at the SKILL.md.
+const fs = require('fs')
+const path = require('path')
+
+module.exports = async (h) => {
+  const dir = path.join(h.fixture, '.claude', 'skills', 'tidy')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: tidy\ndescription: Tidy up the code\n---\nRemove dead code.\n')
+  await h.openFixture()
+  await h.click('.activitybar button[title^="Skills"]')
+  await h.wait(1000)
+  // ~/.claude skills are listed too, so target the fixture's skill by name
+  const ran = await h.js(`(() => { const row = [...document.querySelectorAll('.asset-row')].find(r => r.querySelector('.rt-name')?.textContent.startsWith('tidy')); const b = row?.querySelector('button[title="Run skill in a new session"]'); b?.click(); return !!b })()`)
+  h.expect(ran, 'skills offer a run button for any agent')
+  await h.wait(300)
+  h.expect(await h.js(`[...document.querySelectorAll('.inline-form select option')].some(o => o.value === 'codex')`), 'agent picker lists other agents')
+  h.expect(await h.setValue('.inline-form select', 'codex'), 'pick Codex')
+  await h.setValue('.inline-form input:not([type])', 'src only')
+  await h.wait(200)
+  h.expect(await h.js(`document.querySelector('.skill-prompt')?.textContent.includes('SKILL.md')`), 'prompt points at SKILL.md for Codex')
+  await h.shot('1-run-form')
+  await h.click('.inline-form button[type="submit"]')
+  await h.wait(2500)
+  const m = (await h.js(`window.api.store.get('missions')`)).missions.at(-1)
+  h.expect(m?.options.agent === 'codex' && m.prompt.includes(path.join(dir, 'SKILL.md')) && m.prompt.includes('Task: src only'), 'mission runs Codex with the skill prompt')
+  await h.shot('2-mission')
+}

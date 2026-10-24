@@ -14,6 +14,9 @@ linux:
   syncDesktopName: true
   category: Development
   maintainer: sldev-io
+deb:
+  # apt installs recommends by default; everything else is offered by the in-app setup check
+  recommends: [git, libappindicator3-1]
 mac:
   target: [dmg, zip]
   category: public.app-category.developer-tools

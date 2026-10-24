@@ -5,6 +5,7 @@ import { useAgents } from '../state/agents'
 import { applyTerminalFont } from '../lib/terminals'
 import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
+import { openSetup } from '../state/setup'
 
 export function SettingsPanel(): React.JSX.Element {
   const s = useStore(workspace, (w) => w)
@@ -58,6 +59,13 @@ export function SettingsPanel(): React.JSX.Element {
         <div className="field">
           <span>Claude Code hooks file (passed with --settings; your own Claude settings are untouched)</span>
           <code className="mono small selectable">{hooks}</code>
+        </div>
+      </section>
+      <section>
+        <h3>Setup</h3>
+        <div className="field">
+          <span>Check git, the GitHub CLI, Node.js, Docker and agent CLIs, and install what's missing.</span>
+          <button type="button" className="btn sm" onClick={openSetup}>Open setup check</button>
         </div>
       </section>
       <section>

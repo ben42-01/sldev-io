@@ -4,6 +4,8 @@ import { Copy, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal
 import { activeTerminalId, openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
 import { writeToTerminal, focusTerminal } from '../lib/terminals'
+import { skillPrompt } from '../lib/agents'
+import { getAgent, useAgents } from '../state/agents'
 import { startMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
@@ -84,9 +86,12 @@ function sendToTerminal(text: string): boolean {
   return true
 }
 
+// Skills are plain SKILL.md folders any agent can follow; commands and subagents only exist in Claude Code.
+const runLabel = (a: ClaudeAsset): string => (a.kind === 'skill' ? 'Run skill in a new session' : 'Run in new Claude Code session')
+
 function AssetRow({ asset: a, onRun }: { asset: ClaudeAsset; onRun: () => void }): React.JSX.Element {
   const menu = (): MenuItem[] => [
-    ...(a.kind !== 'agent' ? [{ label: 'Run in new Claude session…', icon: <Rocket size={13} />, run: onRun }] : []),
+    ...(a.kind !== 'agent' ? [{ label: `${runLabel(a)}…`, icon: <Rocket size={13} />, run: onRun }] : []),
     { label: `Type ${a.invocation} into active terminal`, icon: <SendHorizontal size={13} />, run: () => void sendToTerminal(a.invocation + ' ') },
     { type: 'separator' },
     { label: 'Edit', icon: <ExternalLink size={13} />, run: () => void openInEditor(a.path) },
@@ -106,7 +111,7 @@ function AssetRow({ asset: a, onRun }: { asset: ClaudeAsset; onRun: () => void }
           <ExternalLink size={13} />
         </button>
         {a.kind !== 'agent' && (
-          <button className="icon-btn go" title="Run in new Claude session" onClick={onRun}>
+          <button className="icon-btn go" title={runLabel(a)} onClick={onRun}>
             <Rocket size={13} />
           </button>
         )}
@@ -119,14 +124,31 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
   const root = useStore(workspace, (w) => w.rootFolder)
   const [args, setArgs] = useState('')
   const [worktree, setWorktree] = useState(false)
+  const agents = useAgents()
+  const defaultAgent = useStore(workspace, (w) => w.defaultAgent)
+  const choices = asset.kind === 'skill' ? agents : agents.filter((a) => a.claudeSkills)
+  const [agentId, setAgentId] = useState(choices.some((a) => a.id === defaultAgent) ? defaultAgent : (choices[0]?.id ?? 'claude'))
+  const agent = getAgent(agentId)
+  const prompt = skillPrompt(agent, asset, args)
   const run = (): void => {
     if (!root) return
-    void startMission({ prompt: `${asset.invocation} ${args}`.trim(), title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: { agent: 'claude' }, worktree })
+    void startMission({ prompt, title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: { agent: agent.id }, worktree })
     onDone()
   }
   return (
     <form className="form inline-form" onSubmit={(e) => (e.preventDefault(), run())}>
-      <div className="mono small">{asset.invocation}</div>
+      <label className="field">
+        <span>Agent</span>
+        <select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={choices.length < 2}>
+          {choices.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+              {a.installed === false ? ' (not installed)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="mono small skill-prompt" title="Prompt sent to the agent">{prompt}</div>
       <label className="field">
         <span>Arguments / extra instructions</span>
         <input autoFocus value={args} onChange={(e) => setArgs(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && onDone()} />

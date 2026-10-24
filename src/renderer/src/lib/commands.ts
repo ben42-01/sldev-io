@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
 import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
+import { openSetup } from '../state/setup'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
@@ -167,6 +168,7 @@ export function staticCommands(): Command[] {
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
+    { id: 'setup.open', category: 'Preferences', title: 'Check setup (git, gh, agent CLIs…)', run: openSetup },
     { id: 'folder.open', category: 'Workspace', title: 'Open folder…', keys: { mac: 'Cmd+O', other: 'Ctrl+Shift+O' }, run: () => void pickRootFolder() },
     {
       id: 'folder.openInEditor',
