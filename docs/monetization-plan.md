@@ -1,6 +1,10 @@
 # Monetization plan: from free beta to paid licenses
 
-Status: **draft for decision**, 2026-10-24. Nothing in the app enforces anything yet; the website
+Status: **draft, partly decided**, 2026-10-24.
+
+Decided: Personal stays **€10.99** at launch (revisit after real traction). `v0.1.0-beta.1` stays
+unpublished; the next release (`0.1.0-beta.2`) ships everything since, including the expiry.
+ Nothing in the app enforces anything yet; the website
 shows "Limited time" labels and an optional countdown (`website/src/content/pricing.json` → `beta.endsAt`).
 
 ## Recommendation in one paragraph
@@ -52,11 +56,15 @@ same mechanism. Before any of this matters, installers have to be downloadable b
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Polar** (recommended) | Merchant of record (VAT handled), built-in license keys with activation limits, developer-focused, API for validate/activate | Younger company |
-| Lemon Squeezy | Merchant of record, mature license-key API (activate/validate/deactivate per instance) | Product development has slowed since the Stripe acquisition |
+| **Polar** (recommended) | Merchant of record (VAT handled), built-in license keys with activation limits, developer-focused, API for validate/activate | Younger company. New organizations since 27 May 2026 pay **5% + $0.50** per sale (paid plans from $20/mo lower that) plus international card and payout fees |
+| Lemon Squeezy | Merchant of record, mature license-key API (activate/validate/deactivate per instance, 60 req/min) | Product development has slowed since the Stripe acquisition. About **5% + $0.50** per sale, no monthly fee (third-party figures) |
 | Stripe payment links (current site plan) | Lowest fees, you own everything | **You** are the seller: VAT registration (EU OSS/UK), invoices, refunds. No license keys, so you'd need a webhook, key generation and email |
 
 The server code below keeps the provider behind one function, so switching later is cheap.
+
+At €10.99 the fixed $0.50 matters: expect roughly €1.00–1.30 in fees per sale (about 10–12%)
+once international and payout fees are added. Check the official pricing pages before launch;
+the fees changed in 2026.
 
 ### 3. Licensing (app + small server)
 
@@ -121,8 +129,7 @@ who used the beta, sent by email from the purchase/download list or shown on the
 1. **Beta end date**: recommend 6–8 weeks after the first public beta build, with in-app
    warnings from 2 weeks before.
 2. **Provider**: Polar (recommended) or Lemon Squeezy, or Stripe if you want to handle VAT yourself.
-3. **Prices**: €10.99 Personal and €50 Team are low for a tool people use all day. Consider
-   €29–39 Personal with 1 year of updates. Your call: it's all JSON.
+3. ~~Prices~~: decided, €10.99 Personal at launch.
 4. **Updates policy**: lifetime updates, or 1 year of updates with a perpetual fallback (recommended).
 5. **Machines per Personal license**: recommend 3.
 6. **Beta-tester discount**: how much, and for how long.
