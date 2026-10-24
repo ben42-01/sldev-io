@@ -81,6 +81,32 @@ node-pty is native, so each OS builds its own installer.
   release `v<package.json version>`, creating it if needed. Bump `version` before cutting the
   branch; pushing again to the branch replaces the assets. You can also start it from the
   Actions tab and switch macOS off.
+- A version with a suffix (`0.2.0-beta.1`, `0.2.0-rc.1`) becomes a GitHub **pre-release**,
+  so it never shows as "Latest".
+
+### Cutting a release
+
+```bash
+# 1. on an up-to-date master, set the version (no git tag: the workflow creates the release)
+git switch master && git pull
+npm version 0.2.0-beta.1 --no-git-tag-version   # or 0.2.0 for a stable release
+git commit -am "Release v0.2.0-beta.1" && git push origin master
+
+# 2. push a release branch with the same version: this starts the build
+git switch -c release/0.2.0-beta.1
+git push -u origin release/0.2.0-beta.1
+
+# 3. watch it (or open the Release workflow in the Actions tab), takes 10-20 minutes
+gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status
+
+# 4. back to work
+git switch master
+```
+
+When it finishes, `v0.2.0-beta.1` on the Releases page has the AppImage, deb, rpm, exe, dmg,
+zip and `SHA256SUMS.txt`. If one OS fails, fix it on the release branch and push again; the
+files on the release are replaced. Next betas are `-beta.2`, `-beta.3`, …; the final release is
+plain `0.2.0`.
 
 Builds are unsigned until signing secrets are added: Windows shows a SmartScreen warning, and
 on macOS users must right-click → Open the first time (or run `xattr -cr /Applications/sldev-io.app`).
