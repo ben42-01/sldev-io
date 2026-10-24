@@ -86,6 +86,8 @@ Launching (downloads, beta window, payments, licensing, signing): see
   `RELEASES_TOKEN` secret), and records the same release in this private repo. Bump `version` before cutting the
   branch; pushing again to the branch replaces the assets. You can also start it from the
   Actions tab and switch macOS off.
+- After publishing, older releases are deleted from the public repo: only the newest installers
+  stay downloadable (the private repo keeps every release as a record).
 - Users never browse that page: the website's `/download/<windows|mac|mac-intel|linux>`
   (`website/api/download.ts`) redirects to the newest matching installer, and
   `curl -fsSL https://sldev-io.vercel.app/install.sh | sh` installs it on macOS and Linux.

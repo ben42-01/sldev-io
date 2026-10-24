@@ -157,6 +157,22 @@ jobs:
             gh release create "$TAG" dist/* --title "sldev-io $TAG" --notes-file notes.md $PRE
           fi
 
+      # Only the newest installers stay downloadable: older betas would otherwise float around, and
+      # installed apps update from the newest release anyway. Runs only after the upload succeeded.
+      - name: Remove older releases from the public downloads repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_REPO: ${{ env.DOWNLOADS_REPO }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          gh release view "$TAG" >/dev/null
+          gh release list --limit 100 --json tagName -q '.[].tagName' | while read -r t; do
+            if [ "$t" != "$TAG" ]; then
+              echo "deleting $t"
+              gh release delete "$t" --yes --cleanup-tag
+            fi
+          done
+
       - name: Record the release in this repo
         env:
           GH_TOKEN: ${{ github.token }}

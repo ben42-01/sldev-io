@@ -8,7 +8,8 @@ description: Publish a new sldev-io release with installers for Linux, Windows a
 The `.github/workflows/release.yml` workflow runs on pushes to `release/**`. It builds every OS and
 publishes the installers (deb, exe, arm64 and x64 dmg) and the update files (`latest*.yml`, `.blockmap`, macOS zip) as release `v<package.json version>`
 in the **public** repo `ben42-01/downloads.sldev.io` (needs the `RELEASES_TOKEN` secret), plus a
-copy in the private source repo.
+copy in the private source repo. It then **deletes every older release** (and its tag) from the
+public repo, so only the newest installers can be downloaded.
 
 Pushing is outward-facing. Confirm the version and the go-ahead with the user before pushing.
 
