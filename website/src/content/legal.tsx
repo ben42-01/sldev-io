@@ -23,8 +23,12 @@ function Contact(): ReactNode {
       <p>
         {seller}
         <br />
-        {legal.address || '[postal address]'}
-        <br />
+        {legal.address && (
+          <>
+            {legal.address}
+            <br />
+          </>
+        )}
         {email}
       </p>
     </>
