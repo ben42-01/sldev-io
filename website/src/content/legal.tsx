@@ -150,9 +150,10 @@ const privacy: LegalPage = {
           downloads it if so. GitHub sees your IP address.
         </li>
         <li>
-          <b>License activation</b> (paid versions): when you enter a license key, and about every two weeks after, the app sends the key,
-          a one-way hash of your machine's ID (we never see the ID itself) and the app version to our license server, which checks it
-          with Polar.
+          <b>License activation</b>: when you enter a license key, and about every two weeks after, the app sends the key, a one-way
+          hash of your machine's ID (we never see the ID itself), your operating system and processor type (for example "Linux x64", so
+          you can tell your machines apart) and the app version to our license server, which checks the key with Polar. The server
+          sends back a signed license with your plan and the email address you bought with, shown in Settings → License.
         </li>
       </ul>
       <p>

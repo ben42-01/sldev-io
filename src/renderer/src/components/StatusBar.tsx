@@ -8,6 +8,7 @@ import { blockers } from '../lib/setup'
 import { openSetup, setup } from '../state/setup'
 import { UpdateChip } from './About'
 import { BetaChip } from './BetaGate'
+import { TrialChip } from './License'
 
 export function StatusBar({ home }: { home: string }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -42,6 +43,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
         </button>
       )}
       <BetaChip />
+      <TrialChip />
       <UpdateChip />
       <span className="status-item" title="Open terminals">
         <SquareTerminal size={12} /> {count}

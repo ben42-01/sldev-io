@@ -18,8 +18,11 @@ fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out, { recursive: true })
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sldev-io-e2e-'))
 app.setPath('userData', path.join(tmp, 'userdata'))
-// run as the real app version (beta builds honour the beta window)
-app.setVersion(require(path.join(repoRoot, 'package.json')).version)
+// a scenario can set env before the app starts: module.exports.env = { SLDEV_E2E_VERSION: '1.0.0' }
+const scenario = require(path.join(__dirname, 'scenarios', `${name}.cjs`))
+Object.assign(process.env, scenario.env ?? {})
+// run as the real app version (beta builds honour the beta window) unless the scenario wants another
+app.setVersion(process.env.SLDEV_E2E_VERSION || require(path.join(repoRoot, 'package.json')).version)
 
 // stand-in for the website's /beta.json; scenarios change it with h.setBeta()
 let betaConfig = { startsAt: null, endsAt: null }
@@ -28,6 +31,47 @@ const betaServer = http.createServer((_req, res) => {
   res.end(JSON.stringify(betaConfig))
 })
 betaServer.unref()
+
+// stand-in for the website's /api/license/*, with its own key pair; scenarios edit h.licenses
+const { generateKeyPairSync, sign } = require('crypto')
+const licenseKeys = generateKeyPairSync('ed25519')
+const licenses = new Map([['SLDEV-TEST-GOOD', { lid: 'lic-1', plan: 'personal', email: 'buyer@example.com', limit: 3, revoked: false, activations: new Map() }]])
+const signToken = (claims) => {
+  const body = Buffer.from(JSON.stringify(claims)).toString('base64url')
+  return `${body}.${sign(null, Buffer.from(body), licenseKeys.privateKey).toString('base64url')}`
+}
+const licenseServer = http.createServer((req, res) => {
+  let raw = ''
+  req.on('data', (c) => (raw += c))
+  req.on('end', () => {
+    const body = JSON.parse(raw || '{}')
+    const reply = (status, data) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(data))
+    }
+    const l = licenses.get(body.key)
+    if (!l) return reply(403, { error: "That license key isn't valid. Check it against your receipt email." })
+    if (l.revoked) return reply(403, { error: 'This license is no longer active on this machine.' })
+    const claimsOf = (t) => JSON.parse(Buffer.from(String(t).split('.')[0], 'base64url').toString())
+    const issue = (machine, aid) => {
+      const now = Date.now()
+      return reply(200, { token: signToken({ v: 1, lid: l.lid, aid, plan: l.plan, machine, email: l.email, iat: now, exp: now + 45 * 86_400_000 }) })
+    }
+    if (req.url.endsWith('/activate')) {
+      if (!l.activations.has(body.machine) && l.activations.size >= l.limit) return reply(403, { error: 'This license is already active on the maximum number of machines.' })
+      if (!l.activations.has(body.machine)) l.activations.set(body.machine, `act-${l.activations.size + 1}`)
+      return issue(body.machine, l.activations.get(body.machine))
+    }
+    const c = claimsOf(body.token)
+    if (req.url.endsWith('/refresh')) return [...l.activations.values()].includes(c.aid) ? issue(c.machine, c.aid) : reply(403, { error: 'This license is no longer active on this machine.' })
+    if (req.url.endsWith('/deactivate')) {
+      l.activations.delete(c.machine)
+      return reply(200, {})
+    }
+    reply(404, { error: 'not found' })
+  })
+})
+licenseServer.unref()
 // skip the first-run setup panel unless a scenario turns it back on (openFixture({ setupSeen: false }))
 fs.mkdirSync(path.join(tmp, 'userdata'), { recursive: true })
 fs.writeFileSync(path.join(tmp, 'userdata', 'settings.json'), JSON.stringify({ setupSeen: true }))
@@ -47,7 +91,11 @@ const daysFromNow = (n) => new Date(Date.now() + n * 86_400_000).toISOString().s
 
 betaServer.listen(0, '127.0.0.1', () => {
   process.env.SLDEV_BETA_CONFIG_URL = `http://127.0.0.1:${betaServer.address().port}/beta.json`
-  require(path.join(repoRoot, 'out/main/index.js'))
+  licenseServer.listen(0, '127.0.0.1', () => {
+    process.env.SLDEV_LICENSE_API = `http://127.0.0.1:${licenseServer.address().port}/api/license`
+    process.env.SLDEV_LICENSE_PUBLIC_KEY = licenseKeys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64')
+    require(path.join(repoRoot, 'out/main/index.js'))
+  })
 })
 
 app.whenReady().then(async () => {
@@ -62,6 +110,8 @@ app.whenReady().then(async () => {
   const js = (code) => wc.executeJavaScript(code)
   const h = {
     out,
+    /** the fake license server's keys: key → { lid, plan, email, limit, revoked, activations } */
+    licenses,
     fixture,
     wait,
     js,
@@ -116,7 +166,7 @@ app.whenReady().then(async () => {
     }
   }
   try {
-    await require(path.join(__dirname, 'scenarios', `${name}.cjs`))(h)
+    await scenario(h)
   } catch (e) {
     failures.push(String(e))
     logs.push('ERROR ' + e.stack)

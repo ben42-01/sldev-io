@@ -11,7 +11,7 @@ const betaConfigUrl = process.env.SLDEV_BETA_CONFIG_URL || `${siteUrl}/beta.json
 export default defineConfig({
   main: {
     resolve: { alias: { '@shared': resolve('src/shared') } },
-    define: { __BETA_CONFIG_URL__: JSON.stringify(betaConfigUrl) }
+    define: { __BETA_CONFIG_URL__: JSON.stringify(betaConfigUrl), __SITE_URL__: JSON.stringify(siteUrl) }
   },
   preload: {
     resolve: { alias: { '@shared': resolve('src/shared') } }

@@ -70,7 +70,7 @@ confirmed on the provider's site when you get there.
 | Publishing installers to the **public** downloads repo `ben42-01/downloads.sldev.io` | ✅ (needs the `RELEASES_TOKEN` secret and a first commit in that repo) |
 | Auto-update in the app (`src/main/updater.ts`) | ✅ Windows and Linux .deb install updates; macOS shows "Download" until it's signed |
 | Settings → About (version, updates, diagnostics, legal links) | ✅ |
-| License keys: server + app screen + trial | 🤖 to build (Phase 4) |
+| License keys: server + app screen + trial | ✅ built; 🧑 signing key in Vercel + sandbox test (Phase 4) |
 | Payment provider products | 🧑 to set up (Phase 3) |
 | Code signing (macOS / Windows) | 🧑 accounts + 🤖 wiring (Phase 6) |
 | License terms, privacy policy, refund policy | ✅ drafted at `/terms`, `/privacy`, `/refunds`; 🧑 fill in `site.json` → `legal` (Phase 5) |
@@ -391,64 +391,71 @@ are set, it says "Buy Personal" and opens checkout. Don't do this until Phase 7.
 
 ---
 
-## 5. Phase 4: Licensing
+## 5. Phase 4: Licensing ✅ built
 
 **Goal:** paid builds need a license key or an active trial; beta builds keep using the beta window.
 
-### How it will work
+### How it works
 
 ```
-customer buys ──► provider emails key "SLDEV-…"
-customer opens the app ──► Settings → License → paste key
-app (main process) ──POST https://sldev.io/api/license/activate { key, machineHash }──►
-Vercel function ──► Polar / Lemon Squeezy activate (counts against the 3 machines)
-                ◄── signed token { plan, seats, machine, updatesUntil, expires } (Ed25519)
-app checks the signature with the public key built into it → unlocked, works offline
-every ~14 days the app refreshes the token; offline grace 30 days
-refunded / revoked keys stop refreshing → the app asks for a license again
+customer buys ──► Polar emails the key "SLDEV-…" (and shows it in the customer portal)
+customer opens the app ──► Settings → License (or palette: "Enter license key") → paste key
+app (main) ──POST <site>/api/license/activate { key, machine hash, "Linux x64", version }──►
+Vercel function ──► Polar: validate key, reuse this machine's activation or create one
+                ◄── token { plan, machine, email, iat, exp } signed with Ed25519
+app verifies the signature with the public key built into it → unlocked, works offline
+the app refreshes the token every 14 days; it stays valid 45 days after the last refresh
+refunded / revoked / deactivated → refresh gets 403 → the app drops the license with a message
 ```
 
-- **Machine hash**: a SHA-256 of the OS machine id plus an app salt. The raw id never leaves the PC.
-- **Trial** (stable builds only): 14 days from first start, also registered by machine hash so
-  deleting settings doesn't reset it.
+| Piece | Where |
+|---|---|
+| Token format (sign + verify) | `website/api/_licenseToken.ts`, shared by server and app |
+| Polar calls, IDs per environment | `website/api/_polar.ts` (Vercel production = live org, everything else = sandbox) |
+| Functions | `website/api/license/{activate,refresh,deactivate}.ts` |
+| App | `src/main/license.ts`, `machineId.ts`, `licenseKey.ts` (public key); UI in `components/License.tsx` |
+| Lock rule | `isLocked` in `src/shared/license.ts`: decided at launch only |
+| After checkout | `/thanks` page (Polar checkout link success URL) |
+
+- **Machine hash**: SHA-256 of the OS machine id plus an app salt. The raw id never leaves the PC.
+- **Reinstalling** on the same machine reuses its activation (looked up with the access token).
+- **Trial** (stable builds only): 14 days from first start, stored encrypted on the machine.
+  Deleting the app's data folder resets it; registering trials on the server can come later if
+  that's ever abused.
 - **Moving machines**: Settings → License → "Deactivate this machine" frees a slot.
 
-### 5.1 🧑 Create the signing key pair (once)
+### 5.1 🧑 The signing key pair
 
-Claude will give you a one-line command that generates an Ed25519 key pair. Then:
-- Store the **private** key in Vercel as `LICENSE_SIGNING_KEY` (Production only).
-- The **public** key goes into the app source. It isn't secret.
+`node scripts/license-keygen.mjs` writes the **public** key into `src/main/licenseKey.ts` (commit
+it) and the **private** key to `~/sldev-io-license-signing-key.txt` without printing it. Then:
+1. Copy the file's one line into Vercel → Settings → Environment Variables as
+   `LICENSE_SIGNING_KEY`, for **Preview and Production**.
+2. Save it in your password manager, then delete the file.
 
-Losing the private key means existing tokens still work, but new ones can't be issued until you
-ship a build with a new public key. Keep a copy in your password manager.
+Losing the private key means existing tokens keep working until they expire, but new ones can't be
+issued until you ship a build with a new public key.
 
-### 5.2 🤖 Build: license server + app
+### 5.2 🧑 Polar access token
 
-> Read AGENTS.md, docs/monetization-plan.md and docs/go-to-production.md (Phase 4). We use
-> **<Polar | Lemon Squeezy>**. IDs: organization/store `<id>`, Personal product `<id>`, Team
-> product `<id>`. Build: (1) Vercel functions in website/api/license (activate, refresh,
-> deactivate, trial) that call the provider and return Ed25519-signed tokens. Read secrets only
-> from env vars `<POLAR_ACCESS_TOKEN | LEMONSQUEEZY_API_KEY>` and `LICENSE_SIGNING_KEY`, and give
-> me the key-generation command. (2) src/main/license.ts with offline verification, encrypted
-> token storage, a 14-day refresh, a 30-day grace period and a 14-day trial for stable builds.
-> (3) A license gate screen, Settings → License (enter key, status, deactivate this machine) and
-> a status-bar chip. Beta builds keep the beta window and also accept a license. Tests: unit
-> tests for token verification, e2e with a mocked license server, and a fake provider for the
-> functions. Don't call the real provider from tests.
+An organization access token with **license_keys:read/write** and **products:read**, in Vercel as
+`POLAR_ACCESS_TOKEN`: the **sandbox** token in **Preview**, the **live** token in **Production**
+(add the live one at launch). Without products:read the server guesses the plan from the
+activation limit (15 = Team).
 
-### 5.3 🧑 Configure and test
+### 5.3 🧑 Test against the sandbox
 
-1. Vercel env vars: `LICENSE_SIGNING_KEY` and the provider token (sandbox/test values in
-   **Preview**, live values in **Production**).
-2. Deploy a preview, then build a test version of the app pointed at the preview (Claude will
-   give you the command).
-3. With a **test-mode** key: activate, deactivate, activate on a 4th machine (should be refused at
-   3), refund the test order (should stop working at the next refresh).
+1. Push a branch; Vercel builds a preview with the sandbox settings.
+2. Build the app against it: `SLDEV_SITE_URL=https://<preview-url> npm run dist:linux` (or run
+   unpackaged: `SLDEV_LICENSE_API=https://<preview-url>/api/license npm run dev:nosandbox`).
+3. Buy in the sandbox checkout (card `4242 4242 4242 4242`), then in the app: activate, deactivate,
+   activate again; fill the 3 slots and check a 4th machine is refused; refund the order in the
+   sandbox dashboard and use **Check license** (it should drop the license).
 
 ### Phase 4 checklist
 
+- [x] License server, app screens, trial and tests built
 - [ ] Key pair created; private key in Vercel and your password manager
-- [ ] License functions deployed; test-mode key activates and deactivates
+- [ ] License functions deployed; sandbox key activates and deactivates
 - [ ] Activation limit enforced; refund revokes
 - [ ] Trial counts down and ends correctly on a stable test build
 
@@ -609,7 +616,7 @@ Checkout links: sandbox ones for testing; live ones are created on launch day an
 |---|---|---|
 | `RELEASES_TOKEN` | GitHub secret, `sldev-io` repo | 1 |
 | `POLAR_ACCESS_TOKEN` **or** `LEMONSQUEEZY_API_KEY` | Vercel env var | 3–4 |
-| `LICENSE_SIGNING_KEY` | Vercel env var (Production) | 4 |
+| `LICENSE_SIGNING_KEY` | Vercel env var (Preview and Production) | 4 |
 | `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | GitHub secrets, `sldev-io` repo | 6 |
 | `SLDEV_SITE_URL`, `SLDEV_BETA_CONFIG_URL` | Optional, at app build time, to point a test build at a preview site | any |
 

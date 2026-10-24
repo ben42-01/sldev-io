@@ -1280,6 +1280,41 @@ a {
 .settings input.mono {
   font-family: var(--font-mono);
 }
+.license-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 520px;
+}
+.license-row {
+  display: flex;
+  gap: 8px;
+}
+.license-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 9px;
+  font: 12.5px var(--font-mono);
+  outline: none;
+}
+.license-row input:focus {
+  border-color: var(--fg-muted);
+}
+.license-error {
+  font-size: 12px;
+}
+.warn-text {
+  color: #e5c07b;
+  font-size: 12.5px;
+}
+.beta-ended-card .license-form {
+  margin: 4px auto 0;
+}
 .about-head {
   display: flex;
   align-items: center;

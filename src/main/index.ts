@@ -21,6 +21,7 @@ import { betaStatus, refreshBeta, startBetaChecks } from './beta'
 import { checkSetup } from './setup'
 import { containerAction, listContainers } from './docker'
 import { checkForUpdates, installUpdate, startUpdateChecks, updateStatus } from './updater'
+import { activateLicense, deactivateLicense, licenseStatus, refreshLicense, startLicenseChecks } from './license'
 
 const isMac = process.platform === 'darwin'
 
@@ -162,6 +163,12 @@ function registerIpc(): void {
     os: `${osType()} ${release()}`
   }))
 
+  // license
+  ipcMain.handle('license:status', () => licenseStatus())
+  ipcMain.handle('license:activate', (_e, key: string) => activateLicense(String(key)))
+  ipcMain.handle('license:deactivate', () => deactivateLicense())
+  ipcMain.handle('license:refresh', () => refreshLicense(true))
+
   // updates
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkForUpdates())
@@ -268,6 +275,7 @@ app.whenReady().then(async () => {
   // runs alongside startup; the renderer awaits the first result before showing the app
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   startUpdateChecks((s) => win?.webContents.send('update:changed', s))
+  startLicenseChecks((s) => win?.webContents.send('license:changed', s))
   await startHookServer(() => win?.webContents ?? null)
   await loadShellEnv()
   buildMenu()

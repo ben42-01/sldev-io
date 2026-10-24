@@ -18,6 +18,10 @@
     {
       "source": "/refunds",
       "destination": "/refunds/index.html"
+    },
+    {
+      "source": "/thanks",
+      "destination": "/thanks/index.html"
     }
   ],
   "headers": [

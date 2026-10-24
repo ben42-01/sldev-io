@@ -2,12 +2,16 @@ import { ExternalLink, FolderOpen, RefreshCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { formatBetaDate } from '@shared/beta'
 import { beta, pricingUrl, recheckBeta } from '../state/beta'
+import { license } from '../state/license'
 import { useStore } from '../state/store'
+import { LicenseForm } from './License'
 import { Logo } from './Logo'
 
-/** Full-screen page shown instead of the workspace when the free beta has ended. Data is untouched. */
+/** Full-screen page shown instead of the workspace when the free beta (or a trial) has ended. Data is untouched. */
 export function BetaEnded(): React.JSX.Element {
   const status = useStore(beta, (b) => b.status)
+  const trialEnded = status?.phase !== 'ended'
+  const licensing = useStore(license, (l) => !!l.status?.available)
   const [checking, setChecking] = useState(false)
   const recheck = async (): Promise<void> => {
     setChecking(true)
@@ -18,18 +22,22 @@ export function BetaEnded(): React.JSX.Element {
     <div className="beta-ended">
       <div className="beta-ended-card brand-frame">
         <Logo size={44} stroke={1} />
-        <h1>The sldev-io beta has ended</h1>
+        <h1>{trialEnded ? 'Your sldev-io trial has ended' : 'The sldev-io beta has ended'}</h1>
         <p>
-          Thanks for testing{status?.config.endsAt ? ` until ${formatBetaDate(status.config.endsAt)}` : ''}. Get a license to keep going.
-          Your terminals, missions, notes, connections and settings are all still here and come back exactly as you left them.
+          {trialEnded ? 'Thanks for trying sldev-io.' : `Thanks for testing${status?.config.endsAt ? ` until ${formatBetaDate(status.config.endsAt)}` : ''}.`} Enter
+          your license key to keep going. Your terminals, missions, notes, connections and settings are all still here and come back
+          exactly as you left them.
         </p>
+        {licensing && <LicenseForm autoFocus />}
         <div className="beta-ended-actions">
           <button className="btn primary" onClick={() => void window.api.shell.openExternal(pricingUrl())}>
-            <ExternalLink size={14} /> Get sldev-io
+            <ExternalLink size={14} /> Buy a license
           </button>
-          <button className="btn" disabled={checking} onClick={() => void recheck()}>
-            <RefreshCw size={14} /> {checking ? 'Checking…' : 'Check again'}
-          </button>
+          {!trialEnded && (
+            <button className="btn" disabled={checking} onClick={() => void recheck()}>
+              <RefreshCw size={14} /> {checking ? 'Checking…' : 'Check again'}
+            </button>
+          )}
           <button className="btn" onClick={() => void window.api.app.openDataFolder()}>
             <FolderOpen size={14} /> Open data folder
           </button>

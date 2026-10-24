@@ -4,6 +4,7 @@ import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSe
 import { showPicker, type PickItem } from '../state/picker'
 import { openSetup } from '../state/setup'
 import { checkForUpdates } from '../state/updates'
+import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
@@ -175,6 +176,7 @@ export function staticCommands(): Command[] {
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
     { id: 'app.about', category: 'Help', title: 'About sldev-io', run: showAbout },
+    { id: 'app.license', category: 'Help', title: 'Enter license key', run: openLicense },
     { id: 'app.checkUpdates', category: 'Help', title: 'Check for updates', run: () => {
       showAbout()
       void checkForUpdates()

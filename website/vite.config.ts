@@ -45,17 +45,18 @@ function downloadRedirect(): Plugin {
   }
 }
 
-const legalPages = ['terms', 'privacy', 'refunds']
+// extra HTML pages next to index.html (each has <name>/index.html)
+const pages = ['terms', 'privacy', 'refunds', 'thanks']
 
 /** /terms → /terms/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
-function legalRoutes(): Plugin {
+function pageRoutes(): Plugin {
   const rewrite: Connect.NextHandleFunction = (req, _res, next) => {
     const [path, query] = (req.url ?? '').split('?')
-    if (legalPages.includes(path.slice(1))) req.url = `${path}/${query ? `?${query}` : ''}`
+    if (pages.includes(path.slice(1))) req.url = `${path}/${query ? `?${query}` : ''}`
     next()
   }
   return {
-    name: 'legal-routes',
+    name: 'page-routes',
     configureServer: (server) => void server.middlewares.use(rewrite),
     configurePreviewServer: (server) => void server.middlewares.use(rewrite)
   }
@@ -64,12 +65,12 @@ function legalRoutes(): Plugin {
 const page = (path: string): string => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
-  plugins: [react(), betaJson(), downloadRedirect(), legalRoutes()],
+  plugins: [react(), betaJson(), downloadRedirect(), pageRoutes()],
   build: {
     rollupOptions: {
       input: {
         main: page('./index.html'),
-        ...Object.fromEntries(legalPages.map((p) => [p, page(`./${p}/index.html`)]))
+        ...Object.fromEntries(pages.map((p) => [p, page(`./${p}/index.html`)]))
       }
     }
   }
