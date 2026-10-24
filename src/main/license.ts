@@ -81,7 +81,8 @@ export async function licenseStatus(): Promise<LicenseStatus> {
     validUntil: c?.exp ?? null,
     trial: !licensed && s.trialStartedAt !== null ? trialState(s.trialStartedAt, now()) : null,
     message: c && !licensed ? "sldev-io couldn't confirm your license for a while. Connect to the internet and choose Check license." : s.message,
-    available: !!publicKeyB64()
+    // beta builds are free until the beta ends; licenses start with the first stable release
+    available: !!publicKeyB64() && !isBetaBuild()
   }
 }
 
@@ -115,7 +116,7 @@ export async function activateLicense(rawKey: string): Promise<LicenseStatus> {
   await load()
   const key = rawKey.trim()
   if (!key) throw new Error('Enter your license key.')
-  if (!publicKeyB64()) throw new Error("This build of sldev-io can't activate licenses yet.")
+  if (!publicKeyB64() || isBetaBuild()) throw new Error('Licenses can be activated from sldev-io 1.0.')
   const machine = await machineHash()
   const { token } = await post<{ token: string }>('activate', { key, machine, label: `${osType()} ${arch()}`, version: app.getVersion() })
   const c = verifyLicense(token, publicKeyFrom(publicKeyB64()))

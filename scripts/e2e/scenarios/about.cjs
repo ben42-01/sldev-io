@@ -1,4 +1,5 @@
 // Settings → About: version, update state (unsupported when unpacked), diagnostics, legal links.
+// Also: a beta build is free, so Settings → License has no key field.
 const text = (h, sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? ''`)
 
 module.exports = async (h) => {
@@ -15,5 +16,9 @@ module.exports = async (h) => {
   h.expect(status.state === 'unsupported', 'updater stays off in the unpacked build')
   h.expect((await h.js(`[...document.querySelectorAll('.about-links .link')].map(e => e.textContent).join('|')`)).includes('Privacy policy'), 'legal links present')
   h.expect(!(await h.js(`!!document.querySelector('.statusbar .status-item.ok')`)), 'no update chip without an update')
+  h.expect((await text(h, '#settings-license')).includes('Free during the beta'), 'beta build: License says free during the beta')
+  h.expect(!(await h.js(`!!document.querySelector('#settings-license .license-form')`)), 'beta build: no license key field')
+  const refused = await h.js(`window.api.license.activate('SLDEV-TEST-GOOD').then(() => 'activated', e => String(e))`)
+  h.expect(/from sldev-io 1\.0/.test(refused), 'beta build: main refuses to activate a key')
   await h.shot('1-about')
 }

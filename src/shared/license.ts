@@ -19,7 +19,7 @@ export interface LicenseStatus {
   trial: { daysLeft: number; ended: boolean } | null
   /** something the user should know, e.g. the key was revoked */
   message: string | null
-  /** false when this build has no license public key (licensing switched off) */
+  /** licenses can be entered: stable builds with a license public key (beta builds are free) */
   available: boolean
 }
 

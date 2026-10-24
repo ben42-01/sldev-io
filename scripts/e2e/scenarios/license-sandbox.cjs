@@ -21,4 +21,4 @@ module.exports = async (h) => {
   await h.until(async () => !(await text(h, '#settings-license')).includes('Licensed'), 20000)
   h.expect(!(await text(h, '#settings-license')).includes('Licensed'), 'deactivated again')
 }
-module.exports.env = { SLDEV_LICENSE_API: process.env.SLDEV_SANDBOX_API ?? '' }
+module.exports.env = { SLDEV_E2E_VERSION: '1.0.0', SLDEV_LICENSE_API: process.env.SLDEV_SANDBOX_API ?? '' }

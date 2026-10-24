@@ -1,7 +1,8 @@
-// Licenses in a beta build, against the harness's fake license server: bad key, activate,
-// survives the beta ending, deactivate, ended screen → activate unlocks, revoked key.
+// Licenses in a stable build (beta builds are free and have no key field), against the harness's
+// fake license server: bad key, activate, reuse on the same machine, deactivate, revoked key.
+// The ended screen with a key field is covered by trial-ended.cjs.
 const text = (h, sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? ''`)
-const visible = (h, sel) => h.js(`!!document.querySelector(${JSON.stringify(sel)})`)
+const chips = (h) => h.js(`[...document.querySelectorAll('.statusbar .status-item')].map(e => e.textContent).join('|')`)
 
 async function openLicense(h) {
   await h.click('.statusbar .status-item[title="Settings"]')
@@ -9,26 +10,26 @@ async function openLicense(h) {
   await h.js(`document.getElementById('settings-license')?.scrollIntoView({ block: 'start' })`)
 }
 
-async function enterKey(h, scope, key) {
-  await h.setValue(`${scope} .license-form input`, key)
-  await h.click(`${scope} .license-form button[type=submit]`)
+async function enterKey(h, key) {
+  await h.setValue('#settings-license .license-form input', key)
+  await h.click('#settings-license .license-form button[type=submit]')
   await h.wait(1200)
 }
 
 module.exports = async (h) => {
-  h.setBeta({ endsInDays: 30 })
-  await h.js('window.api.beta.refresh()')
   await h.openFixture()
   await openLicense(h)
-  h.expect((await text(h, '#settings-license')).includes('free until'), 'beta build: license section mentions the beta end date')
+  h.expect((await text(h, '#settings-license')).includes('Trial: 14 days left'), 'stable build: trial and key field in Settings → License')
+  h.expect(/trial · 14 days left/.test(await chips(h)), 'trial chip in the status bar')
 
-  await enterKey(h, '#settings-license', 'SLDEV-NOPE')
+  await enterKey(h, 'SLDEV-NOPE')
   h.expect((await text(h, '#settings-license .license-error')).includes("isn't valid"), 'unknown key: error shown')
   await h.shot('1-invalid-key')
 
-  await enterKey(h, '#settings-license', 'SLDEV-TEST-GOOD')
+  await enterKey(h, 'SLDEV-TEST-GOOD')
   const lic = await text(h, '#settings-license')
   h.expect(lic.includes('Licensed') && lic.includes('buyer@example.com'), 'valid key: licensed, email shown')
+  h.expect(!/trial/.test(await chips(h)), 'licensed: trial chip gone')
   h.expect(h.licenses.get('SLDEV-TEST-GOOD').activations.size === 1, 'one activation on the server')
   await h.shot('2-licensed')
 
@@ -36,30 +37,18 @@ module.exports = async (h) => {
   await h.js(`window.api.license.activate('SLDEV-TEST-GOOD')`)
   h.expect(h.licenses.get('SLDEV-TEST-GOOD').activations.size === 1, 'activating again on this machine uses no extra slot')
 
-  h.setBeta({ endsInDays: -1 })
-  await h.js('window.api.beta.refresh()')
-  await h.reload()
-  h.expect(!(await visible(h, '.beta-ended')) && (await visible(h, '.statusbar')), 'licensed: the ended beta does not lock the app')
-
-  await openLicense(h)
   await h.js('void (window.confirm = () => true)')
   await h.click('#settings-license .btn', 'Deactivate this machine')
   await h.wait(1200)
   h.expect(h.licenses.get('SLDEV-TEST-GOOD').activations.size === 0, 'deactivate frees the slot on the server')
   h.expect(!(await text(h, '#settings-license')).includes('Licensed'), 'deactivated: no longer licensed')
 
-  await h.reload()
-  h.expect(await visible(h, '.beta-ended .license-form'), 'beta ended, no license: ended screen offers the key field')
-  await h.shot('3-ended-with-key-field')
-  await enterKey(h, '.beta-ended', 'SLDEV-TEST-GOOD')
-  await h.wait(2500)
-  h.expect(!(await visible(h, '.beta-ended')) && (await visible(h, '.statusbar')), 'activating on the ended screen opens the workspace')
-
   // revoked or refunded: the next check drops the license
+  await enterKey(h, 'SLDEV-TEST-GOOD')
   h.licenses.get('SLDEV-TEST-GOOD').revoked = true
   const status = await h.js('window.api.license.refresh().catch(e => ({ error: String(e) }))')
-  h.expect(!status.licensed && /enter a license key/i.test(status.message ?? ''), 'revoked key: license dropped with a message')
-  await openLicense(h)
+  h.expect(!status.licensed && /no longer active/i.test(status.message ?? ''), 'revoked key: license dropped with a message')
   await h.wait(300)
-  await h.shot('4-revoked')
+  await h.shot('3-revoked')
 }
+module.exports.env = { SLDEV_E2E_VERSION: '1.0.0' }

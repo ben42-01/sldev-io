@@ -82,22 +82,22 @@ export function LicenseSection(): React.JSX.Element {
             </button>
           </div>
         </>
+      ) : !status?.available ? (
+        <div className="field">
+          <span>{betaEnds ? (betaEnded ? `The free beta ended on ${betaEnds}.` : `Free during the beta, until ${betaEnds}.`) : 'Free during the beta.'}</span>
+        </div>
       ) : (
         <>
           <div className="field">
             <span>
-              {betaEnds
-                ? betaEnded
-                  ? `The free beta ended on ${betaEnds}. Enter a license key to keep using sldev-io.`
-                  : `This beta is free until ${betaEnds}. A license keeps sldev-io working after that.`
-                : status?.trial
-                  ? status.trial.ended
-                    ? 'Your trial has ended. Enter a license key to keep using sldev-io.'
-                    : `Trial: ${status.trial.daysLeft} day${status.trial.daysLeft === 1 ? '' : 's'} left. Enter a license key to keep using sldev-io after that.`
-                  : 'Enter your license key from the receipt email.'}
+              {status.trial
+                ? status.trial.ended
+                  ? 'Your trial has ended. Enter a license key to keep using sldev-io.'
+                  : `Trial: ${status.trial.daysLeft} day${status.trial.daysLeft === 1 ? '' : 's'} left. Enter a license key to keep using sldev-io after that.`
+                : 'Enter your license key from the receipt email.'}
             </span>
           </div>
-          {status?.available ? <LicenseForm /> : <div className="muted small">Licenses can be activated from version 1.0.</div>}
+          <LicenseForm />
           <div className="about-links">
             <button className="link" onClick={() => void window.api.shell.openExternal(pricingUrl())}>
               Buy a license <ExternalLink size={11} />

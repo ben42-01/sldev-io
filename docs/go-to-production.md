@@ -82,6 +82,11 @@ confirmed on the provider's site when you get there.
 - `v0.1.0-beta.1` stays unpublished. The first public build is `0.1.0-beta.2`.
 - The beta window is controlled from the website, never baked into builds.
 - Beta window: **2026-10-24 to 2026-12-31**; launch `1.0.0` around 2027-01-01 (extend `endsAt` if needed).
+- **Release model**: `0.1.0-beta.N` builds are the **free beta**: GitHub pre-releases, governed by
+  the beta window, no license key field and no "Buy" (Settings → License just says "Free during the
+  beta"). **`1.0.0` is go-live**: a normal release with the 14-day trial and license keys. Installed
+  betas update themselves to `1.0.0` and start the trial there. Nothing in a beta build changes
+  when you go live; the release, the live Polar token and the live checkout links do.
 - Payment provider: **Polar** (merchant of record, built-in license keys). Plain Stripe would make
   you the seller of record (VAT registration and filing), and Stripe Managed Payments has no license keys.
 - **3 machines** per Personal license; Team = 5 people × 3 machines (15 activations).

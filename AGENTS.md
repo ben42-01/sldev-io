@@ -86,7 +86,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Logic lives in `src/shared/beta.ts`; build-time URLs come from `website/src/content/site.json`
   (`SLDEV_SITE_URL` / `SLDEV_BETA_CONFIG_URL` override).
 - **Licensing**: the lock decision (`isLocked` in `src/shared/license.ts`) is made at **launch** only, like the
-  beta. A license overrides an ended beta or trial. Only main verifies tokens; env overrides
+  beta. A license overrides an ended beta or trial. Beta builds are free: no key field, and main
+  refuses to activate (`available: false`); licenses and the trial start with the first stable release. Only main verifies tokens; env overrides
   (`SLDEV_LICENSE_API`, `SLDEV_LICENSE_PUBLIC_KEY`, `SLDEV_TRIAL_DAYS_AGO`) work in unpackaged builds only.
   Tests never call Polar: unit tests stub `fetch`, e2e uses the fake license server in `scripts/e2e/run.cjs`.
 - **Privacy**: no telemetry. A new network request from the app means updating `website/src/content/legal.tsx`
