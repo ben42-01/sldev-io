@@ -53,6 +53,8 @@ function createWindow(): void {
     show: false,
     backgroundColor: BG,
     title: 'sldev-io',
+    // macOS and Windows take the icon from the app bundle / exe
+    ...(process.platform === 'linux' ? { icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../build/icons/512x512.png') } : {}),
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 12, y: 12 } }

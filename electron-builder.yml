@@ -11,6 +11,12 @@ asarUnpack:
 npmRebuild: true
 linux:
   target: [AppImage, deb, rpm]
+  # one PNG per hicolor size; the theme has no 1024x1024 folder, so a single big icon is ignored
+  icon: build/icons
+  # window icon at runtime (AppImages have no installed .desktop entry to take it from)
+  extraResources:
+    - from: build/icons/512x512.png
+      to: icon.png
   syncDesktopName: true
   category: Development
   maintainer: sldev-io
