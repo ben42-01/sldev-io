@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { existsSync, renameSync } from 'fs'
-import { homedir } from 'os'
+import { arch, homedir, release, type as osType } from 'os'
 import { basename, join } from 'path'
-import { DEFAULT_SETTINGS, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
+import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { PtyManager, setShellOverride } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, findOnPath, openInEditor, terminalEditorCommand, terminalEditorGoto } from './editors'
@@ -20,6 +20,7 @@ import { loadShellEnv } from './shellEnv'
 import { betaStatus, refreshBeta, startBetaChecks } from './beta'
 import { checkSetup } from './setup'
 import { containerAction, listContainers } from './docker'
+import { checkForUpdates, installUpdate, startUpdateChecks, updateStatus } from './updater'
 
 const isMac = process.platform === 'darwin'
 
@@ -149,6 +150,22 @@ function registerIpc(): void {
   ipcMain.handle('beta:status', () => betaStatus())
   ipcMain.handle('beta:refresh', () => refreshBeta())
   ipcMain.handle('app:openDataFolder', () => shell.openPath(app.getPath('userData')))
+  ipcMain.handle('app:info', (): AppInfo => ({
+    name: app.getName(),
+    version: app.getVersion(),
+    channel: /-beta\b/.test(app.getVersion()) ? 'beta' : 'stable',
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    arch: arch(),
+    os: `${osType()} ${release()}`
+  }))
+
+  // updates
+  ipcMain.handle('update:status', () => updateStatus())
+  ipcMain.handle('update:check', () => checkForUpdates())
+  ipcMain.handle('update:install', () => installUpdate(win))
   ipcMain.handle('app:focus', () => {
     if (!win) return
     if (win.isMinimized()) win.restore()
@@ -250,6 +267,7 @@ app.whenReady().then(async () => {
   setShellOverride(settings.get().shell)
   // runs alongside startup; the renderer awaits the first result before showing the app
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
+  startUpdateChecks((s) => win?.webContents.send('update:changed', s))
   await startHookServer(() => win?.webContents ?? null)
   await loadShellEnv()
   buildMenu()

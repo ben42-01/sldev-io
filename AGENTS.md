@@ -33,6 +33,7 @@ src/main/       Electron main process (Node): everything privileged
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events (token-protected)
   beta.ts         free-beta window: fetches <site>/beta.json, encrypted cache, clock-rollback guard
+  updater.ts      electron-updater from the downloads repo (macOS: notify only until builds are signed)
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
@@ -47,6 +48,8 @@ src/renderer/src/
   dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Preview, Settings
   components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
   styles/app.css  all styling; design tokens on :root
+website/        marketing site (Vercel): api/download.ts (/download/<os>), public/install.sh,
+                  legal pages (/terms, /privacy, /refunds) from src/content/legal.tsx
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
@@ -80,6 +83,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   If the site is unreachable and nothing is cached, the beta stays open (fails open on purpose).
   Logic lives in `src/shared/beta.ts`; build-time URLs come from `website/src/content/site.json`
   (`SLDEV_SITE_URL` / `SLDEV_BETA_CONFIG_URL` override).
+- **Privacy**: no telemetry. A new network request from the app means updating `website/src/content/legal.tsx`
+  (`/privacy`) and `legal.updatedAt` in `site.json` in the same change.
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.

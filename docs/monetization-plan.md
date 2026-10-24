@@ -124,10 +124,10 @@ who used the beta, sent by email from the purchase/download list or shown on the
 
 ## Decisions needed
 
-1. **Beta end date**: recommend 6–8 weeks after the first public beta build, with in-app
-   warnings from 2 weeks before.
-2. **Provider**: Polar (recommended) or Lemon Squeezy, or Stripe if you want to handle VAT yourself.
+1. ~~Beta end date~~: decided, free 2026-10-24 to 2026-12-31, launch around 2027-01-01.
+2. ~~Provider~~: decided, Polar.
 3. ~~Prices~~: decided, €10.99 Personal at launch.
-4. **Updates policy**: lifetime updates, or 1 year of updates with a perpetual fallback (recommended).
-5. **Machines per Personal license**: recommend 3.
+4. ~~Updates policy~~: decided, 1 year of updates with a perpetual fallback (in `/terms`).
+5. ~~Machines per Personal license~~: decided, 3.
 6. **Beta-tester discount**: how much, and for how long.
+7. **Renewal price** for another year of updates.

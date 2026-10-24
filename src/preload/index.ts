@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BetaStatus } from '@shared/beta'
 import type {
+  AppInfo,
   AppSettings,
   ClaudeAsset,
   CredentialInput,
@@ -27,6 +28,7 @@ import type {
   SshConnection,
   SshPrompt,
   StoreFiles,
+  UpdateStatus,
   VaultStatus,
   WorktreeInfo
 } from '../shared/types'
@@ -84,7 +86,15 @@ const api = {
   },
   app: {
     focus: (): Promise<void> => ipcRenderer.invoke('app:focus'),
-    openDataFolder: (): Promise<string> => ipcRenderer.invoke('app:openDataFolder')
+    openDataFolder: (): Promise<string> => ipcRenderer.invoke('app:openDataFolder'),
+    info: (): Promise<AppInfo> => ipcRenderer.invoke('app:info')
+  },
+  update: {
+    status: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:status'),
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:check'),
+    /** asks the user, then restarts into the downloaded update */
+    install: (): Promise<void> => ipcRenderer.invoke('update:install'),
+    onChanged: (cb: (s: UpdateStatus) => void): Unsubscribe => on('update:changed', cb)
   },
   git: {
     branch: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:branch', cwd),

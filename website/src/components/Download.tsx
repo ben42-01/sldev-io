@@ -10,7 +10,7 @@ export function DownloadButton({ className = 'btn primary lg', size = 16 }: { cl
       <DownloadIcon size={size} /> Download for {platformLabels[platform]}
     </a>
   ) : (
-    <a className={className} href="#download">
+    <a className={className} href="/#download">
       <DownloadIcon size={size} /> Download
     </a>
   )

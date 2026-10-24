@@ -64,15 +64,16 @@ confirmed on the provider's site when you get there.
 | App (terminals, agents, missions, …) | ✅ |
 | CI on every push | ✅ |
 | Release workflow (builds all OSes, attaches to a GitHub release **in this private repo**) | ✅ |
-| Website with pricing from JSON | ✅ (not yet deployed, as far as this repo knows) |
+| Website with pricing from JSON, OS-aware downloads, `install.sh` | ✅ live at sldev-io.vercel.app |
 | "Limited time" labels and beta countdown on the site | ✅ |
 | Configurable beta window (`/beta.json` → app chip, banner, "beta ended" screen) | ✅ |
 | Publishing installers to the **public** downloads repo `ben42-01/downloads.sldev.io` | ✅ (needs the `RELEASES_TOKEN` secret and a first commit in that repo) |
-| Auto-update in the app | 🤖 to build (Phase 2) |
+| Auto-update in the app (`src/main/updater.ts`) | ✅ Windows and Linux .deb install updates; macOS shows "Download" until it's signed |
+| Settings → About (version, updates, diagnostics, legal links) | ✅ |
 | License keys: server + app screen + trial | 🤖 to build (Phase 4) |
 | Payment provider products | 🧑 to set up (Phase 3) |
 | Code signing (macOS / Windows) | 🧑 accounts + 🤖 wiring (Phase 6) |
-| EULA, privacy policy, refund policy, terms | 🧑 to write or source (Phase 5) |
+| License terms, privacy policy, refund policy | ✅ drafted at `/terms`, `/privacy`, `/refunds`; 🧑 fill in `site.json` → `legal` (Phase 5) |
 
 ### Decisions already made
 
@@ -80,18 +81,21 @@ confirmed on the provider's site when you get there.
 - Downloads: the **public GitHub repo** `ben42-01/downloads.sldev.io`. The source repo stays private.
 - `v0.1.0-beta.1` stays unpublished. The first public build is `0.1.0-beta.2`.
 - The beta window is controlled from the website, never baked into builds.
+- Beta window: **2026-10-24 to 2026-12-31**; launch `1.0.0` around 2027-01-01 (extend `endsAt` if needed).
+- Payment provider: **Polar** (merchant of record, built-in license keys). Plain Stripe would make
+  you the seller of record (VAT registration and filing), and Stripe Managed Payments has no license keys.
+- **3 machines** per Personal license; Team = 5 people × 3 machines (15 activations).
+- Updates: **1 year of updates included**, the bought version works forever, renewal optional.
+- No telemetry. The website self-hosts its fonts and loads nothing from third parties.
 
 ### Decisions still open
 
 | Decision | Recommendation | Needed by |
 |---|---|---|
-| Payment provider | Polar (Lemon Squeezy as fallback) | Phase 3 |
-| Machines per Personal license | 3 | Phase 3 |
-| Team license activations | 15 (5 people × 3 machines) | Phase 3 |
-| Updates policy | Pay once, keep that version forever, 1 year of updates included | Phase 4 |
 | Trial length for paid builds | 14 days | Phase 4 |
 | Beta-tester discount | e.g. 30% for the first month after launch | Phase 7 |
-| Beta start/end dates | Set when ready (Phase 2) | Phase 2 |
+| Renewal price for another year of updates | e.g. 50% of the license price | Phase 4 |
+| Apple Developer account ($99/year) | Before launch: removes the Gatekeeper warning and enables macOS auto-update | Phase 6 |
 
 ---
 
@@ -184,22 +188,21 @@ Needed before paying macOS users arrive. Enrolment can take a few days. See
 **Goal:** anyone can download `0.1.0-beta.2`; it updates itself; you control when the free beta
 starts and ends.
 
-### 3.1 Publishing ✅ and 🤖 auto-update
+### 3.1 Publishing ✅ and auto-update ✅
 
 ✅ The release workflow publishes to `ben42-01/downloads.sldev.io` (pre-releases for `-beta`
-versions) and also keeps a record in the private repo. Releases carry only the installers
-(deb, exe, two dmgs). Builds still bake in the downloads location for auto-update.
+versions) and also keeps a record in the private repo. The website's download buttons and
+`install.sh` serve the installers (deb, exe, two dmgs); the release also carries what
+electron-updater reads (`latest*.yml`, `.blockmap`, the macOS zip).
 
-🤖 Do auto-update **before** the first public beta, so beta testers get fixes without
-re-downloading:
-
-> Read AGENTS.md and docs/go-to-production.md (Phase 2). Add auto-update with electron-updater
-> from the GitHub downloads repo already configured in electron-builder.yml: beta builds follow
-> pre-releases, stable builds follow stable releases; check on start and every few hours,
-> download in the background, and offer "Restart to update" in the status bar. The release
-> workflow uploads only installers, so add the update metadata it needs (latest*.yml, .blockmap,
-> and the macOS zip target) back to the upload. Add tests where
-> possible, update the README release section, then show me the diff before pushing.
+✅ Auto-update (`src/main/updater.ts`, electron-updater): checks 15 s after start and every 6 h.
+Beta builds follow pre-releases, stable builds only stable releases.
+- **Windows**: downloads in the background, installs on quit or via "restart to update".
+- **Linux (.deb)**: downloads in the background; "restart to update" asks for the password (pkexec).
+- **macOS**: Squirrel.Mac only installs signed apps, so unsigned builds show "update available",
+  which opens the website download. After Phase 6 signing, set `manual` to false in `updater.ts`.
+- `0.1.0-beta.2` has no updater: its users install `beta.3` by hand once. The first automatic
+  update is `beta.3 → beta.4`; test it on one machine per OS before announcing.
 
 ### 3.2 🧑 Set the beta window
 
@@ -259,14 +262,14 @@ asks before pushing.
 ### 3.4 🧑 Verify before announcing
 
 - [ ] The release in `downloads.sldev.io` lists the `.deb`, the `-setup.exe` and the `.dmg`s (x64 and
-      arm64), plus (after 3.1) the `latest*.yml` files auto-update reads
+      arm64), plus the update files: `latest*.yml`, `.blockmap`s and the macOS `.zip`s
 - [ ] The website's Download button downloads the installer for your OS, and
       `curl -fsSL https://<site>/install.sh | sh` installs it on Linux and macOS
 - [ ] Install on at least one machine per OS you can reach; the app opens and shows the right
       beta chip/banner for your dates
 - [ ] Set `endsAt` to yesterday on a test branch deploy (or ask Claude to run `npm run e2e -- beta`)
       to see the ended screen; then restore the real date
-- [ ] (After 3.1) install beta.2, release a `beta.3`, and confirm the app offers the update
+- [ ] Install beta.3, release a `beta.4`, and confirm the app offers and installs the update (Settings → About)
 
 Unsigned builds show warnings: on Windows click "More info → Run anyway"; on macOS right-click
 the app → Open (or `xattr -cr /Applications/sldev-io.app`). The website FAQ already says so.
@@ -457,21 +460,24 @@ ship a build with a new public key. Keep a copy in your password manager.
 > This is a checklist, not legal or tax advice. A short call with an accountant is worth it once
 > money comes in.
 
-### Pages the website needs (before taking payments)
+### Pages the website needs (before taking payments) ✅ drafted
 
-| Page | What it covers | Notes |
-|---|---|---|
-| **Terms of Sale / EULA** | What the license allows (1 developer, 3 machines), no reselling, updates policy, warranty disclaimer, liability limit | Shown on the website; the app links to it on first start and in Settings |
-| **Privacy policy** | What's collected: purchase email (by the provider), machine hash and app version (by the license server), the beta check (IP in server logs). No telemetry. | Must match what the code does. Ask Claude to draft it from the code |
-| **Refund policy** | e.g. "Full refund within 14 days, no questions asked" | Providers require a refund policy; EU/UK buyers have a 14-day withdrawal right for digital goods unless they waive it at checkout *(check provider setting)* |
-| **Imprint / contact** | Your name or company, address, email | Expected in the EU (Germany especially) |
+`/terms` (license terms and terms of sale), `/privacy` and `/refunds` are live in the website
+source (`website/src/content/legal.tsx`) and linked from the site footer and the app's
+Settings → About. They describe what the code actually does: no telemetry, the beta and update
+checks, license activation with a hashed machine ID, Polar as merchant of record.
 
-🤖 Prompt:
+🧑 Before taking payments:
+1. Fill in `website/src/content/site.json` → `legal`: `seller` (your legal name or company),
+   `address` (postal address; expected in the EU/UK) and `country` (governing law, e.g.
+   "England and Wales"). Until then the pages show `[seller name]` placeholders.
+2. Read the three pages once. If the app starts sending anything new, update `/privacy` and
+   `legal.updatedAt` in the same change.
+3. Polar asks for the terms, privacy and refund URLs during its organization review: use
+   `https://<site>/terms`, `/privacy`, `/refunds`.
 
-> Draft website pages for sldev-io: terms of sale/EULA, privacy policy, refund policy and a
-> contact page, based on what the code actually collects (read src/main/beta.ts and the license
-> code) and docs/go-to-production.md. Plain language, add them to the website footer, and mark
-> anything I must fill in (name, address).
+> This isn't legal advice: if you're unsure about anything, a one-off review by a lawyer is cheap
+> compared with the risk.
 
 ### Business basics (UK sole trader example)
 

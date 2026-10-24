@@ -1160,6 +1160,9 @@ a {
 .status-item.warn {
   color: #e5c07b;
 }
+.status-item.ok {
+  color: #3fb950;
+}
 .status-item.attention {
   color: #f0a020;
   font-weight: 600;
@@ -1276,6 +1279,72 @@ a {
 }
 .settings input.mono {
   font-family: var(--font-mono);
+}
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.about-name {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.about-name .mono {
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+.about-tag {
+  font: 500 10px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg-muted);
+}
+.about-update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.about-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 12px;
+}
+.about-details dt {
+  color: var(--fg-muted);
+}
+.about-details dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  user-select: text;
+}
+.about-actions,
+.about-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.about-links {
+  gap: 16px;
+  font-size: 12px;
+}
+.about-links .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
 }
 
 /* ── missions ──────────────────────────────── */

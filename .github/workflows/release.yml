@@ -100,11 +100,15 @@ jobs:
         with:
           name: installers-${{ matrix.name }}
           if-no-files-found: error
-          # only the installers: the website's /download/<os> and install.sh pick from these
+          # installers (the website's /download/<os> and install.sh pick from these) plus what
+          # electron-updater reads: latest*.yml, .blockmap, and the macOS zip
           path: |
             dist/*.deb
             dist/*.dmg
             dist/*.exe
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml
 
   release:
     needs: [check, build]

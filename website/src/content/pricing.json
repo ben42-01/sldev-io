@@ -11,7 +11,7 @@
     {
       "id": "personal",
       "name": "Personal",
-      "tagline": "For one developer, on all of their machines.",
+      "tagline": "For one developer, on up to 3 of their machines.",
       "price": 0,
       "listPrice": 10.99,
       "priceNote": "Free during the beta, then pay once.",
@@ -25,7 +25,8 @@
         "Diff review, commit, merge and PR from the app",
         "Skills, MCP servers, runtimes and tasks",
         "SSH, SFTP, credential vault and Docker",
-        "Linux, Windows and macOS"
+        "Linux, Windows and macOS",
+        "1 year of updates included, and your version keeps working forever"
       ]
     },
     {
@@ -41,7 +42,8 @@
       "checkoutUrl": "",
       "features": [
         "Everything in Personal",
-        "5 seats on a single license",
+        "5 seats on a single license, up to 3 machines each",
+        "1 year of updates included, and your version keeps working forever",
         "Priority support by email",
         "Invoice and VAT receipt"
       ]
@@ -50,7 +52,7 @@
   "faq": [
     {
       "q": "Is it really a one-time payment?",
-      "a": "Yes. No subscription and no per-seat monthly fee. You pay once per license."
+      "a": "Yes. No subscription and no monthly fee. A license includes one year of updates. After that, the version you have keeps working forever, and renewing for another year of updates is optional."
     },
     {
       "q": "What does it cost today?",
@@ -59,6 +61,18 @@
     {
       "q": "Do I need an account with every agent?",
       "a": "sldev-io drives the agent CLIs that are already on your machine and uses their own logins. It never replaces your Claude, OpenAI, Cursor or GitHub subscription."
+    },
+    {
+      "q": "How many machines can I use?",
+      "a": "A Personal license covers one developer on up to 3 machines. When you replace a machine, you can move the license to the new one."
+    },
+    {
+      "q": "Can I get a refund?",
+      "a": "Yes. If sldev-io isn't for you, ask within 14 days of buying for a full refund. See the refund policy."
+    },
+    {
+      "q": "Does sldev-io collect my data?",
+      "a": "No. There is no account, no telemetry and no analytics. Your code, terminals, notes and credentials stay on your machine. The privacy policy lists the few network requests the app makes."
     }
   ]
 }

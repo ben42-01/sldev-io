@@ -10,7 +10,7 @@ asarUnpack:
   - node_modules/node-pty/**
 npmRebuild: true
 linux:
-  # the website and install.sh offer exactly one installer per OS: .deb, .dmg (per arch), .exe
+  # the website and install.sh offer one installer per OS: .deb, .dmg (per arch), .exe
   target: [deb]
   # one PNG per hicolor size; the theme has no 1024x1024 folder, so a single big icon is ignored
   icon: build/icons
@@ -25,7 +25,8 @@ deb:
   # apt installs recommends by default; everything else is offered by the in-app setup check
   recommends: [git, libappindicator3-1]
 mac:
-  target: [dmg]
+  # the zip is only for auto-update (Squirrel.Mac and latest-mac.yml); people download the dmg
+  target: [dmg, zip]
   # name the arch on both builds so api/download.ts can tell them apart
   artifactName: ${productName}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
@@ -37,8 +38,8 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 # Where installers are published (by the release workflow, not by electron-builder itself:
-# it runs with --publish never). This bakes the location into the app for auto-update; the
-# update metadata it writes (latest*.yml, .blockmap) isn't published until auto-update exists.
+# it runs with --publish never). This bakes the location into the app for electron-updater
+# (src/main/updater.ts) and writes the update metadata it reads (latest*.yml, .blockmap).
 publish:
   provider: github
   owner: ben42-01

@@ -4,10 +4,10 @@ import { site } from '../lib/pricing'
 import { Logo } from './Logo'
 
 const links = [
-  { href: '#features', label: 'Features' },
-  { href: '#agents', label: 'Agents' },
-  { href: '#pricing', label: 'Pricing' },
-  { href: '#faq', label: 'FAQ' }
+  { href: '/#features', label: 'Features' },
+  { href: '/#agents', label: 'Agents' },
+  { href: '/#pricing', label: 'Pricing' },
+  { href: '/#faq', label: 'FAQ' }
 ]
 
 export function Nav() {
@@ -15,7 +15,7 @@ export function Nav() {
   return (
     <header className="nav">
       <div className="container nav-inner">
-        <a href="#top" className="nav-logo" aria-label={`${site.name} home`}>
+        <a href="/" className="nav-logo" aria-label={`${site.name} home`}>
           <Logo />
           <span>{site.name}</span>
         </a>
@@ -25,11 +25,11 @@ export function Nav() {
               {l.label}
             </a>
           ))}
-          <a className="btn primary nav-cta-mobile" href="#download" onClick={() => setOpen(false)}>
+          <a className="btn primary nav-cta-mobile" href="/#download" onClick={() => setOpen(false)}>
             <Download size={14} /> Download
           </a>
         </nav>
-        <a className="btn primary nav-cta" href="#download">
+        <a className="btn primary nav-cta" href="/#download">
           <Download size={14} /> Download
         </a>
         <button className="nav-toggle" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>

@@ -33,7 +33,10 @@ export function Footer() {
         <span className="grow" />
         <a href={`mailto:${site.contactEmail}`}>Contact</a>
         <a href={site.repoUrl}>GitHub</a>
-        <a href="#pricing">Pricing</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/refunds">Refunds</a>
       </div>
     </footer>
   )

@@ -6,6 +6,26 @@
   "downloadUrl": "https://sldev-io.vercel.app/#download",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
   "contactEmail": "team.agora.hub@gmail.com",
-  "platforms": ["Linux", "Windows", "macOS"],
-  "agents": ["Claude Code", "Codex", "Cursor Agent", "GitHub Copilot", "OpenCode", "Gemini CLI", "Any CLI"]
+  "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+  ],
+  "agents": [
+    "Claude Code",
+    "Codex",
+    "Cursor Agent",
+    "GitHub Copilot",
+    "OpenCode",
+    "Gemini CLI",
+    "Any CLI"
+  ],
+  "legal": {
+    "seller": "",
+    "address": "",
+    "country": "",
+    "updatedAt": "2026-10-24",
+    "personalMachines": 3,
+    "updateYears": 1
+  }
 }

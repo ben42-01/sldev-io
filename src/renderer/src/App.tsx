@@ -12,6 +12,7 @@ import { matchShortcut, staticCommands } from './lib/commands'
 import { initWorkspace, workspace } from './state/workspace'
 import { useStore } from './state/store'
 import { beta, initBeta } from './state/beta'
+import { initUpdates } from './state/updates'
 import { BetaBanner, BetaEnded } from './components/BetaGate'
 
 export function App(): React.JSX.Element {
@@ -25,6 +26,7 @@ export function App(): React.JSX.Element {
     void initBeta().then(() => {
       if (!beta.get().locked) void initWorkspace()
     })
+    void initUpdates()
     void window.api.fs.home().then(setHome)
   }, [])
 

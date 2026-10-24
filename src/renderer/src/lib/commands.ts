@@ -3,6 +3,7 @@ import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTermi
 import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
 import { openSetup } from '../state/setup'
+import { checkForUpdates } from '../state/updates'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
@@ -128,6 +129,11 @@ export function openSettings(): void {
   openPanel('settings', 'settings', 'Settings')
 }
 
+function showAbout(): void {
+  openSettings()
+  requestAnimationFrame(() => document.getElementById('settings-about')?.scrollIntoView({ block: 'start' }))
+}
+
 export function staticCommands(): Command[] {
   return [
     { id: 'palette.show', title: 'Show all commands', keys: { mac: 'Cmd+Shift+P', other: 'Ctrl+Shift+P' }, run: showCommandPalette },
@@ -168,6 +174,11 @@ export function staticCommands(): Command[] {
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
+    { id: 'app.about', category: 'Help', title: 'About sldev-io', run: showAbout },
+    { id: 'app.checkUpdates', category: 'Help', title: 'Check for updates', run: () => {
+      showAbout()
+      void checkForUpdates()
+    } },
     { id: 'setup.open', category: 'Preferences', title: 'Check setup (git, gh, agent CLIs…)', run: openSetup },
     { id: 'folder.open', category: 'Workspace', title: 'Open folder…', keys: { mac: 'Cmd+O', other: 'Ctrl+Shift+O' }, run: () => void pickRootFolder() },
     {

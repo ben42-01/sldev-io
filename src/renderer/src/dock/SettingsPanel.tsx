@@ -6,6 +6,7 @@ import { applyTerminalFont } from '../lib/terminals'
 import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { openSetup } from '../state/setup'
+import { AboutSection } from '../components/About'
 
 export function SettingsPanel(): React.JSX.Element {
   const s = useStore(workspace, (w) => w)
@@ -82,6 +83,7 @@ export function SettingsPanel(): React.JSX.Element {
           <div className={vault?.encrypted ? 'ok' : 'bad'}>{vault ? (vault.encrypted ? `Encrypted with the OS keychain (${vault.backend})` : `Not securely encrypted (backend: ${vault.backend})`) : '…'}</div>
         </div>
       </section>
+      <AboutSection />
     </div>
   )
 }

@@ -370,3 +370,29 @@ export interface DockerList {
 }
 
 export type DockerAction = 'start' | 'stop' | 'restart' | 'rm'
+
+/** Version details for Settings → About and support requests. */
+export interface AppInfo {
+  name: string
+  version: string
+  /** beta builds (`-beta.N`) follow pre-releases; stable builds only stable releases */
+  channel: 'beta' | 'stable'
+  electron: string
+  chrome: string
+  node: string
+  platform: NodeJS.Platform
+  arch: string
+  os: string
+}
+
+export interface UpdateStatus {
+  /** unsupported: dev builds, and Linux installs that didn't come from the .deb */
+  state: 'unsupported' | 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
+  /** the newer version, once one is found */
+  version: string | null
+  percent: number | null
+  /** macOS builds aren't signed yet, which Squirrel.Mac requires: the user downloads the new dmg */
+  manual: boolean
+  error: string | null
+  checkedAt: number | null
+}

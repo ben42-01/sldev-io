@@ -6,6 +6,7 @@ import { useStore } from '../state/store'
 import { tildify } from '../lib/paths'
 import { blockers } from '../lib/setup'
 import { openSetup, setup } from '../state/setup'
+import { UpdateChip } from './About'
 import { BetaChip } from './BetaGate'
 
 export function StatusBar({ home }: { home: string }): React.JSX.Element {
@@ -41,6 +42,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
         </button>
       )}
       <BetaChip />
+      <UpdateChip />
       <span className="status-item" title="Open terminals">
         <SquareTerminal size={12} /> {count}
       </span>

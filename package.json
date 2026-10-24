@@ -29,6 +29,7 @@
     "website:build": "npm --prefix website run build"
   },
   "dependencies": {
+    "electron-updater": "6.8.10",
     "node-pty": "1.1.0",
     "ssh2": "1.17.0"
   },

@@ -66,7 +66,7 @@ or run `npm run dev:nosandbox`.
 
 ```bash
 npm run dist:linux   # deb
-npm run dist:mac     # dmg (on macOS)
+npm run dist:mac     # dmg, plus the zip auto-update needs (on macOS)
 npm run dist:win     # NSIS installer (on Windows)
 ```
 
@@ -80,8 +80,8 @@ Launching (downloads, beta window, payments, licensing, signing): see
 - **CI** (`.github/workflows/ci.yml`) runs on every push and PR: typecheck, unit tests, build.
 - **Release** (`.github/workflows/release.yml`) runs when you push a `release/**` branch
   (e.g. `release/0.2.0`). It builds Linux (deb), Windows (NSIS exe) and macOS
-  (dmg, Intel and Apple Silicon), then publishes just those installers as release
-  `v<package.json version>` in the **public**
+  (dmg, Intel and Apple Silicon), then publishes them with the update metadata electron-updater reads (`latest*.yml`,
+  `.blockmap`, the macOS zip) as release `v<package.json version>` in the **public**
   [`ben42-01/downloads.sldev.io`](https://github.com/ben42-01/downloads.sldev.io) repo (using the
   `RELEASES_TOKEN` secret), and records the same release in this private repo. Bump `version` before cutting the
   branch; pushing again to the branch replaces the assets. You can also start it from the
@@ -111,8 +111,9 @@ gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q
 git switch master
 ```
 
-When it finishes, `v0.2.0-beta.1` on the downloads repo's Releases page has the deb, exe and the two dmgs, and
-the website's download buttons and `install.sh` serve them right away. If one OS fails, fix it on the release branch and push again; the
+When it finishes, `v0.2.0-beta.1` on the downloads repo's Releases page has the deb, exe and the two dmgs (plus
+update files); the website's download buttons and `install.sh` serve them right away, and installed
+builds pick the update up within 6 hours. If one OS fails, fix it on the release branch and push again; the
 files on the release are replaced. Next betas are `-beta.2`, `-beta.3`, …; the final release is
 plain `0.2.0`.
 
