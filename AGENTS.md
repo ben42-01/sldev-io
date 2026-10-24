@@ -97,6 +97,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Ubuntu sandbox**: Electron needs `--no-sandbox` here (chrome-sandbox SUID).
 - **gh** is a snap on the dev box and can't read repos under /tmp.
 - **Electron 45**: use the async `safeStorage` APIs; the sync ones are deprecated.
+- **Linux release builds run on `ubuntu-22.04`**, not `ubuntu-latest`: native modules link against the
+  runner's glibc, and a newer runner makes the app fail to start on older distros. The release workflow
+  rejects anything above glibc 2.35.
 - **ssh2 `hostVerifier`** is async (callback); the typings need a cast through `unknown`.
 
 ## Testing without side effects

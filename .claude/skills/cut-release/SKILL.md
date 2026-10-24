@@ -22,7 +22,12 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
    If a single OS fails, fix it on the branch and push again. Assets are replaced (`--clobber`).
 6. Check `gh release view vX.Y.Z --repo ben42-01/downloads.sldev.io` lists AppImage, deb, rpm, exe,
    dmg (x64 + arm64), zip, `SHA256SUMS.txt`, `latest*.yml` and `.blockmap` files.
-7. Switch back to master.
+7. Launch the published Linux build. The e2e harness runs `out/`, not the packaged app, so it can't
+   catch packaging bugs. Download with `curl -LO` (the `gh` snap can't write to /tmp or hidden dirs),
+   then run `./sldev-io-X.Y.Z.AppImage --appimage-extract` and
+   `timeout 12 squashfs-root/sldev-io --no-sandbox --user-data-dir=<tmp>`. No "Failed to load native module"
+   error should appear in the output.
+8. Switch back to master.
 
 **Betas:** use a prerelease version such as `0.2.0-beta.1` (`npm version 0.2.0-beta.1 --no-git-tag-version`)
 and branch `release/0.2.0-beta.1`. Any version with a `-` is published as a GitHub pre-release, so it
