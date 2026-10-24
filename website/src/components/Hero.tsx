@@ -1,6 +1,7 @@
-import { ArrowRight, Download } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { betaMessage, betaStatus, site } from '../lib/pricing'
 import { AppMockup } from './AppMockup'
+import { DownloadButton } from './Download'
 
 export function Hero() {
   return (
@@ -22,14 +23,14 @@ export function Hero() {
           Watch each mission live, review the diff, open the PR. Not an IDE: your editor stays yours.
         </p>
         <div className="hero-cta">
-          <a className="btn primary lg" href={site.downloadUrl}>
-            <Download size={16} /> Download for free
-          </a>
+          <DownloadButton />
           <a className="btn lg" href="#features">
             See how it works
           </a>
         </div>
-        <p className="platforms">{site.platforms.join(' · ')} · one-time license, no subscription</p>
+        <p className="platforms">
+          <a href="#download">{site.platforms.join(' · ')}</a> · one-time license, no subscription
+        </p>
         <div className="hero-shot">
           <AppMockup />
         </div>

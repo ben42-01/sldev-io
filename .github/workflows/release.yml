@@ -73,10 +73,10 @@ jobs:
           node-version: 22
           cache: npm
       # gcc 11/12 on 22.04 reject Electron 45's V8 headers ([[deprecated]] mixed with __attribute__)
-      - name: Install rpm tooling and clang
+      - name: Install clang
         if: env.skip != '1' && matrix.name == 'linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y rpm clang-15
+          sudo apt-get update && sudo apt-get install -y clang-15
           echo "CC=clang-15" >> "$GITHUB_ENV"
           echo "CXX=clang++-15" >> "$GITHUB_ENV"
       - run: npm ci
@@ -100,16 +100,11 @@ jobs:
         with:
           name: installers-${{ matrix.name }}
           if-no-files-found: error
+          # only the installers: the website's /download/<os> and install.sh pick from these
           path: |
-            dist/*.AppImage
             dist/*.deb
-            dist/*.rpm
             dist/*.dmg
-            dist/*.zip
             dist/*.exe
-            dist/*.blockmap
-            dist/*.yml
-            !dist/builder-debug.yml
 
   release:
     needs: [check, build]
@@ -120,9 +115,9 @@ jobs:
           pattern: installers-*
           path: dist
           merge-multiple: true
-      - name: Checksums
+      - name: Checksums (log only)
         working-directory: dist
-        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: sha256sum *
       - name: Publish to the public downloads repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -136,19 +131,20 @@ jobs:
           # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
           case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
           cat > notes.md <<EOF
-          Download the installer for your system below.
+          The easiest way to install is https://sldev-io.vercel.app/#download, which picks the right
+          file for your system. On macOS and Linux you can also run:
+
+              curl -fsSL https://sldev-io.vercel.app/install.sh | sh
 
           | System | File |
           |---|---|
-          | Windows | \`.exe\` |
+          | Windows | \`-setup.exe\` |
           | macOS (Apple Silicon) | \`-arm64.dmg\` |
-          | macOS (Intel) | \`.dmg\` without \`arm64\` |
-          | Linux | \`.AppImage\` (any distro), \`.deb\` (Debian/Ubuntu), \`.rpm\` (Fedora/RHEL) |
+          | macOS (Intel) | \`-x64.dmg\` |
+          | Linux (Debian/Ubuntu) | \`.deb\` |
 
           Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
-          right-click the app and choose **Open** the first time. Checksums are in \`SHA256SUMS.txt\`.
-
-          More at https://sldev-io.vercel.app
+          right-click the app and choose **Open** the first time.
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber

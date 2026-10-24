@@ -3,7 +3,7 @@
   "tagline": "The terminal-first workspace for agentic coding.",
   "version": "0.1.0-beta.2",
   "url": "https://sldev-io.vercel.app",
-  "downloadUrl": "https://github.com/ben42-01/downloads.sldev.io/releases",
+  "downloadUrl": "https://sldev-io.vercel.app/#download",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
   "contactEmail": "team.agora.hub@gmail.com",
   "platforms": ["Linux", "Windows", "macOS"],

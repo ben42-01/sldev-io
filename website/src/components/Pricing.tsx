@@ -73,7 +73,7 @@ function FaqItem({ item }: { item: Faq }) {
 
 const generalFaq: Faq[] = [
   { q: 'Is sldev-io an IDE?', a: 'No. There is no code editor. Files open in the editor you already use (Cursor, VS Code, Zed, JetBrains, Neovim and more). sldev-io is where your terminals and agents live.' },
-  { q: 'Which platforms are supported?', a: 'Linux (AppImage, deb, rpm), Windows and macOS (Intel and Apple Silicon). Early builds are unsigned, so Windows shows a SmartScreen prompt and macOS needs a right-click → Open the first time.' },
+  { q: 'Which platforms are supported?', a: 'Windows 10/11, macOS (Intel and Apple Silicon) and Debian/Ubuntu Linux (.deb). Early builds are unsigned, so Windows shows a SmartScreen prompt and macOS needs a right-click → Open the first time.' },
   { q: 'Does it change my agent configuration?', a: 'No. Claude Code missions get a separate settings file passed on the command line, and your own settings are left alone.' }
 ]
 

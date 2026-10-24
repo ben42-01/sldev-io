@@ -45,9 +45,19 @@ update `announcement` (the banner above the plans). Add or remove plans by addin
 objects. `faq` feeds the FAQ section too.
 
 Other copy and links (version, download URL, supported agents, contact) live in
-[`src/content/site.json`](src/content/site.json). `downloadUrl` currently points at the GitHub
-releases page, which is only public if the repo is; point it at a public bucket or a download
-page once installers are hosted elsewhere.
+[`src/content/site.json`](src/content/site.json). ## Downloads
+
+Nobody browses GitHub for an installer. The **Download** buttons detect the visitor's OS and link to
+`/download/<windows|mac|mac-intel|linux>`; [`api/download.ts`](api/download.ts) (a Vercel function,
+via the rewrite in `vercel.json`) redirects to the matching file of the newest release in
+`ben42-01/downloads.sldev.io`, pre-releases included. The CDN caches each redirect for 5 minutes,
+so a new release shows up within minutes and the GitHub API stays under its rate limit. Set a
+`GITHUB_TOKEN` env var in Vercel only if it ever hits the limit. `npm run dev` serves the same
+redirects.
+
+[`public/install.sh`](public/install.sh) is the terminal install for macOS and Linux
+(`curl -fsSL https://sldev-io.vercel.app/install.sh | sh`): it downloads the .deb (installed with
+apt) or the right .dmg (copied into /Applications, quarantine flag removed) through those redirects.
 
 ## Deploy on Vercel
 

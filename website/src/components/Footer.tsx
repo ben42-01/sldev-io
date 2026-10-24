@@ -1,5 +1,5 @@
-import { Download } from 'lucide-react'
 import { site } from '../lib/pricing'
+import { DownloadButton } from './Download'
 import { Logo } from './Logo'
 
 export function FinalCta() {
@@ -12,11 +12,11 @@ export function FinalCta() {
           <span className="brand-text">Start shipping with agents.</span>
         </h2>
         <div className="hero-cta">
-          <a className="btn primary lg" href={site.downloadUrl}>
-            <Download size={16} /> Download sldev-io
-          </a>
+          <DownloadButton />
         </div>
-        <p className="platforms">{site.platforms.join(' · ')}</p>
+        <p className="platforms">
+          <a href="#download">{site.platforms.join(' · ')}</a>
+        </p>
       </div>
     </section>
   )

@@ -25,11 +25,11 @@ export function Nav() {
               {l.label}
             </a>
           ))}
-          <a className="btn primary nav-cta-mobile" href={site.downloadUrl}>
+          <a className="btn primary nav-cta-mobile" href="#download" onClick={() => setOpen(false)}>
             <Download size={14} /> Download
           </a>
         </nav>
-        <a className="btn primary nav-cta" href={site.downloadUrl}>
+        <a className="btn primary nav-cta" href="#download">
           <Download size={14} /> Download
         </a>
         <button className="nav-toggle" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>

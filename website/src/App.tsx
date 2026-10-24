@@ -1,3 +1,4 @@
+import { DownloadSection } from './components/Download'
 import { Features } from './components/Features'
 import { FinalCta, Footer } from './components/Footer'
 import { AgentStrip, Hero } from './components/Hero'
@@ -15,6 +16,7 @@ export function App() {
         <Features />
         <Spotlight />
         <Pricing />
+        <DownloadSection />
         <FaqSection />
         <FinalCta />
       </main>

@@ -6,7 +6,7 @@ description: Publish a new sldev-io release with installers for Linux, Windows a
 # Cut a release
 
 The `.github/workflows/release.yml` workflow runs on pushes to `release/**`. It builds every OS and
-publishes the installers, `SHA256SUMS.txt` and update metadata as release `v<package.json version>`
+publishes the installers (deb, exe, arm64 and x64 dmg, nothing else) as release `v<package.json version>`
 in the **public** repo `ben42-01/downloads.sldev.io` (needs the `RELEASES_TOKEN` secret), plus a
 copy in the private source repo.
 
@@ -20,12 +20,13 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 4. Create and push the branch: `git switch -c release/X.Y.Z && git push -u origin release/X.Y.Z`.
 5. Watch it: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
    If a single OS fails, fix it on the branch and push again. Assets are replaced (`--clobber`).
-6. Check `gh release view vX.Y.Z --repo ben42-01/downloads.sldev.io` lists AppImage, deb, rpm, exe,
-   dmg (x64 + arm64), zip, `SHA256SUMS.txt`, `latest*.yml` and `.blockmap` files.
+6. Check `gh release view vX.Y.Z --repo ben42-01/downloads.sldev.io` lists exactly the deb, the
+   exe and the two dmgs (arm64, x64), and that `curl -sI https://sldev-io.vercel.app/download/linux`
+   redirects to the new version's deb (the CDN caches the redirect for up to 5 minutes).
 7. Launch the published Linux build. The e2e harness runs `out/`, not the packaged app, so it can't
    catch packaging bugs. Download with `curl -LO` (the `gh` snap can't write to /tmp or hidden dirs),
-   then run `./sldev-io-X.Y.Z.AppImage --appimage-extract` and
-   `timeout 12 squashfs-root/sldev-io --no-sandbox --user-data-dir=<tmp>`. No "Failed to load native module"
+   then run `dpkg-deb -x sldev-io_X.Y.Z_amd64.deb deb` and
+   `timeout 12 deb/opt/sldev-io/sldev-io --no-sandbox --user-data-dir=<tmp>`. No "Failed to load native module"
    error should appear in the output.
 8. Switch back to master.
 

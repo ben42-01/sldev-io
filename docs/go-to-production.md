@@ -144,9 +144,10 @@ From now on, every push to `master` that touches `website/` redeploys the site.
    5. Generate and copy the token. It's shown only once.
 3. Save it in the **source** repo: `ben42-01/sldev-io` → **Settings → Secrets and variables →
    Actions → New repository secret**. Name: `RELEASES_TOKEN`. Value: the token.
-4. ✅ `website/src/content/site.json` → `downloadUrl` is
-   `https://github.com/ben42-01/downloads.sldev.io/releases`. After the first **stable** release,
-   change it to `…/releases/latest`; until then "latest" shows nothing, because betas are pre-releases.
+4. ✅ The website's download buttons go through `/download/<windows|mac|mac-intel|linux>`
+   (`website/api/download.ts`, a Vercel function), which redirects to the matching installer of
+   the newest release in this repo, betas included. Nothing to change per release. `install.sh`
+   on the site uses the same redirects.
 
 > Never paste the token into chat, a file, or a commit. Only into the GitHub secret field.
 
@@ -172,7 +173,7 @@ Needed before paying macOS users arrive. Enrolment can take a few days. See
 - [ ] Website live on the domain; `/beta.json` reachable
 - [ ] `downloads.sldev.io` public repo created
 - [ ] `RELEASES_TOKEN` secret added to `sldev-io`
-- [ ] `site.json` → `downloadUrl` points at the releases repo
+- [ ] `https://<site>/download/windows` redirects to the newest `.exe`
 - [ ] Support email working; `site.json` → `contactEmail` set
 - [ ] Payment provider sign-up started
 
@@ -186,8 +187,8 @@ starts and ends.
 ### 3.1 Publishing ✅ and 🤖 auto-update
 
 ✅ The release workflow publishes to `ben42-01/downloads.sldev.io` (pre-releases for `-beta`
-versions) and also keeps a record in the private repo. Builds include the update metadata
-(`latest*.yml`, `.blockmap`) and the downloads location for auto-update.
+versions) and also keeps a record in the private repo. Releases carry only the installers
+(deb, exe, two dmgs). Builds still bake in the downloads location for auto-update.
 
 🤖 Do auto-update **before** the first public beta, so beta testers get fixes without
 re-downloading:
@@ -195,7 +196,9 @@ re-downloading:
 > Read AGENTS.md and docs/go-to-production.md (Phase 2). Add auto-update with electron-updater
 > from the GitHub downloads repo already configured in electron-builder.yml: beta builds follow
 > pre-releases, stable builds follow stable releases; check on start and every few hours,
-> download in the background, and offer "Restart to update" in the status bar. Add tests where
+> download in the background, and offer "Restart to update" in the status bar. The release
+> workflow uploads only installers, so add the update metadata it needs (latest*.yml, .blockmap,
+> and the macOS zip target) back to the upload. Add tests where
 > possible, update the README release section, then show me the diff before pushing.
 
 ### 3.2 🧑 Set the beta window
@@ -255,9 +258,10 @@ asks before pushing.
 
 ### 3.4 🧑 Verify before announcing
 
-- [ ] The release in `downloads.sldev.io` lists: `.AppImage`, `.deb`, `.rpm`, `.exe`, `.dmg` (x64 and
-      arm64), `.zip`, `SHA256SUMS.txt`, and (after 3.1) the `latest*.yml` files auto-update reads
-- [ ] The website's Download button opens that page
+- [ ] The release in `downloads.sldev.io` lists the `.deb`, the `-setup.exe` and the `.dmg`s (x64 and
+      arm64), plus (after 3.1) the `latest*.yml` files auto-update reads
+- [ ] The website's Download button downloads the installer for your OS, and
+      `curl -fsSL https://<site>/install.sh | sh` installs it on Linux and macOS
 - [ ] Install on at least one machine per OS you can reach; the app opens and shows the right
       beta chip/banner for your dates
 - [ ] Set `endsAt` to yesterday on a test branch deploy (or ask Claude to run `npm run e2e -- beta`)
@@ -538,7 +542,7 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
    Wait for green.
 2. In `pricing.json`: set `price` to `10.99` / `50`, paste the **live** `checkoutUrl`s, update
    `announcement` and the FAQ ("What does it cost today?"). Set `site.json` → `version` to `1.0.0`
-   and `downloadUrl` to `…/releases/latest`.
+   (downloads pick up the new release by themselves).
 3. Push `master` → the site redeploys with prices and "Buy" buttons.
 4. Buy one license yourself with a real card (refund it afterwards) and activate it in the
    installed `1.0.0`.
@@ -575,7 +579,7 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 | File | Field | Effect |
 |---|---|---|
 | `website/src/content/site.json` | `url` | Website domain; also where the app reads `/beta.json` and links to pricing (baked in at app build time) |
-| | `downloadUrl` | Website "Download" buttons |
+| | `downloadUrl` | Where "download" links outside the site point (the site's download section) |
 | | `version` | Version shown on the site |
 | | `contactEmail` | Footer and support links |
 | `website/src/content/pricing.json` | `beta.startsAt` / `beta.endsAt` | The free-beta window for the site **and** all installed beta apps |

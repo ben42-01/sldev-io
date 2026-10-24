@@ -10,10 +10,11 @@ asarUnpack:
   - node_modules/node-pty/**
 npmRebuild: true
 linux:
-  target: [AppImage, deb, rpm]
+  # the website and install.sh offer exactly one installer per OS: .deb, .dmg (per arch), .exe
+  target: [deb]
   # one PNG per hicolor size; the theme has no 1024x1024 folder, so a single big icon is ignored
   icon: build/icons
-  # window icon at runtime (AppImages have no installed .desktop entry to take it from)
+  # window icon at runtime (also covers running the unpacked build without a .desktop entry)
   extraResources:
     - from: build/icons/512x512.png
       to: icon.png
@@ -24,17 +25,20 @@ deb:
   # apt installs recommends by default; everything else is offered by the in-app setup check
   recommends: [git, libappindicator3-1]
 mac:
-  target: [dmg, zip]
+  target: [dmg]
+  # name the arch on both builds so api/download.ts can tell them apart
+  artifactName: ${productName}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
   hardenedRuntime: true
 win:
   target: [nsis]
 nsis:
+  artifactName: ${productName}-${version}-setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
 # Where installers are published (by the release workflow, not by electron-builder itself:
-# it runs with --publish never). This makes the build write the update metadata (latest*.yml /
-# beta*.yml) and bakes the location into the app for auto-update.
+# it runs with --publish never). This bakes the location into the app for auto-update; the
+# update metadata it writes (latest*.yml, .blockmap) isn't published until auto-update exists.
 publish:
   provider: github
   owner: ben42-01
