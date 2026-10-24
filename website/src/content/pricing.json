@@ -3,8 +3,8 @@
   "billing": "one-time",
   "announcement": "Free while in beta. Every license below becomes a one-time payment at launch.",
   "beta": {
-    "startsAt": null,
-    "endsAt": null,
+    "startsAt": "2026-10-24",
+    "endsAt": "2026-12-31",
     "label": "Limited time"
   },
   "plans": [
