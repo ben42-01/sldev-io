@@ -2,6 +2,10 @@
   "currency": "EUR",
   "billing": "one-time",
   "announcement": "Free while in beta. Every license below becomes a one-time payment at launch.",
+  "beta": {
+    "endsAt": null,
+    "label": "Limited time"
+  },
   "plans": [
     {
       "id": "personal",

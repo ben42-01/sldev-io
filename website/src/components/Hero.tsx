@@ -1,5 +1,5 @@
 import { ArrowRight, Download } from 'lucide-react'
-import { site } from '../lib/pricing'
+import { betaMessage, betaStatus, site } from '../lib/pricing'
 import { AppMockup } from './AppMockup'
 
 export function Hero() {
@@ -8,7 +8,9 @@ export function Hero() {
       <div className="hero-glow" aria-hidden="true" />
       <div className="container hero-inner">
         <a className="pill" href="#pricing">
-          <span className="pill-dot" /> v{site.version} · free during the beta <ArrowRight size={12} />
+          <span className="pill-dot" /> v{site.version} · free during the beta
+          {betaStatus().active && <span className="pill-limited">· {betaMessage().toLowerCase()}</span>}
+          <ArrowRight size={12} />
         </a>
         <h1>
           Every coding agent.

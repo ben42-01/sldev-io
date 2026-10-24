@@ -24,6 +24,11 @@ Each entry in `plans` is one card:
 | `highlight` | brand-gradient border on the featured plan |
 | `features` | bullet list |
 
+**Beta countdown**: `beta.endsAt` (`"YYYY-MM-DD"`, the last free day, UTC) turns the "Limited time
+only" labels into a live countdown ("Free beta ends in 12 days · free until …"). Leave it `null` to show
+just "Limited time". `beta.label` is the tag on free plans. The tags only appear while a plan has
+`price: 0` and a higher `listPrice`.
+
 **Going paid**: set `price` to the real amount, paste the Stripe payment link into `checkoutUrl`,
 update `announcement` (the banner above the plans). Add or remove plans by adding or removing
 objects. `faq` feeds the FAQ section too.

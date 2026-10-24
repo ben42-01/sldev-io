@@ -1,12 +1,22 @@
 import { Check } from 'lucide-react'
-import { formatPrice, planCta, pricing, type Faq, type Plan } from '../lib/pricing'
+import { Clock } from 'lucide-react'
+import { betaMessage, betaStatus, formatPrice, planCta, pricing, type Faq, type Plan } from '../lib/pricing'
 
 function PlanCard({ plan }: { plan: Plan }) {
   const cta = planCta(plan)
   const discounted = plan.listPrice > plan.price
+  const beta = betaStatus()
+  const limited = beta.active && plan.price === 0 && discounted
   return (
     <article className={`plan${plan.highlight ? ' highlight brand-frame' : ''}`}>
-      <h3>{plan.name}</h3>
+      <div className="plan-head">
+        <h3>{plan.name}</h3>
+        {limited && (
+          <span className="limited" title={beta.endsOn ? `Free until ${beta.endsOn}` : undefined}>
+            <Clock size={12} /> {pricing.beta.label}
+          </span>
+        )}
+      </div>
       <p className="plan-tagline">{plan.tagline}</p>
       <div className="plan-price">
         <span className="amount">{formatPrice(plan.price)}</span>
@@ -28,6 +38,7 @@ function PlanCard({ plan }: { plan: Plan }) {
 }
 
 export function Pricing() {
+  const beta = betaStatus()
   return (
     <section className="section alt" id="pricing">
       <div className="container">
@@ -35,6 +46,12 @@ export function Pricing() {
         <h2 className="center">Pay once. Own it.</h2>
         <p className="section-lead center">No subscription, no seat meter. A single {pricing.billing} payment per license.</p>
         <p className="announce">{pricing.announcement}</p>
+        {(beta.active || beta.ended) && (
+          <p className={`beta-countdown${beta.ended ? ' ended' : ''}`}>
+            <Clock size={14} /> {betaMessage(beta)}
+            {beta.endsOn && !beta.ended && <span className="beta-date"> · free until {beta.endsOn}</span>}
+          </p>
+        )}
         <div className="plans">
           {pricing.plans.map((p) => (
             <PlanCard key={p.id} plan={p} />
