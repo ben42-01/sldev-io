@@ -4,7 +4,7 @@
   "version": "0.1.0-beta.1",
   "url": "https://sldev-io.vercel.app",
   "downloadUrl": "https://github.com/ben42-01/downloads.sldev.io/releases",
-  "repoUrl": "https://github.com/ben42-01/sldev-io",
+  "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
   "contactEmail": "team.agora.hub@gmail.com",
   "platforms": ["Linux", "Windows", "macOS"],
   "agents": ["Claude Code", "Codex", "Cursor Agent", "GitHub Copilot", "OpenCode", "Gemini CLI", "Any CLI"]
