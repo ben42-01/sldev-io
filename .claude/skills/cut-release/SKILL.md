@@ -21,5 +21,9 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 6. Check `gh release view vX.Y.Z` lists AppImage, deb, rpm, exe, dmg (x64 + arm64), zip and checksums.
 7. Switch back to master.
 
+**Betas:** use a prerelease version such as `0.2.0-beta.1` (`npm version 0.2.0-beta.1 --no-git-tag-version`)
+and branch `release/0.2.0-beta.1`. Any version with a `-` is published as a GitHub pre-release, so it
+never becomes "Latest". Next betas are `-beta.2`, …; the final release is plain `0.2.0`.
+
 Builds are unsigned (no CSC_LINK / APPLE_ID secrets). Windows shows SmartScreen, and macOS needs
 right-click → Open. To skip macOS, start the workflow from the Actions tab with `mac` unchecked.

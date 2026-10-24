@@ -108,8 +108,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: v${{ needs.check.outputs.version }}
         run: |
+          # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
+          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "sldev-io $TAG" --generate-notes
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "sldev-io $TAG" --generate-notes $PRE
           fi
