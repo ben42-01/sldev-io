@@ -99,7 +99,7 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Electron 45**: use the async `safeStorage` APIs; the sync ones are deprecated.
 - **Linux release builds run on `ubuntu-22.04`**, not `ubuntu-latest`: native modules link against the
   runner's glibc, and a newer runner makes the app fail to start on older distros. The release workflow
-  rejects anything above glibc 2.35.
+  rejects anything above glibc 2.35. It compiles with clang 15 there, because gcc 11/12 reject Electron's V8 headers.
 - **ssh2 `hostVerifier`** is async (callback); the typings need a cast through `unknown`.
 
 ## Testing without side effects

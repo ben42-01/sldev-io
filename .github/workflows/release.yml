@@ -72,9 +72,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Install rpm tooling
+      # gcc 11/12 on 22.04 reject Electron 45's V8 headers ([[deprecated]] mixed with __attribute__)
+      - name: Install rpm tooling and clang
         if: env.skip != '1' && matrix.name == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y rpm
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm clang-15
+          echo "CC=clang-15" >> "$GITHUB_ENV"
+          echo "CXX=clang++-15" >> "$GITHUB_ENV"
       - run: npm ci
         if: env.skip != '1'
       - run: npm run build
