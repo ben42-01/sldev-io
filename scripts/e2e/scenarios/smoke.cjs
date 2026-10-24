@@ -1,0 +1,30 @@
+// Welcome screen, terminal, split, command palette, settings.
+const fs = require('fs')
+const path = require('path')
+
+module.exports = async (h) => {
+  await h.shot('1-welcome')
+  h.expect(await h.js(`document.querySelector('.welcome h1')?.textContent === 'sldev-io'`), 'welcome shows the app name')
+  await h.openFixture()
+  h.key('T', ['control', 'shift'])
+  await h.wait(1500)
+  // the WebGL renderer draws to a canvas, so check a side effect instead of DOM text
+  h.type('echo e2e-ok > e2e-marker.txt\r')
+  await h.wait(800)
+  h.expect(fs.existsSync(path.join(h.fixture, 'e2e-marker.txt')), 'terminal runs commands in the project folder')
+  h.key('D', ['control', 'shift'])
+  await h.wait(1200)
+  h.expect((await h.js(`document.querySelectorAll('.xterm').length`)) === 2, 'split opens a second terminal')
+  await h.shot('2-terminals')
+  h.key('P', ['control', 'shift'])
+  await h.wait(400)
+  h.type('settings')
+  await h.wait(300)
+  h.expect(await h.js(`!!document.querySelector('.palette .palette-item')`), 'command palette lists results')
+  await h.shot('3-palette')
+  h.key('Escape')
+  h.key(',', ['control'])
+  await h.wait(1000)
+  h.expect(await h.js(`!!document.querySelector('.settings')`), 'settings panel opens')
+  await h.shot('4-settings')
+}

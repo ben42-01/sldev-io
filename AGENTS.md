@@ -1,0 +1,120 @@
+# AGENTS.md: working on sldev-io
+
+sldev-io is an Electron desktop app: a terminal-first workspace for agentic coding through CLI
+agents (Claude Code, Codex, Cursor Agent, GitHub Copilot, OpenCode, Gemini CLI, custom). It is
+**not an IDE**: no code editor, files open in the user's editor. Look and feel: Cursor-like, sharp,
+monochrome with a slim blue→green→purple brand gradient.
+
+Repo: https://github.com/ben42-01/sldev-io · default branch `master`
+
+## Commands
+
+```bash
+npm ci                    # installs and rebuilds node-pty for Electron (postinstall)
+npm run dev:nosandbox     # dev app with HMR (Ubuntu needs --no-sandbox, see README)
+npm run typecheck         # tsc for main/preload (tsconfig.node) and renderer (tsconfig.web)
+npm test                  # vitest unit tests in test/
+npm run e2e -- smoke      # build, then drive the real app (scripts/e2e), screenshots in .e2e-out/
+npm run e2e -- missions   # Claude + Codex missions with fake CLIs through every status
+npm run dist:linux        # installers into dist/ (each OS builds its own; node-pty is native)
+```
+
+Before you call a change done: `npm run typecheck && npm test`, and for UI or behaviour changes an
+e2e scenario (add one under `scripts/e2e/scenarios/`) plus a look at its screenshots.
+
+## Architecture
+
+```
+src/main/       Electron main process (Node): everything privileged
+  index.ts        window, ALL ipcMain handlers, startup order (shell env → hook server → window)
+  pty.ts          node-pty sessions with flow control (pause on HIGH water, resume on ack)
+  ssh.ts          ssh2 shells, SFTP, port forwards, host-key TOFU (known_hosts.json)
+  vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
+  hooks.ts        loopback HTTP server receiving Claude Code hook events (token-protected)
+  git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
+  notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
+src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
+src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …)
+src/renderer/src/
+  lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
+                  and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
+  state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
+                  tasks, runs, runtimes, agents, notes, remote
+  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Preview, Settings
+  components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
+  styles/app.css  all styling; design tokens on :root
+test/           vitest (node env; test/setup.ts stubs window.api)
+scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
+```
+
+### Data flow for a feature
+
+renderer UI → `window.api.x.y()` (preload) → `ipcMain.handle('x:y')` in `src/main/index.ts` →
+module in `src/main/`. Push events go back with `webContents.send` and preload `on(channel)`.
+Persisted state uses `JsonStore` in userData (`~/.config/sldev-io` on Linux); store files are
+typed in `StoreFiles` in `src/shared/types.ts`.
+
+## Invariants (things that broke before)
+
+- **Terminal sessions live outside React** (`lib/terminals.ts`). Panels attach and detach the
+  xterm DOM. Sessions are disposed only when a panel is *closed*. Don't create terminals in
+  components, and don't re-add React StrictMode: its double mount kills the dock and the ptys.
+- **Resize**: refit the xterm grid on every ResizeObserver frame (rAF), but tell the pty only after
+  60 ms of quiet (each SIGWINCH makes TUIs redraw). Hidden or tiny hosts (<20px) are skipped.
+- **pty output** is batched and acknowledged: every `pty:data` chunk must be `ack`ed after
+  `term.write` completes, or the pty stays paused.
+- **Missions**: Claude Code gets `--settings <userData>/claude-hooks.json`, and the hooks POST
+  to the loopback server. Never touch the user's `~/.claude/settings.json`. Other agents are
+  tracked from terminal activity: output means working, 5 s quiet means ready, and a bell or
+  OSC 9/777 means needs you. Agent-specific behaviour belongs in `lib/agents.ts`, never `if (agent === …)`
+  scattered through the UI. The app is agent-agnostic: don't add Claude-only UI unless the
+  feature is Claude-only by nature (skills, MCP).
+- **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
+- **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
+  restored missions resume their session instead of re-sending the prompt.
+- **Styling**: monochrome UI (`--fg`, `--border*`), `--radius: 2px`, outline buttons
+  (`.btn`, `.btn.primary` = white outline, inverts on hover). Color only via the brand gradient
+  (`--brand`, `.brand-frame`, `.brand-text`) or status colors (green/amber/red). Icons come from
+  lucide-react and global CSS makes them 1.5px with square caps. Don't add blue buttons.
+
+## Gotchas
+
+- **TypeScript 7**: `paths` entries must start with `./`, and there's no `baseUrl`.
+- **Exact versions** in package.json. Add deps with `--save-exact` and prefer versions at least two weeks old.
+- **npm 10.9 crashes** (`reading 'edgesOut'`) when installing some packages, vitest for example.
+  Install those with `npx -y npm@11.6.2 install …` and check that `npm ci --dry-run` still works.
+- **Ubuntu sandbox**: Electron needs `--no-sandbox` here (chrome-sandbox SUID).
+- **gh** is a snap on the dev box and can't read repos under /tmp.
+- **Electron 45**: use the async `safeStorage` APIs; the sync ones are deprecated.
+- **ssh2 `hostVerifier`** is async (callback); the typings need a cast through `unknown`.
+
+## Testing without side effects
+
+Never run a real `claude`/`codex` mission, dispatch a real workflow, or push from tests, because
+they spend the user's quota or touch real repos. The e2e harness runs against a temp git repo with
+fake CLIs in `scripts/e2e/fakebin/`. `claude` fires the hook events from `--settings` and edits
+files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a new agent.
+
+## Workflows and releases
+
+- `.github/workflows/ci.yml`: typecheck, test and build on every push and PR.
+- `.github/workflows/release.yml`: push `release/<version>` to build Linux, Windows and macOS
+  installers and attach them to GitHub release `v<package.json version>`. Bump the version
+  first. Builds are unsigned for now.
+
+## Skills
+
+Step-by-step playbooks live in `.claude/skills/*/SKILL.md`. Claude Code loads them automatically;
+other agents can read them as plain Markdown:
+
+- `verify-in-app`: run and extend the e2e harness, read screenshots
+- `add-agent-cli`: add or fix a built-in agent CLI
+- `add-feature`: new sidebar view, panel, IPC channel or persisted store, end to end
+- `cut-release`: version bump, release branch, watching the build
+
+## Conventions
+
+- Match the surrounding code: small modules, comments only for the non-obvious "why", no
+  default exports, named functions, `void promise` for fire-and-forget.
+- Commit messages: imperative summary line, optional body. Don't commit `out/`, `dist/`,
+  `.e2e-out/`, or anything secret.

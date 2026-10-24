@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fake Codex for e2e: no hooks, so sldev-io tracks it from terminal output, silence and the bell.
+echo "fake codex: $*"
+for i in 1 2 3 4 5 6 7 8; do echo "thinking $i"; sleep 0.5; done
+echo "change from codex" >> codex-change.txt
+echo "done editing"
+sleep 9
+printf 'Allow command `rm -rf build`? [y/N] \a'
+read ans
+echo "you said $ans"

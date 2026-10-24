@@ -16,3 +16,6 @@ id_rsa*
 id_ed25519*
 credentials.json
 known_hosts.json
+
+# e2e harness output
+.e2e-out/
