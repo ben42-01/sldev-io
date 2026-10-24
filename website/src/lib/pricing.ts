@@ -28,8 +28,8 @@ export const pricing = pricingJson as {
   currency: string
   billing: string
   announcement: string
-  /** endsAt: last day of the free beta (YYYY-MM-DD, end of that day UTC) or null while undecided */
-  beta: { endsAt: string | null; label: string }
+  /** the free-beta window, also published as /beta.json for the app. YYYY-MM-DD (UTC) or null */
+  beta: { startsAt: string | null; endsAt: string | null; label: string }
   plans: Plan[]
   faq: Faq[]
 }
@@ -37,6 +37,9 @@ export const pricing = pricingJson as {
 export interface BetaStatus {
   /** a plan is free today but has a list price, i.e. the free beta offer is running */
   active: boolean
+  /** startsAt is in the future */
+  upcoming: boolean
+  startsOn: string | null
   ended: boolean
   /** whole days left including today; null without an end date */
   daysLeft: number | null
@@ -45,17 +48,21 @@ export interface BetaStatus {
 
 export function betaStatus(now = new Date()): BetaStatus {
   const free = pricing.plans.some((p) => p.price === 0 && p.listPrice > 0)
-  const { endsAt } = pricing.beta
-  if (!endsAt) return { active: free, ended: false, daysLeft: null, endsOn: null }
+  const { startsAt, endsAt } = pricing.beta
+  const fmt = (d: Date): string => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const start = startsAt ? new Date(`${startsAt}T00:00:00Z`) : null
+  const upcoming = !!start && now < start
+  const startsOn = start ? fmt(start) : null
+  if (!endsAt) return { active: free, upcoming, startsOn, ended: false, daysLeft: null, endsOn: null }
   const end = new Date(`${endsAt}T23:59:59Z`)
   const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86_400_000)
-  const endsOn = end.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-  return { active: free && daysLeft > 0, ended: daysLeft <= 0, daysLeft: Math.max(0, daysLeft), endsOn }
+  return { active: free && daysLeft > 0, upcoming, startsOn, ended: daysLeft <= 0, daysLeft: Math.max(0, daysLeft), endsOn: fmt(end) }
 }
 
 /** "Limited time", "Free beta ends in 12 days", "Last day of the free beta", … */
 export function betaMessage(b = betaStatus()): string {
   if (b.ended) return 'The free beta has ended'
+  if (b.upcoming && b.startsOn) return `Free beta opens ${b.startsOn}`
   if (b.daysLeft === null) return `${pricing.beta.label} only`
   if (b.daysLeft <= 1) return 'Last day of the free beta'
   return `Free beta ends in ${b.daysLeft} days`

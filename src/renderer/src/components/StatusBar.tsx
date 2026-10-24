@@ -6,6 +6,7 @@ import { useStore } from '../state/store'
 import { tildify } from '../lib/paths'
 import { blockers } from '../lib/setup'
 import { openSetup, setup } from '../state/setup'
+import { BetaChip } from './BetaGate'
 
 export function StatusBar({ home }: { home: string }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -39,6 +40,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
           <TriangleAlert size={12} /> setup needed
         </button>
       )}
+      <BetaChip />
       <span className="status-item" title="Open terminals">
         <SquareTerminal size={12} /> {count}
       </span>

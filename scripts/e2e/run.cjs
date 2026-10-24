@@ -7,6 +7,7 @@
 const { app, BrowserWindow } = require('electron')
 const { execFileSync } = require('child_process')
 const fs = require('fs')
+const http = require('http')
 const os = require('os')
 const path = require('path')
 
@@ -17,6 +18,16 @@ fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out, { recursive: true })
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sldev-io-e2e-'))
 app.setPath('userData', path.join(tmp, 'userdata'))
+// run as the real app version (beta builds honour the beta window)
+app.setVersion(require(path.join(repoRoot, 'package.json')).version)
+
+// stand-in for the website's /beta.json; scenarios change it with h.setBeta()
+let betaConfig = { startsAt: null, endsAt: null }
+const betaServer = http.createServer((_req, res) => {
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(betaConfig))
+})
+betaServer.unref()
 // skip the first-run setup panel unless a scenario turns it back on (openFixture({ setupSeen: false }))
 fs.mkdirSync(path.join(tmp, 'userdata'), { recursive: true })
 fs.writeFileSync(path.join(tmp, 'userdata', 'settings.json'), JSON.stringify({ setupSeen: true }))
@@ -31,9 +42,13 @@ git('init', '-q', '-b', 'main')
 git('-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', 'add', '.')
 git('-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', 'commit', '-qm', 'init')
 
-require(path.join(repoRoot, 'out/main/index.js'))
-
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+const daysFromNow = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
+
+betaServer.listen(0, '127.0.0.1', () => {
+  process.env.SLDEV_BETA_CONFIG_URL = `http://127.0.0.1:${betaServer.address().port}/beta.json`
+  require(path.join(repoRoot, 'out/main/index.js'))
+})
 
 app.whenReady().then(async () => {
   // the app merges the login-shell env a few seconds after start; put fakes on PATH after that
@@ -55,6 +70,13 @@ app.whenReady().then(async () => {
       logs.push(`${cond ? 'PASS' : 'FAIL'} ${msg}`)
       if (!cond) failures.push(msg)
     },
+    /** poll fn() until it returns truthy or timeoutMs passes; resolves to the last value */
+    until: async (fn, timeoutMs = 8000, everyMs = 200) => {
+      const end = Date.now() + timeoutMs
+      let v
+      while (!(v = await fn()) && Date.now() < end) await wait(everyMs)
+      return v
+    },
     shot: async (file) => fs.writeFileSync(path.join(out, `${file}.png`), (await win.capturePage()).toPNG()),
     key: (keyCode, modifiers = []) => {
       for (const type of ['keyDown', 'keyUp']) wc.sendInputEvent({ type, keyCode, modifiers })
@@ -74,6 +96,18 @@ app.whenReady().then(async () => {
         Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)});
         el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
         return true })()`),
+    /** serve this beta window from the fake /beta.json; days are offsets from today (null = unset) */
+    setBeta: ({ startsInDays = null, endsInDays = null } = {}) => {
+      betaConfig = {
+        startsAt: startsInDays === null ? null : daysFromNow(startsInDays),
+        endsAt: endsInDays === null ? null : daysFromNow(endsInDays)
+      }
+      return betaConfig
+    },
+    reload: async () => {
+      wc.reload()
+      await wait(3000)
+    },
     /** open the fixture project with notifications off, then reload */
     openFixture: async (extra = {}) => {
       await js(`window.api.settings.set(${JSON.stringify({ rootFolder: fixture, notifications: false, sidebarVisible: true, ...extra })})`)

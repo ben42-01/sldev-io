@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { BetaStatus } from '@shared/beta'
 import type {
   AppSettings,
   ClaudeAsset,
@@ -75,8 +76,15 @@ const api = {
     openPath: (p: string): Promise<string> => ipcRenderer.invoke('shell:openPath', p),
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
   },
+  beta: {
+    /** the free-beta window; the first call waits for the startup check */
+    status: (): Promise<BetaStatus> => ipcRenderer.invoke('beta:status'),
+    refresh: (): Promise<BetaStatus> => ipcRenderer.invoke('beta:refresh'),
+    onChanged: (cb: (s: BetaStatus) => void): Unsubscribe => on('beta:changed', cb)
+  },
   app: {
-    focus: (): Promise<void> => ipcRenderer.invoke('app:focus')
+    focus: (): Promise<void> => ipcRenderer.invoke('app:focus'),
+    openDataFolder: (): Promise<string> => ipcRenderer.invoke('app:openDataFolder')
   },
   git: {
     branch: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:branch', cwd),

@@ -16,6 +16,7 @@ npm run typecheck         # tsc for main/preload (tsconfig.node) and renderer (t
 npm test                  # vitest unit tests in test/
 npm run e2e -- smoke      # build, then drive the real app (scripts/e2e), screenshots in .e2e-out/
 npm run e2e -- missions   # Claude + Codex missions with fake CLIs through every status
+npm run e2e -- beta       # free-beta window from /beta.json
 npm run dist:linux        # installers into dist/ (each OS builds its own; node-pty is native)
 ```
 
@@ -31,6 +32,7 @@ src/main/       Electron main process (Node): everything privileged
   ssh.ts          ssh2 shells, SFTP, port forwards, host-key TOFU (known_hosts.json)
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events (token-protected)
+  beta.ts         free-beta window: fetches <site>/beta.json, encrypted cache, clock-rollback guard
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
@@ -72,6 +74,12 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   scattered through the UI. The app is agent-agnostic: don't add Claude-only UI unless the
   feature is Claude-only by nature (slash commands, subagents, MCP). Skills are plain SKILL.md
   folders, so any agent can run them (`skillPrompt` in `lib/agents.ts`).
+- **Beta window**: beta builds (`-beta` in the version) read `startsAt`/`endsAt` from the website's
+  `/beta.json`, generated from `website/src/content/pricing.json`. Never bake dates into a build.
+  An ended beta locks only at **launch** (`BetaEnded` screen, data untouched), never mid-session.
+  If the site is unreachable and nothing is cached, the beta stays open (fails open on purpose).
+  Logic lives in `src/shared/beta.ts`; build-time URLs come from `website/src/content/site.json`
+  (`SLDEV_SITE_URL` / `SLDEV_BETA_CONFIG_URL` override).
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.

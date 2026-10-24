@@ -31,16 +31,14 @@ same mechanism. Before any of this matters, installers have to be downloadable b
 | `v0.1.0-beta.1` has **no expiry** and would work forever | Don't distribute it. The first public build is `0.1.0-beta.2`, with expiry. |
 | Unsigned builds | Fine for a free beta, but paying users shouldn't see SmartScreen or Gatekeeper warnings. macOS needs an Apple Developer account (yearly fee) for signing and notarization. For Windows, Azure Trusted Signing is the cheapest current option. Both need your accounts, so start them early because verification takes days. |
 
-### 1. Beta expiry (app)
+### 1. Beta window (app) ✅ built
 
-- **Build-time date**: the release workflow reads `beta.endsAt` from
-  `website/src/content/pricing.json`, a single source of truth shared with the site. It injects
-  the date through electron-vite `define` (`__BETA_ENDS_AT__`). A prerelease build **fails** if
-  the date is `null`, so an expiring build can't accidentally ship without one.
-- **Remote extension**: the site also publishes `/beta.json` (`{ "endsAt": "…" }`, generated
-  from the same file). The app fetches it at start and every 6 h and uses the **later** of the
-  two dates. You can then extend the beta by editing one JSON file, with no rebuild. Offline, the
-  baked-in date applies.
+- **Remote, not baked in**: `beta.startsAt` / `beta.endsAt` in `website/src/content/pricing.json`
+  are published as `/beta.json`. Beta builds read it at start (waiting at most 1.5 s) and every 6 h.
+  With no dates the beta never expires. Setting, moving or clearing a date and redeploying the site
+  opens, extends or ends it for everyone, with no app release.
+- **Offline**: the last fetched dates are cached (encrypted). With nothing cached and no network
+  the beta stays open, which fails open on purpose during development.
 - **Clock rollback**: store the latest time ever seen (encrypted with safeStorage) and use
   `max(now, lastSeen)`. When online, prefer the `Date` header from the `beta.json` response.
 - **UX**:

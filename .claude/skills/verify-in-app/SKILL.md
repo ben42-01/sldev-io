@@ -15,6 +15,7 @@ The harness at `scripts/e2e/run.cjs` boots the **built** app (`out/`) and gives 
 ```bash
 npm run e2e -- smoke       # builds first; then runs scripts/e2e/scenarios/smoke.cjs
 npm run e2e -- missions
+npm run e2e -- beta        # free-beta window: countdown, banner, ended screen, reopening
 # already built? skip the build:
 npx electron --no-sandbox scripts/e2e/run.cjs <scenario>
 ```
@@ -35,14 +36,17 @@ screenshots** with the Read tool; a passing assertion doesn't mean the UI looks 
 | `h.click(selector, text?)` | click the first match (optionally containing text) |
 | `h.setValue(selector, value, pickExpr?)` | set a React-controlled input/select/textarea; `pickExpr` is JS on `e` to choose among matches |
 | `h.js(code)` | evaluate in the renderer (`window.api.*` is available) |
+| `h.until(fn, timeoutMs?)` | poll an async check until it's truthy (use for time-based status changes) |
+| `h.setBeta({ startsInDays, endsInDays })` | change the fake `/beta.json` the app reads (offsets from today, `null` = unset); then `h.js('window.api.beta.refresh()')` |
+| `h.reload()` | reload the renderer, which acts like a new launch for the beta gate |
 | `h.wait(ms)`, `h.shot(name)`, `h.expect(cond, msg)`, `h.log(...)` | |
 
 Tips:
 - Terminals render with WebGL, so their text isn't in the DOM. Assert on side effects
   (`echo x > file`, then `fs.existsSync(path.join(h.fixture, 'file'))`) or on app state in the DOM.
 - Seed persisted data before `openFixture` with `h.js("window.api.store.set('tasks', {...})")`.
-- Status heuristics are time-based (idle = 5 s). Leave margins and assert on transitions
-  rather than exact timings.
+- Status heuristics and fake hooks are time-based (idle = 5 s; each fake Claude hook spawns a
+  process). Prefer `h.until(...)` over fixed waits.
 - New agent? Add a fake to `scripts/e2e/fakebin/<bin>` (chmod +x) that behaves like the real CLI
   for what you test.
 

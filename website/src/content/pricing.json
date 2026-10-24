@@ -3,6 +3,7 @@
   "billing": "one-time",
   "announcement": "Free while in beta. Every license below becomes a one-time payment at launch.",
   "beta": {
+    "startsAt": null,
     "endsAt": null,
     "label": "Limited time"
   },

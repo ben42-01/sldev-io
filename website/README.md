@@ -24,10 +24,21 @@ Each entry in `plans` is one card:
 | `highlight` | brand-gradient border on the featured plan |
 | `features` | bullet list |
 
-**Beta countdown**: `beta.endsAt` (`"YYYY-MM-DD"`, the last free day, UTC) turns the "Limited time
-only" labels into a live countdown ("Free beta ends in 12 days · free until …"). Leave it `null` to show
-just "Limited time". `beta.label` is the tag on free plans. The tags only appear while a plan has
-`price: 0` and a higher `listPrice`.
+**Beta window**: `beta.startsAt` and `beta.endsAt` (`"YYYY-MM-DD"`, UTC; the end date is the last free
+day) control the free beta **for the website and the desktop app**. The build publishes them as
+`/beta.json`, which the app reads at start and every 6 hours:
+
+| `startsAt` / `endsAt` | website | app (beta builds only) |
+|---|---|---|
+| `null` / `null` | "Limited time only" | runs, no limit |
+| future / any | "Free beta opens …" | runs normally |
+| any / a date | "Free beta ends in N days · free until …" | status-bar chip; banner in the last 14 days |
+| any / past | "The free beta has ended" | next launch shows the "beta ended" screen (data is kept) |
+
+Change a date, push, and Vercel redeploys: that's how you open, extend or end the beta. Moving
+`endsAt` later reopens it for everyone, and the app's "Check again" button picks it up at once. Stable
+(non-beta) builds ignore this. `beta.label` is the tag on free plans; tags only appear while a plan
+has `price: 0` and a higher `listPrice`.
 
 **Going paid**: set `price` to the real amount, paste the Stripe payment link into `checkoutUrl`,
 update `announcement` (the banner above the plans). Add or remove plans by adding or removing

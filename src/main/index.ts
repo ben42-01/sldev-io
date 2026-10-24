@@ -17,6 +17,7 @@ import type { CredentialInput, DockerAction, PortForward, SshConnection, Worktre
 import { JsonStore } from './store'
 import { detectRuntimes } from './runtimes'
 import { loadShellEnv } from './shellEnv'
+import { betaStatus, refreshBeta, startBetaChecks } from './beta'
 import { checkSetup } from './setup'
 import { containerAction, listContainers } from './docker'
 
@@ -145,6 +146,9 @@ function registerIpc(): void {
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
+  ipcMain.handle('beta:status', () => betaStatus())
+  ipcMain.handle('beta:refresh', () => refreshBeta())
+  ipcMain.handle('app:openDataFolder', () => shell.openPath(app.getPath('userData')))
   ipcMain.handle('app:focus', () => {
     if (!win) return
     if (win.isMinimized()) win.restore()
@@ -244,6 +248,8 @@ app.whenReady().then(async () => {
   }
   vault.initVault()
   setShellOverride(settings.get().shell)
+  // runs alongside startup; the renderer awaits the first result before showing the app
+  startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   await startHookServer(() => win?.webContents ?? null)
   await loadShellEnv()
   buildMenu()

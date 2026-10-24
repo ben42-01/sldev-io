@@ -17,10 +17,10 @@ module.exports = async (h) => {
   await h.wait(500)
 
   await launch(h, 'claude', 'Claude task')
-  await h.wait(2200)
-  h.expect((await pills(h))['Claude task'] === 'Needs you / Claude Code', 'claude: permission notification → Needs you')
-  await h.wait(3000)
-  h.expect((await pills(h))['Claude task'] === 'Ready for you / Claude Code', 'claude: Stop hook → Ready for you')
+  // each fake hook spawns Electron-as-Node, so wait for the transitions instead of fixed times
+  const claude = (want) => h.until(async () => (await pills(h))['Claude task'] === want, 10000)
+  h.expect(await claude('Needs you / Claude Code'), 'claude: permission notification → Needs you')
+  h.expect(await claude('Ready for you / Claude Code'), 'claude: Stop hook → Ready for you')
   await h.shot('1-claude-ready')
 
   await launch(h, 'codex', 'Codex task')
