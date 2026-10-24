@@ -1,0 +1,52 @@
+import { ArrowRight, Download } from 'lucide-react'
+import { site } from '../lib/pricing'
+import { AppMockup } from './AppMockup'
+
+export function Hero() {
+  return (
+    <section className="hero" id="top">
+      <div className="hero-glow" aria-hidden="true" />
+      <div className="container hero-inner">
+        <a className="pill" href="#pricing">
+          <span className="pill-dot" /> v{site.version} · free during the beta <ArrowRight size={12} />
+        </a>
+        <h1>
+          Every coding agent.
+          <br />
+          <span className="brand-text">One workspace.</span>
+        </h1>
+        <p className="lead">
+          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side in dockable terminals.
+          Watch each mission live, review the diff, open the PR. Not an IDE: your editor stays yours.
+        </p>
+        <div className="hero-cta">
+          <a className="btn primary lg" href={site.downloadUrl}>
+            <Download size={16} /> Download for free
+          </a>
+          <a className="btn lg" href="#features">
+            See how it works
+          </a>
+        </div>
+        <p className="platforms">{site.platforms.join(' · ')} · one-time license, no subscription</p>
+        <div className="hero-shot">
+          <AppMockup />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export function AgentStrip() {
+  return (
+    <section className="strip" id="agents" aria-label="Supported agents">
+      <div className="container">
+        <p className="eyebrow center">Works with the agents you already use</p>
+        <ul className="strip-list">
+          {site.agents.map((a) => (
+            <li key={a}>{a}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}

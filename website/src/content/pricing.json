@@ -1,0 +1,59 @@
+{
+  "currency": "EUR",
+  "billing": "one-time",
+  "announcement": "Free while in beta. Every license below becomes a one-time payment at launch.",
+  "plans": [
+    {
+      "id": "personal",
+      "name": "Personal",
+      "tagline": "For one developer, on all of their machines.",
+      "price": 0,
+      "listPrice": 10.99,
+      "priceNote": "Free during the beta, then pay once.",
+      "highlight": true,
+      "ctaLabel": "Download the beta",
+      "ctaLabelPaid": "Buy Personal",
+      "checkoutUrl": "",
+      "features": [
+        "Every agent: Claude Code, Codex, Cursor Agent, Copilot, OpenCode, Gemini, custom",
+        "Unlimited terminals, missions and worktrees",
+        "Diff review, commit, merge and PR from the app",
+        "Skills, MCP servers, runtimes and tasks",
+        "SSH, SFTP, credential vault and Docker",
+        "Linux, Windows and macOS"
+      ]
+    },
+    {
+      "id": "team",
+      "name": "Team",
+      "tagline": "One license key for a small team.",
+      "price": 0,
+      "listPrice": 50,
+      "priceNote": "5 seats. Free during the beta, then pay once.",
+      "highlight": false,
+      "ctaLabel": "Download the beta",
+      "ctaLabelPaid": "Buy Team",
+      "checkoutUrl": "",
+      "features": [
+        "Everything in Personal",
+        "5 seats on a single license",
+        "Priority support by email",
+        "Invoice and VAT receipt"
+      ]
+    }
+  ],
+  "faq": [
+    {
+      "q": "Is it really a one-time payment?",
+      "a": "Yes. No subscription and no per-seat monthly fee. You pay once per license."
+    },
+    {
+      "q": "What does it cost today?",
+      "a": "Nothing. sldev-io is free while it is in beta. When paid licenses launch, the prices on this page are the ones you will see."
+    },
+    {
+      "q": "Do I need an account with every agent?",
+      "a": "sldev-io drives the agent CLIs that are already on your machine and uses their own logins. It never replaces your Claude, OpenAI, Cursor or GitHub subscription."
+    }
+  ]
+}
