@@ -31,6 +31,9 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
    error should appear in the output.
 8. Switch back to master.
 
+**Branches:** betas are cut from `master`. `1.0.0` is cut from `master` after merging the `v1`
+branch into it (see docs/go-to-production.md → Launch day). Never push `release/1.0.0` from `v1` directly.
+
 **Betas:** use a prerelease version such as `0.2.0-beta.1` (`npm version 0.2.0-beta.1 --no-git-tag-version`)
 and branch `release/0.2.0-beta.1`. Any version with a `-` is published as a GitHub pre-release, so it
 never becomes "Latest". Next betas are `-beta.2`, …; the final release is plain `0.2.0`.

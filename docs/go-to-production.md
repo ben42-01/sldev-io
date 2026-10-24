@@ -538,6 +538,17 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 
 ## 8. Phase 7: Launch day
 
+### Branches: `master` (beta) and `v1` (launch)
+
+- **`master`** is the beta line. Fixes go here and ship as `0.1.0-beta.N` (push `release/0.1.0-beta.N`).
+- **`v1`** collects what only the paid launch needs: prices and checkout links in `pricing.json`,
+  launch copy on the site, signing, `1.0.0`. Push it as often as you like; it never publishes
+  anything (only `release/**` branches do). Vercel builds a preview of it with the **sandbox**
+  license server, so the whole purchase → key → activate flow can be tested there first.
+- Keep `v1` current: `git switch v1 && git merge master && git push`.
+- **Launch**: `git switch master && git merge v1`, then `npm version 1.0.0 --no-git-tag-version`,
+  commit, push `master`, push `release/1.0.0` (the steps under T-0 below).
+
 ### Two weeks before (T-14)
 
 - [ ] Phases 1–6 done (Windows signing optional)
