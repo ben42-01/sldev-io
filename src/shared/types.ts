@@ -203,6 +203,8 @@ export type HookEvent = {
   sessionId?: string
   type: 'session-start' | 'prompt' | 'tool' | 'notification' | 'stop' | 'session-end'
   text?: string
+  /** Claude Code's session transcript, read for token usage */
+  transcriptPath?: string
 }
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
@@ -237,6 +239,8 @@ export interface Mission {
   history?: StatusChange[]
   /** the factory run and node this mission works for */
   factory?: { run: string; node: string }
+  /** Claude Code transcript (from its hooks), for token usage */
+  transcriptPath?: string
 }
 
 export interface ClaudeAsset {

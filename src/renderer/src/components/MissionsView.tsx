@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentOptions } from '@shared/types'
-import { LayoutGrid, Plus, Rocket } from 'lucide-react'
+import { ChartGantt, LayoutGrid, Plus, Rocket } from 'lucide-react'
 import { openPanel } from '../dock/dockApi'
 import { isLive, missions, startMission } from '../state/missions'
 import { useStore } from '../state/store'
@@ -16,6 +16,10 @@ import { ViewShell } from './RuntimesView'
 
 export function openMissionBoard(): void {
   openPanel('missions', 'mission-board', 'Missions')
+}
+
+export function openDashboard(): void {
+  openPanel('dashboard', 'usage-dashboard', 'Usage')
 }
 
 export function MissionsView(): React.JSX.Element {
@@ -36,6 +40,9 @@ export function MissionsView(): React.JSX.Element {
       title="Agent Missions"
       actions={
         <>
+          <button className="icon-btn" title="Usage dashboard" onClick={openDashboard}>
+            <ChartGantt size={14} />
+          </button>
           <button className="icon-btn" title="Mission board" onClick={openMissionBoard}>
             <LayoutGrid size={14} />
           </button>

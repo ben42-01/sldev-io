@@ -100,7 +100,7 @@ function safeJson(s: unknown): Record<string, unknown> {
 const clip = (s: unknown, n = 240): string | undefined => (typeof s === 'string' && s ? (s.length > n ? s.slice(0, n - 1) + '…' : s) : undefined)
 
 function summarize(mission: string, event: string, p: Record<string, unknown>): HookEvent | null {
-  const base = { mission, sessionId: typeof p.session_id === 'string' ? p.session_id : undefined }
+  const base = { mission, sessionId: typeof p.session_id === 'string' ? p.session_id : undefined, transcriptPath: typeof p.transcript_path === 'string' ? p.transcript_path : undefined }
   switch (event) {
     case 'SessionStart':
       return { ...base, type: 'session-start' }

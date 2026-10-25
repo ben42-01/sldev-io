@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BetaStatus } from '@shared/beta'
 import type { LicenseStatus } from '@shared/license'
+import type { TokenUsage } from '@shared/usage'
 import type {
   AgentProfile,
   RulesState,
@@ -150,6 +151,10 @@ const api = {
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('notes:write', path, text),
     remove: (path: string): Promise<void> => ipcRenderer.invoke('notes:delete', path),
     openFolder: (scope: string | null): Promise<string> => ipcRenderer.invoke('notes:openFolder', scope)
+  },
+  usage: {
+    tokens: (reqs: Array<{ id: string; agent: string; cwd: string; from: number; to: number; transcriptPath?: string }>): Promise<Record<string, TokenUsage | null>> =>
+      ipcRenderer.invoke('usage:tokens', reqs)
   },
   factory: {
     recipes: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('factory:recipes', root),

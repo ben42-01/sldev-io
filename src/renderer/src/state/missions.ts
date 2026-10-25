@@ -212,7 +212,7 @@ function notify(m: Mission, title: string, body: string): void {
 window.api.missions.onHook((e: HookEvent) => {
   const m = getMission(e.mission)
   if (!m) return
-  const base: Partial<Mission> = e.sessionId ? { sessionId: e.sessionId } : {}
+  const base: Partial<Mission> = { ...(e.sessionId ? { sessionId: e.sessionId } : {}), ...(e.transcriptPath ? { transcriptPath: e.transcriptPath } : {}) }
   switch (e.type) {
     case 'session-start':
       update(m.id, { ...base, status: m.status === 'starting' && m.prompt ? 'working' : 'waiting' })

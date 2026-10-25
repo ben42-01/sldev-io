@@ -2735,3 +2735,228 @@ a {
   flex-wrap: wrap;
   gap: 4px 12px;
 }
+
+/* ── usage dashboard ───────────────────────── */
+.dashboard .panel-page-head {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dash-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  margin-bottom: 16px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.dash-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--bg-elev);
+}
+.dash-tile b {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dash-tile.warn b {
+  color: #f0b44c;
+}
+.dash-tile-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+.dash-tile-sub {
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+.dash-card {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.dash-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dash-card h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+.dash-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.dash-row .dash-card {
+  margin-bottom: 0;
+}
+.dash-legend {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+}
+.dash-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sw {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+}
+.sw.working {
+  background: #82b8ff;
+}
+.sw.needs {
+  background: repeating-linear-gradient(45deg, #f0b44c 0 2px, #0a0a0a 2px 4px);
+}
+.sw.idle {
+  height: 2px;
+  background: #56d364;
+}
+.timeline {
+  position: relative;
+}
+.dashboard .seg button {
+  white-space: nowrap;
+}
+.tl-grid {
+  stroke: var(--border);
+}
+.tl-tick {
+  fill: var(--fg-subtle);
+  font: 10.5px var(--font-mono);
+}
+.tl-label {
+  fill: var(--fg);
+  font: 12px var(--font-ui);
+}
+.tl-agent {
+  fill: var(--fg-subtle);
+  font: 10.5px var(--font-mono);
+}
+.tl-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.tl-row:hover .tl-hit {
+  fill: var(--bg-hover);
+}
+.tl-seg.working {
+  fill: #82b8ff;
+}
+.tl-seg.needs-input {
+  fill: url(#tl-hatch);
+}
+.tl-seg.waiting {
+  fill: #56d364;
+}
+.tl-seg.starting {
+  fill: var(--fg-subtle);
+}
+.hatch-bg {
+  fill: #f0b44c;
+}
+.hatch-line {
+  stroke: #0a0a0a;
+  stroke-width: 2;
+}
+.tl-tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 240px;
+  padding: 7px 9px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+.tl-tip b {
+  color: var(--fg);
+  font-weight: 600;
+}
+.tl-tip .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.token-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.token-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12px;
+}
+.token-track {
+  height: 8px;
+  background: var(--bg-hover);
+}
+.token-track i {
+  display: block;
+  height: 100%;
+  background: var(--fg);
+}
+.token-value {
+  font: 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.token-split {
+  grid-column: 2 / 4;
+  font: 10.5px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.outcomes dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+}
+.outcomes dt {
+  color: var(--fg-muted);
+}
+.outcomes dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.active-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  color: var(--fg);
+  font: 12px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}

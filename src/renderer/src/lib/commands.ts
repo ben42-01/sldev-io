@@ -173,6 +173,7 @@ export function staticCommands(): Command[] {
         setTimeout(() => window.dispatchEvent(new Event('sldev:new-mission')), 50)
       } },
     { id: 'missions.board', category: 'Agents', title: 'Open mission board', run: () => openPanel('missions', 'mission-board', 'Missions') },
+    { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openPanel('dashboard', 'usage-dashboard', 'Usage') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },

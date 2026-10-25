@@ -12,6 +12,7 @@ import * as notes from './notes'
 import * as profiles from './profiles'
 import * as rules from './rules'
 import * as factory from './factory'
+import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
@@ -228,6 +229,7 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))
   ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
   ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))
   ipcMain.handle('factory:prepare', (_e, dir: string) => factory.prepareRunDir(dir))
