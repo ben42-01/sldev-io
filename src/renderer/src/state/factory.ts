@@ -481,3 +481,12 @@ onTerminalEvent((e) => {
     for (const [nodeId, nr] of Object.entries(run.nodes))
       if (nr.status === 'running' && nr.panelId === e.id) void complete(run.id, nodeId, { ok: e.exitCode === 0, log: terminalTail(e.id) })
 })
+
+/** Agents with the sldev MCP tools hand over their output, and finish interactive steps, themselves. */
+window.api.missions.onMcp((e) => {
+  const m = getMission(e.mission)
+  const run = m?.factory ? getRun(m.factory.run) : undefined
+  if (!m?.factory || !run) return
+  if (e.type === 'output') void window.api.factory.write(outFile(m.cwd, run.id, m.factory.node), e.text)
+  if (e.type === 'done' && run.recipe.nodes.find((n) => n.id === m.factory!.node)?.interactive) markDone(run.id, m.factory.node)
+})

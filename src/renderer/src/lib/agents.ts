@@ -27,6 +27,8 @@ export interface AgentDef {
   canResume: boolean
   /** takes a role as an extra system prompt; other agents get it at the top of the prompt */
   systemPrompt?: boolean
+  /** flags that attach the sldev MCP server for one run; agents without one are tracked from the terminal */
+  mcpArgs?: (server: McpServerCommand) => string[]
   build: (o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra) => string[]
   custom?: boolean
 }
@@ -38,7 +40,24 @@ export interface CommandExtra {
   resume?: string | true
   /** agent profile role; a resumed session already has it */
   role?: string
+  /** attach the sldev MCP server */
+  mcp?: McpServerCommand
 }
+
+export interface McpServerCommand {
+  command: string
+  args: string[]
+  env: Record<string, string>
+}
+
+/** The sldev MCP server for one mission. */
+export const sldevMcp = (info: { command: string; script: string }, mission: string): McpServerCommand => ({
+  command: info.command,
+  args: [info.script, '--mission', mission],
+  env: { ELECTRON_RUN_AS_NODE: '1' }
+})
+
+const tomlString = (s: string): string => JSON.stringify(s)
 
 const q = (s: string): string => shellQuote(s)
 const flag = (cond: unknown, ...parts: string[]): string[] => (cond ? parts : [])
@@ -65,6 +84,7 @@ const claude: AgentDef = {
   canPrint: true,
   canResume: true,
   systemPrompt: true,
+  mcpArgs: (m) => ['--mcp-config', q(JSON.stringify({ mcpServers: { sldev: { type: 'stdio', command: m.command, args: m.args, env: m.env } } }))],
   build: (o, prompt, name, { settingsPath, resume, role }) => [
     'claude',
     ...flag(settingsPath, '--settings', q(settingsPath ?? '')),
@@ -96,6 +116,11 @@ const codex: AgentDef = {
   hooks: false,
   canPrint: true,
   canResume: true,
+  // -c takes a TOML value: an inline table for the server
+  mcpArgs: (m) => [
+    '-c',
+    q(`mcp_servers.sldev={command=${tomlString(m.command)},args=[${m.args.map(tomlString).join(',')}],env={${Object.entries(m.env).map(([k, v]) => `${k}=${tomlString(v)}`).join(',')}}}`)
+  ],
   build: (o, prompt, _name, { resume }) => [
     'codex',
     ...(resume ? ['resume', '--last'] : flag(o.print, 'exec')),
@@ -250,7 +275,10 @@ export function findAgent(id: string | undefined, custom: CustomAgent[] = []): A
 export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra = {}): string {
   const role = extra.resume ? undefined : extra.role?.trim()
   const p = role && !agent.systemPrompt ? promptWithRole(role, prompt) : prompt
-  return agent.build(o, p, name, agent.hooks ? { ...extra, role } : { resume: extra.resume }).join(' ')
+  const parts = agent.build(o, p, name, agent.hooks ? { ...extra, role } : { resume: extra.resume })
+  // right after the executable: global options come before subcommands like `codex exec`
+  if (extra.mcp && agent.mcpArgs) parts.splice(1, 0, ...agent.mcpArgs(extra.mcp))
+  return parts.join(' ')
 }
 
 export function slugify(s: string): string {

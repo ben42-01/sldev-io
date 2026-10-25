@@ -48,6 +48,8 @@ export interface AppSettings {
   defaultAgent: string
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
+  /** give Claude Code and Codex missions the sldev MCP tools (status, output, other missions) */
+  agentTools: boolean
   /** agent profiles kept for every project (project ones live in .sldev/agents) */
   agentProfiles: AgentProfile[]
   /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
@@ -118,6 +120,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultAgent: 'claude',
   customAgents: [],
   agentProfiles: [],
+  agentTools: true,
   setupSeen: false,
   assetGroups: {}
 }
@@ -206,6 +209,12 @@ export type HookEvent = {
   /** Claude Code's session transcript, read for token usage */
   transcriptPath?: string
 }
+
+/** From the sldev MCP server: an agent reporting on its own mission */
+export type McpEvent =
+  | { mission: string; type: 'status'; state: 'working' | 'needs_input' | 'done'; text?: string }
+  | { mission: string; type: 'output'; text: string }
+  | { mission: string; type: 'done'; text?: string }
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
 

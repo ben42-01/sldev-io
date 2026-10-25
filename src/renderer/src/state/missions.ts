@@ -1,7 +1,7 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
-import { agentCommand, slugify } from '../lib/agents'
+import { agentCommand, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
@@ -17,7 +17,7 @@ interface MissionsState {
 
 export const missions = createStore<MissionsState>({ list: [], panels: {} })
 
-let hook: { port: number; token: string; settingsPath: string } | null = null
+let hook: { port: number; token: string; settingsPath: string; mcp: { command: string; script: string } } | null = null
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 export async function loadMissions(): Promise<void> {
@@ -50,6 +50,9 @@ export function useMission(id: string): Mission | undefined {
   return useStore(missions, (s) => s.list.find((m) => m.id === id))
 }
 
+/** The sldev MCP server for this mission, when the setting is on. */
+const mcpFor = (id: string): McpServerCommand | undefined => (workspace.get().agentTools !== false && hook?.mcp ? sldevMcp(hook.mcp, id) : undefined)
+
 export function missionEnv(id: string): Record<string, string> {
   return hook ? { SLDEV_MISSION_ID: id, SLDEV_HOOK_PORT: String(hook.port), SLDEV_HOOK_TOKEN: hook.token } : { SLDEV_MISSION_ID: id }
 }
@@ -59,8 +62,8 @@ export function missionResumeCommand(id: string): string | undefined {
   const m = getMission(id)
   if (!m) return undefined
   const agent = getAgent(m.options.agent)
-  if (agent.hooks && m.sessionId) return agentCommand(agent, m.options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId })
-  if (!agent.hooks && agent.canResume && m.status !== 'starting') return agentCommand(agent, m.options, undefined, m.title, { resume: true })
+  if (agent.hooks && m.sessionId) return agentCommand(agent, m.options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId, mcp: mcpFor(id) })
+  if (!agent.hooks && agent.canResume && m.status !== 'starting') return agentCommand(agent, m.options, undefined, m.title, { resume: true, mcp: mcpFor(id) })
   return undefined
 }
 
@@ -117,7 +120,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   openTerminal({
     cwd,
     title,
-    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options) }),
+    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options), mcp: mcpFor(id) }),
     displayCommand: agentCommand(agent, input.options, input.prompt, title, { role: roleFor(input.options) }),
     env: missionEnv(id),
     missionId: id,
@@ -136,7 +139,7 @@ export function focusOrResume(id: string): void {
   openTerminal({
     cwd: m.cwd,
     title: m.title,
-    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath, role: roleFor(m.options) }),
+    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath, role: roleFor(m.options), mcp: mcpFor(id) }),
     env: missionEnv(id),
     missionId: id
   })
@@ -242,6 +245,30 @@ window.api.missions.onHook((e: HookEvent) => {
   }
 })
 
+// Agents with the sldev MCP tools can report their own status; once one does, its terminal is no longer guessed from.
+const reporting = new Set<string>()
+
+window.api.missions.onMcp((e) => {
+  const m = getMission(e.mission)
+  if (!m) return
+  const agent = getAgent(m.options.agent).name
+  if (e.type === 'status') {
+    reporting.add(m.id)
+    clearTimeout(idleTimers.get(m.id))
+    if (e.state === 'working') update(m.id, { status: 'working', notification: undefined, activity: e.text ?? m.activity })
+    else if (e.state === 'needs_input') {
+      const next = update(m.id, { status: 'needs-input', notification: e.text ?? `${agent} needs you` })
+      if (next) notify(next, `${m.title} needs you`, e.text ?? `${agent} needs you`)
+    } else {
+      const next = update(m.id, { status: 'waiting', notification: undefined, lastMessage: e.text ?? m.lastMessage })
+      if (next) notify(next, `${m.title} finished`, e.text ?? `${agent} says it's done`)
+      void refreshStats(m.id)
+    }
+  } else if (e.type === 'done' || e.type === 'output') {
+    if (e.text) update(m.id, { lastMessage: e.text.slice(0, 600) })
+  }
+})
+
 // Agents without hooks are tracked from their terminal: output means working, a quiet spell
 // means it's your turn, and a bell / OSC 9 notification means it needs you.
 const IDLE_MS = 5000
@@ -277,7 +304,7 @@ onTerminalEvent((e) => {
   const [missionId] = entry
   const m = getMission(missionId)
   if (m && (e.type === 'activity' || e.type === 'attention')) {
-    if (getAgent(m.options.agent).hooks || !isLive(m.status)) return
+    if (getAgent(m.options.agent).hooks || !isLive(m.status) || reporting.has(m.id)) return
     if (e.type === 'activity') onAgentActivity(m)
     else onAgentAttention(m, e.text)
     return

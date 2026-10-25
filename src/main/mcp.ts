@@ -1,0 +1,62 @@
+import { promises as fsp } from 'fs'
+import { join } from 'path'
+import type { McpEvent, Mission } from '@shared/types'
+import { diff } from './git'
+
+/** Tool calls from the sldev MCP server, answered here; status, output and done also go to the window. */
+
+export interface McpRequest {
+  mission: string
+  tool: string
+  args: Record<string, unknown>
+  cwd: string
+}
+
+export interface McpDeps {
+  missions: () => Mission[]
+  send: (e: McpEvent) => void
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: string; error?: string }> {
+  const all = deps.missions()
+  const self = all.find((m) => m.id === r.mission)
+  if (!self) return { error: 'This session was not started by sldev-io, so it has no mission to report to.' }
+  switch (r.tool) {
+    case 'sldev_status': {
+      const state = str(r.args.state)
+      if (!['working', 'needs_input', 'done'].includes(state)) return { error: 'state must be working, needs_input or done' }
+      deps.send({ mission: self.id, type: 'status', state: state as 'working' | 'needs_input' | 'done', text: str(r.args.message).slice(0, 600) || undefined })
+      return { text: 'Status updated.' }
+    }
+    case 'sldev_output': {
+      const markdown = str(r.args.markdown)
+      if (!markdown.trim()) return { error: 'markdown is empty' }
+      deps.send({ mission: self.id, type: 'output', text: markdown.slice(0, 200_000) })
+      return { text: 'Saved.' }
+    }
+    case 'sldev_done':
+      deps.send({ mission: self.id, type: 'done', text: str(r.args.summary).slice(0, 2000) || undefined })
+      return { text: 'Marked as done. You can stop now.' }
+    case 'sldev_missions': {
+      const mine = all.filter((m) => m.root === self.root && m.id !== self.id).slice(0, 50)
+      if (!mine.length) return { text: 'No other missions in this project.' }
+      return { text: mine.map((m) => `${m.id} · ${m.options.agent ?? 'claude'} · ${m.status} · ${m.worktree?.branch ?? 'in place'} · ${m.title}`).join('\n') }
+    }
+    case 'sldev_mission_diff': {
+      const m = all.find((x) => x.id === str(r.args.id) && x.root === self.root)
+      if (!m) return { error: 'No mission with that id in this project. Use sldev_missions.' }
+      const d = await diff(m.cwd, m.worktree?.base ?? m.baseCommit ?? 'HEAD').catch((e: Error) => `Could not read the diff: ${e.message}`)
+      return { text: d.length > 60_000 ? `${d.slice(0, 60_000)}\n… diff cut at 60k characters` : d || 'No changes.' }
+    }
+    case 'sldev_rules': {
+      for (const f of ['.sldev/rules.md', 'AGENTS.md']) {
+        const text = await fsp.readFile(join(self.root, f), 'utf8').catch(() => null)
+        if (text) return { text }
+      }
+      return { text: 'This project has no agent rules yet.' }
+    }
+  }
+  return { error: `Unknown tool ${r.tool}` }
+}

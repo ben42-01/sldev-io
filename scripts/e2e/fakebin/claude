@@ -14,7 +14,21 @@ if (args.includes('-p')) {
   fire('UserPromptSubmit', { prompt }); sleep(300)
   // the last run file in the prompt is this step's own output; earlier ones are inputs
   const out = [...prompt.matchAll(/(\/\S+?\.sldev\/runs\/\S+?\.md)/g)].pop()
-  if (out) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
+  const mi = args.indexOf('--mcp-config')
+  if (mi >= 0 && prompt.includes('USE_MCP')) {
+    // like the real CLI: start the configured stdio server and call its tools
+    const { command, args: sargs, env } = JSON.parse(args[mi + 1]).mcpServers.sldev
+    const rpc = (id, method, params) => JSON.stringify({ jsonrpc: '2.0', id, method, params })
+    const call = (id, name, a) => rpc(id, 'tools/call', { name, arguments: a })
+    const input = [rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } }),
+      call(2, 'sldev_status', { state: 'needs_input', message: 'Which database should I use?' })].join('\n') + '\n'
+    const r1 = spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
+    console.log('mcp:', r1.stdout.trim().split('\n').length, 'replies')
+    sleep(1500)
+    const input2 = [call(3, 'sldev_status', { state: 'working', message: 'Using Postgres' }),
+      call(4, 'sldev_output', { markdown: '# Spec via MCP\n\nUse Postgres.\n' })].join('\n') + '\n'
+    spawnSync(command, sargs, { input: input2, env: { ...process.env, ...env }, encoding: 'utf8' })
+  } else if (out) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
   fs.appendFileSync(out ? `changes-${path.basename(out[1], '.md')}.md` : 'CHANGES.md', `claude: ${prompt.split('\n')[0]}\n`)
   sleep(800)
   fire('Stop', {})

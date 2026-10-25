@@ -299,7 +299,7 @@ app.whenReady().then(async () => {
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   startUpdateChecks((s) => win?.webContents.send('update:changed', s))
   startLicenseChecks((s) => win?.webContents.send('license:changed', s))
-  await startHookServer(() => win?.webContents ?? null)
+  await startHookServer(() => win?.webContents ?? null, { missions: () => stores.missions.get().missions })
   await loadShellEnv()
   buildMenu()
   registerIpc()

@@ -116,6 +116,7 @@ app.whenReady().then(async () => {
     /** the fake license server's keys: key → { lid, plan, email, limit, revoked, activations } */
     licenses,
     fixture,
+    userData: path.join(tmp, 'userdata'),
     wait,
     js,
     log: (...a) => logs.push(a.join(' ')),

@@ -57,6 +57,10 @@ export function SettingsPanel(): React.JSX.Element {
         <AgentSettings />
         <AgentProfiles />
         <label className="check">
+          <input type="checkbox" checked={s.agentTools !== false} onChange={(e) => updateSettings({ agentTools: e.target.checked })} />
+          <span>Give Claude Code and Codex missions the sldev tools (MCP): they report their own status, hand over results and can read other missions</span>
+        </label>
+        <label className="check">
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />
           <span>Desktop notifications when a mission needs you or finishes</span>
         </label>

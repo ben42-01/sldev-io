@@ -2,6 +2,8 @@ import { app, type WebContents } from 'electron'
 import { createServer } from 'http'
 import { randomBytes } from 'crypto'
 import { openSync, readSync, closeSync, fstatSync, writeFileSync } from 'fs'
+import { MCP_SERVER } from './mcpServer'
+import { handleMcp, type McpDeps } from './mcp'
 import { join } from 'path'
 import type { HookEvent } from '@shared/types'
 
@@ -37,13 +39,16 @@ export interface HookInfo {
   port: number
   token: string
   settingsPath: string
+  /** how agents start the sldev MCP server: `<command> <script> --mission <id>` with ELECTRON_RUN_AS_NODE=1 */
+  mcp: { command: string; script: string }
 }
 
 let info: HookInfo | null = null
 
-export async function startHookServer(target: () => WebContents | null): Promise<HookInfo> {
+export async function startHookServer(target: () => WebContents | null, mcp: Omit<McpDeps, 'send'>): Promise<HookInfo> {
   const token = randomBytes(16).toString('hex')
   const server = createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/mcp' && req.headers['x-sldev-token'] === token) return void serveMcp(req, res)
     if (req.method !== 'POST' || req.url !== '/hook' || req.headers['x-sldev-token'] !== token) {
       res.writeHead(403).end()
       return
@@ -65,6 +70,24 @@ export async function startHookServer(target: () => WebContents | null): Promise
       }
     })
   })
+  const serveMcp = (req: import('http').IncomingMessage, res: import('http').ServerResponse): void => {
+    let body = ''
+    req.on('data', (d) => {
+      body += d
+      if (body.length > 1_000_000) req.destroy()
+    })
+    req.on('end', () => {
+      const send = (e: Parameters<McpDeps['send']>[0]): void => {
+        const wc = target()
+        if (wc && !wc.isDestroyed()) wc.send('mission:mcp', e)
+      }
+      Promise.resolve()
+        .then(() => handleMcp(JSON.parse(body), { ...mcp, send }))
+        .catch(() => ({ error: 'Bad request' }))
+        .then((r) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r)))
+    })
+  }
+
   const port = await new Promise<number>((resolve) =>
     server.listen(0, '127.0.0.1', () => resolve((server.address() as { port: number }).port))
   )
@@ -81,7 +104,11 @@ export async function startHookServer(target: () => WebContents | null): Promise
   }
   const settingsPath = join(dir, 'claude-hooks.json')
   writeFileSync(settingsPath, JSON.stringify({ hooks }, null, 2))
-  info = { port, token, settingsPath }
+  const script = join(dir, 'sldev-mcp.cjs').replace(/\\/g, '/')
+  writeFileSync(script, MCP_SERVER)
+  // the server reads where to call from here, so the token never appears in a command line
+  writeFileSync(join(dir, 'mcp-endpoint.json'), JSON.stringify({ port, token }), { mode: 0o600 })
+  info = { port, token, settingsPath, mcp: { command: exec, script } }
   return info
 }
 

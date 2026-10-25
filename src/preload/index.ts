@@ -22,6 +22,7 @@ import type {
   GhWorkflow,
   GhWorkflowInput,
   HookEvent,
+  McpEvent,
   McpServer,
   NoteMeta,
   PortForward,
@@ -124,8 +125,9 @@ const api = {
     pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },
   missions: {
-    hookInfo: (): Promise<{ port: number; token: string; settingsPath: string } | null> => ipcRenderer.invoke('missions:hookInfo'),
-    onHook: (cb: (e: HookEvent) => void): Unsubscribe => on('mission:hook', cb)
+    hookInfo: (): Promise<{ port: number; token: string; settingsPath: string; mcp: { command: string; script: string } } | null> => ipcRenderer.invoke('missions:hookInfo'),
+    onHook: (cb: (e: HookEvent) => void): Unsubscribe => on('mission:hook', cb),
+    onMcp: (cb: (e: McpEvent) => void): Unsubscribe => on('mission:mcp', cb)
   },
   claude: {
     assets: (root: string | null): Promise<ClaudeAsset[]> => ipcRenderer.invoke('claude:assets', root),
