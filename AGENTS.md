@@ -31,7 +31,8 @@ src/main/       Electron main process (Node): everything privileged
   pty.ts          node-pty sessions with flow control (pause on HIGH water, resume on ack)
   ssh.ts          ssh2 shells, SFTP, port forwards, host-key TOFU (known_hosts.json)
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
-  hooks.ts        loopback HTTP server receiving Claude Code hook events (token-protected)
+  hooks.ts        loopback HTTP server receiving Claude Code hook events and sldev MCP tool calls (token-protected)
+  mcpServer.ts    the stdio MCP server agents start (script string, installed in userData); mcp.ts answers its tools
   beta.ts         free-beta window: fetches <site>/beta.json, encrypted cache, clock-rollback guard
   updater.ts      electron-updater from the downloads repo (macOS: notify only until builds are signed)
   license.ts      license keys + trial: Ed25519-signed tokens from <site>/api/license, verified offline
@@ -40,14 +41,20 @@ src/main/       Electron main process (Node): everything privileged
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
+  factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
+  profiles.ts     project agent profiles (.sldev/agents/*.md) and export to Claude/OpenCode agent files
+  rules.ts        rules sync: .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
+  usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions)
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
-src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …)
+src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
+                  unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
+                  profiles.ts, rules.ts, usage.ts, missionHistory.ts
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
                   and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
-                  tasks, runs, runtimes, agents, notes, remote
-  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Preview, Settings
+                  tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote
+  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Preview, Settings
   components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/license/* (Polar), public/install.sh,
@@ -55,6 +62,14 @@ website/        marketing site (Vercel): api/download.ts (/download/<os>), api/l
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
+
+### Software Factory
+
+A recipe is a graph of stages (`needs`); agent stages are missions in print mode, run stages are
+terminals, the pr stage waits for a click. `src/shared/factory.ts` is the pure state machine (every
+transition is unit-tested); `state/factory.ts` does the side effects: worktrees, missions, commits
+after every stage, merging parallel branches at the fan-in. Hand-offs between stages are files in
+`<worktree>/.sldev/runs/<run>/`. A restart pauses runs; nothing re-runs on its own.
 
 ### Data flow for a feature
 
@@ -93,6 +108,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Privacy**: no telemetry. A new network request from the app means updating `website/src/content/legal.tsx`
   (`/privacy`) and `legal.updatedAt` in `site.json` in the same change.
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
+- **Factory**: never add agent-specific behaviour to the runner; stages talk to agents only through
+  prompts, files and (optionally) the sldev MCP tools. Pushing (the pr stage) only happens on a click.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.
 - **Styling**: monochrome UI (`--fg`, `--border*`), `--radius: 2px`, outline buttons
@@ -131,9 +148,9 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 ## Production docs
 
 `docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks) and
-`docs/monetization-plan.md` has the reasoning. `docs/v1-roadmap.md` is the 1.0 scope and build order (Software
-Factory, agent builder, rules sync, usage dashboard, MCP server); work on it happens on the `v1` branch. Keep them in sync when you change releases, the
-beta window, licensing or pricing.
+`docs/monetization-plan.md` has the reasoning. Keep them in sync when you change releases, the
+beta window, licensing or pricing. `docs/v1-roadmap.md` is the 1.0 scope, its status and what still
+needs checking against the real agent CLIs; 1.0 work happens on the `v1` branch.
 
 ## Skills
 

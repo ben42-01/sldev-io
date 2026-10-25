@@ -11,6 +11,10 @@ factory or comes out of it.
 Rules that hold for all of it (from `AGENTS.md`): agent-agnostic, nothing written to the user's own
 agent settings, no telemetry, terminals stay real terminals, restored layouts never re-run anything.
 
+**Status (2026-10-25): everything below is built on `v1`**, with unit tests (`npm test`) and an e2e
+scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-actions`, `dashboard`,
+`mcp`). What remains before launch is in "Before launch" at the end.
+
 | # | Feature | Size | Why it's in 1.0 |
 |---|---|---|---|
 | 1 | Agent builder | M | Factory stages need named, reusable agents ("Reviewer", "Spec writer") |
@@ -252,3 +256,24 @@ chart library), opened from the activity bar and the palette.
 7. Launch polish
 
 Steps 1, 4 and 5 are useful during the beta as well; they can land on `master` and be merged into `v1`.
+
+## Before launch
+
+The e2e harness drives fake CLIs, so these were built from the CLIs' documentation and need one run
+against the real tools (on a scratch repo, with a cheap model):
+
+- [ ] **Codex MCP flag**: `codex -c 'mcp_servers.sldev={command=…,args=[…],env={…}}' exec …` starts
+      the sldev server and its tools show up (the inline-table form of `-c`).
+- [ ] **Codex token usage**: the session log format (`~/.codex/sessions/YYYY/MM/DD/*.jsonl`,
+      `session_meta` + `token_count` events). The Claude Code transcript format is verified.
+- [ ] **Claude Code `--mcp-config` inline JSON** together with `--settings` and `-p`.
+- [ ] **Print mode for every built-in agent** in a factory run (`claude -p`, `codex exec`,
+      `cursor-agent -p`, `copilot -p --allow-all-tools`, `opencode run`, `gemini -p`): each exits
+      when done and its exit code means success.
+- [ ] A real **pr stage**: push and `gh pr create --body` on a scratch GitHub repo.
+- [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list
+      (on `v1`, so they go live with the launch).
+
+Known gaps, fine for 1.0: "retry this stage with a different agent" (retry reruns the same agent),
+interactive factory stages finish with Done or `sldev_done` only, OpenCode/Cursor/Copilot/Gemini get
+no MCP tools (no per-run flag), token usage for Claude Code and Codex only.

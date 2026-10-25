@@ -552,6 +552,7 @@ Unsigned is acceptable for a free beta. For paid users, signing removes the scar
 ### Two weeks before (T-14)
 
 - [ ] Phases 1–6 done (Windows signing optional)
+- [ ] 1.0 features frozen: every box under "Before launch" in `docs/v1-roadmap.md` ticked
 - [ ] Decide the launch date. Set `beta.endsAt` to the day **before** launch, so beta builds
       start showing the 14-day banner now
 - [ ] Write the launch post and the email to beta testers (if you collected emails)
