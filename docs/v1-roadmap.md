@@ -19,11 +19,12 @@ agent settings, no telemetry, terminals stay real terminals, restored layouts ne
 | 4 | Bake-off and cross-agent review | M | Factory stages; also standalone mission actions |
 | 5 | Issue → mission / factory run | S | The natural intake for the factory |
 | 6 | sldev MCP server | L | Agents report status and hand off output themselves, on every CLI |
-| 7 | Launch polish | M | Tour chapters, features page, docs, e2e for all of the above |
+| 7 | Usage dashboard | M | Gantt timeline of every agent, token usage, time spent waiting on you |
+| 8 | Launch polish | M | Tour chapters, features page, docs, e2e for all of the above |
 
 Not in 1.0 (candidates for 1.x, in rough order): PR feedback loop (review comments re-run the
-agent), cost and token tracking (only Claude reports it reliably today), project map / code graph
-for agent context, project memory ("lore"), mission replay, headless `sldev run` for CI, sandboxed
+agent), money cost (needs per-model price tables that go stale), project map / code graph for
+agent context, project memory ("lore"), mission replay, headless `sldev run` for CI, sandboxed
 runs, team sharing of recipes and agents.
 
 ---
@@ -65,10 +66,18 @@ One source, `.sldev/rules.md`, generates the file each agent reads:
 
 ## 3. Software Factory
 
+### Missions are nodes, recipes are graphs
+
+There is one engine, not two features: a **mission is a single node**, and a factory run is a
+**graph of nodes** (a DAG plus retry edges). A node is an agent step (a mission), a command step or
+a gate. A node runs when everything in its `needs` is done, so independent nodes run in parallel
+and a node with several `needs` waits for all of them (fan-out / fan-in). With no `needs`, a node
+depends on the one above it, so simple recipes read as a plain list.
+
 ### Recipe
 
 A recipe is YAML (`yaml` is already a dependency), either in the repo at `.sldev/factory/<name>.yaml`
-or built into the app. Stages run in order; a stage is an agent step, a command step or a gate.
+or built into the app.
 
 ```yaml
 name: Feature
@@ -80,12 +89,18 @@ stages:
       Write a short spec for: {intent}
       Save it to {out}.
     gate: approve           # a human approves before the run continues
-  - id: build
-    agent: [Implementer@claude, Implementer@codex]   # more than one = bake-off
-    prompt: Implement {spec.out}. Commit when done.
+  - id: api
+    needs: [spec]
+    agent: Implementer@claude
+    prompt: Implement the API part of {spec.out}. Commit when done.
+  - id: ui
+    needs: [spec]           # runs in parallel with api, in its own worktree
+    agent: Implementer@codex
+    prompt: Implement the UI part of {spec.out}. Commit when done.
   - id: verify
+    needs: [api, ui]        # fan-in: branches are merged into the run branch first
     run: [lint, test]        # names from the detected runtimes, or literal commands
-    onFail: { retry: build, max: 2 }   # the failing log goes back to the build agent
+    onFail: { retry: [api, ui], max: 2 }   # the failing log goes back to those agents
   - id: review
     agent: Reviewer
     prompt: Review the diff against {spec.out}. Write findings to {out}.
@@ -94,12 +109,17 @@ stages:
     pr: { title: "{intent}", body: "{spec.out}\n\n{review.out}" }
 ```
 
+An agent list on one node (`agent: [Implementer@claude, Implementer@codex]`) is a **bake-off**:
+same prompt, parallel worktrees, you pick the winner.
+
 Placeholders: `{intent}`, `{issue}`, `{out}` (this stage's output file), `{<stage>.out}`,
 `{diff}` (path to the current diff), `{log}` (failing command output on a retry).
 
 ### How a run works
 
-- A run gets **one worktree and branch** (`sldev/factory/<slug>`); every stage works there.
+- A run gets **one worktree and branch** (`sldev/factory/<slug>`). Sequential nodes work there;
+  parallel nodes each get a worktree branched from it and are merged back at the fan-in node (a
+  merge conflict pauses the run and opens the conflict for you or an agent to resolve).
 - **Agent stages** run the CLI non-interactively (`print` mode; every built-in agent supports
   it) in a normal terminal panel you can watch. The process exiting ends the stage; the exit code
   decides success. A stage can set `interactive: true` to run a normal session instead and finish
@@ -128,7 +148,8 @@ Placeholders: `{intent}`, `{issue}`, `{out}` (this stage's output file), `{<stag
 ### UI
 
 - New activity-bar section **Factory**: recipes, active and past runs.
-- **Pipeline panel** (dock): the run as a graph, left to right, fan-out for bake-offs. Each node
+- **Pipeline panel** (dock): the run as a graph, left to right, with parallel branches, fan-in
+  and retry edges drawn (laid out from `needs`; no graph library needed at this size). Each node
   shows agent, status, time, diff size; click to open its terminal or output file. Gates show
   Approve / Reject (reject sends a note back to the previous agent).
 - Mission cards show which run and stage they belong to; desktop notifications at every gate.
@@ -176,7 +197,43 @@ on `AgentDef` (`mcpArgs`) in `lib/agents.ts`, e.g. Claude `--mcp-config <file>`,
 `-c mcp_servers.sldev=…`. Agents without a per-run flag fall back to terminal tracking.
 Loopback only, so no change to the privacy page; still listed there for transparency.
 
-## 7. Launch polish
+## 7. Usage dashboard
+
+A **Dashboard** dock panel of widgets, per project or across all of them, for today, the week or
+the month. Everything comes from data already on the machine: nothing is sent anywhere.
+
+**Recording** (lands first, in step 1, so there is history by the time the dashboard ships):
+missions get a `history: { status, at }[]` of every status change. Factory nodes are missions, so
+runs get the same for free.
+
+Widgets:
+
+- **Timeline (Gantt)**: one row per mission, grouped by agent or by factory run; bars coloured
+  by status (working / needs you / waiting / ended), so parallel work and idle gaps are visible.
+  Click a bar to open the mission.
+- **Waiting on you**: total and per-mission time spent in "needs you" before you answered.
+  The number that shows whether running more agents is actually paying off.
+- **Tokens**: input / output / cache tokens per agent, per project, per day.
+- **Outcomes**: missions that ended in a PR, a merge, or were discarded; bake-off wins per agent.
+- **Active now**: what is running, what is blocked on you.
+
+**Token sources** (read locally, one reader per agent in `src/main/usage.ts`, declared on
+`AgentDef` as `usage?: 'claude' | 'codex' | …`):
+
+| Agent | Source | 1.0 |
+|---|---|---|
+| Claude Code | the session transcript (`transcript_path` in every hook payload) has `usage` per message | yes |
+| Codex | session logs under `~/.codex/sessions/` record token counts | yes |
+| OpenCode, Gemini CLI | local session storage; verify the format before committing to it | if stable |
+| Cursor Agent, Copilot | nothing local found yet | shown as "not reported" |
+
+Tokens only, no money: prices differ by plan and change, and a wrong number is worse than none.
+Optional budget alerts per mission ("tell me past 2M tokens") come with it.
+
+UI: dashboard panel built from small SVG components (bars and a timeline are easy by hand; no
+chart library), opened from the activity bar and the palette.
+
+## 8. Launch polish
 
 - Website: tour chapters for the Factory pipeline and a bake-off; Factory section on /features;
   pricing feature list.
@@ -185,11 +242,13 @@ Loopback only, so no change to the privacy page; still listed there for transpar
 
 ## Build order
 
-1. Agent builder and rules sync (foundations, independently shippable to the beta too)
-2. Factory core: recipe parse, sequential runner, command stages, gates, pipeline panel
-3. Factory: bake-off, retry and the verify→fix loop, built-in recipes, detection
+1. Mission status history (tiny, starts collecting dashboard data), agent builder, rules sync
+2. Factory core: recipe parse, graph runner (`needs`, parallel worktrees, fan-in merge), command
+   nodes, gates, pipeline panel
+3. Factory: bake-off, retry edges and the verify→fix loop, built-in recipes, detection
 4. Mission actions (bake-off, review with), issue intake
-5. MCP server
-6. Launch polish
+5. Usage dashboard: timeline, waiting-on-you, tokens (Claude, Codex), outcomes
+6. MCP server
+7. Launch polish
 
-Steps 1 and 4 are useful during the beta as well; they can land on `master` and be merged into `v1`.
+Steps 1, 4 and 5 are useful during the beta as well; they can land on `master` and be merged into `v1`.

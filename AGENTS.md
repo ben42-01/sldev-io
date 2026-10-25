@@ -132,7 +132,7 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 
 `docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks) and
 `docs/monetization-plan.md` has the reasoning. `docs/v1-roadmap.md` is the 1.0 scope and build order (Software
-Factory, agent builder, rules sync, MCP server); work on it happens on the `v1` branch. Keep them in sync when you change releases, the
+Factory, agent builder, rules sync, usage dashboard, MCP server); work on it happens on the `v1` branch. Keep them in sync when you change releases, the
 beta window, licensing or pricing.
 
 ## Skills
