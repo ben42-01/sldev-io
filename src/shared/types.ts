@@ -163,6 +163,12 @@ export type HookEvent = {
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
 
+/** a status the mission entered, and when */
+export interface StatusChange {
+  status: MissionStatus
+  at: number
+}
+
 export interface Mission {
   id: string
   title: string
@@ -183,6 +189,8 @@ export interface Mission {
   lastMessage?: string
   notification?: string
   stats?: DiffStat
+  /** every status change, oldest first (feeds the usage dashboard) */
+  history?: StatusChange[]
 }
 
 export interface ClaudeAsset {

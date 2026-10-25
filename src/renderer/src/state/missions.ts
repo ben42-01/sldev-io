@@ -1,5 +1,6 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal } from '../dock/dockApi'
+import { patchMission, pushStatus } from '@shared/missionHistory'
 import { agentCommand, slugify } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
@@ -21,7 +22,8 @@ export async function loadMissions(): Promise<void> {
   const [store, info] = await Promise.all([window.api.store.get('missions'), window.api.missions.hookInfo()])
   hook = info
   // anything that was live when the app quit is no longer running
-  const list = (store?.missions ?? []).map((m) => (isLive(m.status) ? { ...m, status: 'ended' as MissionStatus } : m))
+  const now = Date.now()
+  const list = (store?.missions ?? []).map((m) => (isLive(m.status) ? patchMission(m, { status: 'ended' }, m.updatedAt || now) : m))
   missions.set({ list })
 }
 
@@ -33,7 +35,7 @@ function persist(): void {
 function update(id: string, patch: Partial<Mission>): Mission | undefined {
   let updated: Mission | undefined
   missions.set((s) => ({
-    list: s.list.map((m) => (m.id === id ? (updated = { ...m, ...patch, updatedAt: Date.now() }) : m))
+    list: s.list.map((m) => (m.id === id ? (updated = patchMission(m, patch, Date.now())) : m))
   }))
   persist()
   return updated
@@ -101,7 +103,8 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     status: 'starting',
     taskId: input.taskId,
     createdAt: Date.now(),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    history: pushStatus(undefined, 'starting', Date.now())
   }
   missions.set((s) => ({ list: [mission, ...s.list] }))
   persist()
