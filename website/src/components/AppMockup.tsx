@@ -1,4 +1,4 @@
-import { Bell, Bot, FolderTree, GitPullRequest, ListChecks, Play, Server, Sparkles, SquarePen, Workflow } from 'lucide-react'
+import { Bell, Bot, Factory, FolderTree, GitPullRequest, ListChecks, Play, Server, Sparkles, SquarePen, Workflow } from 'lucide-react'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 
 type State = 'working' | 'needs' | 'ready' | 'shipped'
@@ -26,8 +26,12 @@ interface Scene {
   title: string
   text: string
   activity: number
-  /** which mission is selected, or -1 for the runtimes view */
+  /** which mission is selected, or -1 for none */
   active: number
+  /** sidebar view; missions unless said otherwise */
+  side?: 'runtimes' | 'factory'
+  /** the extra tab's label, active when no mission is */
+  tab?: string
   cards: [Card, Card, Card]
   pane: ReactNode
   toast?: ReactNode
@@ -168,11 +172,64 @@ const scenes: Scene[] = [
     )
   },
   {
+    id: 'factory',
+    title: 'Build a feature with a factory',
+    text: 'Spec, parallel builds, tests and review run as one graph. You approve what matters.',
+    activity: 3,
+    active: -1,
+    side: 'factory',
+    tab: 'Pipeline',
+    cards: [
+      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
+      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
+      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
+    ],
+    pane: <PipelineMock />
+  },
+  {
+    id: 'bakeoff',
+    title: 'Let two agents race',
+    text: 'Same task, two agents. Compare the diffs and tests, keep the best.',
+    activity: 3,
+    active: -1,
+    side: 'factory',
+    tab: 'Pipeline',
+    cards: [
+      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
+      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
+      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
+    ],
+    pane: (
+      <div className="bo">
+        <L i={0} className="bo-head"><b>compare</b> · Claude Code vs Codex · <span className="t-amber">keep one</span></L>
+        <div className="bo-grid">
+          {[
+            { agent: 'Claude Code', stat: ['+142', '−9', '5 files'], tests: '14 passed', lines: ['+ export function rateLimit(opts) {', '+   const bucket = new TokenBucket(opts)', '+   return (req, res, next) => …'], win: true },
+            { agent: 'Codex', stat: ['+98', '−31', '4 files'], tests: '12 passed, 2 failed', lines: ['+ app.use(limiter({ max: 120 }))', '- app.use(router)', '+ import limiter from "express-limit"'], win: false }
+          ].map((c, k) => (
+            <div key={c.agent} className={`bo-card${c.win ? ' win' : ''}`}>
+              <L i={1 + k}><b>{c.agent}</b></L>
+              <L i={2 + k} className="mono"><span className="t-green">{c.stat[0]}</span> <span className="t-red">{c.stat[1]}</span> · {c.stat[2]}</L>
+              <L i={3 + k} className={`mono ${c.win ? 't-green' : 't-red'}`}>{c.win ? '✓' : '✗'} {c.tests}</L>
+              {c.lines.map((l, j) => (
+                <L key={j} i={4 + k + j} className={`mono small ${l.startsWith('-') ? 't-red' : 't-green'}`}>{l}</L>
+              ))}
+              <L i={8 + k}><span className={`pr-btn${c.win ? ' press' : ''}`}>Keep</span></L>
+            </div>
+          ))}
+        </div>
+        <L i={11} className="bo-foot"><span className="t-green">✓</span> Kept Claude Code · its branch flows on to verify and the pull request</L>
+      </div>
+    )
+  },
+  {
     id: 'runtimes',
     title: 'Run the app, not just the agent',
     text: 'Dev servers, tests and containers detected from your project, with one-click localhost links.',
     activity: 1,
     active: -1,
+    side: 'runtimes',
+    tab: 'dev',
     cards: [
       ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
       ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
@@ -195,6 +252,55 @@ const scenes: Scene[] = [
   }
 ]
 
+/** The factory pipeline as a small graph: columns follow the recipe, parallel builds stack. */
+function PipelineMock() {
+  const nodes = [
+    { id: 'spec', who: 'Spec writer', x: 10, y: 105, st: 'done', label: 'Done' },
+    { id: 'api', who: 'Implementer · Claude', x: 160, y: 35, st: 'done', label: 'Done' },
+    { id: 'ui', who: 'Implementer · Codex', x: 160, y: 175, st: 'done', label: 'Done' },
+    { id: 'verify', who: 'npm test · try 2', x: 310, y: 105, st: 'done', label: 'Done' },
+    { id: 'review', who: 'Reviewer · Gemini', x: 460, y: 105, st: 'needs', label: 'Needs you' },
+    { id: 'pr', who: 'into main', x: 610, y: 105, st: 'wait', label: 'Waiting' }
+  ]
+  const W = 130
+  const H = 64
+  const at = (id: string) => nodes.find((n) => n.id === id)!
+  const edges: Array<[string, string]> = [['spec', 'api'], ['spec', 'ui'], ['api', 'verify'], ['ui', 'verify'], ['verify', 'review'], ['review', 'pr']]
+  return (
+    <div className="fx">
+      <L i={0} className="fx-head"><b>Feature</b> · Add dark mode · <span className="t-dim">5/6 steps · sldev/factory-dark-mode</span></L>
+      <svg viewBox="0 0 750 260" className="fx-graph" aria-hidden="true">
+        {edges.map(([a, b], k) => {
+          const p = at(a)
+          const q = at(b)
+          const x1 = p.x + W
+          const y1 = p.y + H / 2
+          const x2 = q.x
+          const y2 = q.y + H / 2
+          return <path key={k} className="fx-edge ln-svg" style={{ '--i': k + 1 } as CSSProperties} d={`M${x1},${y1} C${x1 + 10},${y1} ${x2 - 10},${y2} ${x2},${y2}`} />
+        })}
+        <path className="fx-retry ln-svg" style={{ '--i': 6 } as CSSProperties} d={`M${at('verify').x + W / 2},${at('verify').y + H} C${at('verify').x + W / 2},250 ${at('ui').x + W / 2},258 ${at('ui').x + W / 2},${at('ui').y + H}`} />
+        {nodes.map((n, k) => (
+          <g key={n.id} className={`fx-node ${n.st} ln-svg`} style={{ '--i': k + 1 } as CSSProperties}>
+            <rect x={n.x} y={n.y} width={W} height={H} rx={2} />
+            <rect x={n.x} y={n.y} width={W} height={2} className="fx-top" />
+            <text x={n.x + 9} y={n.y + 20} className="fx-id">{n.id}</text>
+            <text x={n.x + W - 8} y={n.y + 20} className="fx-st" textAnchor="end">{n.label}</text>
+            <text x={n.x + 9} y={n.y + 38} className="fx-who">{n.who}</text>
+            {n.id === 'review' && <text x={n.x + 9} y={n.y + 56} className="fx-act">Approve · Reject</text>}
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+const factoryRuns = [
+  { state: 'needs', label: 'Needs you', recipe: 'Feature', intent: 'Add dark mode', done: 5, total: 6 },
+  { state: 'working', label: 'Running', recipe: 'Bake-off', intent: 'Rate limit the API', done: 1, total: 3 },
+  { state: 'ready', label: 'Done', recipe: 'Bug fix', intent: 'Login on Safari (#42)', done: 4, total: 4 }
+]
+
 const runtimes = [
   { name: 'dev', cmd: 'npm run dev', state: 'running', link: 'localhost:5173' },
   { name: 'test:watch', cmd: 'vitest', state: 'running', link: '' },
@@ -202,7 +308,7 @@ const runtimes = [
   { name: 'storybook', cmd: 'npm run storybook', state: 'stopped', link: '' }
 ]
 
-const icons = [FolderTree, Play, Bot, ListChecks, Sparkles, Workflow, SquarePen, Server]
+const icons = [FolderTree, Play, Bot, Factory, ListChecks, Sparkles, Workflow, SquarePen, Server]
 
 /** The app window, cycling through what you do with it. Hovering pauses; the tabs jump. */
 export function AppShowcase() {
@@ -223,7 +329,23 @@ export function AppShowcase() {
               <span key={i} className={i === scene.activity ? 'on' : ''}><Icon size={16} /></span>
             ))}
           </div>
-          {scene.active < 0 ? (
+          {scene.side === 'factory' ? (
+            <div className="mock-side">
+              <div className="mock-side-h">Factory</div>
+              <div className="mock-new">New factory run</div>
+              {factoryRuns.map((r, i) => (
+                <div key={r.intent} className={`mock-card ${r.state}${(scene.id === 'factory' ? 0 : 1) === i ? ' sel' : ''}`}>
+                  <div className="mock-card-top">
+                    <b>{r.label}</b>
+                    <span>{r.recipe}</span>
+                  </div>
+                  <div className="mock-card-title">{r.intent}</div>
+                  <div className="mock-run-bar"><i style={{ width: `${(r.done / r.total) * 100}%` }} /></div>
+                  <div className="mock-card-diff">{r.done}/{r.total} steps</div>
+                </div>
+              ))}
+            </div>
+          ) : scene.side === 'runtimes' ? (
             <div className="mock-side">
               <div className="mock-side-h">Runtimes</div>
               {runtimes.map((r) => (
@@ -268,7 +390,7 @@ export function AppShowcase() {
               ))}
               <span className={scene.active < 0 ? 'active' : ''}>
                 <i className="dot ready" />
-                dev
+                {scene.tab ?? 'dev'}
               </span>
             </div>
             <div className="mock-pane" key={scene.id}>

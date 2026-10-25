@@ -242,15 +242,45 @@ h1 { margin-top: 26px; font-size: clamp(40px, 7.4vw, 76px); line-height: 1.04; l
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes press { 60% { background: var(--fg); color: var(--bg); } }
 
+.mock-run-bar { height: 2px; margin: 6px 0 4px; background: var(--border); }
+.mock-run-bar i { display: block; height: 100%; background: var(--brand); }
+.ln-svg { animation: line-in 0.35s ease-out both; animation-delay: calc(var(--i) * 260ms + 150ms); }
+.fx { padding: 14px 16px; display: grid; gap: 10px; }
+.fx-head { font-size: 12.5px; }
+.fx-graph { width: 100%; height: auto; display: block; }
+.fx-node rect { fill: var(--bg-elev); stroke: var(--border-strong); }
+.fx-node .fx-top { stroke: none; fill: var(--fg-subtle); }
+.fx-node.done .fx-top { fill: var(--green); }
+.fx-node.needs rect:first-child { stroke: color-mix(in srgb, var(--amber) 60%, transparent); }
+.fx-node.needs .fx-top { fill: var(--amber); }
+.fx-node.wait { opacity: 0.6; }
+.fx-id { fill: var(--fg); font: 600 12px var(--font-mono); }
+.fx-st { fill: var(--fg-subtle); font: 600 8.5px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; }
+.fx-node.done .fx-st { fill: var(--green); }
+.fx-node.needs .fx-st { fill: var(--amber); }
+.fx-who { fill: var(--fg-muted); font: 10.5px var(--font-ui); }
+.fx-act { fill: var(--fg); font: 500 10px var(--font-ui); }
+.fx-edge { fill: none; stroke: var(--fg-subtle); stroke-width: 1.5; }
+.fx-retry { fill: none; stroke: color-mix(in srgb, var(--amber) 55%, transparent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.bo { padding: 14px 16px; display: grid; gap: 12px; font-size: 12px; }
+.bo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bo-card { display: grid; gap: 4px; align-content: start; padding: 10px 12px; border: 1px solid var(--border-strong); min-width: 0; }
+.bo-card.win { border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.bo-card .mono { font: 11.5px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bo-card .small { font-size: 10.5px; }
+.bo-card .pr-btn { margin-top: 6px; animation: none; }
+.bo-card .pr-btn.press { animation: press 0.4s ease-out 3.4s both; }
+.bo-foot { color: var(--fg-muted); }
+
 /* scene tabs under the window: the bar fills, then the next scene starts */
-.scenes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; margin-top: 20px; background: var(--border); border: 1px solid var(--border); }
-.scene { position: relative; min-height: 150px; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 18px; text-align: left; font: inherit; color: var(--fg-muted); background: var(--bg); border: 0; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.scenes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; margin-top: 20px; background: var(--border); border: 1px solid var(--border); }
+.scene { position: relative; min-height: 172px; display: flex; flex-direction: column; gap: 4px; padding: 16px 16px 18px; text-align: left; font: inherit; color: var(--fg-muted); background: var(--bg); border: 0; cursor: pointer; transition: background 0.2s, color 0.2s; }
 .scene:hover { background: var(--bg-elev); color: var(--fg); }
 .scene.on { background: var(--bg-elev); color: var(--fg); }
 .scene b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .scene-n { font: 11px var(--font-mono); color: var(--fg-subtle); }
 .scene-text { font-size: 12.5px; line-height: 1.45; color: var(--fg-muted); max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.3s, opacity 0.3s; }
-.scene.on .scene-text { max-height: 80px; opacity: 1; }
+.scene.on .scene-text { max-height: 120px; opacity: 1; }
 .scene-bar { position: absolute; left: 0; top: -1px; height: 2px; width: 100%; background: var(--brand); transform: scaleX(0); transform-origin: left; }
 .scene.on .scene-bar { animation: scene-fill 7s linear both; }
 .showcase:hover .scene.on .scene-bar { animation-play-state: paused; }
@@ -397,6 +427,7 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
   .scene:not(.on) { padding: 11px 16px; }
   .scene:not(.on) .scene-text { display: none; }
   .diff { grid-template-columns: 1fr; }
+  .bo-grid { grid-template-columns: 1fr; }
   .diff-files { display: none; }
 }
 @media (max-width: 720px) {
