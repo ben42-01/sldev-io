@@ -11,6 +11,7 @@ import * as gh from './github'
 import * as notes from './notes'
 import * as profiles from './profiles'
 import * as rules from './rules'
+import * as factory from './factory'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
@@ -194,7 +195,7 @@ function registerIpc(): void {
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
   ipcMain.handle('git:merge', (_e, repo: string, branch: string) => git.merge(repo, branch))
-  ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string) => git.pushAndCreatePr(cwd, branch, base, title))
+  ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
 
   // missions (Claude Code hooks)
   ipcMain.handle('missions:hookInfo', () => hookInfo())
@@ -226,6 +227,12 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
+  ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))
+  ipcMain.handle('factory:prepare', (_e, dir: string) => factory.prepareRunDir(dir))
+  ipcMain.handle('factory:read', (_e, p: string) => factory.readRunFile(p))
+  ipcMain.handle('factory:write', (_e, p: string, text: string) => factory.writeRunFile(p, text))
+  ipcMain.handle('factory:copy', (_e, from: string, to: string) => factory.copyRunFile(from, to))
   ipcMain.handle('rules:state', (_e, root: string) => rules.rulesState(root))
   ipcMain.handle('rules:create', (_e, root: string) => rules.createRules(root))
   ipcMain.handle('rules:target', (_e, root: string, id: string, on: boolean) => rules.setRuleTarget(root, id, on))
@@ -280,7 +287,8 @@ app.whenReady().then(async () => {
     tasks: new JsonStore<StoreFiles['tasks']>('tasks', { tasks: [] }),
     runtimes: new JsonStore<StoreFiles['runtimes']>('runtimes', { custom: {} }),
     missions: new JsonStore<StoreFiles['missions']>('missions', { missions: [] }),
-    connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] })
+    connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] }),
+    factoryRuns: new JsonStore<StoreFiles['factoryRuns']>('factory-runs', { runs: [] })
   }
   vault.initVault()
   setShellOverride(settings.get().shell)

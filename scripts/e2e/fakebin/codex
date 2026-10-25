@@ -1,6 +1,18 @@
 #!/bin/sh
 # Fake Codex for e2e: no hooks, so sldev-io tracks it from terminal output, silence and the bell.
 echo "fake codex: $*"
+# print mode (codex exec), as the factory runs it: write the requested output file, edit, exit
+if [ "$1" = "exec" ]; then
+  for a in "$@"; do prompt="$a"; done
+  out=$(printf '%s' "$prompt" | grep -o '/[^ ]*\.sldev/runs/[^ ]*\.md' | tail -n1)
+  if [ -n "$out" ]; then mkdir -p "$(dirname "$out")"; printf '# Output from fake codex\n' > "$out"; fi
+  first=$(printf '%s' "$prompt" | head -n1)
+  name=CODEX; [ -n "$out" ] && name="codex-$(basename "$out" .md)"
+  echo "codex: $first" >> "$name.md"
+  sleep 1
+  echo "done (exec)"
+  exit 0
+fi
 for i in 1 2 3 4 5 6 7 8; do echo "thinking $i"; sleep 0.5; done
 echo "change from codex" >> codex-change.txt
 echo "done editing"

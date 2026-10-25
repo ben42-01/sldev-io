@@ -1,5 +1,5 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
-import { closePanel, focusPanel, getDockApi, openPanel, openTerminal } from '../dock/dockApi'
+import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
 import { agentCommand, slugify } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
@@ -76,6 +76,9 @@ export interface StartMissionInput {
   worktree: boolean
   base?: string
   taskId?: string
+  factory?: Mission['factory']
+  /** where its terminal opens; default: a tab in the active group */
+  placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
 
 export async function startMission(input: StartMissionInput): Promise<Mission> {
@@ -103,6 +106,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     options: { ...input.options, agent: agent.id },
     status: 'starting',
     taskId: input.taskId,
+    factory: input.factory,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     history: pushStatus(undefined, 'starting', Date.now())
@@ -115,7 +119,8 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options) }),
     displayCommand: agentCommand(agent, input.options, input.prompt, title, { role: roleFor(input.options) }),
     env: missionEnv(id),
-    missionId: id
+    missionId: id,
+    ...input.placement
   })
   return mission
 }
@@ -176,6 +181,7 @@ export async function refreshStats(id: string): Promise<void> {
 
 function notify(m: Mission, title: string, body: string): void {
   if (!workspace.get().notifications) return
+  if (m.factory && m.status !== 'needs-input') return
   const panel = missions.get().panels[m.id]
   if (document.hasFocus() && panel && getDockApi()?.activePanel?.id === panel) return
   const n = new Notification(title, { body: body.slice(0, 200) })

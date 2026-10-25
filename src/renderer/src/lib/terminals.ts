@@ -310,6 +310,16 @@ export function terminalCwd(id: string): string | undefined {
   return sessions.get(id)?.cwd
 }
 
+/** The last lines a terminal printed, as plain text (a failing check's output, for the agent that fixes it). */
+export function terminalTail(id: string, maxLines = 120): string {
+  const s = sessions.get(id)
+  if (!s) return ''
+  const b = s.term.buffer.active
+  const out: string[] = []
+  for (let i = Math.max(0, b.length - maxLines); i < b.length; i++) out.push(b.getLine(i)?.translateToString(true) ?? '')
+  return out.join('\n').trim()
+}
+
 export function terminalStatus(id: string): TerminalStatus | undefined {
   return sessions.get(id)?.status
 }

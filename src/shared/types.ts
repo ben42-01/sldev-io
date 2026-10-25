@@ -1,3 +1,5 @@
+import type { FactoryRun } from './factory'
+
 export interface DirEntry {
   name: string
   path: string
@@ -179,6 +181,7 @@ export interface StoreFiles {
   missions: { missions: Mission[] }
   connections: { connections: SshConnection[] }
   runtimes: { custom: Record<string, CustomRuntime[]> }
+  factoryRuns: { runs: FactoryRun[] }
 }
 
 export interface WorktreeInfo {
@@ -232,6 +235,8 @@ export interface Mission {
   stats?: DiffStat
   /** every status change, oldest first (feeds the usage dashboard) */
   history?: StatusChange[]
+  /** the factory run and node this mission works for */
+  factory?: { run: string; node: string }
 }
 
 export interface ClaudeAsset {

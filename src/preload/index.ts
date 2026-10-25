@@ -119,7 +119,7 @@ const api = {
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
     merge: (repo: string, branch: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch),
-    pushAndPr: (cwd: string, branch: string, base: string, title: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title)
+    pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },
   missions: {
     hookInfo: (): Promise<{ port: number; token: string; settingsPath: string } | null> => ipcRenderer.invoke('missions:hookInfo'),
@@ -148,6 +148,14 @@ const api = {
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('notes:write', path, text),
     remove: (path: string): Promise<void> => ipcRenderer.invoke('notes:delete', path),
     openFolder: (scope: string | null): Promise<string> => ipcRenderer.invoke('notes:openFolder', scope)
+  },
+  factory: {
+    recipes: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('factory:recipes', root),
+    saveRecipe: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('factory:saveRecipe', root, slug, text),
+    prepare: (dir: string): Promise<void> => ipcRenderer.invoke('factory:prepare', dir),
+    read: (path: string): Promise<string | null> => ipcRenderer.invoke('factory:read', path),
+    write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('factory:write', path, text),
+    copy: (from: string, to: string): Promise<boolean> => ipcRenderer.invoke('factory:copy', from, to)
   },
   rules: {
     state: (root: string): Promise<RulesState> => ipcRenderer.invoke('rules:state', root),

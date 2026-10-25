@@ -54,7 +54,8 @@ const VIEWS: Array<[ViewId, string]> = [
   ['skills', 'Skills'],
   ['workflows', 'GitHub Workflows'],
   ['notes', 'Notes'],
-  ['remote', 'Remote']
+  ['remote', 'Remote'],
+  ['factory', 'Factory']
 ]
 
 export function showView(view: ViewId): void {

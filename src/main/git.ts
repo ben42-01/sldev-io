@@ -92,6 +92,8 @@ export async function diffStat(cwd: string, base: string): Promise<DiffStat> {
 }
 
 export async function commitAll(cwd: string, message: string): Promise<string> {
+  // nothing to commit is not an error
+  if (!(await ok(['status', '--porcelain'], cwd)).trim()) return ''
   await ok(['add', '-A'], cwd)
   return ok(['commit', '-m', message], cwd)
 }
@@ -100,9 +102,9 @@ export async function merge(repo: string, branch: string): Promise<string> {
   return ok(['merge', '--no-ff', '--no-edit', branch], repo)
 }
 
-export async function pushAndCreatePr(cwd: string, branch: string, base: string, title: string): Promise<string> {
+export async function pushAndCreatePr(cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> {
   await ok(['push', '-u', 'origin', branch], cwd)
-  const r = await run('gh', ['pr', 'create', '--head', branch, '--base', base, '--title', title, '--fill'], cwd, 60000)
+  const r = await run('gh', ['pr', 'create', '--head', branch, '--base', base, '--title', title, ...(body ? ['--body', body] : ['--fill'])], cwd, 60000)
   if (r.code !== 0) throw new Error(r.stderr.trim() || 'gh pr create failed')
   return r.stdout.trim().split('\n').pop() ?? ''
 }

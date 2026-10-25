@@ -1,4 +1,4 @@
-import { Bot, Files, ListChecks, NotebookPen, Play, Server, Sparkles, Workflow } from 'lucide-react'
+import { Bot, Factory, Files, ListChecks, NotebookPen, Play, Server, Sparkles, Workflow } from 'lucide-react'
 import { showView, shortcutLabel, staticCommands } from '../lib/commands'
 import { updateSettings, workspace, type ViewId } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -7,6 +7,7 @@ export const VIEW_META: Array<{ id: ViewId; label: string; icon: React.Component
   { id: 'explorer', label: 'Explorer', icon: Files },
   { id: 'runtimes', label: 'Runtimes', icon: Play },
   { id: 'agents', label: 'Agent Missions', icon: Bot },
+  { id: 'factory', label: 'Factory', icon: Factory },
   { id: 'tasks', label: 'Tasks', icon: ListChecks },
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'workflows', label: 'GitHub Workflows', icon: Workflow },

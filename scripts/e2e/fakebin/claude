@@ -7,6 +7,20 @@ const settings = JSON.parse(fs.readFileSync(args[si + 1], 'utf8'))
 const fire = (ev, payload) => spawnSync('/bin/sh', ['-c', settings.hooks[ev][0].hooks[0].command], { input: JSON.stringify({ session_id: 'sess-123', ...payload }), env: process.env, stdio: ['pipe', 'inherit', 'inherit'] })
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 console.log('\x1b[35m✻ fake claude\x1b[0m  args:', args.slice(2).join(' '))
+// print mode (-p), as the factory runs it: do the work, write the output file it was asked for, exit
+if (args.includes('-p')) {
+  const prompt = args[args.length - 1]
+  fire('SessionStart', { source: 'startup' }); sleep(300)
+  fire('UserPromptSubmit', { prompt }); sleep(300)
+  // the last run file in the prompt is this step's own output; earlier ones are inputs
+  const out = [...prompt.matchAll(/(\/\S+?\.sldev\/runs\/\S+?\.md)/g)].pop()
+  if (out) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
+  fs.appendFileSync(out ? `changes-${path.basename(out[1], '.md')}.md` : 'CHANGES.md', `claude: ${prompt.split('\n')[0]}\n`)
+  sleep(800)
+  fire('Stop', {})
+  console.log('done (print mode)')
+  process.exit(0)
+}
 fire('SessionStart', { source: 'startup' }); sleep(400)
 fire('UserPromptSubmit', { prompt: args[args.length - 1] }); sleep(400)
 fire('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(process.cwd(), 'src/app.js') } }); sleep(800)

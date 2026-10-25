@@ -13,6 +13,7 @@ import { SkillsView } from './SkillsView'
 import { WorkflowsView } from './WorkflowsView'
 import { NotesView } from './NotesView'
 import { RemoteView } from './RemoteView'
+import { FactoryView } from './FactoryView'
 
 export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
   const visible = useStore(workspace, (w) => w.sidebarVisible)
@@ -24,6 +25,7 @@ export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
       {view === 'explorer' && <Explorer home={home} />}
       {view === 'runtimes' && <RuntimesView />}
       {view === 'agents' && <MissionsView />}
+      {view === 'factory' && <FactoryView />}
       {view === 'tasks' && <TasksView />}
       {view === 'skills' && <SkillsView />}
       {view === 'workflows' && <WorkflowsView />}

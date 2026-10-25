@@ -111,6 +111,11 @@ export function consumeFresh(id: string): boolean {
   return fresh.delete(id)
 }
 
+/** The group a panel sits in, to open more panels next to it. */
+export function groupOf(panelId: string): string | undefined {
+  return api?.getPanel(panelId)?.group.id
+}
+
 export function focusPanel(id: string): boolean {
   const panel = api?.getPanel(id)
   if (!panel) return false

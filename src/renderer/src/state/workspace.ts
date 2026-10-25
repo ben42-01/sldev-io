@@ -5,8 +5,9 @@ import { loadRuntimes } from './runtimes'
 import { loadTasks } from './tasks'
 import { loadMissions } from './missions'
 import { loadProjectProfiles } from './profiles'
+import { loadFactory, loadRecipes } from './factory'
 
-export type ViewId = 'explorer' | 'runtimes' | 'agents' | 'tasks' | 'skills' | 'workflows' | 'notes' | 'remote'
+export type ViewId = 'explorer' | 'runtimes' | 'agents' | 'factory' | 'tasks' | 'skills' | 'workflows' | 'notes' | 'remote'
 
 export interface WorkspaceState extends AppSettings {
   ready: boolean
@@ -41,6 +42,8 @@ export async function initWorkspace(): Promise<void> {
   void loadMissions()
   void loadRuntimes(settings.rootFolder)
   void loadProjectProfiles(settings.rootFolder)
+  void loadFactory()
+  void loadRecipes(settings.rootFolder)
 }
 
 export async function refreshBranch(): Promise<void> {
@@ -54,6 +57,7 @@ export function setRootFolder(folder: string): void {
   void refreshBranch()
   void loadRuntimes(folder)
   void loadProjectProfiles(folder)
+  void loadRecipes(folder)
 }
 
 export async function pickRootFolder(): Promise<void> {
