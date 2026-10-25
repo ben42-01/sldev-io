@@ -3,6 +3,7 @@ import type { BetaStatus } from '@shared/beta'
 import type { LicenseStatus } from '@shared/license'
 import type {
   AgentProfile,
+  RulesState,
   AppInfo,
   AppSettings,
   ClaudeAsset,
@@ -147,6 +148,12 @@ const api = {
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('notes:write', path, text),
     remove: (path: string): Promise<void> => ipcRenderer.invoke('notes:delete', path),
     openFolder: (scope: string | null): Promise<string> => ipcRenderer.invoke('notes:openFolder', scope)
+  },
+  rules: {
+    state: (root: string): Promise<RulesState> => ipcRenderer.invoke('rules:state', root),
+    create: (root: string): Promise<string> => ipcRenderer.invoke('rules:create', root),
+    setTarget: (root: string, id: string, on: boolean): Promise<void> => ipcRenderer.invoke('rules:target', root, id, on),
+    sync: (root: string, overwrite: string[] = []): Promise<RulesState> => ipcRenderer.invoke('rules:sync', root, overwrite)
   },
   profiles: {
     list: (root: string): Promise<AgentProfile[]> => ipcRenderer.invoke('profiles:list', root),

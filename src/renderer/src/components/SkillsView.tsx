@@ -11,10 +11,11 @@ import { startMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { showContextMenu, type MenuItem } from './ContextMenu'
+import { RulesTab } from './RulesTab'
 import { ViewShell } from './RuntimesView'
 
-type Tab = 'skill' | 'command' | 'agent' | 'mcp'
-const TABS: Array<[Tab, string]> = [['skill', 'Skills'], ['command', 'Commands'], ['agent', 'Agents'], ['mcp', 'MCP']]
+type Tab = 'skill' | 'command' | 'agent' | 'mcp' | 'rules'
+const TABS: Array<[Tab, string]> = [['skill', 'Skills'], ['command', 'Commands'], ['agent', 'Agents'], ['mcp', 'MCP'], ['rules', 'Rules']]
 
 export function SkillsView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -56,12 +57,14 @@ export function SkillsView(): React.JSX.Element {
         {TABS.map(([id, label]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             {label}
-            {id !== 'mcp' && assets && <span className="count">{assets.filter((a) => a.kind === id).length}</span>}
+            {id !== 'mcp' && id !== 'rules' && assets && <span className="count">{assets.filter((a) => a.kind === id).length}</span>}
           </button>
         ))}
       </div>
       {tab === 'mcp' ? (
         <McpTab />
+      ) : tab === 'rules' ? (
+        <RulesTab />
       ) : (
         <>
           {creating && <NewSkillForm onDone={(created) => (setCreating(false), created && load())} />}

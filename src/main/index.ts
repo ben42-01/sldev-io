@@ -10,6 +10,7 @@ import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
 import * as profiles from './profiles'
+import * as rules from './rules'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
@@ -225,6 +226,10 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('rules:state', (_e, root: string) => rules.rulesState(root))
+  ipcMain.handle('rules:create', (_e, root: string) => rules.createRules(root))
+  ipcMain.handle('rules:target', (_e, root: string, id: string, on: boolean) => rules.setRuleTarget(root, id, on))
+  ipcMain.handle('rules:sync', (_e, root: string, overwrite: string[]) => rules.syncRules(root, overwrite))
   ipcMain.handle('profiles:export', (_e, root: string, p: AgentProfile, target: profiles.ExportTarget) => profiles.exportProfile(root, p, target))
 
   // credentials & SSH

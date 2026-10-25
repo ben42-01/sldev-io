@@ -1185,11 +1185,12 @@ a {
 }
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 0 8px 8px;
 }
 .tabs button {
-  flex: 1;
+  flex: 1 0 auto;
   padding: 4px 6px;
   border-radius: var(--radius);
   color: var(--fg-muted);
@@ -2335,4 +2336,60 @@ a {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* ── rules sync (skills → rules) ───────────── */
+.rules-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 8px;
+}
+.rules-actions .icon-btn {
+  margin-left: auto;
+}
+.rules .muted-note code {
+  font: 11px var(--font-mono);
+}
+.rule-row {
+  padding-left: 12px;
+}
+.rule-row input[type='checkbox'] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.rule-row .rt-name.mono {
+  font: 12px var(--font-mono);
+}
+.rule-row.off .rt-main {
+  opacity: 0.5;
+}
+.rule-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.rule-chip {
+  font: 10.5px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.rule-chip.in-sync {
+  color: #56d364;
+}
+.rule-chip.create,
+.rule-chip.update {
+  color: #f0b44c;
+}
+.rule-chip.hand-edited {
+  color: #f14c4c;
+}
+.rule-fix .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--fg-muted);
 }

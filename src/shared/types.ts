@@ -73,6 +73,23 @@ export interface AgentProfile {
   path?: string
 }
 
+export interface RulesState {
+  sourcePath: string
+  /** null until .sldev/rules.md exists */
+  source: string | null
+  config: { targets: Record<string, boolean>; written: Record<string, string> }
+  targets: Array<{
+    id: string
+    path: string
+    readers: string
+    exists: boolean
+    /** null while there is no source */
+    status: 'off' | 'in-sync' | 'create' | 'update' | 'hand-edited' | null
+    added: number
+    removed: number
+  }>
+}
+
 export interface CustomAgent {
   id: string
   name: string
