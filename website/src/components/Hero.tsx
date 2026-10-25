@@ -1,6 +1,6 @@
 import { ArrowRight } from 'lucide-react'
 import { betaMessage, betaStatus, site } from '../lib/pricing'
-import { AppMockup } from './AppMockup'
+import { AppShowcase } from './AppMockup'
 import { DownloadButton } from './Download'
 
 export function Hero() {
@@ -19,8 +19,8 @@ export function Hero() {
           <span className="brand-text">One workspace.</span>
         </h1>
         <p className="lead">
-          A desktop app for running Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side.
-          See which agent needs you, review what it changed and open the pull request, all from one window.
+          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side. See which one needs you, review what
+          it changed, ship the pull request.
         </p>
         <div className="hero-cta">
           <DownloadButton />
@@ -32,7 +32,7 @@ export function Hero() {
           <a href="/download">{site.platforms.join(' · ')}</a> · one-time license, no subscription
         </p>
         <div className="hero-shot">
-          <AppMockup />
+          <AppShowcase />
         </div>
       </div>
     </section>

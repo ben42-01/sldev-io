@@ -1,5 +1,4 @@
-import { Check } from 'lucide-react'
-import { Clock } from 'lucide-react'
+import { ArrowRight, Check, Clock } from 'lucide-react'
 import { betaMessage, betaStatus, formatPrice, planCta, pricing, type Faq, type Plan } from '../lib/pricing'
 
 function PlanCard({ plan }: { plan: Plan }) {
@@ -86,6 +85,29 @@ export function FaqSection() {
             <FaqItem key={f.q} item={f} />
           ))}
         </div>
+      </div>
+    </section>
+  )
+}
+
+/** The three questions people ask first, on the home page. */
+export function HomeFaq() {
+  const picks = [generalFaq[0], pricing.faq[2], pricing.faq[5]]
+  return (
+    <section className="section alt" id="faq">
+      <div className="container narrow">
+        <p className="eyebrow center">FAQ</p>
+        <h2 className="center">Questions, answered.</h2>
+        <div className="faq">
+          {picks.map((f) => (
+            <FaqItem key={f.q} item={f} />
+          ))}
+        </div>
+        <p className="center faq-more">
+          <a className="more-link" href="/pricing#faq">
+            Pricing and more questions <ArrowRight size={15} />
+          </a>
+        </p>
       </div>
     </section>
   )

@@ -49,7 +49,7 @@ export function FeatureGrid() {
   )
 }
 
-/** Three features on the home page, linking to the rest. */
+/** The features the showcase doesn't cover, on the home page. */
 export function FeatureHighlights() {
   return (
     <section className="section alt" id="features">
@@ -58,13 +58,14 @@ export function FeatureHighlights() {
           <div>
             <p className="eyebrow">Features</p>
             <h2>Everything around the agent, nothing in the way.</h2>
+            <p className="section-lead">Agents write the code. The rest of the day happens here too.</p>
           </div>
           <a className="more-link" href="/features">
             All features <ArrowRight size={15} />
           </a>
         </div>
         <div className="grid">
-          {features.slice(0, 3).map(({ icon: Icon, title, text }) => (
+          {features.slice(3).map(({ icon: Icon, title, text }) => (
             <article className="card" key={title}>
               <Icon size={20} />
               <h3>{title}</h3>

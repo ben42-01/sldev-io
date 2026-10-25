@@ -2,8 +2,8 @@ import { FeatureHighlights } from './components/Features'
 import { FinalCta, Footer } from './components/Footer'
 import { AgentStrip, Hero } from './components/Hero'
 import { Nav } from './components/Nav'
-import { HowItWorks } from './components/Spotlight'
-import { MakerNote, WhySection } from './components/Story'
+import { HomeFaq } from './components/Pricing'
+import { WhySection } from './components/Story'
 
 export function App() {
   return (
@@ -14,8 +14,7 @@ export function App() {
         <AgentStrip />
         <WhySection />
         <FeatureHighlights />
-        <HowItWorks />
-        <MakerNote />
+        <HomeFaq />
         <FinalCta />
       </main>
       <Footer />
