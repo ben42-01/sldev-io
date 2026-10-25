@@ -19,8 +19,8 @@ export function Hero() {
           <span className="brand-text">One workspace.</span>
         </h1>
         <p className="lead">
-          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side. See which one needs you, review what
-          it changed, ship the pull request.
+          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side, or chain them into a Software Factory
+          that takes an idea from spec to reviewed pull request. You only step in where it matters.
         </p>
         <div className="hero-cta">
           <DownloadButton />

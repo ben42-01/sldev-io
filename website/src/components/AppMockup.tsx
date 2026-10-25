@@ -48,6 +48,57 @@ function L({ i, children, className }: { i: number; children?: ReactNode; classN
 
 const scenes: Scene[] = [
   {
+    id: 'factory',
+    title: 'Idea in, pull request out',
+    text: 'Spec, parallel builds, tests and review run as one graph of agents. You approve what matters.',
+    activity: 3,
+    active: -1,
+    side: 'factory',
+    tab: 'Pipeline',
+    cards: [
+      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
+      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
+      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
+    ],
+    pane: <PipelineMock />
+  },
+  {
+    id: 'bakeoff',
+    title: 'Let two agents race',
+    text: 'Same task, two agents. Compare the diffs and tests, keep the best.',
+    activity: 3,
+    active: -1,
+    side: 'factory',
+    tab: 'Pipeline',
+    cards: [
+      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
+      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
+      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
+    ],
+    pane: (
+      <div className="bo">
+        <L i={0} className="bo-head"><b>compare</b> · Claude Code vs Codex · <span className="t-amber">keep one</span></L>
+        <div className="bo-grid">
+          {[
+            { agent: 'Claude Code', stat: ['+142', '−9', '5 files'], tests: '14 passed', lines: ['+ export function rateLimit(opts) {', '+   const bucket = new TokenBucket(opts)', '+   return (req, res, next) => …'], win: true },
+            { agent: 'Codex', stat: ['+98', '−31', '4 files'], tests: '12 passed, 2 failed', lines: ['+ app.use(limiter({ max: 120 }))', '- app.use(router)', '+ import limiter from "express-limit"'], win: false }
+          ].map((c, k) => (
+            <div key={c.agent} className={`bo-card${c.win ? ' win' : ''}`}>
+              <L i={1 + k}><b>{c.agent}</b></L>
+              <L i={2 + k} className="mono"><span className="t-green">{c.stat[0]}</span> <span className="t-red">{c.stat[1]}</span> · {c.stat[2]}</L>
+              <L i={3 + k} className={`mono ${c.win ? 't-green' : 't-red'}`}>{c.win ? '✓' : '✗'} {c.tests}</L>
+              {c.lines.map((l, j) => (
+                <L key={j} i={4 + k + j} className={`mono small ${l.startsWith('-') ? 't-red' : 't-green'}`}>{l}</L>
+              ))}
+              <L i={8 + k}><span className={`pr-btn${c.win ? ' press' : ''}`}>Keep</span></L>
+            </div>
+          ))}
+        </div>
+        <L i={11} className="bo-foot"><span className="t-green">✓</span> Kept Claude Code · its branch flows on to verify and the pull request</L>
+      </div>
+    )
+  },
+  {
     id: 'parallel',
     title: 'Run agents side by side',
     text: 'Claude Code, Codex and Gemini each work on their own task, in their own git worktree.',
@@ -168,57 +219,6 @@ const scenes: Scene[] = [
         <L i={7} className="pr-check"><span className="t-green">✓</span> typecheck <span className="t-dim">18s</span></L>
         <L i={8} className="pr-check"><span className="t-green">✓</span> test <span className="t-dim">41s</span></L>
         <L i={9} className="pr-check"><span className="t-green">✓</span> build <span className="t-dim">1m 02s</span></L>
-      </div>
-    )
-  },
-  {
-    id: 'factory',
-    title: 'Build a feature with a factory',
-    text: 'Spec, parallel builds, tests and review run as one graph. You approve what matters.',
-    activity: 3,
-    active: -1,
-    side: 'factory',
-    tab: 'Pipeline',
-    cards: [
-      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
-      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
-      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
-    ],
-    pane: <PipelineMock />
-  },
-  {
-    id: 'bakeoff',
-    title: 'Let two agents race',
-    text: 'Same task, two agents. Compare the diffs and tests, keep the best.',
-    activity: 3,
-    active: -1,
-    side: 'factory',
-    tab: 'Pipeline',
-    cards: [
-      ['working', 'Edit src/auth/routes.ts', '+118 −44 · 9 files'],
-      ['ready', 'Done! Awaiting the webhook.', '+12 −4 · 2 files'],
-      ['shipped', 'PR #128 · checks passing', '+143 −9 · 5 files']
-    ],
-    pane: (
-      <div className="bo">
-        <L i={0} className="bo-head"><b>compare</b> · Claude Code vs Codex · <span className="t-amber">keep one</span></L>
-        <div className="bo-grid">
-          {[
-            { agent: 'Claude Code', stat: ['+142', '−9', '5 files'], tests: '14 passed', lines: ['+ export function rateLimit(opts) {', '+   const bucket = new TokenBucket(opts)', '+   return (req, res, next) => …'], win: true },
-            { agent: 'Codex', stat: ['+98', '−31', '4 files'], tests: '12 passed, 2 failed', lines: ['+ app.use(limiter({ max: 120 }))', '- app.use(router)', '+ import limiter from "express-limit"'], win: false }
-          ].map((c, k) => (
-            <div key={c.agent} className={`bo-card${c.win ? ' win' : ''}`}>
-              <L i={1 + k}><b>{c.agent}</b></L>
-              <L i={2 + k} className="mono"><span className="t-green">{c.stat[0]}</span> <span className="t-red">{c.stat[1]}</span> · {c.stat[2]}</L>
-              <L i={3 + k} className={`mono ${c.win ? 't-green' : 't-red'}`}>{c.win ? '✓' : '✗'} {c.tests}</L>
-              {c.lines.map((l, j) => (
-                <L key={j} i={4 + k + j} className={`mono small ${l.startsWith('-') ? 't-red' : 't-green'}`}>{l}</L>
-              ))}
-              <L i={8 + k}><span className={`pr-btn${c.win ? ' press' : ''}`}>Keep</span></L>
-            </div>
-          ))}
-        </div>
-        <L i={11} className="bo-foot"><span className="t-green">✓</span> Kept Claude Code · its branch flows on to verify and the pull request</L>
       </div>
     )
   },
