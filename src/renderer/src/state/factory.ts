@@ -1,6 +1,8 @@
 import {
   ancestors,
   approveNode,
+  isBakeoff,
+  pickWinner,
   newNodeRun,
   needsOwnWorktree,
   nodeFinished,
@@ -15,6 +17,7 @@ import {
   totalLines,
   type FactoryRun,
   type Finish,
+  type NodeRun,
   type Recipe
 } from '@shared/factory'
 import { applyProfile } from '@shared/profiles'
@@ -186,9 +189,10 @@ async function commit(cwd: string, message: string): Promise<void> {
 }
 
 /** Parallel branches that finished come back into the run branch before anything builds on them. */
-async function mergeFinished(runId: string, nodeId: string): Promise<boolean> {
+async function mergeFinished(runId: string, nodeId: string | null): Promise<boolean> {
   let run = getRun(runId)!
-  for (const a of ancestors(run.recipe, nodeId)) {
+  // null: the run is over, so bring home every branch nothing came after
+  for (const a of nodeId ? ancestors(run.recipe, nodeId) : run.recipe.nodes.map((n) => n.id)) {
     const nr = run.nodes[a]
     if (!nr.worktree || nr.merged || nr.status !== 'done') continue
     try {
@@ -218,7 +222,7 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
   if (!(await mergeFinished(runId, nodeId))) return
   run = getRun(runId)!
 
-  const own = needsOwnWorktree(run, nodeId, together)
+  const own = !isBakeoff(node) && needsOwnWorktree(run, nodeId, together)
   const worktree = own ? await window.api.git.addWorktree(run.worktree.repo, `${run.worktree.branch.replace(/^sldev\//, '')}-${nodeId}`, run.worktree.branch) : undefined
   const cwd = worktree?.path ?? run.worktree.path
   if (worktree) await window.api.factory.prepare(`${cwd}/.sldev/runs/${run.id}`)
@@ -245,15 +249,53 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
     return
   }
 
+  if (isBakeoff(node)) return startBakeoff(runId, nodeId, outs)
+
   try {
     const options = { ...nodeOptions(node.agents[0]), print: !node.interactive }
-    const prompt = nodePrompt(node, nr, { intent: run.intent, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback })
+    const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback })
     const m = await startMission({ prompt, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })
     const cur = getRun(runId)!
     put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], missionIds: [m.id] } } })
   } catch (e) {
     finish(runId, nodeId, { ok: false, log: (e as Error).message })
   }
+}
+
+/** One worktree and one mission per agent, all from the same commit, all with the same prompt. */
+async function startBakeoff(runId: string, nodeId: string, outs: Record<string, string>): Promise<void> {
+  const run = getRun(runId)!
+  const node = run.recipe.nodes.find((n) => n.id === nodeId)!
+  const nr = run.nodes[nodeId]
+  const candidates: NonNullable<NodeRun['candidates']> = []
+  try {
+    for (const spec of node.agents) {
+      const options = { ...nodeOptions(spec), print: !node.interactive }
+      const slug = `${run.worktree.branch.replace(/^sldev\//, '')}-${nodeId}-${slugify(spec)}`
+      const worktree = await window.api.git.addWorktree(run.worktree.repo, slug, run.worktree.branch)
+      await window.api.factory.prepare(`${worktree.path}/.sldev/runs/${run.id}`)
+      const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(worktree.path, run.id, nodeId), outs, log: nr.feedback })
+      const m = await startMission({ prompt, title: `${nodeId} (${spec}): ${run.intent}`.slice(0, 60), root: run.root, cwd: worktree.path, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(getRun(runId)!) })
+      candidates.push({ spec, missionId: m.id, worktree, status: 'running' })
+      const cur = getRun(runId)!
+      put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], candidates: [...candidates], missionIds: candidates.map((c) => c.missionId) } } })
+    }
+  } catch (e) {
+    finish(runId, nodeId, { ok: false, log: (e as Error).message })
+  }
+}
+
+/** Keep one bake-off version; the others' worktrees and branches go. */
+export async function keep(runId: string, nodeId: string, missionId: string): Promise<void> {
+  const run = getRun(runId)
+  const nr = run?.nodes[nodeId]
+  const winner = nr?.candidates?.find((c) => c.missionId === missionId)
+  if (!run || !nr || !winner) return
+  await window.api.factory.copy(outFile(winner.worktree.path, run.id, nodeId), outFile(run.worktree.path, run.id, nodeId))
+  const next = put(pickWinner(run, nodeId, missionId, Date.now()))
+  for (const c of nr.candidates ?? []) if (c !== winner) await window.api.git.removeWorktree(c.worktree, true).catch(() => undefined)
+  if (next.status === 'done') await mergeFinished(runId, null)
+  void tick(runId)
 }
 
 const completing = new Set<string>()
@@ -277,6 +319,18 @@ async function completeNode(run: FactoryRun, nodeId: string, f: Finish): Promise
   const node = run.recipe.nodes.find((n) => n.id === nodeId)!
   const cwd = nr.worktree?.path ?? run.worktree.path
   let diffLines: number | undefined
+  if (isBakeoff(node)) {
+    const candidates = await Promise.all(
+      (nr.candidates ?? []).map(async (c) => {
+        await commit(c.worktree.path, `factory(${nodeId}, ${c.spec}): ${run.intent}`.slice(0, 100))
+        return { ...c, stats: await window.api.git.diffStat(c.worktree.path, c.worktree.base).catch(() => undefined) }
+      })
+    )
+    const cur = getRun(runId)!
+    put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], candidates } } })
+    finish(runId, nodeId, { ok: candidates.some((c) => c.status === 'done'), log: 'Every agent in the bake-off failed' })
+    return
+  }
   if (node.kind === 'agent') {
     await commit(cwd, `factory(${nodeId}): ${run.intent}`.slice(0, 100))
     if (nr.worktree) await window.api.factory.copy(outFile(cwd, run.id, nodeId), outFile(run.worktree.path, run.id, nodeId))
@@ -294,7 +348,10 @@ function finish(runId: string, nodeId: string, f: Finish, note?: string): void {
   const status = next.nodes[nodeId].status
   if (status === 'approval') ping(next, `${nodeId} is waiting for you`, next.nodes[nodeId].note ?? '')
   if (next.status === 'failed') ping(next, `${next.recipe.name} failed`, next.note ?? '')
-  if (next.status === 'done') ping(next, `${next.recipe.name} finished`, next.intent)
+  if (next.status === 'done') {
+    ping(next, `${next.recipe.name} finished`, next.intent)
+    void mergeFinished(runId, null)
+  }
   void tick(runId)
 }
 
@@ -392,12 +449,30 @@ missions.subscribe(() => {
     if (run.status !== 'running' && run.status !== 'paused') continue
     for (const [nodeId, nr] of Object.entries(run.nodes)) {
       if (nr.status !== 'running' || !nr.missionIds.length) continue
+      if (nr.candidates) {
+        watchBakeoff(run, nodeId, nr)
+        continue
+      }
       const m = getMission(nr.missionIds[0])
       if (m?.status === 'ended') void complete(run.id, nodeId, { ok: true })
       else if (m?.status === 'failed') void complete(run.id, nodeId, { ok: false, log: `${m.title} exited with an error` })
     }
   }
 })
+
+function watchBakeoff(run: FactoryRun, nodeId: string, nr: NodeRun): void {
+  const node = run.recipe.nodes.find((n) => n.id === nodeId)
+  if (!nr.candidates || nr.candidates.length < (node?.agents.length ?? 0)) return
+  let changed = false
+  const candidates = nr.candidates.map((c) => {
+    const status = getMission(c.missionId)?.status
+    const next = status === 'ended' ? 'done' : status === 'failed' ? 'failed' : c.status
+    if (next !== c.status) changed = true
+    return next === c.status ? c : { ...c, status: next }
+  })
+  if (changed) put({ ...run, nodes: { ...run.nodes, [nodeId]: { ...nr, candidates } } })
+  if (candidates.every((c) => c.status !== 'running')) void complete(run.id, nodeId, { ok: true })
+}
 
 onTerminalEvent((e) => {
   if (e.type !== 'status' || e.status !== 'exited') return

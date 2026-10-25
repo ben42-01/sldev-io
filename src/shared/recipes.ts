@@ -83,5 +83,50 @@ stages:
       title: "{intent}"
       body: "{spec.out}"
 `
+  },
+  {
+    slug: 'bake-off',
+    text: `name: Bake-off
+description: The same task on two agents at once. Compare their diffs, keep the best, check it, open the PR.
+stages:
+  - id: build
+    agent: [Implementer@claude, Implementer@codex]
+    prompt: |
+      {intent}
+      Commit your work when done.
+  - id: verify
+    run: [typecheck?, lint?, test?]
+  - id: pr
+    pr:
+      title: "{intent}"
+      body: "{build.out}"
+`
+  },
+  {
+    slug: 'fix-ci',
+    text: `name: Fix CI
+description: Find out why CI fails, fix it, check locally, open the PR.
+stages:
+  - id: diagnose
+    agent: Fixer
+    prompt: |
+      CI is failing on {base}. {intent}
+      Use the GitHub CLI to find out why, for example:
+        gh run list --branch {base} --limit 5
+        gh run view <run id> --log-failed
+      Write the cause and the fix you plan to {out}. Don't change code yet.
+  - id: fix
+    agent: Fixer
+    prompt: |
+      Fix the CI failure described in {diagnose.out}.
+      Commit when done.
+  - id: verify
+    run: [typecheck?, lint?, test?]
+    onFail: { retry: fix, max: 2 }
+  - id: pr
+    pr:
+      title: "Fix CI: {intent}"
+      body: "{diagnose.out}"
+`
   }
 ]

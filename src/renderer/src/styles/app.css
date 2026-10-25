@@ -2637,3 +2637,50 @@ a {
   font: 12px var(--font-ui);
   outline: none;
 }
+.pn-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pn-candidate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+}
+.pn-candidate.winner {
+  border-color: #56d36488;
+}
+.pn-candidate.failed {
+  opacity: 0.55;
+}
+.pn-cand-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.pn-cand-stats {
+  font: 10.5px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.pn-candidate .btn.sm {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+.recipe-checks span {
+  margin-right: 6px;
+  font-family: var(--font-mono);
+}
+.recipe-checks .found {
+  color: #56d364;
+}
+.recipe-checks .missing {
+  text-decoration: line-through;
+}

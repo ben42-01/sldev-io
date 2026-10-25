@@ -10,10 +10,12 @@ import {
   nodePrompt,
   nodeStarted,
   parseRecipe,
+  pickWinner,
   readyNodes,
   rejectNode,
   resolveAgentSpec,
   resolveRun,
+  runtimeNames,
   type FactoryRun,
   type Recipe
 } from '@shared/factory'
@@ -210,5 +212,52 @@ describe('resolveRun', () => {
 describe('built-in recipes', () => {
   it('all parse', () => {
     for (const r of BUILTIN_RECIPES) expect(parseRecipe(r.text).error, r.slug).toBeUndefined()
+  })
+})
+
+describe('bake-off', () => {
+  const BAKE = 'name: b\nstages:\n  - id: build\n    agent: [claude, codex]\n    prompt: Build {intent}\n  - id: check\n    run: npm test'
+  const wt = (b: string) => ({ path: `/wt/${b}`, branch: b, base: 'main', repo: '/p' })
+  const started = (): FactoryRun => {
+    const run = nodeStarted(newRun(recipe(BAKE)), 'build', 1)
+    return {
+      ...run,
+      nodes: {
+        ...run.nodes,
+        build: {
+          ...run.nodes.build,
+          candidates: [
+            { spec: 'claude', missionId: 'm1', worktree: wt('a'), status: 'done' },
+            { spec: 'codex', missionId: 'm2', worktree: wt('b'), status: 'done' }
+          ]
+        }
+      }
+    }
+  }
+
+  it('waits for you to keep one version', () => {
+    const run = nodeFinished(started(), 'build', { ok: true }, 2)
+    expect(run.nodes.build.status).toBe('approval')
+    expect(run.nodes.build.note).toBe('2 versions to compare. Keep one.')
+    expect(approveNode(run, 'build', 3).nodes.build.status).toBe('approval')
+  })
+
+  it('keeps the winner\'s worktree so it merges like a parallel branch', () => {
+    const run = pickWinner(nodeFinished(started(), 'build', { ok: true }, 2), 'build', 'm2', 3)
+    expect(run.nodes.build).toMatchObject({ status: 'done', winner: 'm2', worktree: wt('b'), note: 'Kept codex' })
+    expect(readyNodes(run)).toEqual(['check'])
+  })
+
+  it('a rejection runs every agent again', () => {
+    const run = rejectNode(nodeFinished(started(), 'build', { ok: true }, 2), 'build', 'all too big', 3)
+    expect(run.nodes.build.candidates).toBeUndefined()
+    expect(run.nodes.build.status).toBe('pending')
+  })
+})
+
+describe('runtimeNames', () => {
+  it('lists the scripts a recipe checks with', () => {
+    expect(runtimeNames(recipe())).toEqual([])
+    expect(runtimeNames(recipe('name: x\nstages:\n  - id: a\n    run: [typecheck?, test, npm run build]'))).toEqual(['typecheck', 'test'])
   })
 })

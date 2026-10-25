@@ -131,9 +131,11 @@ export interface FillContext {
   diff?: string
   /** output of the check that failed, on a retry */
   log?: string
+  /** the branch the run started from */
+  base?: string
 }
 
-/** Fills {intent} {issue} {out} {<node>.out} {diff} {log}; unknown placeholders stay as written. */
+/** Fills {intent} {issue} {base} {out} {<node>.out} {diff} {log}; unknown placeholders stay as written. */
 export function fill(text: string, c: FillContext): string {
   return text.replace(/\{([A-Za-z0-9_-]+)(?:\.out)?\}/g, (m, key: string) => {
     if (m.endsWith('.out}')) return c.outs[key] ?? m
@@ -142,6 +144,7 @@ export function fill(text: string, c: FillContext): string {
     if (key === 'out') return c.out ?? m
     if (key === 'diff') return c.diff ?? m
     if (key === 'log') return c.log ?? ''
+    if (key === 'base') return c.base ?? m
     return m
   })
 }
@@ -204,7 +207,19 @@ export interface NodeRun {
   feedback?: string
   /** bake-off: the mission whose work was kept */
   winner?: string
+  /** bake-off: one attempt per agent, each in its own worktree */
+  candidates?: Candidate[]
 }
+
+export interface Candidate {
+  spec: string
+  missionId: string
+  worktree: WorktreeInfo
+  status: 'running' | 'done' | 'failed'
+  stats?: { files: number; insertions: number; deletions: number }
+}
+
+export const isBakeoff = (n: RecipeNode): boolean => n.kind === 'agent' && n.agents.length > 1
 
 export interface FactoryRun {
   id: string
@@ -262,7 +277,7 @@ function rerun(run: FactoryRun, ids: string[], feedback: string | undefined, now
   const nodes = { ...run.nodes }
   for (const id of reset) {
     const old = nodes[id]
-    nodes[id] = { ...old, status: 'pending', note: undefined, merged: undefined, endedAt: undefined, feedback: ids.includes(id) ? feedback : old.feedback, winner: undefined }
+    nodes[id] = { ...old, status: 'pending', note: undefined, merged: undefined, endedAt: undefined, feedback: ids.includes(id) ? feedback : old.feedback, winner: undefined, candidates: undefined }
   }
   return { ...run, nodes, updatedAt: now }
 }
@@ -287,6 +302,10 @@ export function nodeFinished(run: FactoryRun, id: string, f: Finish, now: number
     const failed = setNode(run, id, { status: 'failed', endedAt: now, note: node.onFail ? `Still failing after ${node.onFail.max} retries` : 'Failed' }, now)
     return { ...failed, status: 'failed', note: `${id} failed` }
   }
+  if (isBakeoff(node)) {
+    const ok = (run.nodes[id].candidates ?? []).filter((c) => c.status === 'done').length
+    return setNode(run, id, { status: 'approval', endedAt: now, note: `${ok} version${ok === 1 ? '' : 's'} to compare. Keep one.` }, now)
+  }
   const tooBig = node.maxDiff !== undefined && (f.diffLines ?? 0) > node.maxDiff
   if (node.approve || tooBig) {
     const note = tooBig ? `${f.diffLines} lines changed, over the ${node.maxDiff} limit` : 'Waiting for your approval'
@@ -297,7 +316,17 @@ export function nodeFinished(run: FactoryRun, id: string, f: Finish, now: number
 
 export function approveNode(run: FactoryRun, id: string, now: number): FactoryRun {
   if (run.nodes[id]?.status !== 'approval') return run
+  // a bake-off is approved by keeping one version
+  if (run.recipe.nodes.some((n) => n.id === id && isBakeoff(n))) return run
   return settle(setNode(run, id, { status: 'done', note: undefined, feedback: undefined }, now))
+}
+
+/** Keeps one bake-off version: its worktree becomes the node's, merged into the run like any parallel branch. */
+export function pickWinner(run: FactoryRun, id: string, missionId: string, now: number): FactoryRun {
+  const nr = run.nodes[id]
+  const c = nr?.candidates?.find((x) => x.missionId === missionId)
+  if (nr?.status !== 'approval' || !c || c.status !== 'done') return run
+  return settle(setNode(run, id, { status: 'done', winner: missionId, worktree: c.worktree, merged: undefined, note: `Kept ${c.spec}`, feedback: undefined }, now))
 }
 
 /** Rejecting sends the node back with your note. */
@@ -324,6 +353,11 @@ export function totalLines(stat: { insertions: number; deletions: number }): num
 }
 
 // ── run nodes ────────────────────────────────────────────────────
+
+/** Runtime names a recipe's run stages refer to ("test?" → "test"). */
+export function runtimeNames(r: Recipe): string[] {
+  return [...new Set(r.nodes.flatMap((n) => n.run).filter((e) => /^[\w:.-]+\??$/.test(e)).map((e) => e.replace(/\?$/, '')))]
+}
 
 export interface RuntimeRef {
   name: string

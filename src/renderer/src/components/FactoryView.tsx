@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Factory, FilePlus2, Plus } from 'lucide-react'
-import type { FactoryRun } from '@shared/factory'
+import { runtimeNames, type FactoryRun } from '@shared/factory'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
 import { factory, loadRecipes, openPipeline, removeRun, startRun } from '../state/factory'
@@ -93,7 +93,9 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
   const [base, setBase] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [scripts, setScripts] = useState<string[] | null>(null)
   useEffect(() => {
+    void window.api.runtimes.detect(root).then((d) => setScripts(d.map((r) => r.name)), () => setScripts([]))
     void window.api.git.branches(root).then(setBranches)
     void window.api.git.branch(root).then((b) => setBase(b ?? ''))
   }, [root])
@@ -145,6 +147,16 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
               </span>
             ))}
           </div>
+          {scripts && runtimeNames(entry.recipe).length > 0 && (
+            <div className="hint recipe-checks">
+              Checks:{' '}
+              {runtimeNames(entry.recipe).map((n) => (
+                <span key={n} className={scripts.includes(n) ? 'found' : 'missing'} title={scripts.includes(n) ? 'Found in this project' : 'Not in this project: skipped'}>
+                  {n}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="hint">
             {entry.builtin ? (
               <span className="link" onClick={() => void addToProject()}>

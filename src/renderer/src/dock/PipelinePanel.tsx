@@ -4,12 +4,14 @@ import { Bot, Check, FileText, GitPullRequest, Pause, Play, RotateCcw, Square, S
 import { layout, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
 import { focusPanel } from './dockApi'
 import { openInEditor } from '../lib/actions'
-import { approve, markDone, reject, resume, retry, stop, useRun } from '../state/factory'
-import { focusOrResume } from '../state/missions'
+import { approve, keep, markDone, reject, resume, retry, stop, useRun } from '../state/factory'
+import { focusOrResume, reviewMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
 
 const W = 196
-const H = 112
+const BASE_H = 112
+/** each bake-off version gets a row */
+const ROW_H = 26
 const GX = 44
 const GY = 22
 
@@ -20,6 +22,7 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
   const run = useRun(params.runId)
   const pos = useMemo(() => (run ? layout(run.recipe) : new Map<string, { col: number; row: number }>()), [run])
   if (!run) return <div className="panel-page muted">This run was removed.</div>
+  const H = BASE_H + ROW_H * Math.max(0, ...run.recipe.nodes.map((n) => (n.agents.length > 1 ? n.agents.length : 0)))
 
   const at = (id: string): { x: number; y: number } => {
     const p = pos.get(id) ?? { col: 0, row: 0 }
@@ -103,6 +106,25 @@ function PipelineNode({ run, node, nr }: { run: FactoryRun; node: RecipeNode; nr
         {nr.worktree ? ' · own worktree' : ''}
       </div>
       {nr.note && <div className="pn-note" title={nr.note}>{nr.note}</div>}
+      {nr.candidates && (
+        <div className="pn-candidates">
+          {nr.candidates.map((c) => (
+            <div key={c.missionId} className={`pn-candidate ${c.status}${nr.winner === c.missionId ? ' winner' : ''}`}>
+              <span className="pn-cand-name" title={c.spec}>{c.spec}</span>
+              <span className="pn-cand-stats">
+                {c.status === 'running' ? 'working…' : c.status === 'failed' ? 'failed' : c.stats ? <><span className="add">+{c.stats.insertions}</span> <span className="del">−{c.stats.deletions}</span></> : ''}
+              </span>
+              {c.status !== 'running' && !nr.winner && (
+                <button className="icon-btn" title="Review its diff" onClick={() => reviewMission(c.missionId)}><FileText size={12} /></button>
+              )}
+              {nr.status === 'approval' && c.status === 'done' && (
+                <button className="btn sm" onClick={() => void keep(run.id, node.id, c.missionId)}>Keep</button>
+              )}
+              {nr.winner === c.missionId && <Check size={12} className="ok" />}
+            </div>
+          ))}
+        </div>
+      )}
       {rejecting ? (
         <form className="pn-reject" onSubmit={(e) => (e.preventDefault(), reject(run.id, node.id, note), setRejecting(false))}>
           <input autoFocus value={note} placeholder="What should change?" onChange={(e) => setNote(e.target.value)} />
@@ -110,7 +132,7 @@ function PipelineNode({ run, node, nr }: { run: FactoryRun; node: RecipeNode; nr
         </form>
       ) : (
         <div className="pn-actions">
-          {nr.status === 'approval' && (
+          {nr.status === 'approval' && !nr.candidates && (
             <>
               <button className="btn sm primary" onClick={() => void approve(run.id, node.id)}>
                 {node.kind === 'pr' ? 'Push and open PR' : 'Approve'}
@@ -122,7 +144,12 @@ function PipelineNode({ run, node, nr }: { run: FactoryRun; node: RecipeNode; nr
               )}
             </>
           )}
-          {nr.status === 'running' && node.kind === 'agent' && nr.missionIds[0] && (
+          {nr.status === 'approval' && nr.candidates && (
+            <button className="btn sm" onClick={() => setRejecting(true)}>
+              <X size={12} /> None, run again
+            </button>
+          )}
+          {nr.status === 'running' && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && (
             <button className="icon-btn" title="Open its terminal" onClick={() => focusOrResume(nr.missionIds[0])}><SquareTerminal size={13} /></button>
           )}
           {nr.status === 'running' && node.kind === 'run' && nr.panelId && (
