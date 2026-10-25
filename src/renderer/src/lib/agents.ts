@@ -1,3 +1,4 @@
+import { promptWithRole } from '@shared/profiles'
 import type { AgentOptions, CustomAgent } from '@shared/types'
 import { shellQuote } from './paths'
 
@@ -24,6 +25,8 @@ export interface AgentDef {
   claudeSkills?: boolean
   canPrint: boolean
   canResume: boolean
+  /** takes a role as an extra system prompt; other agents get it at the top of the prompt */
+  systemPrompt?: boolean
   build: (o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra) => string[]
   custom?: boolean
 }
@@ -33,6 +36,8 @@ export interface CommandExtra {
   settingsPath?: string
   /** session id to resume (Claude), or true to continue the most recent session */
   resume?: string | true
+  /** agent profile role; a resumed session already has it */
+  role?: string
 }
 
 const q = (s: string): string => shellQuote(s)
@@ -59,7 +64,8 @@ const claude: AgentDef = {
   claudeSkills: true,
   canPrint: true,
   canResume: true,
-  build: (o, prompt, name, { settingsPath, resume }) => [
+  systemPrompt: true,
+  build: (o, prompt, name, { settingsPath, resume, role }) => [
     'claude',
     ...flag(settingsPath, '--settings', q(settingsPath ?? '')),
     ...(resume === true ? ['--continue'] : flag(resume, '--resume', q(String(resume)))),
@@ -67,6 +73,7 @@ const claude: AgentDef = {
     ...flag(o.model, '--model', q(o.model ?? '')),
     ...flag(o.permissionMode, '--permission-mode', o.permissionMode ?? ''),
     ...flag(o.effort, '--effort', o.effort ?? ''),
+    ...flag(role?.trim() && !resume, '--append-system-prompt', q(role?.trim() ?? '')),
     ...flag(!o.print && name && !resume, '-n', q(name ?? '')),
     ...extraArgs(o),
     ...(resume ? [] : promptArg(prompt))
@@ -241,7 +248,9 @@ export function findAgent(id: string | undefined, custom: CustomAgent[] = []): A
 
 /** The command line that starts (or resumes) an agent session. */
 export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra = {}): string {
-  return agent.build(o, prompt, name, agent.hooks ? extra : { resume: extra.resume }).join(' ')
+  const role = extra.resume ? undefined : extra.role?.trim()
+  const p = role && !agent.systemPrompt ? promptWithRole(role, prompt) : prompt
+  return agent.build(o, p, name, agent.hooks ? { ...extra, role } : { resume: extra.resume }).join(' ')
 }
 
 export function slugify(s: string): string {

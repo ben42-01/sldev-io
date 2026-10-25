@@ -4,6 +4,7 @@ import { createStore } from './store'
 import { loadRuntimes } from './runtimes'
 import { loadTasks } from './tasks'
 import { loadMissions } from './missions'
+import { loadProjectProfiles } from './profiles'
 
 export type ViewId = 'explorer' | 'runtimes' | 'agents' | 'tasks' | 'skills' | 'workflows' | 'notes' | 'remote'
 
@@ -39,6 +40,7 @@ export async function initWorkspace(): Promise<void> {
   void loadTasks()
   void loadMissions()
   void loadRuntimes(settings.rootFolder)
+  void loadProjectProfiles(settings.rootFolder)
 }
 
 export async function refreshBranch(): Promise<void> {
@@ -51,6 +53,7 @@ export function setRootFolder(folder: string): void {
   updateSettings({ rootFolder: folder, recentFolders: recent })
   void refreshBranch()
   void loadRuntimes(folder)
+  void loadProjectProfiles(folder)
 }
 
 export async function pickRootFolder(): Promise<void> {

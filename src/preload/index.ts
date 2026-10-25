@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BetaStatus } from '@shared/beta'
 import type { LicenseStatus } from '@shared/license'
 import type {
+  AgentProfile,
   AppInfo,
   AppSettings,
   ClaudeAsset,
@@ -146,6 +147,12 @@ const api = {
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('notes:write', path, text),
     remove: (path: string): Promise<void> => ipcRenderer.invoke('notes:delete', path),
     openFolder: (scope: string | null): Promise<string> => ipcRenderer.invoke('notes:openFolder', scope)
+  },
+  profiles: {
+    list: (root: string): Promise<AgentProfile[]> => ipcRenderer.invoke('profiles:list', root),
+    save: (root: string, profile: AgentProfile): Promise<string> => ipcRenderer.invoke('profiles:save', root, profile),
+    remove: (root: string, path: string): Promise<void> => ipcRenderer.invoke('profiles:remove', root, path),
+    export: (root: string, profile: AgentProfile, target: 'claude' | 'opencode'): Promise<string> => ipcRenderer.invoke('profiles:export', root, profile, target)
   },
   vault: {
     status: (): Promise<VaultStatus> => ipcRenderer.invoke('vault:status'),

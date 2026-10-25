@@ -3,6 +3,7 @@ import { Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal
 import { focusOrResume, isLive, missions, removeMission, reviewMission, stopMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
+import { useProfiles } from '../state/profiles'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
@@ -23,6 +24,7 @@ export function MissionStatusPill({ status }: { status: Mission['status'] }): Re
 export function MissionCard({ mission: m, large = false }: { mission: Mission; large?: boolean }): React.JSX.Element {
   const hasPanel = useStore(missions, (s) => !!s.panels[m.id])
   const live = isLive(m.status)
+  const profileName = useProfiles().find((p) => p.id === m.options.profile)?.name
   const menu = (): MenuItem[] => [
     { label: hasPanel ? 'Show terminal' : 'Resume session', icon: <SquareTerminal size={13} />, run: () => focusOrResume(m.id) },
     { label: 'Review changes', icon: <FileDiff size={13} />, run: () => reviewMission(m.id) },
@@ -44,7 +46,7 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
-        <span className="mission-agent">{getAgent(m.options.agent).name}</span>
+        <span className="mission-agent">{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}</span>
         <span className="mission-time">{ago(m.updatedAt)}</span>
       </div>
       <div className="mission-title" title={m.prompt}>{m.title}</div>

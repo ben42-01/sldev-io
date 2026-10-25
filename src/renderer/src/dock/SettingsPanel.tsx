@@ -8,6 +8,7 @@ import { updateSettings, workspace } from '../state/workspace'
 import { openSetup } from '../state/setup'
 import { AboutSection } from '../components/About'
 import { LicenseSection } from '../components/License'
+import { AgentProfiles } from '../components/AgentProfiles'
 
 export function SettingsPanel(): React.JSX.Element {
   const s = useStore(workspace, (w) => w)
@@ -54,6 +55,7 @@ export function SettingsPanel(): React.JSX.Element {
       <section>
         <h3>Agents</h3>
         <AgentSettings />
+        <AgentProfiles />
         <label className="check">
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />
           <span>Desktop notifications when a mission needs you or finishes</span>

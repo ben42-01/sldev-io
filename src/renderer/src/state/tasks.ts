@@ -3,6 +3,7 @@ import { openTerminal, focusPanel } from '../dock/dockApi'
 import { restartTerminal } from '../lib/terminals'
 import { agentCommand } from '../lib/agents'
 import { getAgent } from './agents'
+import { roleFor } from './profiles'
 import { startMission } from './missions'
 import { findRun, isActive } from './runs'
 import { createStore } from './store'
@@ -45,7 +46,7 @@ export function newTaskId(): string {
 export function buildTaskCommand(task: Task): string {
   if (task.kind === 'shell') return task.command?.trim() ?? ''
   const o = task.agent ?? {}
-  return agentCommand(getAgent(o.agent), o, task.prompt, task.name)
+  return agentCommand(getAgent(o.agent), o, task.prompt, task.name, { role: roleFor(o) })
 }
 
 export function taskCwd(task: Task): string | undefined {

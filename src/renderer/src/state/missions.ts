@@ -4,6 +4,7 @@ import { patchMission, pushStatus } from '@shared/missionHistory'
 import { agentCommand, slugify } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
+import { roleFor } from './profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
 
@@ -111,8 +112,8 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   openTerminal({
     cwd,
     title,
-    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath }),
-    displayCommand: agentCommand(agent, input.options, input.prompt, title),
+    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options) }),
+    displayCommand: agentCommand(agent, input.options, input.prompt, title, { role: roleFor(input.options) }),
     env: missionEnv(id),
     missionId: id
   })
@@ -129,7 +130,7 @@ export function focusOrResume(id: string): void {
   openTerminal({
     cwd: m.cwd,
     title: m.title,
-    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath }),
+    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath, role: roleFor(m.options) }),
     env: missionEnv(id),
     missionId: id
   })

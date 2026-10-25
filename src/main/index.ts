@@ -9,11 +9,12 @@ import { detectEditors, findOnPath, openInEditor, terminalEditorCommand, termina
 import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
+import * as profiles from './profiles'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
 import { importSshConfig, SshManager } from './ssh'
-import type { CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
+import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
 import { detectRuntimes } from './runtimes'
 import { loadShellEnv } from './shellEnv'
@@ -219,6 +220,12 @@ function registerIpc(): void {
   ipcMain.handle('notes:write', (_e, p: string, text: string) => notes.writeNote(p, text))
   ipcMain.handle('notes:delete', (_e, p: string) => notes.deleteNote(p))
   ipcMain.handle('notes:openFolder', (_e, scope: string | null) => notes.openNotesFolder(scope))
+
+  // agent profiles (project scope; user profiles live in settings)
+  ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
+  ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
+  ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('profiles:export', (_e, root: string, p: AgentProfile, target: profiles.ExportTarget) => profiles.exportProfile(root, p, target))
 
   // credentials & SSH
   ipcMain.handle('vault:status', () => vault.vaultStatus())

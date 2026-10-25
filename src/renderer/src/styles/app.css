@@ -2269,3 +2269,70 @@ a {
 .beta-banner .icon-btn {
   margin-left: auto;
 }
+
+/* ── agent profiles (settings) ─────────────── */
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.profile-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--fg);
+  font: 12.5px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.profile-row:first-child {
+  border-top: 0;
+}
+.profile-row:hover,
+.profile-row.on {
+  background: var(--bg-hover);
+}
+.profile-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.profile-scope {
+  font: 10.5px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.profile-editor {
+  gap: 8px;
+}
+.profile-editor textarea {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font: 12px/1.5 var(--font-mono);
+  resize: vertical;
+  outline: none;
+  user-select: text;
+}
+.profile-editor textarea:focus {
+  border-color: var(--accent);
+}
+.profile-actions .grow {
+  flex: 1;
+}
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}

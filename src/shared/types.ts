@@ -46,10 +46,31 @@ export interface AppSettings {
   defaultAgent: string
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
+  /** agent profiles kept for every project (project ones live in .sldev/agents) */
+  agentProfiles: AgentProfile[]
   /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
   setupSeen: boolean
   /** Skills view groups the user opened (true) or closed (false), keyed by `${tab}:${group}` */
   assetGroups: Record<string, boolean>
+}
+
+/**
+ * A named agent: a CLI with fixed options plus a role (Markdown instructions). User profiles live in
+ * settings; project profiles are `.sldev/agents/<slug>.md` so a team can commit them.
+ */
+export interface AgentProfile {
+  id: string
+  name: string
+  description: string
+  /** CLI id; unset = whichever agent is picked (or the default agent) */
+  agent?: string
+  model?: string
+  permissionMode?: string
+  effort?: string
+  role: string
+  scope: 'builtin' | 'user' | 'project'
+  /** project profiles: the .md file */
+  path?: string
 }
 
 export interface CustomAgent {
@@ -77,6 +98,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
   customAgents: [],
+  agentProfiles: [],
   setupSeen: false,
   assetGroups: {}
 }
@@ -116,6 +138,8 @@ export interface AgentOptions {
   /** non-interactive: print the result and exit */
   print?: boolean
   extraArgs?: string
+  /** agent profile id: its role goes to the agent with the prompt */
+  profile?: string
 }
 
 export interface Task {
