@@ -232,6 +232,8 @@ export interface FactoryRun {
   outDir: string
   status: RunStatus
   note?: string
+  /** GitHub issue it came from; the PR closes it */
+  issue?: number
   nodes: Record<string, NodeRun>
   createdAt: number
   updatedAt: number
@@ -384,4 +386,22 @@ export function resolveRun(entries: string[], runtimes: RuntimeRef[]): { command
     else parts.push(name)
   }
   return { command: parts.join(' && '), skipped }
+}
+
+/** The text an issue becomes: a mission prompt or a factory intent. */
+export function issueText(i: { number: number; title: string; body: string }): string {
+  const body = i.body.trim()
+  return `${i.title} (#${i.number})${body ? `\n\n${body}` : ''}`
+}
+
+/** A one-stage bake-off for "run this prompt on several agents". */
+export function compareRecipe(specs: string[]): Recipe {
+  return {
+    name: 'Compare agents',
+    description: 'One prompt on several agents; keep the best version.',
+    intake: 'prompt',
+    nodes: [
+      { id: 'compare', kind: 'agent', needs: [], agents: specs, prompt: '{intent}\n\nCommit your work when done.', interactive: false, run: [], approve: false }
+    ]
+  }
 }

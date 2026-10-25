@@ -14,6 +14,7 @@ import type {
   DockerList,
   DirEntry,
   EditorInfo,
+  GhIssue,
   GhPr,
   GhRepoInfo,
   GhRun,
@@ -139,7 +140,8 @@ const api = {
     dispatch: (cwd: string, id: number, ref: string, inputs: Record<string, string>): Promise<void> => ipcRenderer.invoke('gh:dispatch', cwd, id, ref, inputs),
     rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
-    pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd)
+    pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
+    issues: (cwd: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd)
   },
   notes: {
     list: (scope: string | null): Promise<NoteMeta[]> => ipcRenderer.invoke('notes:list', scope),

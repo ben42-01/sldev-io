@@ -4,5 +4,6 @@ case "$1 $2" in
   "--version "*) echo "gh version 2.0.0-fake (e2e)" ;;
   "auth status") echo "You are not logged into any GitHub hosts." >&2; exit 1 ;;
   "auth login") echo "fake gh: logged in"; echo ok > gh-login-marker.txt ;;
+  "issue list") echo '[{"number":42,"title":"Login button does nothing on Safari","body":"Clicking Log in on Safari 17 does nothing.","url":"https://github.com/acme/shop/issues/42"},{"number":7,"title":"Add CSV export","body":"","url":"https://github.com/acme/shop/issues/7"}]' ;;
   *) echo "fake gh: $*" >&2; exit 1 ;;
 esac

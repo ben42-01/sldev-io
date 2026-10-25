@@ -113,7 +113,7 @@ export function checkRecipe(recipe: Recipe): string | null {
   return null
 }
 
-export async function startRun(input: { recipe: Recipe; intent: string; root: string; base?: string }): Promise<FactoryRun> {
+export async function startRun(input: { recipe: Recipe; intent: string; root: string; base?: string; issue?: number }): Promise<FactoryRun> {
   const problem = checkRecipe(input.recipe)
   if (problem) throw new Error(problem)
   if (!(await window.api.git.isRepo(input.root))) throw new Error('The factory needs a git repository')
@@ -131,6 +131,7 @@ export async function startRun(input: { recipe: Recipe; intent: string; root: st
     worktree,
     outDir,
     status: 'running',
+    issue: input.issue,
     nodes: Object.fromEntries(input.recipe.nodes.map((n) => [n.id, newNodeRun()])),
     createdAt: now,
     updatedAt: now
@@ -428,7 +429,7 @@ async function openPr(run: FactoryRun, nodeId: string): Promise<void> {
   put({ ...run, nodes: { ...run.nodes, [nodeId]: { ...nr, status: 'running', note: 'Pushing and opening the pull request…' } } })
   try {
     await commit(run.worktree.path, `factory: ${run.intent}`.slice(0, 100))
-    const body = fillText(node.pr?.body ?? '').trim()
+    const body = [fillText(node.pr?.body ?? '').trim(), run.issue ? `Closes #${run.issue}` : ''].filter(Boolean).join('\n\n')
     const url = await window.api.git.pushAndPr(run.worktree.path, run.worktree.branch, run.worktree.base, fillText(node.pr?.title ?? '{intent}'), body || undefined)
     const cur = getRun(run.id)!
     const nodes = { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], status: 'done' as const, endedAt: Date.now(), note: url || 'Pull request opened' } }

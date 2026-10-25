@@ -6,7 +6,11 @@ import { isLive, missions, startMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
-import { getAgent } from '../state/agents'
+import { getAgent, useAgents } from '../state/agents'
+import { compareRecipe, issueText } from '@shared/factory'
+import { startRun } from '../state/factory'
+import { getProfile } from '../state/profiles'
+import { IssuePicker } from './IssuePicker'
 import { MissionCard } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 
@@ -77,6 +81,10 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
   const [base, setBase] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [issue, setIssue] = useState<number | undefined>()
+  /** other agents to run the same prompt on (a bake-off) */
+  const [compare, setCompare] = useState<string[]>([])
+  const agents = useAgents()
 
   useEffect(() => {
     void window.api.git.isRepo(root).then(setIsRepo)
@@ -89,7 +97,11 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
     setBusy(true)
     setError('')
     try {
-      await startMission({ prompt, title, root, options, worktree: isRepo && worktree, base })
+      if (compare.length) {
+        const profile = getProfile(options.profile)
+        const ids = [options.agent || workspace.get().defaultAgent, ...compare.filter((c) => c !== options.agent)]
+        await startRun({ recipe: compareRecipe(ids.map((id) => (profile ? `${profile.name}@${id}` : id))), intent: prompt, root, base, issue })
+      } else await startMission({ prompt, title, root, options, worktree: isRepo && worktree, base })
       onDone()
     } catch (e) {
       setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
@@ -113,6 +125,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
         if (e.key === 'Escape') onDone()
       }}
     >
+      {isRepo && <IssuePicker root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
         <span>What should {getAgent(options.agent).name} do?</span>
         <textarea autoFocus rows={6} value={prompt} placeholder="Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
@@ -138,11 +151,27 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
         </>
       )}
       <AgentOptionsFields value={options} onChange={(p) => setOptions((o) => ({ ...o, ...p }))} showPrint={false} />
+      {isRepo && (
+        <div className="field compare-agents">
+          <span>Also run it on (compare the versions, keep one)</span>
+          <div className="compare-list">
+            {agents
+              .filter((a) => a.id !== (options.agent || 'claude') && a.installed !== false)
+              .map((a) => (
+                <label key={a.id} className="check">
+                  <input type="checkbox" checked={compare.includes(a.id)} onChange={(e) => setCompare((c) => (e.target.checked ? [...c, a.id] : c.filter((x) => x !== a.id)))} />
+                  <span>{a.name}</span>
+                </label>
+              ))}
+          </div>
+          {compare.length > 0 && <div className="hint">Runs as a factory bake-off: every agent works in its own worktree, without stopping to ask, and you keep the best diff.</div>}
+        </div>
+      )}
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn" onClick={onDone}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!prompt.trim() || busy} title="Ctrl/Cmd+Enter">
-          <Rocket size={14} /> {busy ? 'Launching…' : 'Launch'}
+          <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>
       </div>
     </form>

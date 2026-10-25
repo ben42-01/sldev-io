@@ -214,6 +214,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
+  ipcMain.handle('gh:issues', (_e, cwd: string) => gh.listIssues(cwd))
 
   // notes
   ipcMain.handle('notes:list', (_e, scope: string | null) => notes.listNotes(scope))

@@ -294,6 +294,13 @@ export interface GhRun {
   number: number
 }
 
+export interface GhIssue {
+  number: number
+  title: string
+  body: string
+  url: string
+}
+
 export interface GhPr {
   number: number
   title: string

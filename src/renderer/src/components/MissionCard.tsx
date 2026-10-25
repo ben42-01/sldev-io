@@ -1,8 +1,10 @@
 import type { Mission } from '@shared/types'
-import { Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal } from 'lucide-react'
-import { focusOrResume, isLive, missions, removeMission, reviewMission, stopMission } from '../state/missions'
+import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal } from 'lucide-react'
+import { focusOrResume, isLive, missions, removeMission, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
+import { allAgents } from '../lib/agents'
+import { workspace } from '../state/workspace'
 import { useProfiles } from '../state/profiles'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
@@ -29,6 +31,10 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     { label: hasPanel ? 'Show terminal' : 'Resume session', icon: <SquareTerminal size={13} />, run: () => focusOrResume(m.id) },
     { label: 'Review changes', icon: <FileDiff size={13} />, run: () => reviewMission(m.id) },
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
+    { type: 'header', label: 'Review with another agent' },
+    ...allAgents(workspace.get().customAgents)
+      .filter((a) => a.id !== (m.options.agent || 'claude'))
+      .map((a): MenuItem => ({ label: a.name, icon: <Bot size={13} />, run: () => void reviewWithAgent(m.id, a.id) })),
     { type: 'separator' },
     { label: 'Open folder in editor', run: () => void openInEditor(m.cwd, undefined, true) },
     { label: 'New terminal in mission folder', run: () => openTerminal({ cwd: m.cwd }) },

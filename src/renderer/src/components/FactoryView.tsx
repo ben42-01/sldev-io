@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Factory, FilePlus2, Plus } from 'lucide-react'
-import { runtimeNames, type FactoryRun } from '@shared/factory'
+import { issueText, runtimeNames, type FactoryRun } from '@shared/factory'
+import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
 import { factory, loadRecipes, openPipeline, removeRun, startRun } from '../state/factory'
@@ -94,6 +95,7 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [scripts, setScripts] = useState<string[] | null>(null)
+  const [issue, setIssue] = useState<number | undefined>()
   useEffect(() => {
     void window.api.runtimes.detect(root).then((d) => setScripts(d.map((r) => r.name)), () => setScripts([]))
     void window.api.git.branches(root).then(setBranches)
@@ -107,7 +109,7 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
     setBusy(true)
     setError('')
     try {
-      await startRun({ recipe: entry.recipe, intent, root, base })
+      await startRun({ recipe: entry.recipe, intent, root, base, issue })
       onDone()
     } catch (err) {
       setError((err as Error).message)
@@ -168,6 +170,7 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
           </div>
         </>
       )}
+      <IssuePicker root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />
       <label className="field">
         <span>What should the factory build?</span>
         <textarea rows={4} value={intent} autoFocus placeholder="Add a dark mode toggle to the settings page" onChange={(e) => setIntent(e.target.value)} />

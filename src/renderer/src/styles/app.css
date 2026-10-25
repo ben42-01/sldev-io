@@ -2684,3 +2684,54 @@ a {
 .recipe-checks .missing {
   text-decoration: line-through;
 }
+
+/* ── issue picker ──────────────────────────── */
+.issue-btn {
+  align-self: flex-start;
+}
+.issue-picker {
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.issue-row {
+  display: flex;
+  gap: 8px;
+  padding: 5px 8px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font: 12px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.issue-row:hover {
+  background: var(--bg-hover);
+}
+.issue-n {
+  font-family: var(--font-mono);
+  color: var(--fg-subtle);
+}
+.issue-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-close {
+  align-self: flex-end;
+  margin: 4px 8px;
+  background: none;
+  border: 0;
+  font: 11px var(--font-ui);
+  color: var(--fg-muted);
+}
+.compare-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}

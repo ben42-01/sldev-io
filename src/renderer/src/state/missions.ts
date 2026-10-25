@@ -4,7 +4,8 @@ import { patchMission, pushStatus } from '@shared/missionHistory'
 import { agentCommand, slugify } from '../lib/agents'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
-import { roleFor } from './profiles'
+import { getProfile, roleFor } from './profiles'
+import { applyProfile } from '@shared/profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
 
@@ -161,6 +162,23 @@ export async function removeMission(id: string, opts: { removeWorktree: boolean;
 export function reviewMission(id: string): void {
   const m = getMission(id)
   if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { missionId: id }, 'right')
+}
+
+/** A second agent reviews a mission's changes, read-only, in the same folder. */
+export async function reviewWithAgent(id: string, agentId: string): Promise<Mission | undefined> {
+  const m = getMission(id)
+  if (!m) return undefined
+  const base = missionBase(m)
+  const options = { ...applyProfile({ agent: agentId }, getProfile('builtin:reviewer')), agent: agentId }
+  const prompt = [
+    `Review the changes in this folder since ${base}: run \`git diff ${base}\` and look at untracked files too.`,
+    `${getAgent(m.options.agent).name} made them for this task:`,
+    '',
+    m.prompt,
+    '',
+    'List your findings, most important first. Do not edit any files.'
+  ].join('\n')
+  return startMission({ prompt, title: `Review: ${m.title}`.slice(0, 60), root: m.root, cwd: m.cwd, options, worktree: false })
 }
 
 export function missionBase(m: Mission): string {

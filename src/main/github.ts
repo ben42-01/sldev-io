@@ -1,7 +1,7 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
-import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
+import type { GhIssue, GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
 import { run } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -86,3 +86,6 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
   }
   return { number: pr.number, title: pr.title, state: pr.state, url: pr.url, isDraft: pr.isDraft, checks }
 }
+
+export const listIssues = (cwd: string): Promise<GhIssue[]> =>
+  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url'], cwd)
