@@ -428,3 +428,9 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
   .scene.on .scene-bar { transform: scaleX(1); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* /changelog */
+.changelog { max-width: 760px; display: grid; gap: 40px; }
+.changelog-entry h2 { font: 600 20px var(--font-mono); letter-spacing: -0.01em; }
+.changelog-entry time { margin-left: 10px; font-size: 13px; font-weight: 400; color: var(--fg-subtle); }
+.changelog-entry ul { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 8px; list-style: disc; color: var(--fg-muted); }

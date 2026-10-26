@@ -6,7 +6,7 @@ import { useStore } from '../state/store'
 import { tildify } from '../lib/paths'
 import { blockers } from '../lib/setup'
 import { openSetup, setup } from '../state/setup'
-import { UpdateChip } from './About'
+import { FeedbackChip, UpdateChip } from './About'
 import { BetaChip } from './BetaGate'
 import { TrialChip } from './License'
 
@@ -42,6 +42,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
           <TriangleAlert size={12} /> setup needed
         </button>
       )}
+      <FeedbackChip />
       <BetaChip />
       <TrialChip />
       <UpdateChip />

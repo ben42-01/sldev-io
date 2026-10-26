@@ -1,7 +1,8 @@
-import { Check, Copy, Download, ExternalLink, FolderOpen, RefreshCw, RotateCw } from 'lucide-react'
+import { Bug, Check, Copy, Download, ExternalLink, FolderOpen, MessageSquare, RefreshCw, RotateCw, Sparkles } from 'lucide-react'
 import type { UpdateStatus } from '@shared/types'
 import { useState } from 'react'
-import { checkForUpdates, diagnostics, downloadUpdate, siteLink, updates } from '../state/updates'
+import { checkForUpdates, diagnostics, downloadUpdate, reportBug, siteLink, updates } from '../state/updates'
+import { openWhatsNew } from '../state/whatsNew'
 import { useStore } from '../state/store'
 import { Logo } from './Logo'
 
@@ -101,6 +102,12 @@ export function AboutSection(): React.JSX.Element {
         <button className="btn sm" onClick={() => void window.api.app.openDataFolder()}>
           <FolderOpen size={13} /> Open data folder
         </button>
+        <button className="btn sm" onClick={() => openWhatsNew()}>
+          <Sparkles size={13} /> What's new
+        </button>
+        <button className="btn sm" onClick={reportBug}>
+          <Bug size={13} /> Report a bug or idea
+        </button>
       </div>
       <div className="about-links">
         {links.map((l) => (
@@ -132,4 +139,15 @@ export function UpdateChip(): React.JSX.Element | null {
     )
   }
   return null
+}
+
+/** Beta builds only: a standing invitation to report what broke. */
+export function FeedbackChip(): React.JSX.Element | null {
+  const beta = useStore(updates, (u) => u.info?.channel === 'beta')
+  if (!beta) return null
+  return (
+    <button className="status-item clickable" title="Report a bug or send an idea (opens GitHub)" onClick={reportBug}>
+      <MessageSquare size={12} /> feedback
+    </button>
+  )
 }

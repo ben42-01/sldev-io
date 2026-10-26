@@ -38,6 +38,8 @@ export interface AppSettings {
   terminalFontSize: number
   terminalFontFamily: string
   notifications: boolean
+  /** a short chime when a mission needs you and you aren't looking at it */
+  notificationSound: boolean
   /** custom shell executable; null = $SHELL / PowerShell */
   shell: string | null
   /** Electron accelerator that shows/hides the window from anywhere; null = off */
@@ -48,6 +50,8 @@ export interface AppSettings {
   customAgents: CustomAgent[]
   /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
   setupSeen: boolean
+  /** the version whose What's new was last shown; null until the first launch records it */
+  lastSeenVersion: string | null
   /** Skills view groups the user opened (true) or closed (false), keyed by `${tab}:${group}` */
   assetGroups: Record<string, boolean>
 }
@@ -73,11 +77,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalFontFamily:
     '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace',
   notifications: true,
+  notificationSound: false,
   shell: null,
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
   customAgents: [],
   setupSeen: false,
+  lastSeenVersion: null,
   assetGroups: {}
 }
 

@@ -3,7 +3,8 @@ import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTermi
 import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
 import { openSetup } from '../state/setup'
-import { checkForUpdates } from '../state/updates'
+import { checkForUpdates, reportBug } from '../state/updates'
+import { openWhatsNew } from '../state/whatsNew'
 import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
@@ -176,6 +177,8 @@ export function staticCommands(): Command[] {
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
     { id: 'app.about', category: 'Help', title: 'About sldev-io', run: showAbout },
+    { id: 'app.whatsNew', category: 'Help', title: "What's new", run: () => openWhatsNew() },
+    { id: 'app.feedback', category: 'Help', title: 'Report a bug or send feedback', run: reportBug },
     { id: 'app.license', category: 'Help', title: 'Enter license key', run: openLicense },
     { id: 'app.checkUpdates', category: 'Help', title: 'Check for updates', run: () => {
       showAbout()

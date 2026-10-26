@@ -58,6 +58,10 @@ export function SettingsPanel(): React.JSX.Element {
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />
           <span>Desktop notifications when a mission needs you or finishes</span>
         </label>
+        <label className="check">
+          <input type="checkbox" checked={s.notificationSound} onChange={(e) => updateSettings({ notificationSound: e.target.checked })} />
+          <span>Play a sound when a mission needs you</span>
+        </label>
         <div className="field">
           <span>Claude Code hooks file (passed with --settings; your own Claude settings are untouched)</span>
           <code className="mono small selectable">{hooks}</code>

@@ -87,6 +87,8 @@ const api = {
   },
   app: {
     focus: (): Promise<void> => ipcRenderer.invoke('app:focus'),
+    /** overlay: a PNG data URL for the Windows taskbar, ignored elsewhere */
+    badge: (count: number, overlay: string | null): Promise<void> => ipcRenderer.invoke('app:badge', count, overlay),
     openDataFolder: (): Promise<string> => ipcRenderer.invoke('app:openDataFolder'),
     info: (): Promise<AppInfo> => ipcRenderer.invoke('app:info')
   },

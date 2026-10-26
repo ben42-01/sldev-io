@@ -1,0 +1,42 @@
+[
+  {
+    "version": "0.1.0-beta.5",
+    "date": null,
+    "changes": [
+      "What's new: after an update, sldev-io shows what changed (also under Help → What's new, and on the website's changelog).",
+      "Report a bug or send an idea from the app: it opens a GitHub issue with your versions already filled in.",
+      "The taskbar and dock icon shows how many missions need you.",
+      "Optional sound when a mission needs you (Settings → General)."
+    ]
+  },
+  {
+    "version": "0.1.0-beta.4",
+    "date": "2026-10-24",
+    "changes": [
+      "The version is shown in the title bar; click it to open Settings → About.",
+      "The terminal installer always installs the version from the website, even over a local build."
+    ]
+  },
+  {
+    "version": "0.1.0-beta.3",
+    "date": "2026-10-24",
+    "changes": [
+      "Automatic updates on Windows and Linux; on macOS the app tells you when a new version is out.",
+      "Settings → About with versions, diagnostics to copy and links to the legal pages.",
+      "The Linux build runs on older distributions (glibc 2.35 and newer)."
+    ]
+  },
+  {
+    "version": "0.1.0-beta.2",
+    "date": "2026-10-24",
+    "changes": ["Installers are published to the public downloads page.", "The free beta runs until the date on the website."]
+  },
+  {
+    "version": "0.1.0-beta.1",
+    "date": "2026-10-24",
+    "changes": [
+      "First beta: terminals, runtimes and tasks, agent missions for Claude Code, Codex, Cursor Agent, GitHub Copilot, OpenCode, Gemini CLI and custom CLIs.",
+      "Skills, workflows, notes, SSH with a credential vault, Docker containers and a first-run setup check."
+    ]
+  }
+]

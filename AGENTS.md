@@ -50,7 +50,8 @@ src/renderer/src/
   dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Preview, Settings
   components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
   styles/app.css  all styling; design tokens on :root
-website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), api/license/* (Polar), public/install.sh,
+website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
+                  src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,
                   pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx)
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/

@@ -16,8 +16,10 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 1. Make sure `master` is green: `gh run list --workflow ci.yml --limit 3`.
 2. Locally: `npm run typecheck && npm test && npm run e2e -- smoke`.
 3. Bump the version without creating a tag (the workflow makes it):
-   `npm version <patch|minor|major|x.y.z> --no-git-tag-version`, then commit
-   `Release vX.Y.Z` on master and push master.
+   `npm version <patch|minor|major|x.y.z> --no-git-tag-version`. In `website/src/content/changelog.json`,
+   make sure the top entry has this version and set its `date` (today, YYYY-MM-DD): the app shows it as
+   What's new after updating, and the website's `/changelog` lists only dated entries (`npm test` checks
+   the version has an entry). Commit `Release vX.Y.Z` on master and push master.
 4. Create and push the branch: `git switch -c release/X.Y.Z && git push -u origin release/X.Y.Z`.
 5. Watch it: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
    If a single OS fails, fix it on the branch and push again. Assets are replaced (`--clobber`).

@@ -8,6 +8,7 @@ import { MissionBoardPanel } from './MissionBoardPanel'
 import { PreviewPanel } from './PreviewPanel'
 import { SettingsPanel } from './SettingsPanel'
 import { SetupPanel } from './SetupPanel'
+import { WhatsNewPanel } from './WhatsNewPanel'
 import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
 import { onPanelRemoved, openTerminal, setDockApi } from './dockApi'
@@ -15,9 +16,10 @@ import { runs } from '../state/runs'
 import { useStore } from '../state/store'
 import { StatusDot } from '../components/StatusDot'
 import { startupSetupCheck } from '../state/setup'
+import { startupWhatsNew } from '../state/whatsNew'
 
 const theme: DockviewTheme = { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 }
-const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionBoardPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionBoardPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, 'whats-new': WhatsNewPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
@@ -70,7 +72,8 @@ async function onReady(e: DockviewReadyEvent): Promise<void> {
     clearTimeout(timer)
     timer = setTimeout(() => void window.api.layout.save(api.toJSON()), 500)
   })
-  void startupSetupCheck()
+  // before the setup check, which marks setupSeen on a first launch
+  void startupWhatsNew().then(startupSetupCheck)
 }
 
 export function Dock(): React.JSX.Element {

@@ -1,6 +1,7 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal } from '../dock/dockApi'
 import { agentCommand, slugify } from '../lib/agents'
+import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
 import { createStore, useStore } from './store'
@@ -171,9 +172,11 @@ export async function refreshStats(id: string): Promise<void> {
 // ── live updates ─────────────────────────────────────────────────
 
 function notify(m: Mission, title: string, body: string): void {
-  if (!workspace.get().notifications) return
+  const { notifications, notificationSound } = workspace.get()
   const panel = missions.get().panels[m.id]
   if (document.hasFocus() && panel && getDockApi()?.activePanel?.id === panel) return
+  if (notificationSound && m.status === 'needs-input') playChime()
+  if (!notifications) return
   const n = new Notification(title, { body: body.slice(0, 200) })
   n.onclick = () => {
     void window.api.app.focus()

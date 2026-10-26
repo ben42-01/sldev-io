@@ -48,7 +48,7 @@ function downloadRedirect(): Plugin {
 }
 
 // extra HTML pages next to index.html (each has <name>/index.html)
-const pages = ['features', 'pricing', 'download', 'terms', 'privacy', 'refunds', 'thanks']
+const pages = ['features', 'pricing', 'download', 'changelog', 'terms', 'privacy', 'refunds', 'thanks']
 
 /** /terms → /terms/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
 function pageRoutes(): Plugin {
