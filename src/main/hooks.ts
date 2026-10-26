@@ -148,7 +148,8 @@ function summarize(mission: string, event: string, p: Record<string, unknown>): 
 function toolSummary(tool: string, input: Record<string, unknown>): string {
   const pick = (k: string): string | undefined => (typeof input[k] === 'string' ? (input[k] as string) : undefined)
   const file = pick('file_path') ?? pick('notebook_path') ?? pick('path')
-  const detail = file ? file.split(/[\\/]/).slice(-2).join('/') : pick('command') ?? pick('pattern') ?? pick('url') ?? pick('description') ?? pick('query')
+  // Claude's Bash and Task calls carry a one-line description, which reads better than the raw command
+  const detail = file ? file.split(/[\\/]/).slice(-2).join('/') : pick('description') ?? pick('command') ?? pick('pattern') ?? pick('url') ?? pick('query')
   return clip(detail ? `${tool}: ${detail}` : tool, 160)!
 }
 

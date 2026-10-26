@@ -3,10 +3,12 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Send, Square, SquareTerminal, Upload, Wrench, X } from 'lucide-react'
 import { describeEvent, layout, sendBackTargets, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
 import { focusPanel, openTerminal } from './dockApi'
+import { getAgent } from '../state/agents'
+import { terminalTail } from '../lib/terminals'
 import { openInEditor } from '../lib/actions'
 import type { GhPrComment } from '@shared/types'
 import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, sendBack, stop, useRun } from '../state/factory'
-import { focusOrResume, isLive, reviewMission, useMission } from '../state/missions'
+import { focusOrResume, isLive, missions, reviewMission, useMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
 
 const W = 196
@@ -243,6 +245,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
         {nr.worktree ? ' · own worktree' : ''}
       </div>
       {nr.note && <div className="pn-note" title={nr.note}>{nr.note}</div>}
+      {nr.status === 'running' && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && <StageActivity missionId={nr.missionIds[0]} />}
       {nr.candidates && (
         <div className="pn-candidates">
           {nr.candidates.map((c) => (
@@ -327,6 +330,36 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * What a running agent stage is doing right now. Print mode shows nothing in the terminal until the
+ * agent exits, so without this a long stage looks stuck. Hook agents report each tool call; for the
+ * others the terminal's last line is the best there is.
+ */
+function StageActivity({ missionId }: { missionId: string }): React.JSX.Element | null {
+  const m = useMission(missionId)
+  // re-render every few seconds so the time moves; the time itself is read at render
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 5000)
+    return () => clearInterval(t)
+  }, [])
+  if (!m || !isLive(m.status)) return null
+  const hooks = getAgent(m.options.agent).hooks
+  const panel = missions.get().panels[missionId]
+  const text = hooks ? m.activity : panel ? terminalTail(panel, 20).split('\n').filter((l) => l.trim()).pop()?.trim() : undefined
+  const at = m.activityAt
+  // a hook agent's time is how long the current step has run; for the others, how long since any output
+  const since = at ? duration(Math.max(0, Date.now() - at)) : ''
+  const when = since && (hooks ? `for ${since}` : `${since} ago`)
+  if (!text && !when) return null
+  return (
+    <div className="pn-activity" title={text}>
+      {text ?? 'working'}
+      {when && <span className="pn-activity-when"> · {when}</span>}
     </div>
   )
 }

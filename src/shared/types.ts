@@ -250,6 +250,8 @@ export interface Mission {
   createdAt: number
   updatedAt: number
   activity?: string
+  /** when the agent last showed it's busy: a tool call started (hooks) or the terminal printed something */
+  activityAt?: number
   lastMessage?: string
   notification?: string
   stats?: DiffStat

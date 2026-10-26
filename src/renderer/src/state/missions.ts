@@ -224,10 +224,10 @@ window.api.missions.onHook((e: HookEvent) => {
       update(m.id, { ...base, status: m.status === 'starting' && m.prompt ? 'working' : 'waiting' })
       break
     case 'prompt':
-      update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text ? `Prompt: ${e.text}` : m.activity })
+      update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text ? `Prompt: ${e.text}` : m.activity, activityAt: Date.now() })
       break
     case 'tool':
-      update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text })
+      update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text, activityAt: Date.now() })
       break
     case 'notification': {
       const idle = /waiting for your input/i.test(e.text ?? '')
@@ -279,7 +279,9 @@ const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function onAgentActivity(m: Mission): void {
   clearTimeout(idleTimers.get(m.id))
-  if (m.status !== 'working' && m.status !== 'needs-input') update(m.id, { status: 'working', notification: undefined })
+  if (m.status !== 'working' && m.status !== 'needs-input') update(m.id, { status: 'working', notification: undefined, activityAt: Date.now() })
+  // output comes in bursts: a few seconds is precise enough for "last output", and spares the store
+  else if (Date.now() - (m.activityAt ?? 0) > 3000) update(m.id, { activityAt: Date.now() })
   idleTimers.set(
     m.id,
     setTimeout(() => {

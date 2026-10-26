@@ -10,7 +10,7 @@ setup: node -e "require('fs').appendFileSync('installed.txt', '1')"
 stages:
   - id: build
     agent: claude
-    prompt: Build it. {intent}
+    prompt: Build it. {intent} SLOW_STEP
   - id: verify
     run: node verify.js
     onFail: { retry: build, max: 1 }
@@ -53,6 +53,9 @@ module.exports = async (h) => {
   const missions = () => h.js(`window.api.store.get('missions').then(s => s.missions ?? s)`)
 
   await start('Recovery', 'Add export')
+  h.expect(await h.until(() => h.js(`document.querySelector('.pipeline-node[data-node="build"] .pn-activity')?.textContent.includes('Run the test suite')`), 20000), 'a running stage shows what its agent is doing')
+  h.expect(await h.js(`/for \\d+s/.test(document.querySelector('.pipeline-node[data-node="build"] .pn-activity-when')?.textContent ?? '')`), 'and for how long')
+  await h.shot('0-activity')
   h.expect(await h.until(async () => (await runs())[0]?.status === 'failed', 60000), 'the check fails, the retry fails too, the run stops')
   let run = (await runs())[0]
   const wt = run.worktree.path

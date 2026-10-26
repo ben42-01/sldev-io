@@ -12,6 +12,8 @@ if (args.includes('-p')) {
   const prompt = args[args.length - 1]
   fire('SessionStart', { source: 'startup' }); sleep(300)
   fire('UserPromptSubmit', { prompt }); sleep(300)
+  // a long step, so the pipeline can show what a stage is doing while it runs
+  if (prompt.includes('SLOW_STEP')) { fire('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test', description: 'Run the test suite' } }); sleep(4000) }
   // the last run file in the prompt is this step's own output; earlier ones are inputs
   const out = [...prompt.matchAll(/(\/\S+?\.sldev\/runs\/\S+?\.md)/g)].pop()
   const mi = args.indexOf('--mcp-config')
