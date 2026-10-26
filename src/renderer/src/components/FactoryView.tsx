@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Factory, FilePlus2, Plus } from 'lucide-react'
+import { Check, Factory, FilePlus2, Import, Plus, Share2 } from 'lucide-react'
 import { issueText, runtimeNames, type FactoryRun } from '@shared/factory'
 import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
-import { factory, loadRecipes, openPipeline, removeRun, startRun } from '../state/factory'
+import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, removeRun, startRun } from '../state/factory'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
@@ -15,6 +15,7 @@ export function FactoryView(): React.JSX.Element {
   const runs = useStore(factory, (s) => s.runs)
   const errors = useStore(factory, (s) => s.recipeErrors)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   useEffect(() => void loadRecipes(root), [root])
   const mine = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
 
@@ -32,10 +33,15 @@ export function FactoryView(): React.JSX.Element {
           <div className="empty-state"><p>Open a git project to run factory recipes in it.</p></div>
         ) : creating ? (
           <NewRunForm root={root} onDone={() => setCreating(false)} />
+        ) : importing ? (
+          <ImportForm root={root} onDone={() => setImporting(false)} />
         ) : (
           <div className="view-footer">
             <button className="btn primary full" onClick={() => setCreating(true)}>
               <Factory size={14} /> New factory run
+            </button>
+            <button className="btn full" onClick={() => setImporting(true)}>
+              <Import size={14} /> Import recipe
             </button>
           </div>
         )}
@@ -159,7 +165,8 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
               ))}
             </div>
           )}
-          <div className="hint">
+          <div className="hint recipe-links">
+            <ShareLink text={() => recipeBundle(entry)} />
             {entry.builtin ? (
               <span className="link" onClick={() => void addToProject()}>
                 <FilePlus2 size={11} /> Copy to .sldev/factory to edit it
@@ -186,6 +193,63 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
         <button type="button" className="btn" onClick={onDone}>Cancel</button>
         <button type="submit" className="btn primary" disabled={busy || !intent.trim() || !entry}>
           <Factory size={14} /> {busy ? 'Starting…' : 'Start'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Copies the recipe bundle; the other person pastes it into Import recipe. */
+function ShareLink({ text }: { text: () => string }): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  const copy = (): void => {
+    void navigator.clipboard.writeText(text()).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <span className="link" title="Copy the recipe and its agents to paste anywhere" onClick={copy}>
+      {copied ? <Check size={11} /> : <Share2 size={11} />} {copied ? 'Copied' : 'Share'}
+    </span>
+  )
+}
+
+function ImportForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState('')
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const r = await importRecipe(root, text)
+      setResult(
+        [`Added "${r.name}" to .sldev/factory.`, r.added.length ? `New agents: ${r.added.join(', ')}.` : '', r.kept.length ? `Kept your own ${r.kept.join(', ')}.` : '']
+          .filter(Boolean)
+          .join(' ')
+      )
+      setText('')
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form className="form inline-form import-form" onSubmit={(e) => void submit(e)}>
+      <label className="field">
+        <span>Paste a shared recipe (or any recipe YAML)</span>
+        <textarea rows={8} value={text} autoFocus className="mono" placeholder="# sldev-io recipe …" onChange={(e) => setText(e.target.value)} />
+      </label>
+      {error && <div className="bad">{error}</div>}
+      {result && <div className="ok">{result}</div>}
+      <div className="form-actions">
+        <button type="button" className="btn" onClick={onDone}>{result ? 'Done' : 'Cancel'}</button>
+        <button type="submit" className="btn primary" disabled={busy || !text.trim()}>
+          <Import size={14} /> {busy ? 'Importing…' : 'Import'}
         </button>
       </div>
     </form>

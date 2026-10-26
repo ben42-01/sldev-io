@@ -27,10 +27,11 @@ scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-action
 | 8 | Launch polish | M | Tour chapters, features page, docs, e2e for all of the above |
 | 9 | PR feedback loop | S | Review comments on the factory's PR go back to an agent; the factory doesn't stop at "PR opened" |
 | 10 | Run history and replay | S | Trust in an automated pipeline: see what happened when, and the graph at any moment |
+| 11 | Share recipes | S | A recipe and its agents as one paste; lets people trade recipes (and the website show some) |
 
 Not in 1.0 (candidates for 1.x, in rough order): money cost (needs per-model price tables that go stale), project map / code graph for
 agent context, project memory ("lore"), headless `sldev run` for CI, sandboxed
-runs, team sharing of recipes and agents.
+runs, a shared team library of recipes and agents (1.0 has copy-and-paste sharing).
 
 ---
 
@@ -264,6 +265,15 @@ feedback hand-over and the push land in `FactoryRun.events` without each transit
 itself. **History** on the pipeline panel lists them with times since the start; the slider (or a
 click on an event) replays the graph as it was then (`statusesAt`), read-only. Runs from before this
 change have no history.
+
+## 11. Share recipes
+
+**Share** (next to a recipe in the new-run form) copies one YAML text: a comment line, `sldev: sldev-recipe/1`,
+the recipe as written, and the custom agent profiles it names (`makeBundle` in `src/shared/recipeBundle.ts`;
+built-in starters are left out). **Import recipe** in the Factory view takes that text, or any plain recipe
+YAML, and writes `.sldev/factory/<name>.yml` and `.sldev/agents/<name>.md`. An agent you already have by
+that name is kept, never overwritten. No file dialogs: it's a paste, so it works through chat, issues and
+gists. e2e: `recipe-share`.
 
 ## Build order
 

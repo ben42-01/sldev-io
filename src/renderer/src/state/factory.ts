@@ -23,6 +23,7 @@ import {
 } from '@shared/factory'
 import { applyProfile } from '@shared/profiles'
 import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
+import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import type { AgentOptions, GhPrComment } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
@@ -30,7 +31,7 @@ import { slugify } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
 import { allAgents } from '../lib/agents'
 import { getMission, missions, startMission } from './missions'
-import { allProfiles } from './profiles'
+import { allProfiles, loadProjectProfiles } from './profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
 
@@ -42,6 +43,8 @@ import { workspace } from './workspace'
 
 export interface RecipeEntry {
   recipe: Recipe
+  /** the YAML it came from, for sharing */
+  text: string
   /** built-in slug, for "Add to project" */
   builtin?: string
 }
@@ -90,14 +93,40 @@ export async function loadRecipes(root: string | null): Promise<void> {
   const recipeErrors: Record<string, string> = {}
   for (const f of root ? await window.api.factory.recipes(root).catch(() => []) : []) {
     const r = parseRecipe(f.text, f.path)
-    if (r.recipe) recipes.push({ recipe: r.recipe })
+    if (r.recipe) recipes.push({ recipe: r.recipe, text: f.text })
     else recipeErrors[f.path] = r.error
   }
   for (const b of BUILTIN_RECIPES) {
     const r = parseRecipe(b.text)
-    if (r.recipe && !recipes.some((x) => x.recipe.name === r.recipe.name)) recipes.push({ recipe: r.recipe, builtin: b.slug })
+    if (r.recipe && !recipes.some((x) => x.recipe.name === r.recipe.name)) recipes.push({ recipe: r.recipe, text: b.text, builtin: b.slug })
   }
   factory.set({ recipes, recipeErrors })
+}
+
+/** The recipe and its agent profiles as one text to paste anywhere. */
+export function recipeBundle(entry: RecipeEntry): string {
+  return makeBundle(entry.text, entry.recipe, allProfiles(), allAgents(workspace.get().customAgents).map((a) => a.id))
+}
+
+/**
+ * Adds a pasted bundle (or plain recipe) to the project: the recipe goes to .sldev/factory, its
+ * agents to .sldev/agents. An agent you already have by that name is kept as it is.
+ */
+export async function importRecipe(root: string, text: string): Promise<{ name: string; added: string[]; kept: string[] }> {
+  const b = readBundle(text)
+  if ('error' in b) throw new Error(b.error)
+  const added: string[] = []
+  const kept: string[] = []
+  for (const p of b.profiles) {
+    if (allProfiles().some((x) => x.name.toLowerCase() === p.name.toLowerCase())) kept.push(p.name)
+    else {
+      await window.api.profiles.save(root, { ...p, id: '', scope: 'project', path: undefined })
+      added.push(p.name)
+    }
+  }
+  await window.api.factory.saveRecipe(root, slugify(b.recipe.name), b.recipeText)
+  await Promise.all([loadProjectProfiles(root), loadRecipes(root)])
+  return { name: b.recipe.name, added, kept }
 }
 
 export function openPipeline(runId: string): void {

@@ -3106,3 +3106,15 @@ a {
 .run-events li.approval .link {
   color: #f0b44c;
 }
+
+/* ── factory: share and import recipes ─────── */
+.view-footer .btn.full + .btn.full {
+  margin-top: 6px;
+}
+.recipe-links {
+  display: flex;
+  gap: 14px;
+}
+.import-form textarea.mono {
+  font: 11.5px var(--font-mono);
+}
