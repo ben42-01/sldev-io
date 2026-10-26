@@ -59,7 +59,8 @@ src/renderer/src/
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
                   src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,
-                  pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx)
+                  pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx),
+                  /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts)
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```

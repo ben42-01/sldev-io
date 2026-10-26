@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { ChangelogList } from './components/Changelog'
 import { CompareTable } from './components/Compare'
+import { DocArticle, DocsIndex } from './components/Docs'
 import { DownloadOptions } from './components/Download'
 import { FeatureGrid } from './components/Features'
 import { FinalCta } from './components/Footer'
@@ -9,6 +10,7 @@ import { LegalPage } from './components/LegalPage'
 import { FaqSection, PricingPlans } from './components/Pricing'
 import { AgentAgnostic, HowItWorks } from './components/Spotlight'
 import { Thanks } from './components/Thanks'
+import { docs } from './content/docs'
 import { legalPages, type LegalPageId } from './content/legal'
 import { pricing, site } from './lib/pricing'
 import './fonts'
@@ -99,6 +101,29 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
       </Layout>
     )
   },
+  docs: {
+    title: 'Docs',
+    render: () => (
+      <Layout page="docs">
+        <PageHeader eyebrow="Docs" title={<>Guides for <span className="brand-text">sldev-io</span></>} lead="How to get more out of it, step by step." />
+        <DocsIndex />
+      </Layout>
+    )
+  },
+  // /docs/<id> pages set data-page="docs-<id>"
+  ...Object.fromEntries(
+    docs.map((d) => [
+      `docs-${d.id}`,
+      {
+        title: d.title,
+        render: () => (
+          <Layout page="docs">
+            <DocArticle page={d} />
+          </Layout>
+        )
+      }
+    ])
+  ),
   thanks: {
     title: 'Thanks for buying sldev-io',
     render: () => (

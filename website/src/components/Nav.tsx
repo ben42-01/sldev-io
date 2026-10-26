@@ -3,11 +3,12 @@ import { useState } from 'react'
 import { site } from '../lib/pricing'
 import { Logo } from './Logo'
 
-export type NavPage = 'features' | 'pricing' | 'download'
+export type NavPage = 'features' | 'pricing' | 'download' | 'docs'
 
 const links: { page?: NavPage; href: string; label: string }[] = [
   { page: 'features', href: '/features', label: 'Features' },
   { page: 'pricing', href: '/pricing', label: 'Pricing' },
+  { page: 'docs', href: '/docs', label: 'Docs' },
   { href: '/pricing#faq', label: 'FAQ' }
 ]
 

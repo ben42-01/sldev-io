@@ -24,6 +24,14 @@
       "destination": "/compare/index.html"
     },
     {
+      "source": "/docs",
+      "destination": "/docs/index.html"
+    },
+    {
+      "source": "/docs/recipes",
+      "destination": "/docs/recipes/index.html"
+    },
+    {
       "source": "/download/:os",
       "destination": "/api/download?os=:os"
     },
