@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
 import { existsSync, renameSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
 import { basename, join } from 'path'
@@ -177,6 +177,11 @@ function registerIpc(): void {
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkForUpdates())
   ipcMain.handle('update:install', () => installUpdate(win))
+  // Missions that need you; Windows gets a drawn overlay because it has no badge count.
+  ipcMain.handle('app:badge', (_e, count: number, overlay: string | null) => {
+    if (process.platform === 'win32') win?.setOverlayIcon(overlay ? nativeImage.createFromDataURL(overlay) : null, count ? `${count} need you` : '')
+    else app.setBadgeCount(count)
+  })
   ipcMain.handle('app:focus', () => {
     if (!win) return
     if (win.isMinimized()) win.restore()

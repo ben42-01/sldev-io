@@ -16,6 +16,10 @@
       "destination": "/features/index.html"
     },
     {
+      "source": "/changelog",
+      "destination": "/changelog/index.html"
+    },
+    {
       "source": "/download/:os",
       "destination": "/api/download?os=:os"
     },

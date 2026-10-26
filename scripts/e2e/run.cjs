@@ -72,9 +72,10 @@ const licenseServer = http.createServer((req, res) => {
   })
 })
 licenseServer.unref()
-// skip the first-run setup panel unless a scenario turns it back on (openFixture({ setupSeen: false }))
+// skip the first-run setup panel and What's new unless a scenario turns them back on
+// (openFixture({ setupSeen: false }), openFixture({ lastSeenVersion: '…' }))
 fs.mkdirSync(path.join(tmp, 'userdata'), { recursive: true })
-fs.writeFileSync(path.join(tmp, 'userdata', 'settings.json'), JSON.stringify({ setupSeen: true }))
+fs.writeFileSync(path.join(tmp, 'userdata', 'settings.json'), JSON.stringify({ setupSeen: true, lastSeenVersion: app.getVersion() }))
 
 // fixture project: a git repo with a package.json so runtimes, missions and diffs have something to work on
 const fixture = path.join(tmp, 'project')

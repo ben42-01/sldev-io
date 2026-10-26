@@ -13,6 +13,7 @@ import { initWorkspace, workspace } from './state/workspace'
 import { useStore } from './state/store'
 import { beta, initBeta } from './state/beta'
 import { initUpdates } from './state/updates'
+import { initBadge } from './state/badge'
 import { BetaBanner, BetaEnded } from './components/BetaGate'
 
 export function App(): React.JSX.Element {
@@ -27,6 +28,7 @@ export function App(): React.JSX.Element {
       if (!beta.get().locked) void initWorkspace()
     })
     void initUpdates()
+    initBadge()
     void window.api.fs.home().then(setHome)
   }, [])
 

@@ -2960,3 +2960,23 @@ a {
   text-align: left;
   cursor: pointer;
 }
+
+/* ── what's new ────────────────────────────── */
+.whats-new h3 {
+  text-transform: none;
+  font-family: var(--font-mono);
+}
+.whats-new h3 .muted {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+.whats-new-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}

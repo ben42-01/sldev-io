@@ -3,6 +3,9 @@ import { createStore } from './store'
 
 export const updates = createStore<{ status: UpdateStatus | null; info: AppInfo | null }>({ status: null, info: null })
 
+// Public: the code repo is private, and the downloads repo is where users already get the app.
+const ISSUES_URL = 'https://github.com/ben42-01/downloads.sldev.io/issues/new'
+
 export const siteLink = (path: string): string => `${__SITE_URL__}${path}`
 
 export async function initUpdates(): Promise<void> {
@@ -29,4 +32,23 @@ export function diagnostics(info: AppInfo, status: UpdateStatus | null): string 
     `${info.os} (${info.platform} ${info.arch})`,
     `Updates: ${status?.state ?? 'unknown'}${status?.version ? ` ${status.version}` : ''}${status?.error ? ` (${status.error})` : ''}`
   ].join('\n')
+}
+
+/** A new GitHub issue with a short template and the diagnostics filled in. */
+export function feedbackUrl(info: AppInfo | null, status: UpdateStatus | null): string {
+  const body = [
+    '**What happened, or what would you like?**',
+    '',
+    '',
+    '**Steps to reproduce (for a bug)**',
+    '1. ',
+    '',
+    ...(info ? ['```text', diagnostics(info, status), '```'] : [])
+  ].join('\n')
+  return `${ISSUES_URL}?${new URLSearchParams({ body })}`
+}
+
+export function reportBug(): void {
+  const { info, status } = updates.get()
+  void window.api.shell.openExternal(feedbackUrl(info, status))
 }

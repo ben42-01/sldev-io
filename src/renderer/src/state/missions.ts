@@ -2,6 +2,7 @@ import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/ty
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
 import { agentCommand, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
+import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
@@ -201,10 +202,12 @@ export async function refreshStats(id: string): Promise<void> {
 // ── live updates ─────────────────────────────────────────────────
 
 function notify(m: Mission, title: string, body: string): void {
-  if (!workspace.get().notifications) return
+  const { notifications, notificationSound } = workspace.get()
   if (m.factory && m.status !== 'needs-input') return
   const panel = missions.get().panels[m.id]
   if (document.hasFocus() && panel && getDockApi()?.activePanel?.id === panel) return
+  if (notificationSound && m.status === 'needs-input') playChime()
+  if (!notifications) return
   const n = new Notification(title, { body: body.slice(0, 200) })
   n.onclick = () => {
     void window.api.app.focus()
