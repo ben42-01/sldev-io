@@ -60,13 +60,17 @@ function CopyCommand() {
 
 const count = new Intl.NumberFormat('en-US')
 
+/** Below this the counts stay hidden; /download?count shows them anyway. */
+const MIN_PUBLIC_DOWNLOADS = 100
+
 /** Download counts from api/stats.ts; shows nothing until they load, or if they don't. */
 function useDownloadStats(): DownloadStats | null {
   const [stats, setStats] = useState<DownloadStats | null>(null)
   useEffect(() => {
+    const min = new URLSearchParams(location.search).has('count') ? 0 : MIN_PUBLIC_DOWNLOADS
     void fetch('/api/stats')
       .then((r) => (r.ok ? (r.json() as Promise<DownloadStats>) : null))
-      .then((s) => setStats(s && s.total > 0 ? s : null))
+      .then((s) => setStats(s && s.total >= min ? s : null))
       .catch(() => {})
   }, [])
   return stats
