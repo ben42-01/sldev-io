@@ -138,6 +138,20 @@ Placeholders: `{intent}`, `{issue}`, `{out}` (this stage's output file), `{<stag
 - **Bake-off**: a stage with several agents forks one worktree per agent from the run's current
   commit, runs them in parallel, and shows their diffs side by side with stats and test results.
   You pick a winner; the run continues on the winner's branch and the others are removed.
+- **Setup**: a fresh worktree has no `node_modules`, so before its first stage the run installs
+  dependencies, detected from the lockfile (`npm ci`, `pnpm install --frozen-lockfile`, yarn, bun,
+  `uv sync`, `poetry install`), once per worktree. A recipe can set `setup: <command>` or `setup: none`.
+  A failing setup pauses the run with the log.
+- **Unattended permissions**: print-mode stages have nobody to approve a tool call, so each agent runs
+  with a mode that lets it work alone (Claude `auto`, Codex `full-auto`, Gemini `auto_edit`), set per
+  agent in Settings → Software Factory; a stage's profile can set its own.
+- **No output, no pass**: an agent stage that ends without writing its output file fails and says so,
+  instead of handing the next stage nothing.
+- **When a run fails** you can steer it: a failed check is **sent back** to the stages it retries
+  with your note and its log (its retries start over), a failed agent stage is tried again with the
+  failure. A failed stage opens a terminal in its worktree to fix things by hand, then "check again".
+  A finished agent stage can be **talked to**: its session continues in a terminal, and what it
+  changes is committed before the next stage.
 - **Retry a stage** with the same or a different agent from the pipeline view.
 - Runs are persisted (`factoryRuns` store). After a restart a run comes back **paused**, never
   re-running a stage on its own (layout-restore invariant).
@@ -315,6 +329,9 @@ against the real tools (on a scratch repo, with a cheap model):
 - [ ] **PR feedback**: on that PR, a review, a conversation comment and a line comment show up in
       Review feedback (the JSON field names from `gh pr view` and the REST pulls/comments API), and
       Push update lands on the PR.
+- [ ] **Unattended stages**: Claude `-p --permission-mode auto` can edit, run `npm test` and commit
+      without prompts (auto mode needs a plan that has it; otherwise pick another mode in Settings);
+      Codex `exec --full-auto` and Gemini `-p --approval-mode auto_edit` do the work too.
 - [ ] **Model ids in the logs**: Claude Code transcripts carry `message.model` and Codex sessions a
       `turn_context` line with `model`; the dashboard prices them (unpriced otherwise).
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list

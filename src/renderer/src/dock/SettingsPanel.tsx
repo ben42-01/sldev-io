@@ -74,6 +74,10 @@ export function SettingsPanel(): React.JSX.Element {
         </div>
       </section>
       <section>
+        <h3>Software Factory</h3>
+        <FactorySettings />
+      </section>
+      <section>
         <h3>Setup</h3>
         <div className="field">
           <span>Check git, the GitHub CLI, Node.js, Docker and agent CLIs, and install what's missing.</span>
@@ -97,6 +101,39 @@ export function SettingsPanel(): React.JSX.Element {
       <LicenseSection />
       <AboutSection />
     </div>
+  )
+}
+
+/** Stages run in print mode with nobody to approve a tool call, so each agent gets a mode that lets it work alone. */
+function FactorySettings(): React.JSX.Element {
+  const agents = useAgents().filter((a) => a.modes.length > 0)
+  const modes = useStore(workspace, (w) => w.factoryModes ?? {})
+  const pick = (id: string, value: string | undefined): void => {
+    const next = { ...modes }
+    if (value === undefined) delete next[id]
+    else next[id] = value
+    updateSettings({ factoryModes: next })
+  }
+  const label = (a: (typeof agents)[number], v: string | undefined): string => a.modes.find((m) => m.value === v)?.label ?? 'CLI default'
+  return (
+    <>
+      <div className="field">
+        <span>
+          Permission mode for agent stages. Stages run unattended in their own worktree, so a mode that asks before every edit or command
+          leaves them unable to do anything. A stage's agent profile can set its own mode.
+        </span>
+      </div>
+      {agents.map((a) => (
+        <label key={a.id} className="field">
+          <span>{a.name}</span>
+          <select value={modes[a.id] ?? '__recommended'} onChange={(e) => pick(a.id, e.target.value === '__recommended' ? undefined : e.target.value)}>
+            <option value="__recommended">Recommended: {label(a, a.unattendedMode)}</option>
+            {a.modes.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            <option value="">CLI default</option>
+          </select>
+        </label>
+      ))}
+    </>
   )
 }
 

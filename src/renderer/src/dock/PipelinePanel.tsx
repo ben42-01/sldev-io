@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Square, SquareTerminal, Upload, X } from 'lucide-react'
-import { describeEvent, layout, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
-import { focusPanel } from './dockApi'
+import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Send, Square, SquareTerminal, Upload, Wrench, X } from 'lucide-react'
+import { describeEvent, layout, sendBackTargets, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
+import { focusPanel, openTerminal } from './dockApi'
 import { openInEditor } from '../lib/actions'
 import type { GhPrComment } from '@shared/types'
-import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, stop, useRun } from '../state/factory'
+import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, sendBack, stop, useRun } from '../state/factory'
 import { focusOrResume, isLive, reviewMission, useMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
 
 const W = 196
-const BASE_H = 112
+const BASE_H = 128
 /** each bake-off version gets a row */
 const ROW_H = 26
 const GX = 44
@@ -218,8 +218,12 @@ function RunHistory({ run, at, setAt }: { run: FactoryRun; at: number | null; se
 }
 
 function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: RecipeNode; nr: NodeRun; readOnly?: boolean }): React.JSX.Element {
-  const [rejecting, setRejecting] = useState(false)
+  /** the note box: rejecting an approval, or sending a failed stage back */
+  const [asking, setAsking] = useState<'reject' | 'send' | null>(null)
   const [note, setNote] = useState('')
+  const setRejecting = (on: boolean): void => setAsking(on ? 'reject' : null)
+  const targets = nr.status === 'failed' ? sendBackTargets(run, node.id) : []
+  const cwd = nr.worktree?.path ?? run.worktree.path
   const Icon = node.kind === 'agent' ? Bot : node.kind === 'run' ? SquareTerminal : GitPullRequest
   const who = node.kind === 'agent' ? node.agents.join(' vs ') : node.kind === 'run' ? node.run.join(' · ') : `into ${run.worktree.base}`
   const out = `${run.outDir}/${node.id}.md`
@@ -258,10 +262,19 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           ))}
         </div>
       )}
-      {readOnly ? null : rejecting ? (
-        <form className="pn-reject" onSubmit={(e) => (e.preventDefault(), reject(run.id, node.id, note), setRejecting(false))}>
-          <input autoFocus value={note} placeholder="What should change?" onChange={(e) => setNote(e.target.value)} />
-          <button className="icon-btn" title="Send back"><Check size={13} /></button>
+      {readOnly ? null : asking ? (
+        <form
+          className="pn-reject"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (asking === 'reject') reject(run.id, node.id, note)
+            else sendBack(run.id, node.id, note)
+            setAsking(null)
+            setNote('')
+          }}
+        >
+          <input autoFocus value={note} placeholder={asking === 'reject' ? 'What should change?' : 'What should it do? (optional)'} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setAsking(null)} />
+          <button className="icon-btn" title={asking === 'reject' ? 'Send back' : `Send to ${targets.join(', ')}`}><Check size={13} /></button>
         </form>
       ) : (
         <div className="pn-actions">
@@ -294,8 +307,23 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           {node.kind === 'agent' && (nr.status === 'done' || nr.status === 'approval') && (
             <button className="icon-btn" title="Open its output" onClick={() => void openInEditor(out)}><FileText size={13} /></button>
           )}
+          {nr.status === 'failed' && run.status !== 'running' && targets.length > 0 && (
+            <button className="btn sm" title="Run it again with the failure and your note" onClick={() => setAsking('send')}>
+              <Send size={11} /> {targets.length === 1 && targets[0] === node.id ? 'Try again' : `Send to ${targets.join(', ')}`}
+            </button>
+          )}
+          {(nr.status === 'failed' || nr.status === 'done' || nr.status === 'approval') && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && (
+            <button className="icon-btn" title="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." onClick={() => focusOrResume(nr.missionIds[0])}>
+              <MessageSquare size={13} />
+            </button>
+          )}
+          {nr.status === 'failed' && (
+            <button className="icon-btn" title={`Open a terminal in the worktree to fix it by hand (${cwd})`} onClick={() => openTerminal({ cwd, title: `${node.id} · fix` })}>
+              <Wrench size={13} />
+            </button>
+          )}
           {(nr.status === 'failed' || nr.status === 'done') && run.status !== 'running' && (
-            <button className="icon-btn" title="Run this step again" onClick={() => retry(run.id, node.id)}><RotateCcw size={13} /></button>
+            <button className="icon-btn" title={node.kind === 'run' ? 'Check again' : 'Run this step again'} onClick={() => retry(run.id, node.id)}><RotateCcw size={13} /></button>
           )}
         </div>
       )}

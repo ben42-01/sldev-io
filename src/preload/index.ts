@@ -169,7 +169,9 @@ const api = {
     prepare: (dir: string): Promise<void> => ipcRenderer.invoke('factory:prepare', dir),
     read: (path: string): Promise<string | null> => ipcRenderer.invoke('factory:read', path),
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('factory:write', path, text),
-    copy: (from: string, to: string): Promise<boolean> => ipcRenderer.invoke('factory:copy', from, to)
+    copy: (from: string, to: string): Promise<boolean> => ipcRenderer.invoke('factory:copy', from, to),
+    setupPlan: (dir: string, command: string | false | undefined): Promise<string | null> => ipcRenderer.invoke('factory:setupPlan', dir, command),
+    setup: (dir: string, command: string): Promise<{ ok: boolean; log: string }> => ipcRenderer.invoke('factory:setup', dir, command)
   },
   rules: {
     state: (root: string): Promise<RulesState> => ipcRenderer.invoke('rules:state', root),

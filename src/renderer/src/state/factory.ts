@@ -15,6 +15,7 @@ import {
   resolveAgentSpec,
   resolveRun,
   retryNode,
+  sendBack as sendBackNode,
   totalLines,
   type FactoryRun,
   type Finish,
@@ -27,9 +28,8 @@ import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import type { AgentOptions, GhPrComment } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
-import { slugify } from '../lib/agents'
+import { allAgents, findAgent, slugify, stageMode } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
-import { allAgents } from '../lib/agents'
 import { getMission, missions, startMission } from './missions'
 import { allProfiles, loadProjectProfiles } from './profiles'
 import { createStore, useStore } from './store'
@@ -248,6 +248,31 @@ function nodeOptions(spec: string): AgentOptions {
   return { ...o, agent: r.agent ?? o.agent }
 }
 
+/** Print-mode stages have nobody to approve a tool call, so they get the unattended mode unless the profile sets one. */
+function stageOptions(spec: string, interactive: boolean): AgentOptions {
+  const o = { ...nodeOptions(spec), print: !interactive }
+  if (interactive || o.permissionMode) return o
+  const { customAgents, factoryModes } = workspace.get()
+  return { ...o, permissionMode: stageMode(findAgent(o.agent, customAgents), factoryModes) }
+}
+
+/** Installs dependencies in a worktree before its first stage. False = it failed and the run is paused. */
+async function setUp(runId: string, dir: string): Promise<boolean> {
+  const run = getRun(runId)!
+  const command = await window.api.factory.setupPlan(dir, run.recipe.setup).catch(() => null)
+  if (!command) return true
+  put({ ...run, note: `Setting up the worktree: ${command}`, updatedAt: Date.now() })
+  const r = await window.api.factory.setup(dir, command)
+  const cur = getRun(runId)!
+  if (r.ok) {
+    put({ ...cur, note: undefined, updatedAt: Date.now() })
+    return true
+  }
+  const last = r.log.trim().split('\n').slice(-3).join(' ').slice(0, 300)
+  put({ ...cur, status: 'paused', note: `Setup failed (${command}) in ${dir}: ${last}. Fix it there, or set "setup:" in the recipe, then resume.`, updatedAt: Date.now() })
+  return false
+}
+
 async function startNode(runId: string, nodeId: string, together: string[]): Promise<void> {
   let run = getRun(runId)!
   const node = run.recipe.nodes.find((n) => n.id === nodeId)!
@@ -259,6 +284,8 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
   const worktree = own ? await window.api.git.addWorktree(run.worktree.repo, `${run.worktree.branch.replace(/^sldev\//, '')}-${nodeId}`, run.worktree.branch) : undefined
   const cwd = worktree?.path ?? run.worktree.path
   if (worktree) await window.api.factory.prepare(`${cwd}/.sldev/runs/${run.id}`)
+  if (node.kind !== 'pr' && !(await setUp(runId, cwd))) return
+  run = getRun(runId)!
   run = put(nodeStarted(run, nodeId, Date.now(), { worktree, merged: undefined, missionIds: [], panelId: undefined, winner: undefined }))
   const nr = run.nodes[nodeId]
   const outs = Object.fromEntries(run.recipe.nodes.map((n) => [n.id, outFile(run.worktree.path, run.id, n.id)]))
@@ -285,7 +312,7 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
   if (isBakeoff(node)) return startBakeoff(runId, nodeId, outs)
 
   try {
-    const options = { ...nodeOptions(node.agents[0]), print: !node.interactive }
+    const options = stageOptions(node.agents[0], node.interactive)
     const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback })
     const m = await startMission({ prompt, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })
     const cur = getRun(runId)!
@@ -303,10 +330,11 @@ async function startBakeoff(runId: string, nodeId: string, outs: Record<string, 
   const candidates: NonNullable<NodeRun['candidates']> = []
   try {
     for (const spec of node.agents) {
-      const options = { ...nodeOptions(spec), print: !node.interactive }
+      const options = stageOptions(spec, node.interactive)
       const slug = `${run.worktree.branch.replace(/^sldev\//, '')}-${nodeId}-${slugify(spec)}`
       const worktree = await window.api.git.addWorktree(run.worktree.repo, slug, run.worktree.branch)
       await window.api.factory.prepare(`${worktree.path}/.sldev/runs/${run.id}`)
+      if (!(await setUp(runId, worktree.path))) return
       const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(worktree.path, run.id, nodeId), outs, log: nr.feedback })
       const m = await startMission({ prompt, title: `${nodeId} (${spec}): ${run.intent}`.slice(0, 60), root: run.root, cwd: worktree.path, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(getRun(runId)!) })
       candidates.push({ spec, missionId: m.id, worktree, status: 'running' })
@@ -366,6 +394,14 @@ async function completeNode(run: FactoryRun, nodeId: string, f: Finish): Promise
   }
   if (node.kind === 'agent') {
     await commit(cwd, `factory(${nodeId}): ${run.intent}`.slice(0, 100))
+    // later stages read this file; without it they'd build on nothing
+    if (f.ok && !node.interactive && (await window.api.factory.read(outFile(cwd, run.id, nodeId))) === null) {
+      const panel = nr.missionIds[0] ? missions.get().panels[nr.missionIds[0]] : undefined
+      const tail = panel ? terminalTail(panel) : ''
+      const reason = `Ended without writing .sldev/runs/${run.id}/${nodeId}.md. Open its terminal to see why`
+      finish(runId, nodeId, { ok: false, reason, log: `The agent ended without writing ${outFile(cwd, run.id, nodeId)}.${tail ? `\n\nIts last output:\n${tail}` : ''}` })
+      return
+    }
     if (nr.worktree) await window.api.factory.copy(outFile(cwd, run.id, nodeId), outFile(run.worktree.path, run.id, nodeId))
     if (node.maxDiff !== undefined) diffLines = totalLines(await window.api.git.diffStat(cwd, run.worktree.base).catch(() => ({ files: 0, insertions: 0, deletions: 0 })))
   }
@@ -419,6 +455,14 @@ export function retry(runId: string, nodeId: string): void {
   const run = getRun(runId)
   if (!run) return
   put(retryNode(run, nodeId, Date.now()))
+  void tick(runId)
+}
+
+/** A failed stage goes back to the agent that can fix it, with your note. */
+export function sendBack(runId: string, nodeId: string, note: string): void {
+  const run = getRun(runId)
+  if (!run) return
+  put(sendBackNode(run, nodeId, note, Date.now()))
   void tick(runId)
 }
 

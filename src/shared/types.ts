@@ -48,6 +48,8 @@ export interface AppSettings {
   globalHotkey: string | null
   /** agent preselected for new missions and tasks */
   defaultAgent: string
+  /** permission mode per agent id for Factory stages; missing = the agent's recommended one, '' = the CLI default */
+  factoryModes: Record<string, string>
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
   /** give Claude Code and Codex missions the sldev MCP tools (status, output, other missions) */
@@ -124,6 +126,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
   customAgents: [],
+  factoryModes: {},
   agentProfiles: [],
   agentTools: true,
   setupSeen: false,

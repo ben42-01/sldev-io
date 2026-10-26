@@ -70,7 +70,9 @@ A recipe is a graph of stages (`needs`); agent stages are missions in print mode
 terminals, the pr stage waits for a click. `src/shared/factory.ts` is the pure state machine (every
 transition is unit-tested); `state/factory.ts` does the side effects: worktrees, missions, commits
 after every stage, merging parallel branches at the fan-in. Hand-offs between stages are files in
-`<worktree>/.sldev/runs/<run>/`. A restart pauses runs; nothing re-runs on its own.
+`<worktree>/.sldev/runs/<run>/`. A restart pauses runs; nothing re-runs on its own. Each new worktree
+gets its dependencies installed once (`setupCommand`, or the recipe's `setup:`), and print-mode stages
+run with the agent's `unattendedMode` (Settings → Software Factory), because nobody is there to approve.
 
 ### Data flow for a feature
 

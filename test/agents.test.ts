@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ClaudeAsset } from '@shared/types'
 import { COLLAPSE_OVER, groupAssets, isGroupOpen } from '@renderer/lib/assets'
-import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, skillPrompt, slugify } from '@renderer/lib/agents'
+import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, skillPrompt, slugify, stageMode } from '@renderer/lib/agents'
 
 const agent = (id: string) => findAgent(id)
 
@@ -69,6 +69,17 @@ describe('custom agents', () => {
   it('falls back to Claude for unknown ids', () => {
     expect(findAgent('nope').id).toBe('claude')
     expect(findAgent('c1', [{ id: 'c1', name: 'Aider', command: 'aider' }]).name).toBe('Aider')
+  })
+})
+
+describe('stageMode', () => {
+  it('lets stages work alone unless settings say otherwise', () => {
+    expect(stageMode(agent('claude'), {})).toBe('auto')
+    expect(stageMode(agent('codex'), undefined)).toBe('full-auto')
+    expect(stageMode(agent('opencode'), {})).toBeUndefined()
+    expect(stageMode(agent('claude'), { claude: 'bypassPermissions' })).toBe('bypassPermissions')
+    // '' = the CLI's own default
+    expect(stageMode(agent('claude'), { claude: '' })).toBeUndefined()
   })
 })
 

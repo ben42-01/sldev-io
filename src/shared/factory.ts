@@ -32,6 +32,8 @@ export interface Recipe {
   description: string
   intake: 'prompt' | 'issue'
   nodes: RecipeNode[]
+  /** command that prepares a fresh worktree (installs dependencies); unset = detected, false = none */
+  setup?: string | false
   /** file it came from; unset for built-ins */
   path?: string
 }
@@ -96,9 +98,30 @@ export function parseRecipe(text: string, path?: string): ParseResult {
       description: typeof doc.description === 'string' ? doc.description.trim() : '',
       intake: doc.intake === 'issue' ? 'issue' : 'prompt',
       nodes,
+      setup: doc.setup === false || doc.setup === 'none' ? false : typeof doc.setup === 'string' && doc.setup.trim() ? doc.setup.trim() : undefined,
       path
     }
   }
+}
+
+// ── worktree setup ───────────────────────────────────────────────
+
+/**
+ * A new worktree has the tracked files only: no node_modules, no virtualenv. The install command
+ * for the project's lockfile, run once per worktree before any stage; null when nothing needs it.
+ */
+export function setupCommand(files: string[]): string | null {
+  const has = (f: string): boolean => files.includes(f)
+  if (has('package.json')) {
+    if (has('pnpm-lock.yaml')) return 'pnpm install --frozen-lockfile'
+    if (has('bun.lock') || has('bun.lockb')) return 'bun install --frozen-lockfile'
+    if (has('yarn.lock')) return 'yarn install --frozen-lockfile'
+    if (has('package-lock.json') || has('npm-shrinkwrap.json')) return 'npm ci'
+    return 'npm install --no-package-lock'
+  }
+  if (has('uv.lock')) return 'uv sync'
+  if (has('poetry.lock')) return 'poetry install'
+  return null
 }
 
 // ── agents ───────────────────────────────────────────────────────
@@ -300,6 +323,8 @@ function rerun(run: FactoryRun, ids: string[], feedback: string | undefined, now
 
 export interface Finish {
   ok: boolean
+  /** why it failed, shown on the node */
+  reason?: string
   /** failing output, handed to the retried agents */
   log?: string
   /** lines changed in the run so far, for maxDiff */
@@ -315,8 +340,10 @@ export function nodeFinished(run: FactoryRun, id: string, f: Finish, now: number
       const feedback = `${node.run.join(' && ')} failed (attempt ${retries} of ${node.onFail.max + 1}):\n\n${(f.log ?? '').slice(-4000)}`
       return rerun(run, node.onFail.retry, feedback, now)
     }
-    const failed = setNode(run, id, { status: 'failed', endedAt: now, note: node.onFail ? `Still failing after ${node.onFail.max} retries` : 'Failed' }, now)
-    return { ...failed, status: 'failed', note: `${id} failed` }
+    // the log stays on the node, so "send back" can hand it to an agent with your note
+    const note = f.reason ?? (node.onFail ? `Still failing after ${node.onFail.max} retries` : 'Failed')
+    const failed = setNode(run, id, { status: 'failed', endedAt: now, note, feedback: f.log ? `${node.kind === 'run' ? node.run.join(' && ') : id} failed:\n\n${f.log.slice(-4000)}` : undefined }, now)
+    return { ...failed, status: 'failed', note: `${id} failed${f.reason ? `: ${f.reason}` : ''}` }
   }
   if (isBakeoff(node)) {
     const ok = (run.nodes[id].candidates ?? []).filter((c) => c.status === 'done').length
@@ -354,6 +381,24 @@ export function rejectNode(run: FactoryRun, id: string, note: string, now: numbe
 export function retryNode(run: FactoryRun, id: string, now: number): FactoryRun {
   const r = rerun(run, [id], run.nodes[id]?.feedback, now)
   return { ...r, status: 'running', note: undefined }
+}
+
+/** The stages "send back" restarts for a failed one: a check goes back to the stages it retries, an agent stage to itself. */
+export function sendBackTargets(run: FactoryRun, id: string): string[] {
+  const node = run.recipe.nodes.find((n) => n.id === id)
+  if (!node) return []
+  if (node.kind === 'agent') return [id]
+  return node.onFail?.retry ?? node.needs.filter((n) => run.recipe.nodes.find((x) => x.id === n)?.kind === 'agent')
+}
+
+/** A failed run continues: the targets run again with your note and the failure, and the check gets its retries back. */
+export function sendBack(run: FactoryRun, id: string, note: string, now: number): FactoryRun {
+  const targets = sendBackTargets(run, id)
+  if (run.nodes[id]?.status !== 'failed' || !targets.length) return run
+  const failure = run.nodes[id].feedback
+  const feedback = [note.trim() && `From the user: ${note.trim()}`, failure].filter(Boolean).join('\n\n') || undefined
+  const r = rerun(run, targets, feedback, now)
+  return { ...r, nodes: { ...r.nodes, [id]: { ...r.nodes[id], attempts: 0 } }, status: 'running', note: undefined }
 }
 
 /** The prompt an agent node gets: the recipe prompt, then any feedback from a failed check or a rejection. */

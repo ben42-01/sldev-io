@@ -19,6 +19,9 @@ import {
   resolveAgentSpec,
   resolveRun,
   runtimeNames,
+  sendBack,
+  sendBackTargets,
+  setupCommand,
   type FactoryRun,
   type Recipe
 } from '@shared/factory'
@@ -171,6 +174,40 @@ describe('a run', () => {
     expect(run.nodes.verify.note).toContain('after 1 retries')
   })
 
+  it('a failed check can be sent back with a note, and gets its retries back', () => {
+    let run = approveNode(finishAll(newRun(recipe()), ['spec']), 'spec', 3)
+    for (let i = 0; i < 2; i++) {
+      run = finishAll(run, ['api', 'ui'])
+      run = nodeFinished(nodeStarted(run, 'verify', 5), 'verify', { ok: false, log: "Cannot find module 'left-pad'" }, 6)
+    }
+    expect(run.status).toBe('failed')
+    expect(sendBackTargets(run, 'verify')).toEqual(['api', 'ui'])
+    run = sendBack(run, 'verify', 'Run npm ci first', 7)
+    expect(run.status).toBe('running')
+    expect(run.nodes.api.status).toBe('pending')
+    expect(run.nodes.api.feedback).toContain('From the user: Run npm ci first')
+    expect(run.nodes.api.feedback).toContain("Cannot find module 'left-pad'")
+    expect(run.nodes.verify).toMatchObject({ status: 'pending', attempts: 0 })
+    // the retry loop works again: one more failure goes back to the agents instead of failing the run
+    run = finishAll(run, ['api', 'ui'])
+    run = nodeFinished(nodeStarted(run, 'verify', 8), 'verify', { ok: false, log: 'x' }, 9)
+    expect(run.status).toBe('running')
+  })
+
+  it('a failed agent stage keeps its reason and is sent back to itself', () => {
+    let run = nodeFinished(nodeStarted(newRun(recipe()), 'spec', 1), 'spec', { ok: false, reason: 'Ended without writing spec.md', log: 'Permission denied' }, 2)
+    expect(run.nodes.spec).toMatchObject({ status: 'failed', note: 'Ended without writing spec.md' })
+    expect(sendBackTargets(run, 'spec')).toEqual(['spec'])
+    run = sendBack(run, 'spec', '', 3)
+    expect(run.nodes.spec.feedback).toContain('Permission denied')
+    expect(run.nodes.spec.feedback).not.toContain('From the user')
+  })
+
+  it('sending back does nothing unless the stage failed', () => {
+    const run = newRun(recipe())
+    expect(sendBack(run, 'verify', 'x', 1)).toBe(run)
+  })
+
   it('a rejection reruns the node with the note', () => {
     let run = finishAll(newRun(recipe()), ['spec'])
     run = rejectNode(run, 'spec', 'Cover mobile too', 3)
@@ -298,5 +335,25 @@ describe('run history and replay', () => {
     expect(statusesAt(run, 5)).toEqual({ a: 'pending', b: 'pending' })
     expect(statusesAt(run, 15)).toEqual({ a: 'running', b: 'pending' })
     expect(statusesAt(run, 25)).toEqual({ a: 'done', b: 'pending' })
+  })
+})
+
+describe('worktree setup', () => {
+  it('picks the install for the lockfile', () => {
+    expect(setupCommand(['package.json', 'package-lock.json'])).toBe('npm ci')
+    expect(setupCommand(['package.json', 'pnpm-lock.yaml', 'package-lock.json'])).toBe('pnpm install --frozen-lockfile')
+    expect(setupCommand(['package.json', 'yarn.lock'])).toBe('yarn install --frozen-lockfile')
+    expect(setupCommand(['package.json', 'bun.lock'])).toBe('bun install --frozen-lockfile')
+    expect(setupCommand(['package.json'])).toBe('npm install --no-package-lock')
+    expect(setupCommand(['pyproject.toml', 'uv.lock'])).toBe('uv sync')
+    expect(setupCommand(['Cargo.toml', 'src'])).toBeNull()
+  })
+
+  it('a recipe can set or turn off the setup', () => {
+    const base = 'name: x\nstages:\n  - id: a\n    run: make\n'
+    expect(recipe(base).setup).toBeUndefined()
+    expect(recipe(`${base}setup: make deps\n`).setup).toBe('make deps')
+    expect(recipe(`${base}setup: false\n`).setup).toBe(false)
+    expect(recipe(`${base}setup: none\n`).setup).toBe(false)
   })
 })

@@ -18,6 +18,11 @@ export interface AgentDef {
   modelPlaceholder?: string
   /** approval / permission modes ('' = the agent's default) */
   modes: AgentMode[]
+  /**
+   * mode for Factory stages, which run with nobody there to approve anything; unset = the CLI's own
+   * default (Cursor and OpenCode already act on their own in print mode, Copilot gets --allow-all-tools)
+   */
+  unattendedMode?: string
   efforts: string[]
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
@@ -78,6 +83,7 @@ const claude: AgentDef = {
     { value: 'manual', label: 'Manual' },
     { value: 'bypassPermissions', label: 'Bypass permissions' }
   ],
+  unattendedMode: 'auto',
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   hooks: true,
   claudeSkills: true,
@@ -112,6 +118,7 @@ const codex: AgentDef = {
     { value: 'full-auto', label: 'Full auto (workspace write)' },
     { value: 'yolo', label: 'No sandbox, no approvals' }
   ],
+  unattendedMode: 'full-auto',
   efforts: ['minimal', 'low', 'medium', 'high'],
   hooks: false,
   canPrint: true,
@@ -217,6 +224,7 @@ const gemini: AgentDef = {
     { value: 'auto_edit', label: 'Auto-accept edits' },
     { value: 'yolo', label: 'YOLO (approve everything)' }
   ],
+  unattendedMode: 'auto_edit',
   efforts: [],
   hooks: false,
   canPrint: true,
@@ -269,6 +277,15 @@ export function allAgents(custom: CustomAgent[] = []): AgentDef[] {
 
 export function findAgent(id: string | undefined, custom: CustomAgent[] = []): AgentDef {
   return allAgents(custom).find((a) => a.id === (id || 'claude')) ?? claude
+}
+
+/**
+ * The permission mode a Factory stage runs with when its profile sets none: Settings → Factory, else
+ * the agent's unattendedMode. '' in settings means the CLI's own default.
+ */
+export function stageMode(agent: AgentDef, settings: Record<string, string> | undefined): string | undefined {
+  const picked = settings?.[agent.id]
+  return (picked === undefined ? agent.unattendedMode : picked) || undefined
 }
 
 /** The command line that starts (or resumes) an agent session. */
