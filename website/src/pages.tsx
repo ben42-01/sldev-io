@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { ChangelogList } from './components/Changelog'
+import { CompareTable } from './components/Compare'
 import { DownloadOptions } from './components/Download'
 import { FeatureGrid } from './components/Features'
 import { FinalCta } from './components/Footer'
@@ -69,6 +70,23 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
           lead={`Version ${site.version}, free during the beta. Pick your system, or install from a terminal.`}
         />
         <DownloadOptions />
+      </Layout>
+    )
+  },
+  compare: {
+    title: 'sldev-io compared',
+    render: () => (
+      <Layout>
+        <PageHeader
+          eyebrow="Compare"
+          title={
+            <>
+              Where <span className="brand-text">sldev-io</span> fits
+            </>
+          }
+          lead="Next to your editor and your terminal, not instead of them. What each kind of tool does out of the box."
+        />
+        <CompareTable />
       </Layout>
     )
   },

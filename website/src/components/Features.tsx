@@ -27,13 +27,13 @@ interface Feature {
 }
 
 const features: Feature[] = [
-  { icon: Factory, title: 'Software Factory', text: 'Recipes turn an idea into a reviewed pull request: a graph of agent steps, checks and approvals. Parallel steps get their own worktrees, and failing tests go back to the agent.' },
+  { icon: Factory, title: 'Software Factory', text: 'Recipes turn an idea into a reviewed pull request: a graph of agent steps, checks and approvals. Parallel steps get their own worktrees, failing tests and review comments go back to the agent, and every run can be replayed step by step.' },
   { icon: Swords, title: 'Bake-offs and second opinions', text: 'Run one task on two or three agents and keep the best diff, or have a different agent review the work before you do.' },
   { icon: Layers, title: 'Every agent, one window', text: 'Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side, plus any CLI you add with a command template.' },
   { icon: SquareTerminal, title: 'Terminals that stay alive', text: 'Dock, split and float as many terminals as you like. Sessions live outside the UI, so moving a panel never restarts your shell or your agent.' },
   { icon: Rocket, title: 'Agent missions', text: 'Launch a prompt with a model, effort and permission mode, optionally in its own git worktree. One board shows what is working, waiting or done.' },
   { icon: UserCog, title: 'Agent builder', text: 'Create agents with a role, model and permissions, like a read-only reviewer or a spec writer. Share them with the project or export them as Claude subagents.', home: true },
-  { icon: ChartGantt, title: 'Usage dashboard', text: 'A timeline of every agent, how long they waited on you, and token usage read from the logs on your machine.', home: true },
+  { icon: ChartGantt, title: 'Usage dashboard', text: 'A timeline of every agent, how long they waited on you, and token usage with an estimated cost, read from the logs on your machine.', home: true },
   { icon: GitPullRequest, title: 'Diff review to PR', text: 'Read the per-file diff, commit, merge into the base branch, or push and open a pull request without leaving the app.' },
   { icon: FileStack, title: 'One set of rules', text: 'Write your project rules once. sldev-io keeps AGENTS.md, CLAUDE.md, GEMINI.md, Cursor rules and Copilot instructions in sync, and never overwrites a hand edit.', home: true },
   { icon: Plug, title: 'Skills and MCP', text: 'Run skills with any agent, manage MCP servers, and give agents the sldev tools to report their own status and read each other\'s work.', home: true },

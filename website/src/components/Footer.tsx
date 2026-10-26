@@ -34,6 +34,7 @@ export function Footer() {
         <a href={`mailto:${site.contactEmail}`}>Contact</a>
         <a href={site.repoUrl}>GitHub</a>
         <a href="/pricing">Pricing</a>
+        <a href="/compare">Compare</a>
         <a href="/changelog">Changelog</a>
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>

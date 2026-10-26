@@ -22,8 +22,8 @@
       "features": [
         "Every agent: Claude Code, Codex, Cursor Agent, Copilot, OpenCode, Gemini, custom",
         "Unlimited terminals, missions and worktrees",
-        "Software Factory: recipes, parallel agents, bake-offs and approvals",
-        "Agent builder, rules sync and a usage dashboard",
+        "Software Factory: recipes, parallel agents, bake-offs, approvals and PR review loops",
+        "Agent builder, rules sync, shareable recipes and a usage dashboard with cost estimates",
         "Diff review, commit, merge and PR from the app",
         "Skills, MCP servers, runtimes and tasks",
         "SSH, SFTP, credential vault and Docker",

@@ -319,6 +319,8 @@ against the real tools (on a scratch repo, with a cheap model):
       `turn_context` line with `model`; the dashboard prices them (unpriced otherwise).
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list
       (on `v1`, so they go live with the launch).
+- [ ] Website `/compare` (on `v1`): check the AI code editor column against what current editors ship
+      before launch; it compares categories, not products, and should stay fair.
 
 Known gaps, fine for 1.0: "retry this stage with a different agent" (retry reruns the same agent),
 interactive factory stages finish with Done or `sldev_done` only, OpenCode/Cursor/Copilot/Gemini get

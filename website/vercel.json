@@ -20,6 +20,10 @@
       "destination": "/changelog/index.html"
     },
     {
+      "source": "/compare",
+      "destination": "/compare/index.html"
+    },
+    {
       "source": "/download/:os",
       "destination": "/api/download?os=:os"
     },
