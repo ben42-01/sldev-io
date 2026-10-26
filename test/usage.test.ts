@@ -51,7 +51,15 @@ describe('Claude transcripts', () => {
   it('sums usage once per message', () => {
     const line = (id: string, input: number, output: number) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: input, output_tokens: output, cache_read_input_tokens: 100, cache_creation_input_tokens: 10 } } })
     const text = [line('a', 5, 1), line('a', 5, 20), JSON.stringify({ type: 'user', message: {} }), line('b', 3, 7), '{"type":"assis'].join('\n')
-    expect(claudeTranscriptUsage(text)).toEqual({ input: 8, output: 27, cacheRead: 200, cacheWrite: 20 })
+    // no model in the log: counted, but not priced
+    expect(claudeTranscriptUsage(text)).toEqual({ input: 8, output: 27, cacheRead: 200, cacheWrite: 20, cost: 0, unpriced: 255 })
+  })
+  it('prices each message with its own model', () => {
+    const line = (id: string, model: string) => JSON.stringify({ type: 'assistant', message: { id, model, usage: { input_tokens: 5, output_tokens: 20, cache_read_input_tokens: 100, cache_creation_input_tokens: 10 } } })
+    const u = claudeTranscriptUsage([line('a', 'claude-opus-5-5'), line('b', 'mystery-model')].join('\n'))!
+    // opus 5.5: 5 × $4 + 20 × $20 + 100 × $0.20 + 10 × $5 per million
+    expect(u.cost).toBeCloseTo(490 / 1e6, 12)
+    expect(u.unpriced).toBe(135)
   })
   it('null when there is nothing to count', () => {
     expect(claudeTranscriptUsage('')).toBeNull()
@@ -62,10 +70,11 @@ describe('Codex sessions', () => {
   it('reads the cwd, start and the last running total', () => {
     const text = [
       JSON.stringify({ type: 'session_meta', payload: { cwd: '/wt', timestamp: '2026-10-25T10:00:00.000Z' } }),
+      JSON.stringify({ type: 'turn_context', payload: { cwd: '/wt', model: 'gpt-5-codex' } }),
       JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 10, reasoning_output_tokens: 5 } } } }),
       JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 300, cached_input_tokens: 100, output_tokens: 30, reasoning_output_tokens: 5 } } } })
     ].join('\n')
-    expect(codexSessionUsage(text)).toEqual({ cwd: '/wt', startedAt: Date.parse('2026-10-25T10:00:00.000Z'), usage: { input: 200, output: 35, cacheRead: 100, cacheWrite: 0 } })
+    expect(codexSessionUsage(text)).toEqual({ cwd: '/wt', startedAt: Date.parse('2026-10-25T10:00:00.000Z'), usage: { input: 200, output: 35, cacheRead: 100, cacheWrite: 0, cost: (200 * 1.25 + 35 * 10 + 100 * 0.125) / 1e6, unpriced: 0 } })
   })
 })
 

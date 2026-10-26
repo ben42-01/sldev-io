@@ -3118,3 +3118,6 @@ a {
 .import-form textarea.mono {
   font: 11.5px var(--font-mono);
 }
+.token-cost {
+  color: var(--fg-muted);
+}

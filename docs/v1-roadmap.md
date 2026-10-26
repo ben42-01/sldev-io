@@ -28,8 +28,9 @@ scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-action
 | 9 | PR feedback loop | S | Review comments on the factory's PR go back to an agent; the factory doesn't stop at "PR opened" |
 | 10 | Run history and replay | S | Trust in an automated pipeline: see what happened when, and the graph at any moment |
 | 11 | Share recipes | S | A recipe and its agents as one paste; lets people trade recipes (and the website show some) |
+| 12 | Cost estimate | S | "What did that run cost me?" is the first question buyers ask |
 
-Not in 1.0 (candidates for 1.x, in rough order): money cost (needs per-model price tables that go stale), project map / code graph for
+Not in 1.0 (candidates for 1.x, in rough order): project map / code graph for
 agent context, project memory ("lore"), headless `sldev run` for CI, sandboxed
 runs, a shared team library of recipes and agents (1.0 has copy-and-paste sharing).
 
@@ -275,6 +276,15 @@ YAML, and writes `.sldev/factory/<name>.yml` and `.sldev/agents/<name>.md`. An a
 that name is kept, never overwritten. No file dialogs: it's a paste, so it works through chat, issues and
 gists. e2e: `recipe-share`.
 
+## 12. Cost estimate
+
+The usage dashboard prices the tokens it already reads: every Claude Code message with its own `model`
+(a session can switch), a Codex session with the model from its `turn_context`. Prices are a short table
+in `src/shared/prices.ts` with the date they were checked (`PRICES_CHECKED`); a model that matches no row
+counts as *unpriced* and is shown as such, never guessed. Shown as "Est. cost" and per agent, labelled as
+API list prices: on a subscription you pay your plan instead. The table goes stale, so the release
+playbook says to check it.
+
 ## Build order
 
 1. Mission status history (tiny, starts collecting dashboard data), agent builder, rules sync
@@ -305,6 +315,8 @@ against the real tools (on a scratch repo, with a cheap model):
 - [ ] **PR feedback**: on that PR, a review, a conversation comment and a line comment show up in
       Review feedback (the JSON field names from `gh pr view` and the REST pulls/comments API), and
       Push update lands on the PR.
+- [ ] **Model ids in the logs**: Claude Code transcripts carry `message.model` and Codex sessions a
+      `turn_context` line with `model`; the dashboard prices them (unpriced otherwise).
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list
       (on `v1`, so they go live with the launch).
 

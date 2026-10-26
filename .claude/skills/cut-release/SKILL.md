@@ -19,7 +19,9 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
    `npm version <patch|minor|major|x.y.z> --no-git-tag-version`. In `website/src/content/changelog.json`,
    make sure the top entry has this version and set its `date` (today, YYYY-MM-DD): the app shows it as
    What's new after updating, and the website's `/changelog` lists only dated entries (`npm test` checks
-   the version has an entry). Commit `Release vX.Y.Z` on master and push master.
+   the version has an entry). If `PRICES_CHECKED` in `src/shared/prices.ts` is more than a couple of
+   months old, check the Anthropic and OpenAI price pages and update the table. Commit `Release vX.Y.Z`
+   on master and push master.
 4. Create and push the branch: `git switch -c release/X.Y.Z && git push -u origin release/X.Y.Z`.
 5. Watch it: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
    If a single OS fails, fix it on the branch and push again. Assets are replaced (`--clobber`).

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Mission } from '@shared/types'
+import { PRICES_CHECKED } from '@shared/prices'
 import { activeIn, addTokens, clipSegments, median, NO_TOKENS, responseTimes, segments, timeIn, timeTicks, tokenTotal, type Segment, type TokenUsage } from '@shared/usage'
 import { getAgent } from '../state/agents'
 import { factory } from '../state/factory'
@@ -27,6 +28,13 @@ export function duration(ms: number): string {
   if (m < 60) return `${m}m`
   const h = Math.floor(m / 60)
   return h < 48 ? `${h}h ${m % 60}m` : `${Math.round(h / 24)}d`
+}
+
+/** An estimate, so no false precision: cents under $10, whole dollars above. */
+export function dollars(n: number): string {
+  if (n === 0) return '$0'
+  if (n < 0.01) return '<$0.01'
+  return n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n).toLocaleString('en-US')}`
 }
 
 export function tokens(n: number): string {
@@ -73,6 +81,7 @@ export function DashboardPanel(): React.JSX.Element {
     byAgent.set(name, { usage: u ? addTokens(e.usage, u) : e.usage, reported: e.reported + (u ? 1 : 0), missions: e.missions + 1 })
   }
   const total = [...byAgent.values()].reduce((t, e) => t + tokenTotal(e.usage), 0)
+  const all = [...byAgent.values()].reduce((t, e) => addTokens(t, e.usage), NO_TOKENS)
 
   return (
     <div className="panel-page dashboard">
@@ -94,6 +103,12 @@ export function DashboardPanel(): React.JSX.Element {
         <Tile label="Agents working" value={duration(working)} sub={shown.length ? `across ${shown.length} mission${shown.length === 1 ? '' : 's'}` : '—'} />
         <Tile label="Waiting on you" value={duration(waiting)} sub={med === null ? 'no answers yet' : `median answer ${duration(med)}`} warn={waiting > working / 2 && waiting > 60000} />
         <Tile label="Tokens" value={tokens(total)} sub="Claude Code and Codex logs" />
+        <Tile
+          label="Est. cost"
+          value={total ? `~${dollars(all.cost)}` : '—'}
+          sub={all.unpriced ? `+ ${tokens(all.unpriced)} tokens with no known price` : `at API list prices (${PRICES_CHECKED})`}
+          title="What these tokens would cost at API list prices. On a subscription (Claude Max, ChatGPT) you pay your plan instead."
+        />
       </div>
 
       <section className="dash-card">
@@ -118,9 +133,9 @@ export function DashboardPanel(): React.JSX.Element {
   )
 }
 
-function Tile({ label, value, sub, warn }: { label: string; value: string; sub: string; warn?: boolean }): React.JSX.Element {
+function Tile({ label, value, sub, warn, title }: { label: string; value: string; sub: string; warn?: boolean; title?: string }): React.JSX.Element {
   return (
-    <div className={`dash-tile${warn ? ' warn' : ''}`}>
+    <div className={`dash-tile${warn ? ' warn' : ''}`} title={title}>
       <span className="dash-tile-label">{label}</span>
       <b>{value}</b>
       <span className="dash-tile-sub">{sub}</span>
@@ -248,7 +263,10 @@ function TokenBars({ byAgent }: { byAgent: Map<string, { usage: TokenUsage; repo
           <div key={name} className="token-row" title={e.reported ? `input ${tokens(e.usage.input)} · output ${tokens(e.usage.output)} · cache read ${tokens(e.usage.cacheRead)} · cache write ${tokens(e.usage.cacheWrite)}` : undefined}>
             <span className="token-name">{name}</span>
             <span className="token-track">{e.reported > 0 && <i style={{ width: `${(t / max) * 100}%` }} />}</span>
-            <span className="token-value">{e.reported ? tokens(t) : 'not reported'}</span>
+            <span className="token-value">
+              {e.reported ? tokens(t) : 'not reported'}
+              {e.reported > 0 && e.usage.cost > 0 && <span className="token-cost"> · ~{dollars(e.usage.cost)}</span>}
+            </span>
             {e.reported > 0 && (
               <span className="token-split">
                 in {tokens(e.usage.input)} · out {tokens(e.usage.output)} · cache {tokens(e.usage.cacheRead + e.usage.cacheWrite)}
@@ -258,7 +276,10 @@ function TokenBars({ byAgent }: { byAgent: Map<string, { usage: TokenUsage; repo
           </div>
         )
       })}
-      <div className="hint">Read from the logs Claude Code and Codex keep on this machine. Other agents don't record usage locally.</div>
+      <div className="hint">
+        Read from the logs Claude Code and Codex keep on this machine. Other agents don't record usage locally. Costs are estimates at API list
+        prices checked on {PRICES_CHECKED}; a subscription bills differently.
+      </div>
     </div>
   )
 }

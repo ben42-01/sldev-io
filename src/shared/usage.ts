@@ -1,3 +1,4 @@
+import { costOf, priceFor } from './prices'
 import type { Mission, MissionStatus } from './types'
 
 /** Usage dashboard math: everything here comes from mission status history and local agent logs. */
@@ -58,15 +59,32 @@ export interface TokenUsage {
   output: number
   cacheRead: number
   cacheWrite: number
+  /** USD at API list prices (src/shared/prices.ts) for the tokens whose model has a price */
+  cost: number
+  /** tokens from models without a known price, left out of `cost` */
+  unpriced: number
 }
 
 export const tokenTotal = (u: TokenUsage): number => u.input + u.output + u.cacheRead + u.cacheWrite
 
 export function addTokens(a: TokenUsage, b: TokenUsage): TokenUsage {
-  return { input: a.input + b.input, output: a.output + b.output, cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite }
+  return {
+    input: a.input + b.input,
+    output: a.output + b.output,
+    cacheRead: a.cacheRead + b.cacheRead,
+    cacheWrite: a.cacheWrite + b.cacheWrite,
+    cost: a.cost + b.cost,
+    unpriced: a.unpriced + b.unpriced
+  }
 }
 
-export const NO_TOKENS: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+export const NO_TOKENS: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, unpriced: 0 }
+
+/** Tokens of one model, priced. */
+export function priced(t: Pick<TokenUsage, 'input' | 'output' | 'cacheRead' | 'cacheWrite'>, model: string | undefined): TokenUsage {
+  const price = priceFor(model)
+  return { ...t, cost: price ? costOf(t, price) : 0, unpriced: price ? 0 : t.input + t.output + t.cacheRead + t.cacheWrite }
+}
 
 /**
  * Claude Code transcript (JSONL): each assistant message carries `usage`. A message can span several
@@ -77,15 +95,14 @@ export function claudeTranscriptUsage(jsonl: string): TokenUsage | null {
   for (const line of jsonl.split('\n')) {
     if (!line.includes('"usage"')) continue
     try {
-      const d = JSON.parse(line) as { type?: string; message?: { id?: string; usage?: Record<string, number> } }
+      const d = JSON.parse(line) as { type?: string; message?: { id?: string; model?: string; usage?: Record<string, number> } }
       const u = d.type === 'assistant' ? d.message?.usage : undefined
       if (!u) continue
-      byId.set(d.message?.id ?? String(byId.size), {
-        input: u.input_tokens ?? 0,
-        output: u.output_tokens ?? 0,
-        cacheRead: u.cache_read_input_tokens ?? 0,
-        cacheWrite: u.cache_creation_input_tokens ?? 0
-      })
+      // each message is priced with its own model: /model can switch mid-session
+      byId.set(
+        d.message?.id ?? String(byId.size),
+        priced({ input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 }, d.message?.model)
+      )
     } catch {
       // a partly written line
     }
@@ -94,13 +111,14 @@ export function claudeTranscriptUsage(jsonl: string): TokenUsage | null {
 }
 
 /**
- * Codex session log (JSONL): a session_meta line with the cwd and start time, then token_count events
- * whose `total_token_usage` is the running total.
+ * Codex session log (JSONL): a session_meta line with the cwd and start time, turn_context lines with
+ * the model, then token_count events whose `total_token_usage` is the running total.
  */
 export function codexSessionUsage(jsonl: string): { cwd?: string; startedAt?: number; usage: TokenUsage | null } {
   let cwd: string | undefined
   let startedAt: number | undefined
   let usage: TokenUsage | null = null
+  let model: string | undefined
   for (const line of jsonl.split('\n')) {
     if (!line.trim()) continue
     try {
@@ -111,10 +129,11 @@ export function codexSessionUsage(jsonl: string): { cwd?: string; startedAt?: nu
         const t = Date.parse(String(p.timestamp ?? d.timestamp ?? ''))
         if (!Number.isNaN(t)) startedAt = t
       }
+      if (typeof p.model === 'string') model = p.model
       const total = p.type === 'token_count' ? ((p.info as Record<string, unknown> | undefined)?.total_token_usage as Record<string, number> | undefined) : undefined
       if (total) {
         const cached = total.cached_input_tokens ?? 0
-        usage = { input: Math.max(0, (total.input_tokens ?? 0) - cached), output: (total.output_tokens ?? 0) + (total.reasoning_output_tokens ?? 0), cacheRead: cached, cacheWrite: 0 }
+        usage = priced({ input: Math.max(0, (total.input_tokens ?? 0) - cached), output: (total.output_tokens ?? 0) + (total.reasoning_output_tokens ?? 0), cacheRead: cached, cacheWrite: 0 }, model)
       }
     } catch {
       // a partly written line

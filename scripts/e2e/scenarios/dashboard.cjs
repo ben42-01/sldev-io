@@ -9,7 +9,7 @@ module.exports = async (h) => {
   const now = Date.now()
   const min = 60000
   const transcript = path.join(codexHome, 'claude-transcript.jsonl')
-  const line = (id, i, o) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: i, output_tokens: o, cache_read_input_tokens: 50000, cache_creation_input_tokens: 2000 } } })
+  const line = (id, i, o) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-sonnet-4-6', usage: { input_tokens: i, output_tokens: o, cache_read_input_tokens: 50000, cache_creation_input_tokens: 2000 } } })
   fs.writeFileSync(transcript, [line('a', 1200, 300), line('a', 1200, 800), line('b', 3000, 1500)].join('\n') + '\n')
   const d = new Date(now - 50 * min)
   const dir = path.join(codexHome, 'sessions', String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0'))
@@ -18,6 +18,7 @@ module.exports = async (h) => {
     path.join(dir, 'rollout-e2e.jsonl'),
     [
       JSON.stringify({ type: 'session_meta', payload: { cwd: h.fixture, timestamp: new Date(now - 50 * min + 2000).toISOString() } }),
+      JSON.stringify({ type: 'turn_context', payload: { cwd: h.fixture, model: 'gpt-5-codex' } }),
       JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 90000, cached_input_tokens: 60000, output_tokens: 4000, reasoning_output_tokens: 1000 } } } })
     ].join('\n') + '\n'
   )
@@ -53,8 +54,9 @@ module.exports = async (h) => {
   h.expect(await h.js(`document.querySelectorAll('.tl-seg.needs-input').length === 2 && document.querySelectorAll('.tl-seg.waiting').length === 1`), 'needs-you spans are hatched, ready spans thin')
   const tok = await h.js(`Object.fromEntries([...document.querySelectorAll('.token-row')].map(r => [r.querySelector('.token-name').textContent, r.querySelector('.token-value').textContent]))`)
   h.log(JSON.stringify(tok))
-  h.expect(tok['Claude Code'] === '111k', 'Claude tokens from the transcript, counted once per message (4200 in + 2300 out + 104000 cache)')
-  h.expect(tok['Codex'] === '95k', 'Codex tokens from its session log (30k in + 5k out + 60k cache)')
+  h.expect(tok['Claude Code'] === '111k · ~$0.09', 'Claude tokens from the transcript, counted once per message (4200 in + 2300 out + 104000 cache), priced as Sonnet 4.6')
+  h.expect(tok['Codex'].startsWith('95k · ~$0.'), 'Codex tokens from its session log (30k in + 5k out + 60k cache), priced as GPT-5-Codex')
+  h.expect(tiles['Est. cost']?.startsWith('~$0.19 |') && tiles['Est. cost'].includes('API list prices'), `estimated cost tile (${tiles['Est. cost']})`)
   h.expect(tok['Gemini CLI'] === 'not reported', 'agents without local logs say so')
   await h.shot('0-dashboard')
   // hover a bar for its tooltip
