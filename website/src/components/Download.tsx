@@ -59,6 +59,7 @@ function CopyCommand() {
 }
 
 const count = new Intl.NumberFormat('en-US')
+const downloads = (n: number): string => `${count.format(n)} download${n === 1 ? '' : 's'}`
 
 /** Below this the counts stay hidden; /download?count shows them anyway. */
 const MIN_PUBLIC_DOWNLOADS = 100
@@ -96,13 +97,13 @@ export function DownloadOptions() {
                   </a>
                 ))}
               </div>
-              {stats && <p className="download-count">{count.format(stats.platforms[c.id])} downloads</p>}
+              {stats && <p className="download-count">{downloads(stats.platforms[c.id])}</p>}
             </article>
           ))}
         </div>
         {stats && (
           <p className="download-total">
-            <b>{count.format(stats.total)}</b> downloads so far
+            <b>{count.format(stats.total)}</b> {stats.total === 1 ? 'download' : 'downloads'} so far
             {stats.releases[0] && ` · ${count.format(stats.releases[0].downloads)} of ${stats.releases[0].version}`}
           </p>
         )}
