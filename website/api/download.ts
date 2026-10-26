@@ -23,9 +23,26 @@ export function isPlatform(value: string | null): value is Platform {
   return value !== null && Object.hasOwn(matchers, value)
 }
 
-interface Release {
+export interface Release {
+  tag_name: string
   draft: boolean
-  assets: { name: string; browser_download_url: string }[]
+  published_at: string | null
+  assets: { name: string; browser_download_url: string; download_count: number }[]
+}
+
+/** Which installer a file is, or null for blockmaps, update zips, latest-*.yml and the like. */
+export function assetPlatform(name: string): Platform | null {
+  const n = name.toLowerCase()
+  return (Object.keys(matchers) as Platform[]).find((p) => matchers[p](n)) ?? null
+}
+
+/** The newest releases of the downloads repo, newest first. */
+export async function fetchReleases(): Promise<Release[]> {
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json', 'User-Agent': 'sldev-io-website' }
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100`, { headers })
+  if (!res.ok) throw new Error(`GitHub API ${res.status}`)
+  return (await res.json()) as Release[]
 }
 
 /** The installer for `platform` in the newest release that has one (releases come newest first). */
@@ -52,11 +69,7 @@ export async function GET(request: Request): Promise<Response> {
   const os = new URL(request.url).searchParams.get('os')
   if (!isPlatform(os)) return redirect('/download', 3600)
   try {
-    const headers: Record<string, string> = { Accept: 'application/vnd.github+json', 'User-Agent': 'sldev-io-website' }
-    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=20`, { headers })
-    if (!res.ok) throw new Error(`GitHub API ${res.status}`)
-    const url = pickAsset((await res.json()) as Release[], os)
+    const url = pickAsset(await fetchReleases(), os)
     if (url) return redirect(url, 300)
   } catch (err) {
     console.error('download lookup failed:', err)
