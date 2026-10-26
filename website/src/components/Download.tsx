@@ -1,5 +1,6 @@
 import { Check, Copy, Download as DownloadIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { DownloadStats } from '../../api/stats'
 import { detectPlatform, downloadHref, installCommand, platformLabels, type Platform } from '../lib/download'
 
 /** "Download for Windows" on desktops we build for; otherwise a jump to the download section. */
@@ -57,10 +58,25 @@ function CopyCommand() {
   )
 }
 
+const count = new Intl.NumberFormat('en-US')
+
+/** Download counts from api/stats.ts; shows nothing until they load, or if they don't. */
+function useDownloadStats(): DownloadStats | null {
+  const [stats, setStats] = useState<DownloadStats | null>(null)
+  useEffect(() => {
+    void fetch('/api/stats')
+      .then((r) => (r.ok ? (r.json() as Promise<DownloadStats>) : null))
+      .then((s) => setStats(s && s.total > 0 ? s : null))
+      .catch(() => {})
+  }, [])
+  return stats
+}
+
 /** Installer per OS plus the terminal install; the /download page supplies the heading. */
 export function DownloadOptions() {
   const detected = detectPlatform()
   const current = detected === 'mac-intel' ? 'mac' : detected
+  const stats = useDownloadStats()
   return (
     <section className="section page-first">
       <div className="container">
@@ -76,9 +92,16 @@ export function DownloadOptions() {
                   </a>
                 ))}
               </div>
+              {stats && <p className="download-count">{count.format(stats.platforms[c.id])} downloads</p>}
             </article>
           ))}
         </div>
+        {stats && (
+          <p className="download-total">
+            <b>{count.format(stats.total)}</b> downloads so far
+            {stats.releases[0] && ` · ${count.format(stats.releases[0].downloads)} of ${stats.releases[0].version}`}
+          </p>
+        )}
         <p className="install-label">macOS and Linux, from a terminal</p>
         <CopyCommand />
         <p className="download-note">

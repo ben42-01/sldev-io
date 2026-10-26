@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { AppInfo } from '@shared/types'
 import { isPlatform, pickAsset } from '../website/api/download'
+import { summarize } from '../website/api/stats'
 import { detectPlatform } from '../website/src/lib/download'
 import { diagnostics } from '@renderer/state/updates'
 
-const asset = (name: string) => ({ name, browser_download_url: `https://dl/${name}` })
-const release = (version: string, names: string[], draft = false) => ({ draft, assets: names.map((n) => asset(`sldev-io-${version}${n}`)) })
+const asset = (name: string, downloads = 0) => ({ name, browser_download_url: `https://dl/${name}`, download_count: downloads })
+const release = (version: string, names: string[], draft = false, downloads = 0) => ({
+  tag_name: `v${version}`,
+  draft,
+  published_at: draft ? null : '2026-10-01T00:00:00Z',
+  assets: names.map((n) => asset(`sldev-io-${version}${n}`, downloads))
+})
 
 describe('website /download/<platform>', () => {
   const releases = [
@@ -40,6 +46,22 @@ describe('website /download/<platform>', () => {
     expect(detectPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux')
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 14)')).toBeNull()
     expect(detectPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)')).toBeNull()
+  })
+})
+
+describe('website /api/stats', () => {
+  it('counts installer downloads per platform and release, skipping drafts and update files', () => {
+    const stats = summarize([
+      release('0.2.0', ['-setup.exe'], true, 99),
+      release('0.1.0', ['-setup.exe', '-setup.exe.blockmap', '-arm64.dmg', '-x64.dmg', '-arm64-mac.zip', '_amd64.deb', '-latest-linux.yml'], false, 10),
+      release('0.1.0-beta.2', ['.Setup.exe', '_amd64.deb'], false, 3)
+    ])
+    expect(stats.platforms).toEqual({ windows: 13, mac: 20, linux: 13 })
+    expect(stats.total).toBe(46)
+    expect(stats.releases).toEqual([
+      { version: '0.1.0', publishedAt: '2026-10-01T00:00:00Z', downloads: 40 },
+      { version: '0.1.0-beta.2', publishedAt: '2026-10-01T00:00:00Z', downloads: 6 }
+    ])
   })
 })
 
