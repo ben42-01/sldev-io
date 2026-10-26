@@ -10,6 +10,7 @@ import {
   nodeStarted,
   parseRecipe,
   readyNodes,
+  recordEvents,
   rejectNode,
   resolveAgentSpec,
   resolveRun,
@@ -63,7 +64,8 @@ function persist(): void {
 export const getRun = (id: string): FactoryRun | undefined => factory.get().runs.find((r) => r.id === id)
 export const useRun = (id: string): FactoryRun | undefined => useStore(factory, (s) => s.runs.find((r) => r.id === id))
 
-function put(run: FactoryRun): FactoryRun {
+function put(next: FactoryRun): FactoryRun {
+  const run = recordEvents(getRun(next.id), next, Date.now())
   factory.set((s) => ({ runs: s.runs.map((r) => (r.id === run.id ? run : r)) }))
   persist()
   return run
@@ -77,7 +79,7 @@ export async function loadFactory(): Promise<void> {
     const nodes = Object.fromEntries(
       Object.entries(r.nodes).map(([id, n]) => [id, n.status === 'running' ? { ...n, status: 'pending' as const, note: 'Interrupted when the app closed' } : n])
     )
-    return { ...r, nodes, status: 'paused' as const, note: 'Paused when the app closed. Resume to continue.' }
+    return recordEvents(r, { ...r, nodes, status: 'paused' as const, note: 'Paused when the app closed. Resume to continue.' }, Date.now())
   })
   factory.set({ runs })
   if (saved.some((r) => r.status === 'running')) persist()
@@ -137,7 +139,7 @@ export async function startRun(input: { recipe: Recipe; intent: string; root: st
     createdAt: now,
     updatedAt: now
   }
-  factory.set((s) => ({ runs: [run, ...s.runs] }))
+  factory.set((s) => ({ runs: [recordEvents(undefined, run, now), ...s.runs] }))
   persist()
   openPipeline(id)
   void tick(id)

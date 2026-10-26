@@ -64,4 +64,18 @@ module.exports = async (h) => {
   h.expect(await h.until(async () => !!(await runs())[0].pr?.pushedAt, 10000), 'the update is pushed on the click')
   h.expect(/Address review feedback on #12/.test(pushed()), 'origin has the agent\'s fix on the PR branch')
   await h.shot('3-pushed')
+
+  // the run's history, and replaying the graph as it was
+  await h.click('.pipeline .panel-page-head .btn', 'History')
+  await h.wait(300)
+  const events = await h.js(`[...document.querySelectorAll('.run-events li .link span:last-child')].map(e => e.textContent)`)
+  h.log('history', events.join(' | '))
+  h.expect(events[0] === 'Run started' && events.includes('build started') && events.includes('build done') && events.includes('pr is waiting for you: Push ' + branch + ' and open a pull request into main?'), 'history lists the run and node changes')
+  h.expect(['Pull request opened', 'Review comments handed to an agent', 'Update pushed to the pull request'].every((e) => events.includes(e)), 'history has the PR, the hand-over and the push')
+  await h.click('.run-events .link', 'build started')
+  await h.wait(300)
+  const replay = await h.js(`Object.fromEntries([...document.querySelectorAll('.pipeline-node')].map(n => [n.dataset.node, n.querySelector('.pn-status').textContent]))`)
+  h.expect(replay.build === 'Running' && replay.pr === 'Waiting', `replay shows the graph at that moment (${JSON.stringify(replay)})`)
+  h.expect(!(await h.js(`!!document.querySelector('.pipeline-node .pn-actions')`)), 'replay is read-only')
+  await h.shot('4-replay')
 }

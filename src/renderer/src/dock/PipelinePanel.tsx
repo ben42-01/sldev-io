@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { Bot, Check, ExternalLink, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Square, SquareTerminal, Upload, X } from 'lucide-react'
-import { layout, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
+import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Square, SquareTerminal, Upload, X } from 'lucide-react'
+import { describeEvent, layout, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
 import { focusPanel } from './dockApi'
 import { openInEditor } from '../lib/actions'
 import type { GhPrComment } from '@shared/types'
@@ -21,6 +21,9 @@ const nodeLabel: Record<NodeRun['status'], string> = { pending: 'Waiting', runni
 /** A factory run as a graph: columns follow `needs`, parallel branches stack, retry loops are dashed. */
 export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>): React.JSX.Element {
   const run = useRun(params.runId)
+  const [history, setHistory] = useState(false)
+  /** replay position; null follows the live run */
+  const [replayAt, setReplayAt] = useState<number | null>(null)
   const pos = useMemo(() => (run ? layout(run.recipe) : new Map<string, { col: number; row: number }>()), [run])
   if (!run) return <div className="panel-page muted">This run was removed.</div>
   const H = BASE_H + ROW_H * Math.max(0, ...run.recipe.nodes.map((n) => (n.agents.length > 1 ? n.agents.length : 0)))
@@ -34,6 +37,7 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
   const width = cols * (W + GX) - GX
   const height = rows * (H + GY) - GY + 40
   const done = Object.values(run.nodes).filter((n) => n.status === 'done').length
+  const replayed = replayAt === null ? null : statusesAt(run, replayAt)
 
   return (
     <div className="panel-page pipeline">
@@ -46,9 +50,13 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
           <button className="btn sm" onClick={() => resume(run.id)}><Play size={13} /> Resume</button>
         )}
         {run.status === 'running' && <button className="btn sm" onClick={() => stop(run.id)}><Pause size={13} /> Stop</button>}
+        <button className={`btn sm${history ? ' active' : ''}`} onClick={() => (setHistory(!history), setReplayAt(null))}>
+          <History size={13} /> History
+        </button>
       </div>
       <p className="pipeline-intent">{run.intent}</p>
-      {run.note && <div className={`pipeline-note ${run.status}`}>{run.note}</div>}
+      {run.note && replayAt === null && <div className={`pipeline-note ${run.status}`}>{run.note}</div>}
+      {history && <RunHistory run={run} at={replayAt} setAt={setReplayAt} />}
       <div className="pipeline-canvas" style={{ width, height }}>
         <svg className="pipeline-edges" width={width} height={height} aria-hidden="true">
           {run.recipe.nodes.flatMap((n) =>
@@ -76,7 +84,11 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
           const p = at(n.id)
           return (
             <div key={n.id} className="pipeline-node-wrap" style={{ left: p.x, top: p.y, width: W, height: H }}>
-              <PipelineNode run={run} node={n} nr={run.nodes[n.id]} />
+              {replayed ? (
+                <PipelineNode run={run} node={n} nr={{ ...run.nodes[n.id], status: replayed[n.id], note: undefined, candidates: undefined }} readOnly />
+              ) : (
+                <PipelineNode run={run} node={n} nr={run.nodes[n.id]} />
+              )}
             </div>
           )
         })}
@@ -168,7 +180,44 @@ function PrFeedback({ run }: { run: FactoryRun }): React.JSX.Element {
   )
 }
 
-function PipelineNode({ run, node, nr }: { run: FactoryRun; node: RecipeNode; nr: NodeRun }): React.JSX.Element {
+/** The run's timeline: drag to see the graph as it was, click an event to jump there. */
+function RunHistory({ run, at, setAt }: { run: FactoryRun; at: number | null; setAt: (t: number | null) => void }): React.JSX.Element {
+  const events = run.events ?? []
+  if (!events.length) return <div className="run-history muted small">No history yet. Runs started before this version have none.</div>
+  const start = events[0].at
+  const end = Math.max(events[events.length - 1].at, start + 1)
+  const pos = at ?? end
+  return (
+    <section className="run-history">
+      <div className="run-history-scrub">
+        <input
+          type="range"
+          min={start}
+          max={end}
+          value={pos}
+          aria-label="Replay position"
+          onChange={(e) => {
+            const t = Number(e.target.value)
+            setAt(t >= end ? null : t)
+          }}
+        />
+        <span className="mono small">{at === null ? 'live' : `+${duration(at - start)}`}</span>
+      </div>
+      <ol className="run-events">
+        {events.map((e, i) => (
+          <li key={i} className={`${e.at <= pos ? 'past' : 'future'}${e.kind === 'node' ? ` ${e.status}` : ''}`}>
+            <button className="link" onClick={() => setAt(i === events.length - 1 ? null : e.at)}>
+              <span className="mono">+{duration(e.at - start)}</span>
+              <span>{describeEvent(e, i === 0)}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: RecipeNode; nr: NodeRun; readOnly?: boolean }): React.JSX.Element {
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const Icon = node.kind === 'agent' ? Bot : node.kind === 'run' ? SquareTerminal : GitPullRequest
@@ -209,7 +258,7 @@ function PipelineNode({ run, node, nr }: { run: FactoryRun; node: RecipeNode; nr
           ))}
         </div>
       )}
-      {rejecting ? (
+      {readOnly ? null : rejecting ? (
         <form className="pn-reject" onSubmit={(e) => (e.preventDefault(), reject(run.id, node.id, note), setRejecting(false))}>
           <input autoFocus value={note} placeholder="What should change?" onChange={(e) => setNote(e.target.value)} />
           <button className="icon-btn" title="Send back"><Check size={13} /></button>

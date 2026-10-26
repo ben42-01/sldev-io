@@ -246,6 +246,8 @@ export interface FactoryRun {
   issue?: number
   /** the pull request the pr node opened, and its review loop */
   pr?: RunPr
+  /** what happened when, for the history and replay; written by recordEvents */
+  events?: RunEvent[]
   nodes: Record<string, NodeRun>
   createdAt: number
   updatedAt: number
@@ -416,4 +418,58 @@ export function compareRecipe(specs: string[]): Recipe {
       { id: 'compare', kind: 'agent', needs: [], agents: specs, prompt: '{intent}\n\nCommit your work when done.', interactive: false, run: [], approve: false }
     ]
   }
+}
+
+// ── history and replay ───────────────────────────────────────────
+
+export type RunEvent =
+  | { at: number; kind: 'run'; status: RunStatus; note?: string }
+  | { at: number; kind: 'node'; node: string; status: NodeStatus; attempt: number; note?: string }
+  | { at: number; kind: 'pr'; what: 'opened' | 'feedback' | 'pushed'; text?: string }
+
+/** Plenty for a long run with retries; the oldest go first. */
+export const EVENT_LIMIT = 400
+
+/** `next` with whatever changed since `prev` appended to its history. A new run (no `prev`) starts it. */
+export function recordEvents(prev: FactoryRun | undefined, next: FactoryRun, now: number): FactoryRun {
+  const events: RunEvent[] = []
+  // the run starts before its nodes and finishes after them
+  const runChanged = prev?.status !== next.status
+  if (runChanged && !prev) events.push({ at: now, kind: 'run', status: next.status, note: next.note })
+  for (const [id, nr] of Object.entries(next.nodes)) {
+    const was = prev?.nodes[id]
+    // a node restarted for a retry may go straight from running to running: the attempt tells them apart
+    if (was?.status !== nr.status || (nr.status === 'running' && was.attempts !== nr.attempts))
+      if (prev || nr.status !== 'pending') events.push({ at: now, kind: 'node', node: id, status: nr.status, attempt: nr.attempts, note: nr.note })
+  }
+  if (next.pr && !prev?.pr) events.push({ at: now, kind: 'pr', what: 'opened', text: next.pr.url })
+  if (next.pr?.addressedAt && next.pr.addressedAt !== prev?.pr?.addressedAt) events.push({ at: now, kind: 'pr', what: 'feedback' })
+  if (next.pr?.pushedAt && next.pr.pushedAt !== prev?.pr?.pushedAt) events.push({ at: now, kind: 'pr', what: 'pushed' })
+  if (runChanged && prev) events.push({ at: now, kind: 'run', status: next.status, note: next.note })
+  if (!events.length) return next
+  return { ...next, events: [...(next.events ?? []), ...events].slice(-EVENT_LIMIT) }
+}
+
+/** Every node's status at time `t`, from the history (pending until its first event). */
+export function statusesAt(run: FactoryRun, t: number): Record<string, NodeStatus> {
+  const out: Record<string, NodeStatus> = Object.fromEntries(run.recipe.nodes.map((n) => [n.id, 'pending' as NodeStatus]))
+  for (const e of run.events ?? []) if (e.at <= t && e.kind === 'node') out[e.node] = e.status
+  return out
+}
+
+/** One line for the history list. */
+export function describeEvent(e: RunEvent, first: boolean): string {
+  if (e.kind === 'pr') return { opened: 'Pull request opened', feedback: 'Review comments handed to an agent', pushed: 'Update pushed to the pull request' }[e.what]
+  if (e.kind === 'run') {
+    const what = { running: first ? 'Run started' : 'Run resumed', paused: 'Run paused', done: 'Run finished', failed: 'Run failed', stopped: 'Run stopped' }[e.status]
+    return e.note && e.status !== 'running' && e.status !== 'done' ? `${what}: ${e.note}` : what
+  }
+  const what = {
+    running: e.attempt > 1 ? `started again (try ${e.attempt})` : 'started',
+    approval: 'is waiting for you',
+    done: 'done',
+    failed: 'failed',
+    pending: 'goes back in the queue'
+  }[e.status]
+  return `${e.node} ${what}${e.note && (e.status === 'approval' || e.status === 'failed') ? `: ${e.note}` : ''}`
 }

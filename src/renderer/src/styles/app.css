@@ -3042,3 +3042,67 @@ a {
   color: var(--fg-muted);
   white-space: pre-wrap;
 }
+
+/* ── factory: run history and replay ───────── */
+.pipeline .btn.active {
+  background: var(--bg-active);
+}
+.run-history {
+  max-width: 760px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.run-history-scrub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.run-history-scrub input {
+  flex: 1;
+  accent-color: var(--fg);
+}
+.run-history-scrub .mono {
+  min-width: 56px;
+  text-align: right;
+  color: var(--fg-muted);
+}
+.run-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+}
+.run-events li .link {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  text-align: left;
+  text-decoration: none;
+  color: var(--fg-muted);
+}
+.run-events li .link:hover {
+  color: var(--fg);
+}
+.run-events li .mono {
+  flex: 0 0 52px;
+  color: var(--fg-subtle);
+}
+.run-events li.future .link {
+  opacity: 0.4;
+}
+.run-events li.done .link {
+  color: #56d364;
+}
+.run-events li.failed .link {
+  color: #f14c4c;
+}
+.run-events li.approval .link {
+  color: #f0b44c;
+}

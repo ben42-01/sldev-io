@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   approveNode,
+  describeEvent,
+  recordEvents,
+  statusesAt,
   descendants,
   fill,
   layout,
@@ -259,5 +262,41 @@ describe('runtimeNames', () => {
   it('lists the scripts a recipe checks with', () => {
     expect(runtimeNames(recipe())).toEqual([])
     expect(runtimeNames(recipe('name: x\nstages:\n  - id: a\n    run: [typecheck?, test, npm run build]'))).toEqual(['typecheck', 'test'])
+  })
+})
+
+describe('run history and replay', () => {
+  const r = recipe('name: H\nstages:\n  - id: a\n    agent: claude\n    prompt: x\n  - id: b\n    run: npm test\n')
+  const base = (): FactoryRun => ({
+    id: 'r', recipe: r, intent: 'i', root: '/r', outDir: '/o', status: 'running', createdAt: 0, updatedAt: 0,
+    worktree: { path: '/w', branch: 'sldev/x', base: 'main', repo: '/r' },
+    nodes: { a: newNodeRun(), b: newNodeRun() }
+  })
+
+  it('starts with the run, then logs node changes, retries and the PR', () => {
+    let run = recordEvents(undefined, base(), 0)
+    run = recordEvents(run, nodeStarted(run, 'a', 10), 10)
+    run = recordEvents(run, nodeFinished(run, 'a', { ok: true }, 20), 20)
+    run = recordEvents(run, nodeStarted(run, 'b', 30), 30)
+    run = recordEvents(run, nodeStarted(run, 'b', 40), 40)
+    run = recordEvents(run, { ...run, pr: { number: 3, url: 'u' } }, 50)
+    expect(run.events!.map((e, i) => `${e.at} ${describeEvent(e, i === 0)}`)).toEqual([
+      '0 Run started',
+      '10 a started',
+      '20 a done',
+      '30 b started',
+      '40 b started again (try 2)',
+      '50 Pull request opened'
+    ])
+    expect(recordEvents(run, { ...run }, 60).events).toHaveLength(6)
+  })
+
+  it('replays every node status at a point in time', () => {
+    let run = recordEvents(undefined, base(), 0)
+    run = recordEvents(run, nodeStarted(run, 'a', 10), 10)
+    run = recordEvents(run, nodeFinished(run, 'a', { ok: true }, 20), 20)
+    expect(statusesAt(run, 5)).toEqual({ a: 'pending', b: 'pending' })
+    expect(statusesAt(run, 15)).toEqual({ a: 'running', b: 'pending' })
+    expect(statusesAt(run, 25)).toEqual({ a: 'done', b: 'pending' })
   })
 })

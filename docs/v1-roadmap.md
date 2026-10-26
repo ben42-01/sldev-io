@@ -26,9 +26,10 @@ scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-action
 | 7 | Usage dashboard | M | Gantt timeline of every agent, token usage, time spent waiting on you |
 | 8 | Launch polish | M | Tour chapters, features page, docs, e2e for all of the above |
 | 9 | PR feedback loop | S | Review comments on the factory's PR go back to an agent; the factory doesn't stop at "PR opened" |
+| 10 | Run history and replay | S | Trust in an automated pipeline: see what happened when, and the graph at any moment |
 
 Not in 1.0 (candidates for 1.x, in rough order): money cost (needs per-model price tables that go stale), project map / code graph for
-agent context, project memory ("lore"), mission replay, headless `sldev run` for CI, sandboxed
+agent context, project memory ("lore"), headless `sldev run` for CI, sandboxed
 runs, team sharing of recipes and agents.
 
 ---
@@ -254,6 +255,15 @@ with a chosen recipe agent in the run worktree (prompt: `feedbackPrompt` in `src
 which tells the agent to commit and not push). When it's done, **Push update** commits and pushes the
 branch: like opening the PR, pushing only happens on a click. e2e: `pr-feedback` (local bare origin,
 fake `gh`).
+
+## 10. Run history and replay
+
+Every change to a run is diffed against the previous state (`recordEvents` in `src/shared/factory.ts`,
+called from `put` in `state/factory.ts`), so node status changes, retries, pauses, the PR, the
+feedback hand-over and the push land in `FactoryRun.events` without each transition having to log
+itself. **History** on the pipeline panel lists them with times since the start; the slider (or a
+click on an event) replays the graph as it was then (`statusesAt`), read-only. Runs from before this
+change have no history.
 
 ## Build order
 
