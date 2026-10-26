@@ -25,9 +25,9 @@ scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-action
 | 6 | sldev MCP server | L | Agents report status and hand off output themselves, on every CLI |
 | 7 | Usage dashboard | M | Gantt timeline of every agent, token usage, time spent waiting on you |
 | 8 | Launch polish | M | Tour chapters, features page, docs, e2e for all of the above |
+| 9 | PR feedback loop | S | Review comments on the factory's PR go back to an agent; the factory doesn't stop at "PR opened" |
 
-Not in 1.0 (candidates for 1.x, in rough order): PR feedback loop (review comments re-run the
-agent), money cost (needs per-model price tables that go stale), project map / code graph for
+Not in 1.0 (candidates for 1.x, in rough order): money cost (needs per-model price tables that go stale), project map / code graph for
 agent context, project memory ("lore"), mission replay, headless `sldev run` for CI, sandboxed
 runs, team sharing of recipes and agents.
 
@@ -244,6 +244,17 @@ chart library), opened from the activity bar and the palette.
 - `docs/go-to-production.md`: the launch checklist gets the 1.0 feature freeze.
 - e2e: `factory`, `bakeoff`, `rules`, `profiles` scenarios; screenshots reviewed.
 
+## 9. PR feedback loop
+
+When the pr stage has opened a pull request, the run remembers it (`FactoryRun.pr`) and the pipeline
+panel gets a **Review feedback** section. It reads the reviews, conversation comments and line comments
+through `gh` (`gh pr view --json comments,reviews` and `gh api repos/{owner}/{repo}/pulls/<n>/comments`),
+lists the ones newer than the last hand-over, and **Address N comments** starts an interactive mission
+with a chosen recipe agent in the run worktree (prompt: `feedbackPrompt` in `src/shared/prFeedback.ts`,
+which tells the agent to commit and not push). When it's done, **Push update** commits and pushes the
+branch: like opening the PR, pushing only happens on a click. e2e: `pr-feedback` (local bare origin,
+fake `gh`).
+
 ## Build order
 
 1. Mission status history (tiny, starts collecting dashboard data), agent builder, rules sync
@@ -271,6 +282,9 @@ against the real tools (on a scratch repo, with a cheap model):
       `cursor-agent -p`, `copilot -p --allow-all-tools`, `opencode run`, `gemini -p`): each exits
       when done and its exit code means success.
 - [ ] A real **pr stage**: push and `gh pr create --body` on a scratch GitHub repo.
+- [ ] **PR feedback**: on that PR, a review, a conversation comment and a line comment show up in
+      Review feedback (the JSON field names from `gh pr view` and the REST pulls/comments API), and
+      Push update lands on the PR.
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list
       (on `v1`, so they go live with the launch).
 

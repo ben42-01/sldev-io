@@ -2980,3 +2980,65 @@ a {
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* ── factory: review feedback on the run's PR ─ */
+.pr-feedback {
+  max-width: 720px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.pr-feedback-head,
+.pr-feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pr-feedback-head .grow {
+  flex: 1;
+}
+.pr-feedback-row select {
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  font: 12px var(--font-ui);
+}
+.pr-feedback-row .btn {
+  flex-shrink: 0;
+}
+.pr-feedback-error {
+  color: #f14c4c;
+}
+.pr-comments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.pr-comments li {
+  display: grid;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-strong);
+}
+.pr-comment-who {
+  color: var(--fg);
+  font-weight: 500;
+}
+.pr-comment-who .mono {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.pr-comment-body {
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+}

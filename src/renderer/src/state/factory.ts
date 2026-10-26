@@ -21,8 +21,9 @@ import {
   type Recipe
 } from '@shared/factory'
 import { applyProfile } from '@shared/profiles'
+import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
 import { BUILTIN_RECIPES } from '@shared/recipes'
-import type { AgentOptions } from '@shared/types'
+import type { AgentOptions, GhPrComment } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { slugify } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
@@ -434,12 +435,42 @@ async function openPr(run: FactoryRun, nodeId: string): Promise<void> {
     const cur = getRun(run.id)!
     const nodes = { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], status: 'done' as const, endedAt: Date.now(), note: url || 'Pull request opened' } }
     const done = Object.values(nodes).every((n) => n.status === 'done')
-    put({ ...cur, nodes, status: done ? 'done' : cur.status, updatedAt: Date.now() })
+    const number = prNumber(url)
+    put({ ...cur, nodes, status: done ? 'done' : cur.status, pr: number ? { number, url } : cur.pr, updatedAt: Date.now() })
     void tick(run.id)
   } catch (e) {
     const cur = getRun(run.id)!
     put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], status: 'approval', note: `Couldn't open the PR: ${(e as Error).message.split('\n')[0]}` } } })
   }
+}
+
+// ── review feedback on the run's pull request ───────────────────
+
+/** Review comments nobody has handed to an agent yet. */
+export async function prFeedback(runId: string): Promise<GhPrComment[]> {
+  const run = getRun(runId)
+  if (!run?.pr) return []
+  return unaddressed(await window.api.gh.prComments(run.worktree.path, run.pr.number), run.pr.addressedAt)
+}
+
+/** An interactive mission in the run worktree, so you can watch and steer it; it commits, you push. */
+export async function addressPrFeedback(runId: string, spec: string, comments: GhPrComment[]): Promise<void> {
+  const run = getRun(runId)
+  if (!run?.pr || !comments.length) return
+  const prompt = feedbackPrompt(run.intent, run.pr.number, comments)
+  const m = await startMission({ prompt, title: `PR #${run.pr.number} feedback: ${run.intent}`.slice(0, 60), root: run.root, cwd: run.worktree.path, options: nodeOptions(spec), worktree: false, placement: placement(run) })
+  const cur = getRun(runId)!
+  put({ ...cur, pr: { ...cur.pr!, addressedAt: Date.now(), missionId: m.id }, updatedAt: Date.now() })
+}
+
+/** Only on a click, like opening the PR. */
+export async function pushPrUpdate(runId: string): Promise<void> {
+  const run = getRun(runId)
+  if (!run?.pr) return
+  await commit(run.worktree.path, `Address review feedback on #${run.pr.number}`)
+  await window.api.git.push(run.worktree.path, run.worktree.branch)
+  const cur = getRun(runId)!
+  put({ ...cur, pr: { ...cur.pr!, pushedAt: Date.now() }, updatedAt: Date.now() })
 }
 
 // ── watching missions and terminals ─────────────────────────────

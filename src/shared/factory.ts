@@ -221,6 +221,16 @@ export interface Candidate {
 
 export const isBakeoff = (n: RecipeNode): boolean => n.kind === 'agent' && n.agents.length > 1
 
+export interface RunPr {
+  number: number
+  url: string
+  /** when review comments were last handed to an agent; older comments count as addressed */
+  addressedAt?: number
+  /** the mission addressing them */
+  missionId?: string
+  pushedAt?: number
+}
+
 export interface FactoryRun {
   id: string
   recipe: Recipe
@@ -234,6 +244,8 @@ export interface FactoryRun {
   note?: string
   /** GitHub issue it came from; the PR closes it */
   issue?: number
+  /** the pull request the pr node opened, and its review loop */
+  pr?: RunPr
   nodes: Record<string, NodeRun>
   createdAt: number
   updatedAt: number

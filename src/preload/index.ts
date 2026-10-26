@@ -16,6 +16,7 @@ import type {
   DirEntry,
   EditorInfo,
   GhIssue,
+  GhPrComment,
   GhPr,
   GhRepoInfo,
   GhRun,
@@ -124,6 +125,7 @@ const api = {
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
     merge: (repo: string, branch: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch),
+    push: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:push', cwd, branch),
     pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },
   missions: {
@@ -146,7 +148,8 @@ const api = {
     rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
-    issues: (cwd: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd)
+    issues: (cwd: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd),
+    prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n)
   },
   notes: {
     list: (scope: string | null): Promise<NoteMeta[]> => ipcRenderer.invoke('notes:list', scope),

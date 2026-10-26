@@ -201,6 +201,7 @@ function registerIpc(): void {
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
   ipcMain.handle('git:merge', (_e, repo: string, branch: string) => git.merge(repo, branch))
+  ipcMain.handle('git:push', (_e, cwd: string, branch: string) => git.push(cwd, branch))
   ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
 
   // missions (Claude Code hooks)
@@ -221,6 +222,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
   ipcMain.handle('gh:issues', (_e, cwd: string) => gh.listIssues(cwd))
+  ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes
   ipcMain.handle('notes:list', (_e, scope: string | null) => notes.listNotes(scope))

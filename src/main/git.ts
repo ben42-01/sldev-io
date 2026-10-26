@@ -109,6 +109,11 @@ export async function pushAndCreatePr(cwd: string, branch: string, base: string,
   return r.stdout.trim().split('\n').pop() ?? ''
 }
 
+/** Pushes new commits to a branch that already has a pull request. */
+export async function push(cwd: string, branch: string): Promise<void> {
+  await ok(['push', 'origin', branch], cwd)
+}
+
 export async function listFiles(cwd: string): Promise<string[]> {
   const r = await git(['ls-files', '--cached', '--others', '--exclude-standard'], cwd)
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean).slice(0, 50000) : []

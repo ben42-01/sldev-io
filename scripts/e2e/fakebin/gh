@@ -5,5 +5,9 @@ case "$1 $2" in
   "auth status") echo "You are not logged into any GitHub hosts." >&2; exit 1 ;;
   "auth login") echo "fake gh: logged in"; echo ok > gh-login-marker.txt ;;
   "issue list") echo '[{"number":42,"title":"Login button does nothing on Safari","body":"Clicking Log in on Safari 17 does nothing.","url":"https://github.com/acme/shop/issues/42"},{"number":7,"title":"Add CSV export","body":"","url":"https://github.com/acme/shop/issues/7"}]' ;;
+  # the PR feedback loop: a PR, two review comments and a line comment (dates in the past)
+  "pr create") echo "https://github.com/acme/shop/pull/12" ;;
+  "pr view") echo '{"url":"https://github.com/acme/shop/pull/12","reviews":[{"id":"R1","author":{"login":"maria"},"body":"Looks close. Please add a test.","submittedAt":"2026-01-02T10:00:00Z","state":"CHANGES_REQUESTED"},{"id":"R2","author":{"login":"li"},"body":"","submittedAt":"2026-01-02T11:00:00Z","state":"APPROVED"}],"comments":[{"id":"C1","author":{"login":"li"},"body":"Can we keep the old log line?","createdAt":"2026-01-02T09:00:00Z","url":"https://github.com/acme/shop/pull/12#issuecomment-1"}]}' ;;
+  "api repos/{owner}/{repo}/pulls/12/comments") echo '[{"id":99,"user":{"login":"maria"},"body":"Rename this variable.","created_at":"2026-01-02T10:05:00Z","html_url":"https://github.com/acme/shop/pull/12#discussion_r99","path":"src/app.js","line":1,"original_line":1}]' ;;
   *) echo "fake gh: $*" >&2; exit 1 ;;
 esac

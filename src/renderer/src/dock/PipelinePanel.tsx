@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { Bot, Check, FileText, GitPullRequest, Pause, Play, RotateCcw, Square, SquareTerminal, X } from 'lucide-react'
+import { Bot, Check, ExternalLink, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Square, SquareTerminal, Upload, X } from 'lucide-react'
 import { layout, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
 import { focusPanel } from './dockApi'
 import { openInEditor } from '../lib/actions'
-import { approve, keep, markDone, reject, resume, retry, stop, useRun } from '../state/factory'
-import { focusOrResume, reviewMission } from '../state/missions'
+import type { GhPrComment } from '@shared/types'
+import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, stop, useRun } from '../state/factory'
+import { focusOrResume, isLive, reviewMission, useMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
 
 const W = 196
@@ -80,7 +81,90 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
           )
         })}
       </div>
+      {run.pr && <PrFeedback run={run} />}
     </div>
+  )
+}
+
+/** Review comments on the run's PR go back to an agent in the same worktree; pushing the fix is a click. */
+function PrFeedback({ run }: { run: FactoryRun }): React.JSX.Element {
+  const pr = run.pr!
+  const specs = [...new Set(run.recipe.nodes.flatMap((n) => n.agents))]
+  const [spec, setSpec] = useState(specs[0] ?? '')
+  const [comments, setComments] = useState<GhPrComment[] | null>(null)
+  const [busy, setBusy] = useState<'check' | 'push' | null>(null)
+  const [error, setError] = useState('')
+  const mission = useMission(pr.missionId ?? '')
+  const working = mission && isLive(mission.status) && mission.status !== 'waiting'
+  const unpushed = pr.addressedAt && (!pr.pushedAt || pr.pushedAt < pr.addressedAt) && !working
+
+  const act = async (kind: 'check' | 'push', f: () => Promise<void>): Promise<void> => {
+    setBusy(kind)
+    setError('')
+    await f().catch((e: Error) => setError(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '').split('\n')[0]))
+    setBusy(null)
+  }
+  const check = (): Promise<void> => act('check', async () => setComments(await prFeedback(run.id)))
+  useEffect(() => {
+    void check()
+  }, [run.id, pr.addressedAt])
+
+  return (
+    <section className="pr-feedback">
+      <div className="pr-feedback-head">
+        <MessageSquare size={13} />
+        <b>Review feedback</b>
+        <button className="link" onClick={() => void window.api.shell.openExternal(pr.url)}>
+          #{pr.number} <ExternalLink size={11} />
+        </button>
+        <span className="grow" />
+        <button className="btn sm" disabled={busy !== null} onClick={() => void check()}>
+          <RefreshCw size={12} /> {busy === 'check' ? 'Checking…' : 'Check again'}
+        </button>
+      </div>
+      {error && <div className="pr-feedback-error">{error}</div>}
+      {working && (
+        <div className="pr-feedback-row">
+          An agent is addressing the comments.
+          <button className="icon-btn" title="Open its terminal" onClick={() => focusOrResume(mission.id)}><SquareTerminal size={13} /></button>
+        </div>
+      )}
+      {unpushed && (
+        <div className="pr-feedback-row">
+          Ready to update the pull request with the agent's commits.
+          <button className="btn sm primary" title={`Push ${run.worktree.branch}`} disabled={busy !== null} onClick={() => void act('push', () => pushPrUpdate(run.id))}>
+            <Upload size={12} /> {busy === 'push' ? 'Pushing…' : 'Push update'}
+          </button>
+        </div>
+      )}
+      {pr.pushedAt && !unpushed && !working && <div className="muted small">Update pushed {ago(pr.pushedAt)}.</div>}
+      {comments && comments.length === 0 && !working && <div className="muted small">No new review comments.</div>}
+      {comments && comments.length > 0 && !working && (
+        <>
+          <ul className="pr-comments">
+            {comments.map((c) => (
+              <li key={c.id}>
+                <span className="pr-comment-who">
+                  {c.author}
+                  {c.path && <span className="mono"> {c.path}{c.line ? `:${c.line}` : ''}</span>}
+                </span>
+                <span className="pr-comment-body">{c.body}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="pr-feedback-row">
+            <select value={spec} onChange={(e) => setSpec(e.target.value)} aria-label="Agent">
+              {specs.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button className="btn sm primary" disabled={!spec} onClick={() => void act('check', () => addressPrFeedback(run.id, spec, comments))}>
+              <Bot size={12} /> Address {comments.length} comment{comments.length === 1 ? '' : 's'}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 

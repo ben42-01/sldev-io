@@ -329,6 +329,18 @@ export interface GhPr {
   checks: { passed: number; failed: number; pending: number }
 }
 
+/** A review, a conversation comment or a line comment on a pull request. */
+export interface GhPrComment {
+  id: string
+  author: string
+  body: string
+  createdAt: string
+  url: string
+  /** line comments only */
+  path?: string
+  line?: number
+}
+
 export interface NoteMeta {
   path: string
   title: string

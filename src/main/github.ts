@@ -1,7 +1,7 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
-import type { GhIssue, GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
+import type { GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
 import { run } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -89,3 +89,26 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
 
 export const listIssues = (cwd: string): Promise<GhIssue[]> =>
   ghJson(['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url'], cwd)
+
+interface Author { login?: string }
+
+/** Everything reviewers wrote on PR `n`: reviews, conversation comments and line comments. */
+export async function prComments(cwd: string, n: number): Promise<GhPrComment[]> {
+  const [view, lines] = await Promise.all([
+    ghJson<{ comments: { id: string; author: Author; body: string; createdAt: string; url: string }[]; reviews: { id: string; author: Author; body: string; submittedAt: string; state: string }[] }>(
+      ['pr', 'view', String(n), '--json', 'comments,reviews,url'],
+      cwd
+    ),
+    // {owner}/{repo} is filled in by gh from the repository in cwd
+    ghJson<{ id: number; user: Author; body: string; created_at: string; html_url: string; path: string; line: number | null; original_line: number | null }[]>(
+      ['api', `repos/{owner}/{repo}/pulls/${n}/comments`, '--paginate'],
+      cwd
+    )
+  ])
+  const who = (a: Author | null | undefined): string => a?.login || 'someone'
+  return [
+    ...view.reviews.map((r) => ({ id: `review-${r.id}`, author: who(r.author), body: r.body, createdAt: r.submittedAt, url: '' })),
+    ...view.comments.map((c) => ({ id: `comment-${c.id}`, author: who(c.author), body: c.body, createdAt: c.createdAt, url: c.url })),
+    ...lines.map((c) => ({ id: `line-${c.id}`, author: who(c.user), body: c.body, createdAt: c.created_at, url: c.html_url, path: c.path, line: c.line ?? c.original_line ?? undefined }))
+  ]
+}
