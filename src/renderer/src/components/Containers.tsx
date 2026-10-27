@@ -130,20 +130,20 @@ function ContainerRow({ c, busy, act }: { c: DockerContainer; busy: boolean; act
         </div>
       </div>
       <div className="row-actions">
-        <button className="icon-btn" title="Follow logs" onClick={logs}>
+        <button className="icon-btn" title="Follow logs" aria-label="Follow logs" onClick={logs}>
           <ScrollText size={13} />
         </button>
         {running ? (
           <>
-            <button className="icon-btn" title="Stop" disabled={busy} onClick={() => act('stop')}>
+            <button className="icon-btn" title="Stop" aria-label="Stop" disabled={busy} onClick={() => act('stop')}>
               <Square size={13} />
             </button>
-            <button className="icon-btn go" title="Open shell" onClick={shell}>
+            <button className="icon-btn go" title="Open shell" aria-label="Open shell" onClick={shell}>
               <SquareTerminal size={13} />
             </button>
           </>
         ) : (
-          <button className="icon-btn go" title="Start" disabled={busy} onClick={() => act('start')}>
+          <button className="icon-btn go" title="Start" aria-label="Start" disabled={busy} onClick={() => act('start')}>
             <Play size={13} />
           </button>
         )}

@@ -179,7 +179,7 @@ function AgentSettings(): React.JSX.Element {
           <div key={c.id} className="custom-agent" onBlur={() => updateSettings({ customAgents: custom })}>
             <div className="field-row">
               <input value={c.name} placeholder="Name (e.g. Aider)" onChange={(e) => edit(c.id, { name: e.target.value })} />
-              <button type="button" className="icon-btn" title="Remove" onClick={() => save(custom.filter((x) => x.id !== c.id))}>
+              <button type="button" className="icon-btn" title="Remove" aria-label="Remove" onClick={() => save(custom.filter((x) => x.id !== c.id))}>
                 <Trash2 size={13} />
               </button>
             </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CredentialInput, CredentialKind, CredentialMeta, PortForward, RemoteEntry, SshConnection, VaultStatus } from '@shared/types'
-import { ArrowRightLeft, ChevronRight, Copy, Download, File, Folder, FolderTree, Import, KeyRound, Pencil, Plug, Plus, ShieldAlert, SquareTerminal, Trash2, Unplug } from 'lucide-react'
+import { Activity, ArrowRightLeft, ChevronRight, Copy, Download, File, Folder, FolderTree, Import, KeyRound, Pencil, Plug, Plus, ShieldAlert, SquareTerminal, Trash2, Unplug } from 'lucide-react'
 import { loadRemote, newId, openSshTerminal, refreshRemoteState, reloadCredentials, remote, saveConnections } from '../state/remote'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
@@ -26,9 +26,9 @@ export function RemoteView(): React.JSX.Element {
   return (
     <ViewShell title="Remote">
       <div className="tabs">
-        <button className={tab === 'connections' ? 'on' : ''} onClick={() => setTab('connections')}>Connections</button>
-        <button className={tab === 'credentials' ? 'on' : ''} onClick={() => setTab('credentials')}>Credentials</button>
-        <button className={tab === 'containers' ? 'on' : ''} onClick={() => setTab('containers')}>Containers</button>
+        <button className={tab === 'connections' ? 'on' : ''} aria-pressed={tab === 'connections'} onClick={() => setTab('connections')}>Connections</button>
+        <button className={tab === 'credentials' ? 'on' : ''} aria-pressed={tab === 'credentials'} onClick={() => setTab('credentials')}>Credentials</button>
+        <button className={tab === 'containers' ? 'on' : ''} aria-pressed={tab === 'containers'} onClick={() => setTab('containers')}>Containers</button>
       </div>
       {vault && !vault.encrypted && tab !== 'containers' && (
         <div className="warn-banner">
@@ -48,6 +48,14 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
   const connected = useStore(remote, (r) => r.connected)
   const [editing, setEditing] = useState<SshConnection | null>(null)
   const [browsing, setBrowsing] = useState<string | null>(null)
+  const [pings, setPings] = useState<Record<string, 'testing' | { ms: number } | { error: string }>>({})
+  /** TCP reachability of the first hop: the jump host when there is one */
+  const ping = async (c: SshConnection): Promise<void> => {
+    const hop = (c.jumpId && connections.find((j) => j.id === c.jumpId)) || c
+    setPings((p) => ({ ...p, [c.id]: 'testing' }))
+    const r = await window.api.ssh.ping(hop.host, hop.port || 22)
+    setPings((p) => ({ ...p, [c.id]: r }))
+  }
   const [notice, setNotice] = useState('')
 
   const importConfig = async (): Promise<void> => {
@@ -63,9 +71,9 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
         initial={editing}
         onNeedCredential={onNeedCredential}
         onCancel={() => setEditing(null)}
-        onSave={(c) => {
+        onSave={(c, connect) => {
           const list = remote.get().connections
-          void saveConnections(list.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c])
+          void saveConnections(list.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c]).then(() => connect && openSshTerminal(c))
           setEditing(null)
         }}
       />
@@ -95,6 +103,7 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
                   { label: 'Open terminal', icon: <SquareTerminal size={13} />, run: () => openSshTerminal(c) },
                   { label: browsing === c.id ? 'Hide files' : 'Browse files', icon: <FolderTree size={13} />, run: () => setBrowsing(browsing === c.id ? null : c.id) },
                   { label: 'Disconnect', icon: <Unplug size={13} />, disabled: !isUp, run: () => void window.api.ssh.disconnect(c.id).then(refreshRemoteState) },
+                  { label: 'Ping', icon: <Activity size={13} />, run: () => void ping(c) },
                   { type: 'separator' },
                   { label: 'Edit', icon: <Pencil size={13} />, run: () => setEditing(c) },
                   { label: 'Duplicate', icon: <Copy size={13} />, run: () => void saveConnections([...connections, { ...c, id: newId('ssh'), name: `${c.name} copy` }]) },
@@ -109,12 +118,16 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
                   {c.username ? `${c.username}@` : ''}{c.host}{c.port !== 22 ? `:${c.port}` : ''}
                   {c.jumpId ? ` via ${connections.find((j) => j.id === c.jumpId)?.name ?? 'jump'}` : ''}
                 </div>
+                {pings[c.id] && <PingResult r={pings[c.id]} via={c.jumpId ? connections.find((j) => j.id === c.jumpId)?.name : undefined} />}
               </div>
               <div className="row-actions">
-                <button className="icon-btn" title="Browse files" onClick={() => setBrowsing(browsing === c.id ? null : c.id)}>
+                <button className="icon-btn reveal" title="Ping: is the SSH port reachable?" aria-label="Ping" disabled={pings[c.id] === 'testing'} onClick={() => void ping(c)}>
+                  <Activity size={13} />
+                </button>
+                <button className="icon-btn" title="Browse files" aria-label="Browse files" onClick={() => setBrowsing(browsing === c.id ? null : c.id)}>
                   <FolderTree size={13} />
                 </button>
-                <button className="icon-btn go" title="Open terminal" onClick={() => openSshTerminal(c)}>
+                <button className="icon-btn go" title="Open terminal" aria-label="Open terminal" onClick={() => openSshTerminal(c)}>
                   <SquareTerminal size={13} />
                 </button>
               </div>
@@ -126,6 +139,16 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
       })}
       {!connections.length && <div className="muted-note">Save SSH hosts here and open remote terminals in the dock. Credentials are stored encrypted with your OS keychain and can be shared between connections.</div>}
     </div>
+  )
+}
+
+function PingResult({ r, via }: { r: 'testing' | { ms: number } | { error: string }; via?: string }): React.JSX.Element {
+  if (r === 'testing') return <div className="rt-meta">Testing…</div>
+  const where = via ? ` (via ${via})` : ''
+  return 'ms' in r ? (
+    <div className="rt-meta tone-done mono">● {r.ms}ms: reachable{where}</div>
+  ) : (
+    <div className="rt-meta tone-error mono">✕ {r.error}{where}</div>
   )
 }
 
@@ -154,7 +177,7 @@ function Forwards({ conn }: { conn: SshConnection }): React.JSX.Element {
           </div>
         )
       })}
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
     </div>
   )
 }
@@ -238,33 +261,40 @@ function formatSize(n: number): string {
   return n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`
 }
 
-function ConnectionForm({ initial, onSave, onCancel, onNeedCredential }: { initial: SshConnection; onSave: (c: SshConnection) => void; onCancel: () => void; onNeedCredential: () => void }): React.JSX.Element {
+function ConnectionForm({ initial, onSave, onCancel, onNeedCredential }: { initial: SshConnection; onSave: (c: SshConnection, connect: boolean) => void; onCancel: () => void; onNeedCredential: () => void }): React.JSX.Element {
   const [c, setC] = useState(initial)
   const credentials = useStore(remote, (r) => r.credentials)
   const connections = useStore(remote, (r) => r.connections)
   const set = (p: Partial<SshConnection>): void => setC((x) => ({ ...x, ...p }))
   const setFwd = (id: string, p: Partial<PortForward>): void => set({ forwards: c.forwards.map((f) => (f.id === id ? { ...f, ...p } : f)) })
-  const valid = c.host.trim() && (c.auth !== 'credential' || c.credentialId)
+  const portOk = Number.isInteger(c.port) && c.port >= 1 && c.port <= 65535
+  const valid = c.host.trim() && portOk && (c.auth !== 'credential' || c.credentialId)
+  const save = (connect: boolean): void => {
+    if (valid) onSave({ ...c, name: c.name.trim() || c.host.trim(), host: c.host.trim(), username: c.username?.trim() || undefined, forwards: c.forwards.filter((f) => f.localPort && f.remotePort) }, connect)
+  }
   return (
     <form
       className="form view-scroll"
       onSubmit={(e) => {
         e.preventDefault()
-        if (valid) onSave({ ...c, name: c.name.trim() || c.host.trim(), host: c.host.trim(), username: c.username?.trim() || undefined, forwards: c.forwards.filter((f) => f.localPort && f.remotePort) })
+        save(false)
       }}
     >
       <label className="field">
         <span>Name</span>
-        <input autoFocus value={c.name} placeholder="prod-api" onChange={(e) => set({ name: e.target.value })} />
+        <input autoFocus value={c.name} maxLength={80} placeholder="e.g. prod-api" onChange={(e) => set({ name: e.target.value })} />
+        <span className="field-hint">Optional. Defaults to the host.</span>
       </label>
       <div className="field-row">
         <label className="field" style={{ flex: 3 }}>
           <span>Host</span>
-          <input className="mono" value={c.host} placeholder="203.0.113.10" onChange={(e) => set({ host: e.target.value })} />
+          <input className="mono" value={c.host} spellCheck={false} placeholder="e.g. 10.0.1.42 or dev.example.com" onChange={(e) => set({ host: e.target.value })} />
+          <span className="field-hint">Required.</span>
         </label>
         <label className="field" style={{ flex: 1 }}>
           <span>Port</span>
-          <input className="mono" type="number" value={c.port} onChange={(e) => set({ port: Number(e.target.value) || 22 })} />
+          <input className="mono" type="number" min={1} max={65535} value={Number.isNaN(c.port) ? '' : c.port} onChange={(e) => set({ port: e.target.value === '' ? NaN : Number(e.target.value) })} />
+          {!portOk && <span className="field-hint tone-error">1 to 65535</span>}
         </label>
       </div>
       <label className="field">
@@ -315,8 +345,9 @@ function ConnectionForm({ initial, onSave, onCancel, onNeedCredential }: { initi
         </button>
       </div>
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={!valid}>Save</button>
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn" disabled={!valid}>Save</button>
+        <button type="button" className="btn primary" disabled={!valid} title="Save, then open a terminal on it" onClick={() => save(true)}>Save & Connect</button>
       </div>
     </form>
   )
@@ -350,7 +381,7 @@ function Credentials(): React.JSX.Element {
               </div>
             </div>
             <div className="row-actions">
-              <button className="icon-btn" title="Edit" onClick={() => setEditing({ meta: c })}><Pencil size={13} /></button>
+              <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => setEditing({ meta: c })}><Pencil size={13} /></button>
             </div>
           </div>
         )
@@ -367,8 +398,14 @@ function CredentialForm({ meta, onDone }: { meta?: CredentialMeta; onDone: () =>
   const [keyPath, setKeyPath] = useState(meta?.keyPath ?? '~/.ssh/id_ed25519')
   const [secret, setSecret] = useState('')
   const [passphrase, setPassphrase] = useState('')
+  /** saved secrets the user chose to remove: blank = keep, typed = replace, removed = '' */
+  const [drop, setDrop] = useState<{ secret?: boolean; passphrase?: boolean }>({})
   const [error, setError] = useState('')
-  const keep = (has?: boolean): string => (has ? '•••••• stored. Leave empty to keep' : '')
+  const [vault, setVault] = useState<VaultStatus | null>(null)
+  useEffect(() => void window.api.vault.status().then(setVault), [])
+  const locked = vault?.encrypted === false
+  const sameKind = !!meta && meta.kind === kind
+  const keep = (has?: boolean): string => (has ? '•••••••• saved in the OS credential store. Type to replace' : '')
   const save = async (): Promise<void> => {
     const input: CredentialInput = {
       id: meta?.id,
@@ -376,8 +413,8 @@ function CredentialForm({ meta, onDone }: { meta?: CredentialMeta; onDone: () =>
       kind,
       username,
       keyPath: kind === 'key-file' ? keyPath : undefined,
-      secret: secret || (meta && meta.kind === kind ? undefined : ''),
-      passphrase: passphrase || (meta && meta.kind === kind ? undefined : '')
+      secret: secret || (drop.secret || !sameKind ? '' : undefined),
+      passphrase: passphrase || (drop.passphrase || !sameKind ? '' : undefined)
     }
     try {
       await window.api.vault.save(input)
@@ -393,43 +430,56 @@ function CredentialForm({ meta, onDone }: { meta?: CredentialMeta; onDone: () =>
         <input autoFocus value={name} placeholder="deploy key" onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="seg">
-        <button type="button" className={kind === 'password' ? 'on' : ''} onClick={() => setKind('password')}>Password</button>
-        <button type="button" className={kind === 'key' ? 'on' : ''} onClick={() => setKind('key')}>Private key</button>
-        <button type="button" className={kind === 'key-file' ? 'on' : ''} onClick={() => setKind('key-file')}>Key file</button>
+        <button type="button" className={kind === 'password' ? 'on' : ''} aria-pressed={kind === 'password'} onClick={() => setKind('password')}>Password</button>
+        <button type="button" className={kind === 'key' ? 'on' : ''} aria-pressed={kind === 'key'} onClick={() => setKind('key')}>Private key</button>
+        <button type="button" className={kind === 'key-file' ? 'on' : ''} aria-pressed={kind === 'key-file'} onClick={() => setKind('key-file')}>Key file</button>
       </div>
       <label className="field">
         <span>Username (optional)</span>
         <input className="mono" value={username} onChange={(e) => setUsername(e.target.value)} />
       </label>
+      {locked && <div className="banner tone-attention">This system can't encrypt secrets (no OS keychain), so they can't be saved. Key files and ssh-agent still work.</div>}
       {kind === 'password' && (
-        <label className="field">
-          <span>Password</span>
-          <input type="password" value={secret} placeholder={keep(meta?.kind === 'password' && meta.hasSecret)} onChange={(e) => setSecret(e.target.value)} />
-        </label>
+        <SecretField label="Password" value={secret} onChange={setSecret} disabled={locked} saved={sameKind && !!meta?.hasSecret} removed={!!drop.secret} onRemove={(r) => setDrop((d) => ({ ...d, secret: r }))} placeholder={keep(sameKind && meta?.hasSecret)} />
       )}
       {kind === 'key' && (
         <label className="field">
           <span>Private key</span>
-          <textarea className="mono" rows={6} value={secret} placeholder={keep(meta?.kind === 'key' && meta.hasSecret) || '-----BEGIN OPENSSH PRIVATE KEY-----'} onChange={(e) => setSecret(e.target.value)} />
+          <textarea className="mono" rows={6} spellCheck={false} disabled={locked} value={secret} placeholder={keep(sameKind && meta?.hasSecret) || '-----BEGIN OPENSSH PRIVATE KEY-----'} onChange={(e) => setSecret(e.target.value)} />
         </label>
       )}
       {kind === 'key-file' && (
         <label className="field">
           <span>Key file path</span>
-          <input className="mono" value={keyPath} onChange={(e) => setKeyPath(e.target.value)} />
+          <input className="mono" spellCheck={false} value={keyPath} placeholder="e.g. ~/.ssh/id_ed25519" onChange={(e) => setKeyPath(e.target.value)} />
+          <span className="field-hint">Read from disk on each connect; the key itself isn't copied into the vault.</span>
         </label>
       )}
       {kind !== 'password' && (
-        <label className="field">
-          <span>Passphrase (if the key has one)</span>
-          <input type="password" value={passphrase} placeholder={keep(meta?.hasPassphrase)} onChange={(e) => setPassphrase(e.target.value)} />
-        </label>
+        <SecretField label="Passphrase" hint="Only if the key has one." value={passphrase} onChange={setPassphrase} disabled={locked} saved={sameKind && !!meta?.hasPassphrase} removed={!!drop.passphrase} onRemove={(r) => setDrop((d) => ({ ...d, passphrase: r }))} placeholder={keep(sameKind && meta?.hasPassphrase)} />
       )}
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onDone}>Cancel</button>
+        <span className="form-note">Secrets are encrypted{vault?.backend ? ` (${vault.backend})` : ''} on this machine and never leave it.</span>
+        <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!name.trim() || (kind === 'key-file' && !keyPath.trim())}>Save</button>
       </div>
     </form>
+  )
+}
+
+/** A saved secret has three states: left blank it is kept, typed it is replaced, or explicitly removed. */
+function SecretField(p: { label: string; hint?: string; value: string; onChange: (v: string) => void; disabled: boolean; saved: boolean; removed: boolean; onRemove: (removed: boolean) => void; placeholder: string }): React.JSX.Element {
+  return (
+    <label className="field">
+      <span>{p.label}</span>
+      <input type="password" value={p.value} disabled={p.disabled || p.removed} placeholder={p.removed ? 'Will be removed when you save' : p.placeholder} onChange={(e) => p.onChange(e.target.value)} />
+      {p.saved && !p.value && (
+        <button type="button" className="link field-hint" onClick={() => p.onRemove(!p.removed)}>
+          {p.removed ? 'Keep the saved one' : `Remove saved ${p.label.toLowerCase()}`}
+        </button>
+      )}
+      {p.hint && <span className="field-hint">{p.hint}</span>}
+    </label>
   )
 }

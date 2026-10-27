@@ -16,11 +16,11 @@ export function PreviewPanel(props: IDockviewPanelProps<{ url: string }>): React
   return (
     <div className="preview-panel">
       <form className="preview-bar" onSubmit={(e) => (e.preventDefault(), go(draft))}>
-        <button type="button" className="icon-btn" title="Reload" onClick={() => frame.current && (frame.current.src = url)}>
+        <button type="button" className="icon-btn" title="Reload" aria-label="Reload" onClick={() => frame.current && (frame.current.src = url)}>
           <RotateCw size={13} />
         </button>
         <input className="mono" value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <button type="button" className="icon-btn" title="Open in browser" onClick={() => void window.api.shell.openExternal(url)}>
+        <button type="button" className="icon-btn" title="Open in browser" aria-label="Open in browser" onClick={() => void window.api.shell.openExternal(url)}>
           <ExternalLink size={13} />
         </button>
       </form>

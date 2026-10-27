@@ -89,12 +89,12 @@ export function DashboardPanel(): React.JSX.Element {
         <h2>Usage</h2>
         <div className="seg sm">
           {RANGES.map(([id, label]) => (
-            <button key={id} className={range === id ? 'on' : ''} onClick={() => setRange(id)}>{label}</button>
+            <button key={id} className={range === id ? 'on' : ''} aria-pressed={range === id} onClick={() => setRange(id)}>{label}</button>
           ))}
         </div>
         <div className="seg sm">
-          <button className={scope === 'project' ? 'on' : ''} disabled={!root} onClick={() => setScope('project')}>This project</button>
-          <button className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>All projects</button>
+          <button className={scope === 'project' ? 'on' : ''} aria-pressed={scope === 'project'} disabled={!root} onClick={() => setScope('project')}>This project</button>
+          <button className={scope === 'all' ? 'on' : ''} aria-pressed={scope === 'all'} onClick={() => setScope('all')}>All projects</button>
         </div>
       </div>
 

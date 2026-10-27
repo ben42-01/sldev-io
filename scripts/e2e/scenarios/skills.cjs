@@ -26,11 +26,11 @@ module.exports = async (h) => {
   h.expect(await h.setValue('.inline-form select', 'codex'), 'pick Codex')
   await h.setValue('.inline-form input:not([type])', 'src only')
   await h.wait(200)
-  h.expect(await h.js(`document.querySelector('.skill-prompt')?.textContent.includes('SKILL.md')`), 'prompt points at SKILL.md for Codex')
+  h.expect(await h.js(`document.querySelector('.prompt-preview pre')?.textContent.includes('SKILL.md')`), 'prompt points at SKILL.md for Codex')
   await h.shot('1-run-form')
   await h.click('.inline-form button[type="submit"]')
   await h.wait(2500)
   const m = (await h.js(`window.api.store.get('missions')`)).missions.at(-1)
-  h.expect(m?.options.agent === 'codex' && m.prompt.includes(path.join(dir, 'SKILL.md')) && m.prompt.includes('Task: src only'), 'mission runs Codex with the skill prompt')
+  h.expect(m?.options.agent === 'codex' && m.prompt.includes(path.join(dir, 'SKILL.md')) && m.prompt.includes('Arguments (wherever the skill says $ARGUMENTS):\nsrc only'), 'mission runs Codex with the skill prompt')
   await h.shot('2-mission')
 }

@@ -140,7 +140,7 @@ function PrFeedback({ run }: { run: FactoryRun }): React.JSX.Element {
       {working && (
         <div className="pr-feedback-row">
           An agent is addressing the comments.
-          <button className="icon-btn" title="Open its terminal" onClick={() => focusOrResume(mission.id)}><SquareTerminal size={13} /></button>
+          <button className="icon-btn" title="Open its terminal" aria-label="Open its terminal" onClick={() => focusOrResume(mission.id)}><SquareTerminal size={13} /></button>
         </div>
       )}
       {unpushed && (
@@ -255,7 +255,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
                 {c.status === 'running' ? 'working…' : c.status === 'failed' ? 'failed' : c.stats ? <><span className="add">+{c.stats.insertions}</span> <span className="del">−{c.stats.deletions}</span></> : ''}
               </span>
               {c.status !== 'running' && !nr.winner && (
-                <button className="icon-btn" title="Review its diff" onClick={() => reviewMission(c.missionId)}><FileText size={12} /></button>
+                <button className="icon-btn" title="Review its diff" aria-label="Review its diff" onClick={() => reviewMission(c.missionId)}><FileText size={12} /></button>
               )}
               {nr.status === 'approval' && c.status === 'done' && (
                 <button className="btn sm" onClick={() => void keep(run.id, node.id, c.missionId)}>Keep</button>
@@ -299,16 +299,16 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
             </button>
           )}
           {nr.status === 'running' && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && (
-            <button className="icon-btn" title="Open its terminal" onClick={() => focusOrResume(nr.missionIds[0])}><SquareTerminal size={13} /></button>
+            <button className="icon-btn" title="Open its terminal" aria-label="Open its terminal" onClick={() => focusOrResume(nr.missionIds[0])}><SquareTerminal size={13} /></button>
           )}
           {nr.status === 'running' && node.kind === 'run' && nr.panelId && (
-            <button className="icon-btn" title="Open its terminal" onClick={() => focusPanel(nr.panelId!)}><SquareTerminal size={13} /></button>
+            <button className="icon-btn" title="Open its terminal" aria-label="Open its terminal" onClick={() => focusPanel(nr.panelId!)}><SquareTerminal size={13} /></button>
           )}
           {nr.status === 'running' && node.interactive && (
             <button className="btn sm" onClick={() => markDone(run.id, node.id)}><Square size={11} /> Done</button>
           )}
           {node.kind === 'agent' && (nr.status === 'done' || nr.status === 'approval') && (
-            <button className="icon-btn" title="Open its output" onClick={() => void openInEditor(out)}><FileText size={13} /></button>
+            <button className="icon-btn" title="Open its output" aria-label="Open its output" onClick={() => void openInEditor(out)}><FileText size={13} /></button>
           )}
           {nr.status === 'failed' && run.status !== 'running' && targets.length > 0 && (
             <button className="btn sm" title="Run it again with the failure and your note" onClick={() => setAsking('send')}>
@@ -316,7 +316,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
             </button>
           )}
           {(nr.status === 'failed' || nr.status === 'done' || nr.status === 'approval') && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && (
-            <button className="icon-btn" title="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." onClick={() => focusOrResume(nr.missionIds[0])}>
+            <button className="icon-btn" title="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." aria-label="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." onClick={() => focusOrResume(nr.missionIds[0])}>
               <MessageSquare size={13} />
             </button>
           )}
@@ -326,7 +326,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
             </button>
           )}
           {(nr.status === 'failed' || nr.status === 'done') && run.status !== 'running' && (
-            <button className="icon-btn" title={node.kind === 'run' ? 'Check again' : 'Run this step again'} onClick={() => retry(run.id, node.id)}><RotateCcw size={13} /></button>
+            <button className="icon-btn" title={node.kind === 'run' ? 'Check again' : 'Run this step again'} aria-label={node.kind === 'run' ? 'Check again' : 'Run this step again'} onClick={() => retry(run.id, node.id)}><RotateCcw size={13} /></button>
           )}
         </div>
       )}

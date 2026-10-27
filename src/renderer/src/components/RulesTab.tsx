@@ -66,7 +66,7 @@ export function RulesTab(): React.JSX.Element {
         <button className="btn sm primary" disabled={!pending} onClick={() => sync()}>
           {pending ? `Sync ${pending} file${pending === 1 ? '' : 's'}` : 'All in sync'}
         </button>
-        <button className="icon-btn" title="Rescan" onClick={load}>
+        <button className="icon-btn" title="Rescan" aria-label="Rescan" onClick={load}>
           <RefreshCw size={13} />
         </button>
       </div>

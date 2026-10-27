@@ -10,6 +10,8 @@ import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, shellKind, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
 import { errText, showNotice } from './removals'
+import { nextNeedsYou } from '../state/attention'
+import { openAgentsDashboard } from '../dock/AgentsPanel'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -175,6 +177,8 @@ export function staticCommands(): Command[] {
         setTimeout(() => window.dispatchEvent(new Event('sldev:new-mission')), 50)
       } },
     { id: 'missions.board', category: 'Agents', title: 'Open mission board', run: () => openPanel('missions', 'mission-board', 'Missions') },
+    { id: 'missions.next', category: 'Agents', title: 'Next mission that needs you', keys: { mac: 'Cmd+Shift+J', other: 'Ctrl+Shift+J' }, run: () => void (nextNeedsYou() || showNotice('Nothing needs you', 'No mission or factory run is waiting for you right now.')) },
+    { id: 'agents.dashboard', category: 'Agents', title: 'Open agents dashboard (every running agent)', run: openAgentsDashboard },
     { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openPanel('dashboard', 'usage-dashboard', 'Usage') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },

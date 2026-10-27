@@ -45,7 +45,7 @@ export function TasksView(): React.JSX.Element {
     <ViewShell
       title="Tasks"
       actions={
-        <button className="icon-btn" title="New task" onClick={() => setEditing(blank())}>
+        <button className="icon-btn" title="New task" aria-label="New task" onClick={() => setEditing(blank())}>
           <Plus size={14} />
         </button>
       }
@@ -101,10 +101,10 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JS
         {task.lastRunAt && <div className="rt-meta">ran {timeAgo(task.lastRunAt)}</div>}
       </div>
       <div className="row-actions">
-        <button className="icon-btn" title="Edit" onClick={onEdit}>
+        <button className="icon-btn" title="Edit" aria-label="Edit" onClick={onEdit}>
           <Pencil size={13} />
         </button>
-        <button className={`icon-btn${active ? ' danger' : ' go'}`} title={active ? 'Stop' : 'Run'} onClick={() => (active && run ? stopTerminal(run.panelId) : runTask(task))}>
+        <button className={`icon-btn${active ? ' danger' : ' go'}`} title={active ? 'Stop' : 'Run'} aria-label={active ? 'Stop' : 'Run'} onClick={() => (active && run ? stopTerminal(run.panelId) : runTask(task))}>
           {active ? <Square size={13} /> : <Play size={13} />}
         </button>
       </div>

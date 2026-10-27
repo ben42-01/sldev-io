@@ -22,7 +22,7 @@ export function TerminalPanel(props: IDockviewPanelProps<TerminalPanelParams>): 
     linkPanel(id, { runtimeId, taskId })
     if (missionId) linkMissionPanel(missionId, id)
     const baseTitle = props.api.title ?? 'terminal'
-    setTerminalListeners({ id, keepTitle: !!command || !!sshConnectionId, baseTitle, setTitle: (t) => props.api.setTitle(t) })
+    setTerminalListeners({ id, keepTitle: !!command || !!sshConnectionId, baseTitle, setTitle: (t) => !props.api.getParameters<TerminalPanelParams>().customTitle && props.api.setTitle(t) })
     attachTerminal(id, ref.current!)
     const active = props.api.onDidActiveChange((e) => e.isActive && focusTerminal(id))
     // Sessions are disposed when the panel is *closed* (see Dock), not on unmount,

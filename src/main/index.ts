@@ -16,7 +16,7 @@ import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
 import { hookInfo, startHookServer } from './hooks'
-import { importSshConfig, SshManager } from './ssh'
+import { importSshConfig, ping as pingHost, SshManager } from './ssh'
 import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
 import { detectRuntimes } from './runtimes'
@@ -268,6 +268,7 @@ function registerIpc(): void {
   ipcMain.handle('vault:delete', (_e, id: string) => vault.deleteCredential(id))
   ipcMain.handle('ssh:importConfig', () => importSshConfig(stores.connections.get().connections))
   ipcMain.handle('ssh:connected', () => ssh.connectedIds())
+  ipcMain.handle('ssh:ping', (_e, host: string, port: number) => pingHost(host, port))
   ipcMain.handle('ssh:disconnect', (_e, connId: string) => ssh.disconnect(connId))
   ipcMain.handle('ssh:home', (e, connId: string) => ssh.home(e.sender, connId))
   ipcMain.handle('ssh:list', (e, connId: string, path: string) => ssh.list(e.sender, connId, path))

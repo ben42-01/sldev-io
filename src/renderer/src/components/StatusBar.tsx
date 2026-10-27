@@ -1,6 +1,7 @@
 import { Bell, GitBranch, Radio, Settings, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { openSettings, showBranchPicker, showView } from '../lib/commands'
-import { missions } from '../state/missions'
+import { nextNeedsYou, useMissionCounts } from '../state/attention'
+import { openAgentsDashboard } from '../dock/AgentsPanel'
 import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { tildify } from '../lib/paths'
@@ -15,8 +16,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
   const branch = useStore(workspace, (w) => w.branch)
   const count = useStore(workspace, (w) => w.terminalCount)
   const broadcast = useStore(workspace, (w) => w.broadcastCount)
-  const needsYou = useStore(missions, (s) => s.list.filter((m) => m.status === 'needs-input').length)
-  const working = useStore(missions, (s) => s.list.filter((m) => m.status === 'working').length)
+  const { needsYou, working } = useMissionCounts()
   const missing = useStore(setup, (s) => blockers(s.report).length)
   return (
     <footer className="statusbar">
@@ -33,7 +33,7 @@ export function StatusBar({ home }: { home: string }): React.JSX.Element {
         </span>
       )}
       {(needsYou > 0 || working > 0) && (
-        <button className={`status-item clickable${needsYou ? ' attention' : ''}`} onClick={() => showView('agents')} title="Agent missions">
+        <button className={`status-item clickable${needsYou ? ' attention' : ''}`} onClick={() => (needsYou ? nextNeedsYou() : openAgentsDashboard())} title={needsYou ? 'Go to the next one that needs you (Ctrl+Shift+J)' : 'Agents dashboard'}>
           <Bell size={12} /> {needsYou ? `${needsYou} need${needsYou === 1 ? 's' : ''} you` : `${working} working`}
         </button>
       )}

@@ -60,7 +60,7 @@ export function WorkflowsView(): React.JSX.Element {
     <ViewShell
       title="GitHub Workflows"
       actions={
-        <button className="icon-btn" title="Refresh" onClick={() => void loadAll()}>
+        <button className="icon-btn" title="Refresh" aria-label="Refresh" onClick={() => void loadAll()}>
           <RefreshCw size={14} />
         </button>
       }
@@ -96,7 +96,7 @@ export function WorkflowsView(): React.JSX.Element {
             {workflows.map((w) => (
               <div key={w.id} className={`wf-row${selected?.id === w.id ? ' on' : ''}${w.state !== 'active' ? ' dim' : ''}`} onClick={() => setSelected(w)}>
                 <span className="wf-name">{w.name}</span>
-                <button className="icon-btn go" title="Run workflow…" onClick={(e) => (e.stopPropagation(), setDispatching(w))}>
+                <button className="icon-btn go" title="Run workflow…" aria-label="Run workflow…" onClick={(e) => (e.stopPropagation(), setDispatching(w))}>
                   <Play size={12} />
                 </button>
               </div>
@@ -148,10 +148,10 @@ function RunRow({ run: r, root, onChange }: { run: GhRun; root: string; onChange
         <div className="rt-meta">{r.workflowName} · {r.headBranch} · {r.event} · {ago(Date.parse(r.createdAt))}</div>
       </div>
       <div className="row-actions">
-        <button className="icon-btn" title={active ? 'Watch' : 'Logs'} onClick={active ? watch : logs}>
+        <button className="icon-btn" title={active ? 'Watch' : 'Logs'} aria-label={active ? 'Watch' : 'Logs'} onClick={active ? watch : logs}>
           {active ? <Eye size={13} /> : <ScrollText size={13} />}
         </button>
-        <button className="icon-btn" title="Open in browser" onClick={() => void window.api.shell.openExternal(r.url)}>
+        <button className="icon-btn" title="Open in browser" aria-label="Open in browser" onClick={() => void window.api.shell.openExternal(r.url)}>
           <ExternalLink size={13} />
         </button>
       </div>
@@ -191,7 +191,7 @@ function DispatchForm({ root, workflow, defaultRef, onDone }: { root: string; wo
     <form className="form inline-form" onSubmit={(e) => (e.preventDefault(), void submit())}>
       <strong>Run {workflow.name}</strong>
       {inputs === undefined && <div className="muted">Reading workflow…</div>}
-      {inputs === null && <div className="form-error">This workflow has no workflow_dispatch trigger, so it can't be started manually.</div>}
+      {inputs === null && <div className="form-error" role="alert">This workflow has no workflow_dispatch trigger, so it can't be started manually.</div>}
       {inputs && (
         <>
           <label className="field">
@@ -223,7 +223,7 @@ function DispatchForm({ root, workflow, defaultRef, onDone }: { root: string; wo
           ))}
         </>
       )}
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn" onClick={() => onDone(false)}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!inputs || busy || inputs.some((i) => i.required && !values[i.name])}>

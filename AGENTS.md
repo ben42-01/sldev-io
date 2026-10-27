@@ -29,6 +29,7 @@ e2e scenario (add one under `scripts/e2e/scenarios/`) plus a look at its screens
 src/main/       Electron main process (Node): everything privileged
   index.ts        window, ALL ipcMain handlers, startup order (shell env → hook server → window)
   pty.ts          node-pty sessions with flow control (pause on HIGH water, resume on ack)
+  launch.ts       how an agent argv is spawned without a shell (PATH lookup, Windows .exe/.cmd handling)
   ssh.ts          ssh2 shells, SFTP, port forwards, host-key TOFU (known_hosts.json)
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events and sldev MCP tool calls (token-protected)
@@ -48,13 +49,14 @@ src/main/       Electron main process (Node): everything privileged
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
-                  profiles.ts, rules.ts, usage.ts, missionHistory.ts
+                  profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
+                  missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff)
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
                   and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote
-  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Preview, Settings
+  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Agents, Preview, Settings
   components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
@@ -116,10 +118,28 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   prompts, files and (optionally) the sldev MCP tools. Pushing (the pr stage) only happens on a click.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.
-- **Styling**: monochrome UI (`--fg`, `--border*`), `--radius: 2px`, outline buttons
-  (`.btn`, `.btn.primary` = white outline, inverts on hover). Color only via the brand gradient
-  (`--brand`, `.brand-frame`, `.brand-text`) or status colors (green/amber/red). Icons come from
-  lucide-react and global CSS makes them 1.5px with square caps. Don't add blue buttons.
+- **Agent spawning**: agents start from an **argv array** (`agentCommand` in `lib/agents.ts` returns one
+  element per argument, never quoted) and main spawns it without a shell (`src/main/launch.ts`: a real
+  `.exe` first, npm `.cmd` shims unwrapped to `node <script>`, cmd.exe only as a last resort that refuses
+  multi-line prompts). Never join an agent command into a string or run it through `cmd /c`/`sh -c`: on
+  Windows that once delivered the prompt as the single word "need". `commandText()` is for display only.
+  Shell strings (`command: string`) are for user-typed runtime/task commands.
+- **Destructive actions** ask first with `confirmAction`/`confirmDelete` (`components/Modal.tsx`,
+  flows in `lib/removals.tsx`), saying what is removed and kept. Never `window.confirm`/`alert`.
+  Worktrees are removed without `--force` unless the user ticked "discard", and never while something
+  runs in them.
+- **Styling** (UI guide look): OKLCH surface ladder (`--background` < `--surface` < `--surface-raised` <
+  `--muted`, borders above), radius scale (`--radius-xs/sm` chips, `--radius` 6px buttons/inputs,
+  `--radius-lg` cards, `--radius-xl` modals, `--radius-full` pills/dots), and an inner radius smaller
+  than its container. Buttons: `.btn` secondary, `.btn.primary` light-grey fill (one per area),
+  `.btn.ghost`, `.btn.danger` (destructive only on hover); focus-visible ring. Colour means state only,
+  through `src/shared/status.ts` (`missionSignal` etc. → tone) and `StatusDot`/`StatusPill`: working
+  green, attention amber, error red, review blue, done teal; pulse = live activity (ping halo, never
+  blink). The aurora border (`.aurora`) is for containers only (cards, modals, board icons), never
+  buttons or inputs, and a status border wins over it. Dialogs use the shared `Modal` (`<dialog>`).
+  Field labels are uppercase 10px; hints under fields explain the effect. Every async region has
+  empty/loading/error states (`components/States.tsx`). Icons come from lucide-react (1.5px, square caps)
+  and icon-only buttons get `title` and `aria-label`.
 
 ## Gotchas
 

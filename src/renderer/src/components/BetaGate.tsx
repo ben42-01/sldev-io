@@ -80,7 +80,7 @@ export function BetaBanner(): React.JSX.Element | null {
       <button className="link" onClick={() => void window.api.shell.openExternal(pricingUrl())}>
         Get sldev-io
       </button>
-      <button className="icon-btn" title="Dismiss until next start" onClick={() => beta.set({ dismissed: true })}>
+      <button className="icon-btn" title="Dismiss until next start" aria-label="Dismiss until next start" onClick={() => beta.set({ dismissed: true })}>
         <X size={13} />
       </button>
     </div>

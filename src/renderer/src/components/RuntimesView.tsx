@@ -52,10 +52,10 @@ export function RuntimesView(): React.JSX.Element {
       title="Runtimes"
       actions={
         <>
-          <button className="icon-btn" title="Add custom command" onClick={() => setEditing({ id: '', name: '', command: '', cwd: '' })}>
+          <button className="icon-btn" title="Add custom command" aria-label="Add custom command" onClick={() => setEditing({ id: '', name: '', command: '', cwd: '' })}>
             <Plus size={14} />
           </button>
-          <button className="icon-btn" title="Rescan project" onClick={() => void loadRuntimes(root)}>
+          <button className="icon-btn" title="Rescan project" aria-label="Rescan project" onClick={() => void loadRuntimes(root)}>
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
           </button>
         </>
@@ -153,16 +153,16 @@ function RuntimeRow({ def, onEdit, onDelete }: { def: RuntimeDef; onEdit?: () =>
       </div>
       <div className="row-actions">
         {run && (
-          <button className="icon-btn" title="Show terminal" onClick={() => focusPanel(run.panelId)}>
+          <button className="icon-btn" title="Show terminal" aria-label="Show terminal" onClick={() => focusPanel(run.panelId)}>
             <SquareTerminal size={13} />
           </button>
         )}
         {active && (
-          <button className="icon-btn" title="Restart" onClick={() => restartRuntime(def.id)}>
+          <button className="icon-btn" title="Restart" aria-label="Restart" onClick={() => restartRuntime(def.id)}>
             <RotateCw size={13} />
           </button>
         )}
-        <button className={`icon-btn${active ? ' danger' : ' go'}`} title={active ? 'Stop' : 'Run'} onClick={() => (active ? stopRuntime(def.id) : runRuntime(def))}>
+        <button className={`icon-btn${active ? ' danger' : ' go'}`} title={active ? 'Stop' : 'Run'} aria-label={active ? 'Stop' : 'Run'} onClick={() => (active ? stopRuntime(def.id) : runRuntime(def))}>
           {active ? <Square size={13} /> : <Play size={13} />}
         </button>
       </div>

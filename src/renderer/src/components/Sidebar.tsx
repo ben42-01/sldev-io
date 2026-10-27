@@ -73,19 +73,19 @@ function Explorer({ home }: { home: string }): React.JSX.Element {
       <div className="sidebar-header">
         <span title={root}>{basename(root)}</span>
         <div className="sidebar-actions">
-          <button className="icon-btn" title="New terminal at root" onClick={() => openTerminal({ cwd: root })}>
+          <button className="icon-btn" title="New terminal at root" aria-label="New terminal at root" onClick={() => openTerminal({ cwd: root })}>
             <SquareTerminal size={14} />
           </button>
           <button className="icon-btn" title={`Open in ${preferredEditor()?.name ?? 'default app'}`} onClick={() => void openInEditor(root, preferredEditor(), true)}>
             <ExternalLink size={14} />
           </button>
-          <button className="icon-btn" title="Refresh" onClick={() => tree.current?.refresh()}>
+          <button className="icon-btn" title="Refresh" aria-label="Refresh" onClick={() => tree.current?.refresh()}>
             <RefreshCw size={14} />
           </button>
-          <button className="icon-btn" title="Collapse all" onClick={() => tree.current?.collapseAll()}>
+          <button className="icon-btn" title="Collapse all" aria-label="Collapse all" onClick={() => tree.current?.collapseAll()}>
             <ChevronsDownUp size={14} />
           </button>
-          <button className="icon-btn" title="Open another folder" onClick={() => void pickRootFolder()}>
+          <button className="icon-btn" title="Open another folder" aria-label="Open another folder" onClick={() => void pickRootFolder()}>
             <FolderOpen size={14} />
           </button>
         </div>

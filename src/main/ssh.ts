@@ -1,6 +1,6 @@
 import { app, ipcMain, type WebContents } from 'electron'
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
-import { createServer, type Server } from 'net'
+import { connect as netConnect, createServer, type Server } from 'net'
 import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -365,4 +365,19 @@ export async function importSshConfig(existing: SshConnection[]): Promise<SshCon
     })
   }
   return out
+}
+
+/** Whether the SSH port answers (a TCP connect, nothing is sent): round-trip ms, or why it didn't. */
+export function ping(host: string, port: number, timeoutMs = 4000): Promise<{ ms: number } | { error: string }> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const sock = netConnect({ host, port })
+    const done = (r: { ms: number } | { error: string }): void => {
+      sock.destroy()
+      resolve(r)
+    }
+    sock.setTimeout(timeoutMs, () => done({ error: 'timeout' }))
+    sock.once('connect', () => done({ ms: Date.now() - start }))
+    sock.once('error', (e: NodeJS.ErrnoException) => done({ error: e.code === 'ENOTFOUND' ? 'host not found' : e.code === 'ECONNREFUSED' ? 'refused' : (e.code ?? e.message) }))
+  })
 }

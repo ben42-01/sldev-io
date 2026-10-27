@@ -41,13 +41,13 @@ export function MissionsView(): React.JSX.Element {
       title="Agent Missions"
       actions={
         <>
-          <button className="icon-btn" title="Usage dashboard" onClick={openDashboard}>
+          <button className="icon-btn" title="Usage dashboard" aria-label="Usage dashboard" onClick={openDashboard}>
             <ChartGantt size={14} />
           </button>
-          <button className="icon-btn" title="Mission board" onClick={openMissionBoard}>
+          <button className="icon-btn" title="Mission board" aria-label="Mission board" onClick={openMissionBoard}>
             <LayoutGrid size={14} />
           </button>
-          <button className="icon-btn" title="New mission" onClick={() => setCreating(true)}>
+          <button className="icon-btn" title="New mission" aria-label="New mission" onClick={() => setCreating(true)}>
             <Plus size={14} />
           </button>
         </>

@@ -62,8 +62,8 @@ export function NotesView(): React.JSX.Element {
     <>
       <div className="section-label pad row-label">
         <span>{label}</span>
-        <button className="icon-btn" title="New note" onClick={() => setCreating(scope)}><Plus size={13} /></button>
-        <button className="icon-btn" title="Open notes folder" onClick={() => void window.api.notes.openFolder(scope === 'project' ? root : null)}><FolderOpen size={13} /></button>
+        <button className="icon-btn" title="New note" aria-label="New note" onClick={() => setCreating(scope)}><Plus size={13} /></button>
+        <button className="icon-btn" title="Open notes folder" aria-label="Open notes folder" onClick={() => void window.api.notes.openFolder(scope === 'project' ? root : null)}><FolderOpen size={13} /></button>
       </div>
       {creating === scope && (
         <form className="note-new" onSubmit={(e) => (e.preventDefault(), void create())}>
@@ -99,7 +99,7 @@ export function NotesView(): React.JSX.Element {
     <ViewShell
       title="Notes"
       actions={
-        <button className="icon-btn" title="New note" onClick={() => setCreating(root ? 'project' : 'global')}>
+        <button className="icon-btn" title="New note" aria-label="New note" onClick={() => setCreating(root ? 'project' : 'global')}>
           <Plus size={14} />
         </button>
       }

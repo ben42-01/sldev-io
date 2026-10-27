@@ -120,7 +120,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
                   <span className={`diff-status ${f.status}`}>{f.status}</span>
                   <span className="mono">{f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}</span>
                   <span className="spacer" />
-                  <button className="icon-btn" title="Open file" onClick={() => void openInEditor(`${mission.cwd}/${f.path}`)}>
+                  <button className="icon-btn" title="Open file" aria-label="Open file" onClick={() => void openInEditor(`${mission.cwd}/${f.path}`)}>
                     <ExternalLink size={12} />
                   </button>
                 </header>

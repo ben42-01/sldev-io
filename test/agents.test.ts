@@ -117,8 +117,8 @@ describe('skillPrompt', () => {
   it('points other agents at the SKILL.md', () => {
     const p = skillPrompt(agent('codex'), skill, 'the auth module')
     expect(p).toContain('read /home/u/.claude/skills/review/SKILL.md')
-    expect(p).toMatch(/Task: the auth module$/)
-    expect(skillPrompt(agent('gemini'), skill, '')).not.toContain('Task:')
+    expect(p).toMatch(/Arguments \(wherever the skill says \$ARGUMENTS\):\nthe auth module$/)
+    expect(skillPrompt(agent('gemini'), skill, '')).not.toContain('Arguments')
   })
 })
 

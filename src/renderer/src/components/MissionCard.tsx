@@ -61,18 +61,18 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
           </span>
         ) : <span className="stats">no changes</span>)}
         <span className="spacer" />
-        <button className="icon-btn" title="Review changes" onClick={() => reviewMission(m.id)}>
+        <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
           <FileDiff size={13} />
         </button>
         {hasPanel && live ? (
-          <button className="icon-btn danger" title="Stop" onClick={() => stopMission(m.id)}>
+          <button className="icon-btn danger" title="Stop" aria-label="Stop" onClick={() => stopMission(m.id)}>
             <Square size={13} />
           </button>
         ) : null}
-        <button className="icon-btn" title={hasPanel ? 'Show terminal' : 'Resume'} onClick={() => focusOrResume(m.id)}>
+        <button className="icon-btn" title={hasPanel ? 'Show terminal' : 'Resume'} aria-label={hasPanel ? 'Show terminal' : 'Resume'} onClick={() => focusOrResume(m.id)}>
           {hasPanel ? <SquareTerminal size={13} /> : <Play size={13} />}
         </button>
-        <button className="icon-btn" title="More" onClick={(e) => showContextMenu(e, menu())}>
+        <button className="icon-btn" title="More" aria-label="More" onClick={(e) => showContextMenu(e, menu())}>
           <Ellipsis size={13} />
         </button>
       </div>

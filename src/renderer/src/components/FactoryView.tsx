@@ -26,7 +26,7 @@ export function FactoryView(): React.JSX.Element {
     <ViewShell
       title="Factory"
       actions={
-        <button className="icon-btn" title="New run" onClick={() => setCreating(true)}>
+        <button className="icon-btn" title="New run" aria-label="New run" onClick={() => setCreating(true)}>
           <Plus size={14} />
         </button>
       }

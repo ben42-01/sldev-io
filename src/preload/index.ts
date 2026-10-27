@@ -197,6 +197,7 @@ const api = {
   ssh: {
     openShell: (id: string, connId: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('ssh:openShell', id, connId, cols, rows),
     importConfig: (): Promise<SshConnection[]> => ipcRenderer.invoke('ssh:importConfig'),
+    ping: (host: string, port: number): Promise<{ ms: number } | { error: string }> => ipcRenderer.invoke('ssh:ping', host, port),
     connected: (): Promise<string[]> => ipcRenderer.invoke('ssh:connected'),
     disconnect: (connId: string): Promise<void> => ipcRenderer.invoke('ssh:disconnect', connId),
     home: (connId: string): Promise<string> => ipcRenderer.invoke('ssh:home', connId),

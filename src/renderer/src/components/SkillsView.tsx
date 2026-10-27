@@ -5,6 +5,7 @@ import { activeTerminalId, openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
 import { writeToTerminal, focusTerminal, shellKind } from '../lib/terminals'
 import { shellQuote } from '../lib/paths'
+import { errText } from '../lib/removals'
 import { skillPrompt } from '../lib/agents'
 import { groupAssets, isGroupOpen } from '../lib/assets'
 import { getAgent, useAgents } from '../state/agents'
@@ -46,10 +47,10 @@ export function SkillsView(): React.JSX.Element {
       title="Skills"
       actions={
         <>
-          <button className="icon-btn" title="New skill" onClick={() => (setTab('skill'), setCreating(true))}>
+          <button className="icon-btn" title="New skill" aria-label="New skill" onClick={() => (setTab('skill'), setCreating(true))}>
             <Plus size={14} />
           </button>
-          <button className="icon-btn" title="Rescan" onClick={load}>
+          <button className="icon-btn" title="Rescan" aria-label="Rescan" onClick={load}>
             <RefreshCw size={14} />
           </button>
         </>
@@ -57,7 +58,7 @@ export function SkillsView(): React.JSX.Element {
     >
       <div className="tabs">
         {TABS.map(([id, label]) => (
-          <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+          <button key={id} className={tab === id ? 'on' : ''} aria-pressed={tab === id} onClick={() => setTab(id)}>
             {label}
             {id !== 'mcp' && id !== 'rules' && assets && <span className="count">{assets.filter((a) => a.kind === id).length}</span>}
           </button>
@@ -126,11 +127,11 @@ function AssetRow({ asset: a, onRun }: { asset: ClaudeAsset; onRun: () => void }
         <div className="asset-desc">{a.description}</div>
       </div>
       <div className="row-actions">
-        <button className="icon-btn" title="Edit" onClick={() => void openInEditor(a.path)}>
+        <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => void openInEditor(a.path)}>
           <ExternalLink size={13} />
         </button>
         {a.kind !== 'agent' && (
-          <button className="icon-btn go" title={runLabel(a)} onClick={onRun}>
+          <button className="icon-btn go" title={runLabel(a)} aria-label={runLabel(a)} onClick={onRun}>
             <Rocket size={13} />
           </button>
         )}
@@ -149,13 +150,23 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
   const [agentId, setAgentId] = useState(choices.some((a) => a.id === defaultAgent) ? defaultAgent : (choices[0]?.id ?? 'claude'))
   const agent = getAgent(agentId)
   const prompt = skillPrompt(agent, asset, args)
-  const run = (): void => {
-    if (!root) return
-    void startMission({ prompt, title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: { agent: agent.id }, worktree })
-    onDone()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const run = async (): Promise<void> => {
+    if (!root || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await startMission({ prompt, brief: prompt, title: `${asset.name}${args ? `: ${args.slice(0, 40)}` : ''}`, root, options: { agent: agent.id }, worktree })
+      onDone()
+    } catch (e) {
+      setError(errText(e))
+    } finally {
+      setBusy(false)
+    }
   }
   return (
-    <form className="form inline-form" onSubmit={(e) => (e.preventDefault(), run())}>
+    <form className="form inline-form" onSubmit={(e) => (e.preventDefault(), void run())}>
       <label className="field">
         <span>Agent</span>
         <select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={choices.length < 2}>
@@ -167,19 +178,24 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
           ))}
         </select>
       </label>
-      <div className="mono small skill-prompt" title="Prompt sent to the agent">{prompt}</div>
       <label className="field">
         <span>Arguments / extra instructions</span>
-        <input autoFocus value={args} onChange={(e) => setArgs(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && onDone()} />
+        <input autoFocus value={args} disabled={busy} placeholder="e.g. the auth module" onChange={(e) => setArgs(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && !busy && onDone()} />
+        <span className="field-hint">Optional. Passed to the skill as text in the prompt, never as command-line flags.</span>
       </label>
+      <details className="prompt-preview">
+        <summary>Prompt preview</summary>
+        <pre className="cmd-preview selectable">{prompt}</pre>
+      </details>
       <label className="check">
         <input type="checkbox" checked={worktree} onChange={(e) => setWorktree(e.target.checked)} />
         <span>In a new git worktree</span>
       </label>
-      {!root && <div className="form-error">Open a folder first.</div>}
+      {!root && <div className="form-error" role="alert">Open a folder first.</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={!root}><Rocket size={13} /> Run</button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={onDone}>Cancel</button>
+        <button type="submit" className="btn primary" disabled={!root || busy}><Rocket size={13} /> {busy ? 'Launching…' : 'Run'}</button>
       </div>
     </form>
   )
@@ -222,7 +238,7 @@ function NewSkillForm({ onDone }: { onDone: (created: boolean) => void }): React
           <option value="user">All projects (~/.claude/skills)</option>
         </select>
       </label>
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn" onClick={() => onDone(false)}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!name || !description.trim()}>Create</button>

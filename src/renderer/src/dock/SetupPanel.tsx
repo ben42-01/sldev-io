@@ -97,7 +97,7 @@ function SetupRow({ check: c, pending }: { check: SetupCheck; pending?: boolean 
           </button>
         )}
         {c.state !== 'ok' && c.docs && (
-          <button className="icon-btn" title="Installation guide" onClick={() => void window.api.shell.openExternal(c.docs)}>
+          <button className="icon-btn" title="Installation guide" aria-label="Installation guide" onClick={() => void window.api.shell.openExternal(c.docs)}>
             <ExternalLink size={13} />
           </button>
         )}

@@ -319,6 +319,9 @@ export function slugify(s: string): string {
  */
 export function skillPrompt(agent: AgentDef, skill: { name: string; invocation: string; path: string }, args: string): string {
   if (agent.claudeSkills) return `${skill.invocation} ${args.trim()}`.trim()
-  const task = args.trim() ? `\n\nTask: ${args.trim()}` : ''
-  return `Use the "${skill.name}" skill: read ${skill.path} and follow its instructions (files it mentions are relative to that folder).${task}`
+  return [
+    `Use the "${skill.name}" skill for this task: read ${skill.path} completely and follow its instructions.`,
+    'Files and scripts it mentions are relative to that folder; keep working in your current folder.',
+    ...(args.trim() ? [`Arguments (wherever the skill says $ARGUMENTS):\n${args.trim()}`] : [])
+  ].join('\n\n')
 }

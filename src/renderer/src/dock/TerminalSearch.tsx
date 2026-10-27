@@ -40,13 +40,13 @@ export function TerminalSearch({ id, panelApi }: { id: string; panelApi: Dockvie
           if (e.key === 'Enter') findInTerminal(id, query, e.shiftKey)
         }}
       />
-      <button className="icon-btn" title="Previous (Shift+Enter)" onClick={() => findInTerminal(id, query, true)}>
+      <button className="icon-btn" title="Previous (Shift+Enter)" aria-label="Previous (Shift+Enter)" onClick={() => findInTerminal(id, query, true)}>
         <ChevronUp size={14} />
       </button>
-      <button className="icon-btn" title="Next (Enter)" onClick={() => findInTerminal(id, query)}>
+      <button className="icon-btn" title="Next (Enter)" aria-label="Next (Enter)" onClick={() => findInTerminal(id, query)}>
         <ChevronDown size={14} />
       </button>
-      <button className="icon-btn" title="Close (Esc)" onClick={close}>
+      <button className="icon-btn" title="Close (Esc)" aria-label="Close (Esc)" onClick={close}>
         <X size={14} />
       </button>
     </div>

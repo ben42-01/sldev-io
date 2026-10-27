@@ -51,7 +51,7 @@ module.exports = async (h) => {
   await h.click('.form .btn.primary', 'Launch')
   await h.wait(2500)
   const m = (await h.js(`window.api.store.get('missions')`)).missions[0]
-  h.expect(m?.options.profile === reviewerId && m.options.agent === 'codex' && m.prompt === 'Review the last commit', 'mission stores the profile and the prompt as typed')
+  h.expect(m?.options.profile === reviewerId && m.options.agent === 'codex' && m.brief === 'Review the last commit' && m.prompt.includes('Review the last commit'), 'mission stores the profile and the brief as typed')
   h.expect(m?.history?.[0]?.status === 'starting', 'mission history starts with its launch')
   h.expect(await h.js(`document.querySelector('.mission-card .mission-agent')?.textContent === 'Reviewer · Codex'`), 'mission card shows the profile')
   await h.shot('3-mission')

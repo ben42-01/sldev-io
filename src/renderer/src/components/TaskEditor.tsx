@@ -37,10 +37,10 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
       }}
     >
       <div className="seg">
-        <button type="button" className={t.kind === 'agent' ? 'on' : ''} onClick={() => set({ kind: 'agent' })}>
+        <button type="button" className={t.kind === 'agent' ? 'on' : ''} aria-pressed={t.kind === 'agent'} onClick={() => set({ kind: 'agent' })}>
           <Bot size={14} /> Agent
         </button>
-        <button type="button" className={t.kind === 'shell' ? 'on' : ''} onClick={() => set({ kind: 'shell' })}>
+        <button type="button" className={t.kind === 'shell' ? 'on' : ''} aria-pressed={t.kind === 'shell'} onClick={() => set({ kind: 'shell' })}>
           <Terminal size={14} /> Shell
         </button>
       </div>

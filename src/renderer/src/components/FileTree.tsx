@@ -186,7 +186,7 @@ export function FileTree({ root, handle }: { root: string; handle?: React.RefObj
             <span className="tree-actions">
               <button
                 className="icon-btn"
-                title="New terminal here"
+                title="New terminal here" aria-label="New terminal here"
                 onClick={(ev) => {
                   ev.stopPropagation()
                   openTerminal({ cwd: entry.isDir ? entry.path : dirname(entry.path) })

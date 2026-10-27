@@ -92,9 +92,9 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
         <span className="muted small">{saved ? 'Saved' : 'Editing'}</span>
         <span className="spacer" />
         <div className="seg sm">
-          <button className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')} title="Edit"><Pencil size={12} /></button>
-          <button className={mode === 'split' ? 'on' : ''} onClick={() => setMode('split')} title="Split"><Columns2 size={12} /></button>
-          <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')} title="Preview"><Eye size={12} /></button>
+          <button className={mode === 'edit' ? 'on' : ''} aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} title="Edit"><Pencil size={12} /></button>
+          <button className={mode === 'split' ? 'on' : ''} aria-pressed={mode === 'split'} onClick={() => setMode('split')} title="Split"><Columns2 size={12} /></button>
+          <button className={mode === 'preview' ? 'on' : ''} aria-pressed={mode === 'preview'} onClick={() => setMode('preview')} title="Preview"><Eye size={12} /></button>
         </div>
         <button className="btn sm" title="Paste this note into the active terminal" onClick={() => void sendNoteToTerminal(path)}><SendHorizontal size={12} /> To terminal</button>
         <button className="btn sm" title="Start an agent mission with this note as the prompt" onClick={() => void missionFromNote(path, props.api.title ?? 'Note')}><Rocket size={12} /> Mission</button>

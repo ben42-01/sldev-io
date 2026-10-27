@@ -19,6 +19,7 @@ module.exports = async (h) => {
   await h.setValue('.form textarea', 'Paginate users', `e.placeholder.includes('pagination')`)
   await h.setValue('.form textarea', 'npm test passes', `e.placeholder.includes('GET /users')`)
   await h.wait(200)
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.prompt-preview')`), 4000), 'prompt preview appears once there is a brief')
   await h.js(`document.querySelector('.prompt-preview').open = true`)
   const preview = await h.js(`document.querySelector('.prompt-preview pre')?.textContent ?? ''`)
   h.expect(preview.includes('Acceptance criteria:\nnpm test passes') && preview.includes('summarize what changed'), 'prompt preview shows criteria and the closing instruction')

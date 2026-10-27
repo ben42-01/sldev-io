@@ -160,6 +160,10 @@ const privacy: LegalPage = {
         The tools sldev-io starts for you, such as coding agents, git, the GitHub CLI, ssh and Docker, connect to their own services
         under their own privacy policies. sldev-io doesn't see or relay that traffic.
       </p>
+      <p>
+        Remote connections you open (SSH sessions, and Ping, which only checks that a saved host's SSH port answers) go straight from
+        your computer to that host and nowhere else.
+      </p>
 
       <h2>This website</h2>
       <p>

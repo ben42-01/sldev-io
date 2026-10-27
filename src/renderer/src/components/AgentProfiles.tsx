@@ -163,8 +163,8 @@ function ProfileEditor({ draft, root, onDone, onCopy }: { draft: AgentProfile; r
           <>
             <button type="button" className="btn sm" title="Write .claude/agents/<name>.md in this project" onClick={() => void exportTo('claude')}>Export as Claude subagent</button>
             <button type="button" className="btn sm" title="Write .opencode/agent/<name>.md in this project" onClick={() => void exportTo('opencode')}>Export to OpenCode</button>
-            <button type="button" className="icon-btn" title="Duplicate" onClick={onCopy}><Copy size={13} /></button>
-            <button type="button" className="icon-btn" title="Delete" onClick={() => void remove()}><Trash2 size={13} /></button>
+            <button type="button" className="icon-btn" title="Duplicate" aria-label="Duplicate" onClick={onCopy}><Copy size={13} /></button>
+            <button type="button" className="icon-btn" title="Delete" aria-label="Delete" onClick={() => void remove()}><Trash2 size={13} /></button>
           </>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { DockviewDefaultTab, DockviewReact, type IDockviewPanelHeaderProps, type DockviewReadyEvent, type DockviewTheme, type IDockviewHeaderActionsProps, type SerializedDockview } from 'dockview-react'
 import 'dockview/dist/styles/dockview.css'
 import { Columns2, Plus, Rows2 } from 'lucide-react'
@@ -11,6 +12,7 @@ import { SetupPanel } from './SetupPanel'
 import { PipelinePanel } from './PipelinePanel'
 import { DashboardPanel } from './DashboardPanel'
 import { WhatsNewPanel } from './WhatsNewPanel'
+import { AgentsPanel } from './AgentsPanel'
 import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
 import { onPanelRemoved, openTerminal, setDockApi } from './dockApi'
@@ -22,7 +24,7 @@ import { startupSetupCheck } from '../state/setup'
 import { startupWhatsNew } from '../state/whatsNew'
 
 const theme: DockviewTheme = { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 }
-const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionBoardPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionBoardPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
@@ -31,10 +33,36 @@ function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
     const id = Object.keys(s.panels).find((k) => s.panels[k] === props.api.id)
     return id ? s.list.find((m) => m.id === id)?.status : undefined
   })
+  const [renaming, setRenaming] = useState(false)
+  const rename = (name: string | null): void => {
+    setRenaming(false)
+    // empty or unchanged keeps the old name; a chosen name sticks (shells stop retitling the tab)
+    if (name?.trim() && name.trim() !== props.api.title) {
+      props.api.setTitle(name.trim())
+      props.api.updateParameters({ customTitle: name.trim() })
+    }
+  }
   return (
-    <div className="tab-wrap">
+    <div className="tab-wrap" onDoubleClick={() => setRenaming(true)} title="Double-click to rename">
       {missionStatus ? <StatusDot signal={missionSignal(missionStatus)} /> : run && <RunDot run={run} />}
-      <DockviewDefaultTab {...props} />
+      {renaming ? (
+        <input
+          className="tab-rename"
+          autoFocus
+          defaultValue={props.api.title ?? ''}
+          aria-label="Tab name"
+          onFocus={(e) => e.currentTarget.select()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter') rename(e.currentTarget.value)
+            if (e.key === 'Escape') rename(null)
+          }}
+          onBlur={(e) => rename(e.currentTarget.value)}
+        />
+      ) : (
+        <DockviewDefaultTab {...props} />
+      )}
     </div>
   )
 }
@@ -42,13 +70,13 @@ function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
 function GroupActions({ group }: IDockviewHeaderActionsProps): React.JSX.Element {
   return (
     <div className="group-actions">
-      <button className="icon-btn" title="New terminal in this group" onClick={() => openTerminal({ referenceGroup: group.id })}>
+      <button className="icon-btn" title="New terminal in this group" aria-label="New terminal in this group" onClick={() => openTerminal({ referenceGroup: group.id })}>
         <Plus size={14} />
       </button>
-      <button className="icon-btn" title="Split right" onClick={() => openTerminal({ referenceGroup: group.id, direction: 'right' })}>
+      <button className="icon-btn" title="Split right" aria-label="Split right" onClick={() => openTerminal({ referenceGroup: group.id, direction: 'right' })}>
         <Columns2 size={14} />
       </button>
-      <button className="icon-btn" title="Split down" onClick={() => openTerminal({ referenceGroup: group.id, direction: 'below' })}>
+      <button className="icon-btn" title="Split down" aria-label="Split down" onClick={() => openTerminal({ referenceGroup: group.id, direction: 'below' })}>
         <Rows2 size={14} />
       </button>
     </div>

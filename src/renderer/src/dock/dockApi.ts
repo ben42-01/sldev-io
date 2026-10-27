@@ -19,6 +19,8 @@ export interface TerminalPanelParams {
   env?: Record<string, string>
   sshConnectionId?: string
   displayCommand?: string
+  /** the user renamed the tab; the shell's own title no longer replaces it */
+  customTitle?: string
 }
 
 export const TERMINAL_PREFIX = 'term-'
