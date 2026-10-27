@@ -43,3 +43,11 @@ describe('Report a bug', () => {
     expect(new URL(feedbackUrl(null, null)).searchParams.get('body')).not.toContain('```')
   })
 })
+
+describe('website version', () => {
+  it('matches the app version, so the site never advertises an old release', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
+    const site = JSON.parse(readFileSync('website/src/content/site.json', 'utf8')) as { version: string }
+    expect(site.version).toBe(pkg.version)
+  })
+})

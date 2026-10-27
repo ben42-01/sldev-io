@@ -16,7 +16,9 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 1. Make sure `master` is green: `gh run list --workflow ci.yml --limit 3`.
 2. Locally: `npm run typecheck && npm test && npm run e2e -- smoke`.
 3. Bump the version without creating a tag (the workflow makes it):
-   `npm version <patch|minor|major|x.y.z> --no-git-tag-version`. In `website/src/content/changelog.json`,
+   `npm version <patch|minor|major|x.y.z> --no-git-tag-version`, and set the same `version` in
+   `website/src/content/site.json` (the site's hero and download page show it; `npm test` checks they match).
+   In `website/src/content/changelog.json`,
    make sure the top entry has this version and set its `date` (today, YYYY-MM-DD): the app shows it as
    What's new after updating, and the website's `/changelog` lists only dated entries (`npm test` checks
    the version has an entry). If `PRICES_CHECKED` in `src/shared/prices.ts` is more than a couple of
