@@ -1,6 +1,6 @@
 import { promptWithRole } from '@shared/profiles'
 import type { AgentOptions, CustomAgent } from '@shared/types'
-import { shellQuote } from './paths'
+import { formatArgv, splitArgs } from '@shared/argv'
 
 export interface AgentMode {
   value: string
@@ -34,6 +34,7 @@ export interface AgentDef {
   systemPrompt?: boolean
   /** flags that attach the sldev MCP server for one run; agents without one are tracked from the terminal */
   mcpArgs?: (server: McpServerCommand) => string[]
+  /** argv, one element per argument: values are never quoted, the main process spawns it without a shell */
   build: (o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra) => string[]
   custom?: boolean
 }
@@ -64,10 +65,9 @@ export const sldevMcp = (info: { command: string; script: string }, mission: str
 
 const tomlString = (s: string): string => JSON.stringify(s)
 
-const q = (s: string): string => shellQuote(s)
 const flag = (cond: unknown, ...parts: string[]): string[] => (cond ? parts : [])
-const extraArgs = (o: AgentOptions): string[] => flag(o.extraArgs?.trim(), o.extraArgs?.trim() ?? '')
-const promptArg = (prompt: string | undefined): string[] => flag(prompt?.trim(), q(prompt?.trim() ?? ''))
+const extraArgs = (o: AgentOptions): string[] => splitArgs(o.extraArgs ?? '')
+const promptArg = (prompt: string | undefined): string[] => flag(prompt?.trim(), prompt?.trim() ?? '')
 
 const claude: AgentDef = {
   id: 'claude',
@@ -90,17 +90,17 @@ const claude: AgentDef = {
   canPrint: true,
   canResume: true,
   systemPrompt: true,
-  mcpArgs: (m) => ['--mcp-config', q(JSON.stringify({ mcpServers: { sldev: { type: 'stdio', command: m.command, args: m.args, env: m.env } } }))],
+  mcpArgs: (m) => ['--mcp-config', JSON.stringify({ mcpServers: { sldev: { type: 'stdio', command: m.command, args: m.args, env: m.env } } })],
   build: (o, prompt, name, { settingsPath, resume, role }) => [
     'claude',
-    ...flag(settingsPath, '--settings', q(settingsPath ?? '')),
-    ...(resume === true ? ['--continue'] : flag(resume, '--resume', q(String(resume)))),
+    ...flag(settingsPath, '--settings', settingsPath ?? ''),
+    ...(resume === true ? ['--continue'] : flag(resume, '--resume', String(resume))),
     ...flag(o.print && !resume, '-p'),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode, '--permission-mode', o.permissionMode ?? ''),
     ...flag(o.effort, '--effort', o.effort ?? ''),
-    ...flag(role?.trim() && !resume, '--append-system-prompt', q(role?.trim() ?? '')),
-    ...flag(!o.print && name && !resume, '-n', q(name ?? '')),
+    ...flag(role?.trim() && !resume, '--append-system-prompt', role?.trim() ?? ''),
+    ...flag(!o.print && name && !resume, '-n', name ?? ''),
     ...extraArgs(o),
     ...(resume ? [] : promptArg(prompt))
   ]
@@ -126,12 +126,12 @@ const codex: AgentDef = {
   // -c takes a TOML value: an inline table for the server
   mcpArgs: (m) => [
     '-c',
-    q(`mcp_servers.sldev={command=${tomlString(m.command)},args=[${m.args.map(tomlString).join(',')}],env={${Object.entries(m.env).map(([k, v]) => `${k}=${tomlString(v)}`).join(',')}}}`)
+    `mcp_servers.sldev={command=${tomlString(m.command)},args=[${m.args.map(tomlString).join(',')}],env={${Object.entries(m.env).map(([k, v]) => `${k}=${tomlString(v)}`).join(',')}}}`
   ],
   build: (o, prompt, _name, { resume }) => [
     'codex',
     ...(resume ? ['resume', '--last'] : flag(o.print, 'exec')),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode === 'read-only', '--sandbox', 'read-only'),
     ...flag(o.permissionMode === 'full-auto', '--full-auto'),
     ...flag(o.permissionMode === 'yolo', '--dangerously-bypass-approvals-and-sandbox'),
@@ -157,7 +157,7 @@ const cursor: AgentDef = {
     'cursor-agent',
     ...flag(resume, 'resume'),
     ...flag(o.print && !resume, '-p'),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode === 'force', '--force'),
     ...extraArgs(o),
     ...(resume ? [] : promptArg(prompt))
@@ -179,11 +179,11 @@ const copilot: AgentDef = {
   build: (o, prompt, _name, { resume }) => [
     'copilot',
     ...flag(resume, '--continue'),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     // non-interactive runs can't stop to ask, so they need tools pre-approved
     ...flag(o.permissionMode === 'allow-all-tools' || (o.print && !resume), '--allow-all-tools'),
     ...extraArgs(o),
-    ...(resume || !prompt?.trim() ? [] : [o.print ? '-p' : '-i', q(prompt.trim())])
+    ...(resume || !prompt?.trim() ? [] : [o.print ? '-p' : '-i', prompt.trim()])
   ]
 }
 
@@ -206,10 +206,10 @@ const opencode: AgentDef = {
     'opencode',
     ...flag(o.print && !resume, 'run'),
     ...flag(resume, '--continue'),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode, '--agent', o.permissionMode ?? ''),
     ...extraArgs(o),
-    ...(resume || !prompt?.trim() ? [] : o.print ? [q(prompt.trim())] : ['--prompt', q(prompt.trim())])
+    ...(resume || !prompt?.trim() ? [] : o.print ? [prompt.trim()] : ['--prompt', prompt.trim()])
   ]
 }
 
@@ -232,30 +232,36 @@ const gemini: AgentDef = {
   build: (o, prompt, _name, { resume }) => [
     'gemini',
     ...flag(resume, '--resume', 'latest'),
-    ...flag(o.model, '--model', q(o.model ?? '')),
+    ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode, '--approval-mode', o.permissionMode ?? ''),
     ...extraArgs(o),
-    ...(resume || !prompt?.trim() ? [] : [o.print ? '-p' : '-i', q(prompt.trim())])
+    ...(resume || !prompt?.trim() ? [] : [o.print ? '-p' : '-i', prompt.trim()])
   ]
 }
 
 export const BUILTIN_AGENTS: AgentDef[] = [claude, codex, cursor, copilot, opencode, gemini]
 
-/** Fill a user-defined command template: {prompt}, {model}, {name}. The prompt is appended when the template has no {prompt}. */
+/**
+ * Fill a user-defined command template: {prompt}, {model}, {name}. The template is split into words
+ * first, so a value fills its word and never becomes more arguments. A word that is only a
+ * placeholder disappears when the value is empty; the prompt is appended when there is no {prompt}.
+ */
 function fillTemplate(template: string, o: AgentOptions, prompt: string | undefined, name: string | undefined): string[] {
-  const p = prompt?.trim() ? q(prompt.trim()) : ''
-  let out = template
-    .replace(/\{model\}/g, o.model ? q(o.model) : '')
-    .replace(/\{name\}/g, name ? q(name) : '')
-  out = out.includes('{prompt}') ? out.replace(/\{prompt\}/g, p) : [out, p].filter(Boolean).join(' ')
-  return [out.replace(/\s+/g, ' ').trim(), ...extraArgs(o)]
+  const values: Record<string, string> = { prompt: prompt?.trim() ?? '', model: o.model?.trim() ?? '', name: name?.trim() ?? '' }
+  const words = splitArgs(template)
+  const out = words.flatMap((w) => {
+    const filled = w.replace(/\{(prompt|model|name)\}/g, (_m, k: string) => values[k])
+    return /^\{(prompt|model|name)\}$/.test(w) && !filled ? [] : [filled]
+  })
+  if (!words.some((w) => w.includes('{prompt}')) && values.prompt) out.push(values.prompt)
+  return [...out, ...extraArgs(o)]
 }
 
 export function customAgentDef(c: CustomAgent): AgentDef {
   return {
     id: c.id,
     name: c.name,
-    bin: c.command.trim().split(/\s+/)[0] ?? '',
+    bin: splitArgs(c.command)[0] ?? '',
     models: [],
     modelPlaceholder: c.command.includes('{model}') ? 'model' : undefined,
     modes: [],
@@ -265,7 +271,7 @@ export function customAgentDef(c: CustomAgent): AgentDef {
     canResume: !!c.resumeCommand?.trim(),
     custom: true,
     build: (o, prompt, name, { resume }) => {
-      if (resume && c.resumeCommand?.trim()) return [c.resumeCommand.trim()]
+      if (resume && c.resumeCommand?.trim()) return splitArgs(c.resumeCommand)
       return fillTemplate(o.print && c.printCommand?.trim() ? c.printCommand : c.command, o, prompt, name)
     }
   }
@@ -288,14 +294,19 @@ export function stageMode(agent: AgentDef, settings: Record<string, string> | un
   return (picked === undefined ? agent.unattendedMode : picked) || undefined
 }
 
-/** The command line that starts (or resumes) an agent session. */
-export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra = {}): string {
+/** The argv that starts (or resumes) an agent session; the prompt is one element. */
+export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra = {}): string[] {
   const role = extra.resume ? undefined : extra.role?.trim()
   const p = role && !agent.systemPrompt ? promptWithRole(role, prompt) : prompt
   const parts = agent.build(o, p, name, agent.hooks ? { ...extra, role } : { resume: extra.resume })
   // right after the executable: global options come before subcommands like `codex exec`
   if (extra.mcp && agent.mcpArgs) parts.splice(1, 0, ...agent.mcpArgs(extra.mcp))
-  return parts.join(' ')
+  return parts
+}
+
+/** A command as one readable line: shell commands as typed, argv quoted for this platform's shell. */
+export function commandText(command: string | string[] | undefined): string {
+  return Array.isArray(command) ? formatArgv(command, window.api.platform) : (command ?? '')
 }
 
 export function slugify(s: string): string {

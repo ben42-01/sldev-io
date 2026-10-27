@@ -42,8 +42,8 @@ export function newTaskId(): string {
   return `task-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
-/** The command line a task runs. Shown live in the editor so there's no magic. */
-export function buildTaskCommand(task: Task): string {
+/** What a task runs: a shell command line, or an agent's argv. Shown live in the editor (via commandText) so there's no magic. */
+export function buildTaskCommand(task: Task): string | string[] {
   if (task.kind === 'shell') return task.command?.trim() ?? ''
   const o = task.agent ?? {}
   return agentCommand(getAgent(o.agent), o, task.prompt, task.name, { role: roleFor(o) })
@@ -58,7 +58,7 @@ export function taskCwd(task: Task): string | undefined {
 
 export function runTask(task: Task): void {
   const command = buildTaskCommand(task)
-  if (!command) return
+  if (!command.length) return
   saveTask({ ...task, lastRunAt: Date.now() })
   const root = task.scope ?? workspace.get().rootFolder
   if (task.kind === 'agent' && root) {

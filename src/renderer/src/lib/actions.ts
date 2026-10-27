@@ -2,7 +2,7 @@ import type { EditorInfo } from '@shared/types'
 import { preferredEditor, workspace } from '../state/workspace'
 import { openTerminal } from '../dock/dockApi'
 import { basename, dirname, shellQuote } from './paths'
-import { setFileLinkOpener } from './terminals'
+import { setFileLinkOpener, shellKind } from './terminals'
 
 /** Open a file at a line (clicked `path:line:col` in terminal output, diff lines…). */
 export async function openFileAt(path: string, line?: number, col?: number): Promise<void> {
@@ -30,7 +30,7 @@ export async function openInEditor(target: string, editor: EditorInfo | undefine
       openTerminal({
         cwd: isDir ? target : dirname(target),
         title: `${editor.name}: ${basename(target)}`,
-        initialInput: `${cmd} ${shellQuote(target)}\r`
+        initialInput: `${cmd} ${shellQuote(target, shellKind())}\r`
       })
     }
     return

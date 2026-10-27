@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ClaudeAsset } from '@shared/types'
 import { COLLAPSE_OVER, groupAssets, isGroupOpen } from '@renderer/lib/assets'
-import { agentCommand, BUILTIN_AGENTS, customAgentDef, findAgent, skillPrompt, slugify, stageMode } from '@renderer/lib/agents'
+import { agentCommand as agentArgv, BUILTIN_AGENTS, commandText, customAgentDef, findAgent, skillPrompt, slugify, stageMode } from '@renderer/lib/agents'
 
 const agent = (id: string) => findAgent(id)
+const agentCommand = (...a: Parameters<typeof agentArgv>): string => commandText(agentArgv(...a))
 
 describe('Claude Code', () => {
   const claude = agent('claude')
@@ -22,6 +23,17 @@ describe('Claude Code', () => {
 
   it('escapes single quotes in prompts', () => {
     expect(agentCommand(claude, { print: true }, "don't", undefined)).toBe(`claude -p 'don'\\''t'`)
+  })
+
+  it('keeps the prompt and the session name as single, unquoted argv elements', () => {
+    const prompt = 'I need you to "create" a doc\n& more %PATH%'
+    expect(agentArgv(claude, {}, prompt, 'I need you')).toEqual(['claude', '-n', 'I need you', prompt])
+  })
+
+  it('passes the MCP config as one JSON argument', () => {
+    const argv = agentArgv(claude, {}, 'hi', undefined, { mcp: { command: '/app/sldev', args: ['/u/mcp.cjs', '--mission', 'm1'], env: { ELECTRON_RUN_AS_NODE: '1' } } })
+    expect(argv[1]).toBe('--mcp-config')
+    expect(JSON.parse(argv[2]).mcpServers.sldev.args).toEqual(['/u/mcp.cjs', '--mission', 'm1'])
   })
 })
 
@@ -58,6 +70,12 @@ describe('other agents', () => {
 
 describe('custom agents', () => {
   const aider = customAgentDef({ id: 'c1', name: 'Aider', command: 'aider', printCommand: 'aider --message {prompt} --yes', resumeCommand: 'aider --restore-chat-history' })
+
+  it('splits templates into words, so values never become extra arguments', () => {
+    const tool = customAgentDef({ id: 'c2', name: 'Tool', command: 'tool --model {model} --title={name} {prompt}' })
+    expect(agentArgv(tool, { model: 'big one', extraArgs: '--flag "x y"' }, 'do "it" now', 'My task')).toEqual(['tool', '--model', 'big one', '--title=My task', 'do "it" now', '--flag', 'x y'])
+    expect(agentArgv(tool, {}, '', undefined)).toEqual(['tool', '--model', '--title='])
+  })
 
   it('appends the prompt or fills placeholders', () => {
     expect(agentCommand(aider, { extraArgs: '--no-git' }, 'add tests', 'x')).toBe("aider 'add tests' --no-git")

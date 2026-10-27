@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
-import { existsSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
 import { basename, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
@@ -206,6 +206,15 @@ function registerIpc(): void {
 
   // missions (Claude Code hooks)
   ipcMain.handle('missions:hookInfo', () => hookInfo())
+  ipcMain.handle('missions:briefFile', (_e, id: string, text: string) => {
+    // a brief too long for a command line is handed over as a file the agent reads
+    if (!/^[\w-]+$/.test(id)) throw new Error('Bad mission id')
+    const dir = join(app.getPath('userData'), 'briefs')
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `${id}.md`)
+    writeFileSync(file, text)
+    return file
+  })
 
   // Claude assets
   ipcMain.handle('claude:assets', (_e, root: string | null) => listClaudeAssets(root))

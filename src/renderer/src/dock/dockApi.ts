@@ -11,7 +11,8 @@ const fresh = new Set<string>()
 export interface TerminalPanelParams {
   cwd?: string
   initialInput?: string
-  command?: string
+  /** a shell command line, or an agent's argv (spawned without a shell) */
+  command?: string | string[]
   runtimeId?: string
   taskId?: string
   missionId?: string
@@ -39,7 +40,7 @@ export interface OpenTerminalOptions {
   referencePanel?: string
   referenceGroup?: string
   floating?: boolean
-  command?: string
+  command?: string | string[]
   runtimeId?: string
   taskId?: string
   missionId?: string

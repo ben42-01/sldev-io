@@ -5,7 +5,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { workspace } from '../state/workspace'
-import { shellQuote } from './paths'
+import { shellQuote, type ShellKind } from './paths'
+import { commandText } from './agents'
 
 /**
  * Terminal sessions live here, outside React. A dock panel only *hosts* a session's DOM node,
@@ -43,8 +44,11 @@ export interface TerminalOptions {
   cwd?: string
   /** Text typed into the shell once it starts, e.g. `nvim file\r` */
   initialInput?: string
-  /** Run this command instead of an interactive shell (runtimes, tasks). The panel stays after it exits. */
-  command?: string
+  /**
+   * Run this instead of an interactive shell. The panel stays after it exits. A string runs in the
+   * shell (runtimes, shell tasks); an argv array is spawned directly (agents).
+   */
+  command?: string | string[]
   /** false: wait for Enter before running `command` (used when a layout is restored) */
   autostart?: boolean
   env?: Record<string, string>
@@ -91,7 +95,7 @@ interface Session {
   status: TerminalStatus
   cwd?: string
   initialInput?: string
-  command?: string
+  command?: string | string[]
   displayCommand?: string
   env?: Record<string, string>
   ssh?: string
@@ -149,7 +153,7 @@ window.api.pty.onExit((id, code) => {
   if (!s) return
   s.exitCode = code
   setStatus(s, 'exited')
-  const what = s.command ? `${s.command} exited with code ${code}. Press Enter to run again` : `process exited with code ${code}. Press Enter to restart`
+  const what = s.command ? `${shownCommand(s)} exited with code ${code}. Press Enter to run again` : `process exited with code ${code}. Press Enter to restart`
   s.term.write(`\r\n\x1b[${code === 0 ? '2' : '31'}m[${what}]\x1b[0m\r\n`)
 })
 
@@ -254,7 +258,7 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
     if (!paths.length) return
     e.preventDefault()
     e.stopPropagation()
-    if (s.status === 'running') window.api.pty.write(id, paths.map(shellQuote).join(' ') + ' ')
+    if (s.status === 'running') window.api.pty.write(id, paths.map((p) => shellQuote(p, shellKind(id))).join(' ') + ' ')
     term.focus()
   })
 
@@ -272,7 +276,7 @@ export function attachTerminal(id: string, container: HTMLElement): void {
     loadWebgl(s)
     fitNow(s)
     if (s.autostart) void startPty(s)
-    else s.term.write(`\x1b[2m[${s.command ?? 'shell'}] Press Enter to run\x1b[0m\r\n`)
+    else s.term.write(`\x1b[2m[${s.command ? shownCommand(s) : 'shell'}] Press Enter to run\x1b[0m\r\n`)
   } else {
     scheduleFit(s)
   }
@@ -324,13 +328,13 @@ export function terminalStatus(id: string): TerminalStatus | undefined {
   return sessions.get(id)?.status
 }
 
-export function terminalInfo(id: string): { status: TerminalStatus; exitCode?: number; ports: number[]; command?: string } | undefined {
+export function terminalInfo(id: string): { status: TerminalStatus; exitCode?: number; ports: number[]; command?: string | string[] } | undefined {
   const s = sessions.get(id)
   return s && { status: s.status, exitCode: s.exitCode, ports: [...s.ports], command: s.command }
 }
 
 /** Kill whatever is running and start it again in the same panel (optionally with an updated command). */
-export function restartTerminal(id: string, command?: string): void {
+export function restartTerminal(id: string, command?: string | string[]): void {
   const s = sessions.get(id)
   if (!s) return
   if (command !== undefined && s.command !== undefined) {
@@ -357,6 +361,13 @@ export function stopTerminal(id: string, graceMs = 3000): void {
     setStatus(s, 'exited')
     s.term.write('\r\n\x1b[2m[stopped. Press Enter to run again]\x1b[0m\r\n')
   }, graceMs)
+}
+
+/** The shell a terminal types into: SSH sessions get POSIX quoting, local ones the user's shell. */
+export function shellKind(id?: string): ShellKind {
+  if (id && sessions.get(id)?.ssh) return 'posix'
+  if (window.api.platform !== 'win32') return 'posix'
+  return /(^|[\\/])cmd(\.exe)?$/i.test(workspace.get().shell ?? '') ? 'cmd' : 'powershell'
 }
 
 export function writeToTerminal(id: string, text: string): void {
@@ -387,7 +398,7 @@ async function startPty(s: Session): Promise<void> {
   s.exitCode = undefined
   s.ports.clear()
   setStatus(s, 'starting')
-  if (s.command) s.term.write(`\x1b[2m$ ${s.displayCommand ?? s.command}\x1b[0m\r\n`)
+  if (s.command) s.term.write(`\x1b[2m$ ${shownCommand(s)}\x1b[0m\r\n`)
   const { cols, rows } = s.term
   try {
     if (s.ssh) await window.api.ssh.openShell(s.id, s.ssh, cols, rows)
@@ -413,6 +424,8 @@ async function startPty(s: Session): Promise<void> {
     s.term.write(`\r\n\x1b[31m${s.ssh ? 'Connection failed' : 'Failed to start shell'}: ${msg}\x1b[0m\r\n\x1b[2m[Press Enter to retry]\x1b[0m\r\n`)
   }
 }
+
+const shownCommand = (s: Session): string => s.displayCommand ?? commandText(s.command)
 
 function setStatus(s: Session, status: TerminalStatus): void {
   s.status = status

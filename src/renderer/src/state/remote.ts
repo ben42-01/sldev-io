@@ -1,3 +1,4 @@
+import { posixQuote } from '@shared/argv'
 import type { CredentialMeta, SshConnection } from '@shared/types'
 import { openTerminal } from '../dock/dockApi'
 import { createStore } from './store'
@@ -31,7 +32,7 @@ export async function reloadCredentials(): Promise<void> {
 }
 
 export function openSshTerminal(c: SshConnection, dir?: string): void {
-  openTerminal({ title: c.name, sshConnectionId: c.id, initialInput: dir ? `cd ${JSON.stringify(dir)}\r` : undefined })
+  openTerminal({ title: c.name, sshConnectionId: c.id, initialInput: dir ? `cd ${posixQuote(dir)}\r` : undefined })
   setTimeout(() => void refreshRemoteState(), 3000)
 }
 

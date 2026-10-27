@@ -16,8 +16,11 @@ export interface EditorInfo {
 
 export interface PtyCreateOptions {
   cwd?: string
-  /** Run this command (via the user's shell) instead of an interactive shell; the pty exits with it. */
-  command?: string
+  /**
+   * Run this instead of an interactive shell; the pty exits with it. A string is a shell command line
+   * (runtimes, shell tasks); an array is a program and its arguments, spawned without any shell (agents).
+   */
+  command?: string | string[]
   cols: number
   rows: number
   shell?: string

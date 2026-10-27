@@ -2,6 +2,8 @@
 // Fake Claude Code for tests: fires the hooks from --settings like the real CLI and edits files.
 const { spawnSync } = require('child_process'); const fs = require('fs'); const path = require('path'); const os = require('os')
 const args = process.argv.slice(2)
+// the argv test reads exactly what the app passed, to prove the prompt arrives as one argument
+if (process.env.SLDEV_E2E_ARGV) fs.appendFileSync(process.env.SLDEV_E2E_ARGV, JSON.stringify(args) + '\n')
 const si = args.indexOf('--settings')
 const settings = JSON.parse(fs.readFileSync(args[si + 1], 'utf8'))
 const fire = (ev, payload) => spawnSync('/bin/sh', ['-c', settings.hooks[ev][0].hooks[0].command], { input: JSON.stringify({ session_id: 'sess-123', ...payload }), env: process.env, stdio: ['pipe', 'inherit', 'inherit'] })

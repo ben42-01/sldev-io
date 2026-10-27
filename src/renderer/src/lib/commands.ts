@@ -7,7 +7,7 @@ import { checkForUpdates, reportBug } from '../state/updates'
 import { openWhatsNew } from '../state/whatsNew'
 import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
-import { applyTerminalFont, focusTerminal, toggleBroadcast, writeToTerminal } from './terminals'
+import { applyTerminalFont, focusTerminal, shellKind, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
 
 const isMac = window.api.platform === 'darwin'
@@ -100,7 +100,7 @@ export function showQuickOpen(): void {
           alt: () => {
             const t = activeTerminalId()
             if (t) {
-              writeToTerminal(t, shellQuote(abs) + ' ')
+              writeToTerminal(t, shellQuote(abs, shellKind(t)) + ' ')
               focusTerminal(t)
             }
           },

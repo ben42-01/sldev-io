@@ -97,9 +97,17 @@ export async function startHookServer(target: () => WebContents | null, mcp: Omi
   const relay = join(dir, 'hook-relay.cjs').replace(/\\/g, '/')
   writeFileSync(relay, RELAY)
   const exec = process.execPath.replace(/\\/g, '/')
+  // `VAR=1 program` is POSIX shell syntax; on Windows Claude Code may run hooks through cmd.exe or
+  // PowerShell, so a wrapper script sets the variable and the hook command is just a quoted path.
+  let relayCommand = `ELECTRON_RUN_AS_NODE=1 "${exec}" "${relay}"`
+  if (process.platform === 'win32') {
+    const wrapper = join(dir, 'hook-relay.cmd')
+    writeFileSync(wrapper, `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${relay.replace(/\//g, '\\')}" %1\r\n`)
+    relayCommand = `"${wrapper.replace(/\\/g, '/')}"`
+  }
   const hooks: Record<string, unknown> = {}
   for (const e of EVENTS) {
-    const command = `ELECTRON_RUN_AS_NODE=1 "${exec}" "${relay}" ${e}`
+    const command = `${relayCommand} ${e}`
     hooks[e] = [{ ...(e === 'PreToolUse' ? { matcher: '*' } : {}), hooks: [{ type: 'command', command, timeout: 10 }] }]
   }
   const settingsPath = join(dir, 'claude-hooks.json')

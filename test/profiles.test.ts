@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { applyProfile, claudeSubagentFile, parseProfileFile, promptWithRole, serializeProfile, STARTER_PROFILES } from '@shared/profiles'
 import type { AgentProfile } from '@shared/types'
-import { agentCommand, findAgent } from '@renderer/lib/agents'
+import { agentCommand as agentArgv, commandText, findAgent } from '@renderer/lib/agents'
+
+const agentCommand = (...a: Parameters<typeof agentArgv>): string => commandText(agentArgv(...a))
 
 const reviewer: AgentProfile = {
   id: 'user:r',

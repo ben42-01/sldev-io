@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import type { WebContents } from 'electron'
 import type { PtyCreateOptions, PtyInfo } from '@shared/types'
+import { resolveLaunch } from './launch'
 
 // Output is coalesced and sent to the renderer in frames instead of per chunk.
 const FLUSH_MS = 8
@@ -47,11 +48,16 @@ export class PtyManager {
     this.kill(id)
     const def = defaultShell()
     let shell = opts.shell ?? def.shell
-    let args = opts.args ?? (opts.shell ? [] : def.args)
-    if (opts.command) {
+    let args: string[] | string = opts.args ?? (opts.shell ? [] : def.args)
+    const env = { ...(process.env as Record<string, string>), TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'sldev-io', ...opts.env }
+    if (Array.isArray(opts.command)) {
+      // each argument reaches the program as-is: no shell parses the prompt
+      ;({ file: shell, args } = resolveLaunch(opts.command, env))
+    } else if (opts.command) {
       if (process.platform === 'win32') {
         shell = process.env.COMSPEC || 'cmd.exe'
-        args = ['/d', '/s', '/c', opts.command]
+        // verbatim: as an array node-pty would turn every " in the command into \", which cmd.exe misreads
+        args = `/d /s /c "${opts.command}"`
       } else {
         // env already comes from the resolved login shell (see shellEnv.ts), so no -l needed
         args = ['-c', opts.command]
@@ -63,13 +69,7 @@ export class PtyManager {
       cols: clampInt(opts.cols, 80),
       rows: clampInt(opts.rows, 24),
       cwd,
-      env: {
-        ...(process.env as Record<string, string>),
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        TERM_PROGRAM: 'sldev-io',
-        ...opts.env
-      }
+      env
     })
     const s: Session = { proc, owner, buffer: '', timer: null, unacked: 0, paused: false }
     this.sessions.set(id, s)

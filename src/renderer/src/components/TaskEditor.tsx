@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { AgentOptions, Task } from '@shared/types'
 import { Bot, Terminal } from 'lucide-react'
 import { buildTaskCommand } from '../state/tasks'
+import { commandText } from '../lib/agents'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
@@ -13,7 +14,7 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
   const [t, setT] = useState<Task>(initial)
   const set = (p: Partial<Task>): void => setT((x) => ({ ...x, ...p }))
   const setAgent = (p: Partial<AgentOptions>): void => setT((x) => ({ ...x, agent: { ...x.agent, ...p } }))
-  const command = buildTaskCommand(t)
+  const command = commandText(buildTaskCommand(t))
   const valid = !!t.name.trim() && (t.kind === 'agent' ? !!t.prompt?.trim() || !!t.agent?.extraArgs : !!t.command?.trim())
 
   const submit = (run: boolean): void => {

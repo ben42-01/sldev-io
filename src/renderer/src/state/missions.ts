@@ -1,7 +1,7 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
-import { agentCommand, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
+import { agentCommand, commandText, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
 import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
@@ -59,7 +59,7 @@ export function missionEnv(id: string): Record<string, string> {
 }
 
 /** Resume the mission's session: by id when hooks reported one, else the agent's "continue latest" (if it has one). */
-export function missionResumeCommand(id: string): string | undefined {
+export function missionResumeCommand(id: string): string[] | undefined {
   const m = getMission(id)
   if (!m) return undefined
   const agent = getAgent(m.options.agent)
@@ -118,11 +118,12 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   }
   missions.set((s) => ({ list: [mission, ...s.list] }))
   persist()
+  const prompt = await launchPrompt(id, input.prompt)
   openTerminal({
     cwd,
     title,
-    command: agentCommand(agent, input.options, input.prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options), mcp: mcpFor(id) }),
-    displayCommand: agentCommand(agent, input.options, input.prompt, title, { role: roleFor(input.options) }),
+    command: agentCommand(agent, input.options, prompt, title, { settingsPath: hook?.settingsPath, role: roleFor(input.options), mcp: mcpFor(id) }),
+    displayCommand: commandText(agentCommand(agent, input.options, prompt, title, { role: roleFor(input.options) })),
     env: missionEnv(id),
     missionId: id,
     ...input.placement
@@ -130,7 +131,19 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   return mission
 }
 
-export function focusOrResume(id: string): void {
+/**
+ * Windows caps a command line at 32,767 characters (and slows down long before): a long brief goes
+ * to a file, and the agent is told to read it.
+ */
+const MAX_INLINE_PROMPT = 12_000
+
+async function launchPrompt(id: string, prompt: string): Promise<string> {
+  if (prompt.length <= MAX_INLINE_PROMPT) return prompt
+  const file = await window.api.missions.briefFile(id, prompt)
+  return `Your task is in ${file} (it was too long to pass on the command line). Read the whole file first, then do what it says.`
+}
+
+export async function focusOrResume(id: string): Promise<void> {
   const m = getMission(id)
   if (!m) return
   const panel = missions.get().panels[id]
@@ -140,7 +153,7 @@ export function focusOrResume(id: string): void {
   openTerminal({
     cwd: m.cwd,
     title: m.title,
-    command: resume ?? agentCommand(agent, m.options, m.prompt, m.title, { settingsPath: hook?.settingsPath, role: roleFor(m.options), mcp: mcpFor(id) }),
+    command: resume ?? agentCommand(agent, m.options, await launchPrompt(id, m.prompt), m.title, { settingsPath: hook?.settingsPath, role: roleFor(m.options), mcp: mcpFor(id) }),
     env: missionEnv(id),
     missionId: id
   })
@@ -211,7 +224,7 @@ function notify(m: Mission, title: string, body: string): void {
   const n = new Notification(title, { body: body.slice(0, 200) })
   n.onclick = () => {
     void window.api.app.focus()
-    focusOrResume(m.id)
+    void focusOrResume(m.id)
   }
 }
 

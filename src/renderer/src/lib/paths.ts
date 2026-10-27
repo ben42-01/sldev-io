@@ -1,3 +1,5 @@
+import { posixQuote } from '@shared/argv'
+
 const isWin = window.api.platform === 'win32'
 
 export function basename(p: string): string {
@@ -16,10 +18,15 @@ export function relative(from: string, to: string): string {
   return to.startsWith(prefix) ? to.slice(prefix.length) : to
 }
 
-/** Quote a path so it can be pasted into the user's shell as a single argument. */
-export function shellQuote(p: string): string {
-  if (isWin) return /[\s&()^%!"']/.test(p) ? `"${p}"` : p
-  return /^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`
+export type ShellKind = 'posix' | 'powershell' | 'cmd'
+
+/** Quote a path so it can be typed into a shell as a single argument (Windows terminals run PowerShell unless set to cmd). */
+export function shellQuote(p: string, kind: ShellKind = isWin ? 'powershell' : 'posix'): string {
+  if (kind === 'posix') return posixQuote(p)
+  // cmd.exe has no escape for " inside quotes, but paths can't contain one
+  if (kind === 'cmd') return /[\s&()^%!"']/.test(p) ? `"${p}"` : p
+  // PowerShell single quotes are literal: no $, ` or % expansion; ' is doubled
+  return /^[\w@+=:,./\\-]+$/.test(p) ? p : `'${p.replace(/'/g, "''")}'`
 }
 
 export function tildify(p: string, home: string): string {

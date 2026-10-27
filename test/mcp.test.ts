@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest'
 import type { McpEvent, Mission } from '@shared/types'
 import { handleMcp } from '../src/main/mcp'
 import { MCP_SERVER, MCP_TOOLS } from '../src/main/mcpServer'
-import { agentCommand, findAgent, sldevMcp } from '@renderer/lib/agents'
+import { agentCommand as agentArgv, commandText, findAgent, sldevMcp } from '@renderer/lib/agents'
+
+const agentCommand = (...a: Parameters<typeof agentArgv>): string => commandText(agentArgv(...a))
 
 const server = sldevMcp({ command: '/opt/sldev/sldev-io', script: '/data/sldev-mcp.cjs' }, 'm-1')
 

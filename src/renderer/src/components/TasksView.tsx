@@ -6,6 +6,7 @@ import { stopTerminal } from '../lib/terminals'
 import { basename } from '../lib/paths'
 import { isActive, useRun } from '../state/runs'
 import { useStore } from '../state/store'
+import { commandText } from '../lib/agents'
 import { buildTaskCommand, deleteTask, newTaskId, runTask, saveTask, tasks } from '../state/tasks'
 import { workspace } from '../state/workspace'
 import { getAgent } from '../state/agents'
@@ -86,12 +87,12 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JS
     { type: 'separator' },
     { label: 'Edit', icon: <Pencil size={13} />, run: onEdit },
     { label: 'Duplicate', icon: <Copy size={13} />, run: () => saveTask({ ...task, id: newTaskId(), name: `${task.name} (copy)`, createdAt: Date.now(), lastRunAt: undefined }) },
-    { label: 'Copy command', run: () => void navigator.clipboard.writeText(buildTaskCommand(task)) },
+    { label: 'Copy command', run: () => void navigator.clipboard.writeText(commandText(buildTaskCommand(task))) },
     { type: 'separator' },
     { label: 'Delete', icon: <Trash2 size={13} />, run: () => deleteTask(task.id) }
   ]
   return (
-    <div className="rt-row" onDoubleClick={() => runTask(task)} onContextMenu={(e) => showContextMenu(e, menu())} title={buildTaskCommand(task)}>
+    <div className="rt-row" onDoubleClick={() => runTask(task)} onContextMenu={(e) => showContextMenu(e, menu())} title={commandText(buildTaskCommand(task))}>
       {run ? <StatusDot run={run} /> : <span className="task-kind">{task.kind === 'agent' ? <Bot size={14} /> : <Terminal size={14} />}</span>}
       <div className="rt-main">
         <div className="rt-name">{task.name}</div>

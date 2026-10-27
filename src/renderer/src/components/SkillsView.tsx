@@ -3,7 +3,8 @@ import type { ClaudeAsset, McpServer } from '@shared/types'
 import { ChevronRight, Copy, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal } from 'lucide-react'
 import { activeTerminalId, openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
-import { writeToTerminal, focusTerminal } from '../lib/terminals'
+import { writeToTerminal, focusTerminal, shellKind } from '../lib/terminals'
+import { shellQuote } from '../lib/paths'
 import { skillPrompt } from '../lib/agents'
 import { groupAssets, isGroupOpen } from '../lib/assets'
 import { getAgent, useAgents } from '../state/agents'
@@ -247,7 +248,7 @@ function McpTab(): React.JSX.Element {
       {data?.servers.map((s) => (
         <div key={s.name} className="rt-row" onContextMenu={(e) => showContextMenu(e, [
           { label: 'Show details', run: () => openTerminal({ cwd: root ?? undefined, title: `mcp ${s.name}`, command: `claude mcp get ${JSON.stringify(s.name)}` }) },
-          { label: 'Remove…', run: () => openTerminal({ cwd: root ?? undefined, title: 'claude mcp', initialInput: `claude mcp remove ${JSON.stringify(s.name)}` }) }
+          { label: 'Remove…', run: () => openTerminal({ cwd: root ?? undefined, title: 'claude mcp', initialInput: `claude mcp remove ${shellQuote(s.name, shellKind())}` }) }
         ])}>
           <span className={`status-dot ${/✓|connected/i.test(s.status) ? 'running' : /✗|fail|error/i.test(s.status) ? 'failed' : 'idle'}`} />
           <div className="rt-main">
