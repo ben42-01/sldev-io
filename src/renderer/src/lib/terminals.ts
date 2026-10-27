@@ -314,6 +314,12 @@ export function terminalCwd(id: string): string | undefined {
   return sessions.get(id)?.cwd
 }
 
+/** Terminals with a live process that started in `dir` or below it. */
+export function runningTerminalsIn(dir: string): string[] {
+  const inside = (p: string | undefined): boolean => !!p && (p === dir || p.startsWith(dir + '/') || p.startsWith(dir + '\\'))
+  return [...sessions.values()].filter((s) => (s.status === 'running' || s.status === 'starting') && !s.ssh && inside(s.cwd)).map((s) => s.id)
+}
+
 /** The last lines a terminal printed, as plain text (a failing check's output, for the agent that fixes it). */
 export function terminalTail(id: string, maxLines = 120): string {
   const s = sessions.get(id)

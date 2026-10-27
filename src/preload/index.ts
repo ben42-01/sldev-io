@@ -37,7 +37,8 @@ import type {
   StoreFiles,
   UpdateStatus,
   VaultStatus,
-  WorktreeInfo
+  WorktreeInfo,
+  WorktreeStatus
 } from '../shared/types'
 
 type Unsubscribe = () => void
@@ -120,7 +121,8 @@ const api = {
     branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),
     switch: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', cwd, branch),
     addWorktree: (root: string, slug: string, base: string): Promise<WorktreeInfo> => ipcRenderer.invoke('git:addWorktree', root, slug, base),
-    removeWorktree: (wt: WorktreeInfo, deleteBranch: boolean): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, deleteBranch),
+    worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
+    removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),

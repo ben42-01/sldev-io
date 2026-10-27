@@ -48,7 +48,7 @@ export function ContextMenuHost(): React.JSX.Element | null {
   if (!items) return null
   return (
     <div className="ctx-backdrop" onMouseDown={close} onContextMenu={(e) => (e.preventDefault(), close())}>
-      <div ref={ref} className="ctx-menu brand-frame" style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={ref} className="ctx-menu" style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()}>
         {items.map((it, i) =>
           it.type === 'separator' ? (
             <div key={i} className="ctx-sep" />

@@ -14,6 +14,7 @@ import { updateSettings, workspace } from '../state/workspace'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { RulesTab } from './RulesTab'
 import { ViewShell } from './RuntimesView'
+import { StatusDot } from './StatusDot'
 
 type Tab = 'skill' | 'command' | 'agent' | 'mcp' | 'rules'
 const TABS: Array<[Tab, string]> = [['skill', 'Skills'], ['command', 'Commands'], ['agent', 'Agents'], ['mcp', 'MCP'], ['rules', 'Rules']]
@@ -250,7 +251,7 @@ function McpTab(): React.JSX.Element {
           { label: 'Show details', run: () => openTerminal({ cwd: root ?? undefined, title: `mcp ${s.name}`, command: `claude mcp get ${JSON.stringify(s.name)}` }) },
           { label: 'Remove…', run: () => openTerminal({ cwd: root ?? undefined, title: 'claude mcp', initialInput: `claude mcp remove ${shellQuote(s.name, shellKind())}` }) }
         ])}>
-          <span className={`status-dot ${/✓|connected/i.test(s.status) ? 'running' : /✗|fail|error/i.test(s.status) ? 'failed' : 'idle'}`} />
+          <StatusDot signal={/✓|connected/i.test(s.status) ? { tone: 'working', label: 'Connected', pulse: false } : /✗|fail|error/i.test(s.status) ? { tone: 'error', label: 'Failed', pulse: false } : { tone: 'neutral', label: s.status, pulse: false }} />
           <div className="rt-main">
             <div className="rt-name">{s.name}</div>
             <div className="rt-cmd">{s.detail}</div>

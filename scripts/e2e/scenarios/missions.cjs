@@ -1,6 +1,6 @@
 // A Claude mission (hooks) and a Codex mission (terminal heuristics) through every status.
 const pills = (h) =>
-  h.js(`Object.fromEntries([...document.querySelectorAll('.mission-card')].map(c => [c.querySelector('.mission-title').textContent, c.querySelector('.mission-pill').textContent + ' / ' + c.querySelector('.mission-agent').textContent]))`)
+  h.js(`Object.fromEntries([...document.querySelectorAll('.mission-card')].map(c => [c.querySelector('.mission-title').textContent, c.querySelector('.mission-head .spill').textContent + ' / ' + c.querySelector('.mission-agent').textContent]))`)
 
 async function launch(h, agent, prompt) {
   await h.click('.btn', 'New mission')

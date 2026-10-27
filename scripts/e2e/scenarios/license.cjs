@@ -37,8 +37,9 @@ module.exports = async (h) => {
   await h.js(`window.api.license.activate('SLDEV-TEST-GOOD')`)
   h.expect(h.licenses.get('SLDEV-TEST-GOOD').activations.size === 1, 'activating again on this machine uses no extra slot')
 
-  await h.js('void (window.confirm = () => true)')
   await h.click('#settings-license .btn', 'Deactivate this machine')
+  await h.wait(300)
+  await h.click('dialog[open] .btn', 'Deactivate')
   await h.wait(1200)
   h.expect(h.licenses.get('SLDEV-TEST-GOOD').activations.size === 0, 'deactivate frees the slot on the server')
   h.expect(!(await text(h, '#settings-license')).includes('Licensed'), 'deactivated: no longer licensed')

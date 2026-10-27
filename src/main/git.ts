@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
-import type { DiffStat, WorktreeInfo } from '@shared/types'
+import type { DiffStat, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
   code: number
@@ -63,10 +63,23 @@ export async function addWorktree(root: string, slug: string, base: string): Pro
   return { path, branch, base, repo: top }
 }
 
-export async function removeWorktree(wt: WorktreeInfo, deleteBranch: boolean): Promise<void> {
-  if (existsSync(wt.path)) await ok(['worktree', 'remove', '--force', wt.path], wt.repo)
+/** What removing a worktree would lose: uncommitted files, and commits only its branch has. */
+export async function worktreeStatus(wt: WorktreeInfo): Promise<WorktreeStatus> {
+  if (!existsSync(wt.path)) return { exists: false, modified: 0, untracked: 0, unmerged: 0 }
+  const lines = (await git(['status', '--porcelain', '--untracked-files=all'], wt.path)).stdout.split('\n').filter(Boolean)
+  const untracked = lines.filter((l) => l.startsWith('??')).length
+  const ahead = await git(['rev-list', '--count', `${wt.base}..${wt.branch}`], wt.repo)
+  return { exists: true, modified: lines.length - untracked, untracked, unmerged: ahead.code === 0 ? Number(ahead.stdout.trim()) || 0 : 0 }
+}
+
+/**
+ * Remove a mission's worktree. Without `discard`, git refuses when the folder has uncommitted or
+ * untracked files, so work is never thrown away unless the user acknowledged exactly that.
+ */
+export async function removeWorktree(wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> {
+  if (existsSync(wt.path)) await ok(['worktree', 'remove', ...(opts.discard ? ['--force'] : []), wt.path], wt.repo)
   else await git(['worktree', 'prune'], wt.repo)
-  if (deleteBranch) await git(['branch', '-D', wt.branch], wt.repo)
+  if (opts.deleteBranch) await ok(['branch', '-D', wt.branch], wt.repo)
 }
 
 /** Unified diff of everything that changed since `base` (committed, staged, unstaged and untracked). */

@@ -6,6 +6,8 @@ import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { ViewShell } from './RuntimesView'
 import { Containers } from './Containers'
+import { StatusDot } from './StatusDot'
+import { confirmDelete } from '../lib/removals'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
@@ -96,11 +98,11 @@ function Connections({ onNeedCredential }: { onNeedCredential: () => void }): Re
                   { type: 'separator' },
                   { label: 'Edit', icon: <Pencil size={13} />, run: () => setEditing(c) },
                   { label: 'Duplicate', icon: <Copy size={13} />, run: () => void saveConnections([...connections, { ...c, id: newId('ssh'), name: `${c.name} copy` }]) },
-                  { label: 'Delete', icon: <Trash2 size={13} />, run: () => void saveConnections(connections.filter((x) => x.id !== c.id)) }
+                  { label: 'Delete…', icon: <Trash2 size={13} />, run: () => void confirmDelete('connection', c.name, { keeps: c.credentialId ? ['Its saved credential (in Credentials)'] : undefined }).then((ok) => { if (ok) void saveConnections(connections.filter((x) => x.id !== c.id)) }) }
                 ])
               }
             >
-              <span className={`status-dot ${isUp ? 'running' : 'idle'}`} title={isUp ? 'Connected' : 'Not connected'} />
+              <StatusDot signal={isUp ? { tone: 'working', label: 'Connected', pulse: false } : { tone: 'neutral', label: 'Not connected', pulse: false }} />
               <div className="rt-main">
                 <div className="rt-name">{c.name}</div>
                 <div className="rt-cmd">
@@ -337,7 +339,7 @@ function Credentials(): React.JSX.Element {
         return (
           <div key={c.id} className="rt-row" onDoubleClick={() => setEditing({ meta: c })} onContextMenu={(e) => showContextMenu(e, [
             { label: 'Edit', icon: <Pencil size={13} />, run: () => setEditing({ meta: c }) },
-            { label: users ? `Delete (used by ${users})` : 'Delete', icon: <Trash2 size={13} />, run: () => void window.api.vault.remove(c.id).then(reloadCredentials) }
+            { label: users ? `Delete (used by ${users})…` : 'Delete…', icon: <Trash2 size={13} />, run: () => void confirmDelete('credential', c.name, { note: users ? `${users} connection${users === 1 ? '' : 's'} use${users === 1 ? 's' : ''} it and will ask for a password instead.` : 'The secret is erased from the encrypted vault.' }).then((ok) => { if (ok) void window.api.vault.remove(c.id).then(reloadCredentials) }) }
           ])}>
             <span className="task-kind"><KeyRound size={14} /></span>
             <div className="rt-main">

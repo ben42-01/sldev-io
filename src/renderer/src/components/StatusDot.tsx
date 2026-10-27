@@ -1,14 +1,22 @@
+import { processSignal, type Signal } from '@shared/status'
 import type { Run } from '../state/runs'
 
-// Ctrl+C (SIGINT) exits: 130 on POSIX shells, STATUS_CONTROL_C_EXIT on Windows. Shown as "stopped", not failed.
-const INTERRUPTED = new Set([130, 0xc000013a, -1073741510])
+/** A dot in the signal's tone; a live one gets a ping halo behind it (never a blink). */
+export function StatusDot({ signal, small = false, title }: { signal: Signal; small?: boolean; title?: string }): React.JSX.Element {
+  return <span className={`sdot tone-${signal.tone}${small ? ' small' : ''}${signal.pulse ? ' pulse' : ''}`} title={title ?? signal.label} role="img" aria-label={signal.label} />
+}
 
-export function StatusDot({ run }: { run: Run | undefined }): React.JSX.Element {
-  let cls = 'idle'
-  let title = 'Not running'
-  if (run?.status === 'running') [cls, title] = ['running', 'Running']
-  else if (run?.status === 'starting') [cls, title] = ['starting', 'Starting']
-  else if (run?.status === 'exited' && run.exitCode !== undefined && run.exitCode !== 0 && !INTERRUPTED.has(run.exitCode)) [cls, title] = ['failed', `Exited with code ${run.exitCode}`]
-  else if (run?.status === 'exited') [cls, title] = ['done', run.exitCode === 0 ? 'Finished' : 'Stopped']
-  return <span className={`status-dot ${cls}`} title={title} />
+/** Dot + label in a tinted pill; one class for every tone (it uses currentColor). */
+export function StatusPill({ signal, label }: { signal: Signal; label?: string }): React.JSX.Element {
+  return (
+    <span className={`spill tone-${signal.tone}`}>
+      <StatusDot signal={signal} small title="" />
+      {label ?? signal.label}
+    </span>
+  )
+}
+
+/** The process state of a runtime or task terminal. */
+export function RunDot({ run }: { run: Run | undefined }): React.JSX.Element {
+  return <StatusDot signal={processSignal(run?.status, run?.exitCode)} />
 }

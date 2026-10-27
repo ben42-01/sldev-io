@@ -10,6 +10,8 @@ import type { GhPrComment } from '@shared/types'
 import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, sendBack, stop, useRun } from '../state/factory'
 import { focusOrResume, isLive, missions, reviewMission, useMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
+import { StatusPill } from '../components/StatusDot'
+import { nodeSignal, runSignal } from '@shared/status'
 
 const W = 196
 const BASE_H = 128
@@ -17,8 +19,6 @@ const BASE_H = 128
 const ROW_H = 26
 const GX = 44
 const GY = 22
-
-const nodeLabel: Record<NodeRun['status'], string> = { pending: 'Waiting', running: 'Running', approval: 'Needs you', done: 'Done', failed: 'Failed' }
 
 /** A factory run as a graph: columns follow `needs`, parallel branches stack, retry loops are dashed. */
 export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>): React.JSX.Element {
@@ -45,7 +45,7 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
     <div className="panel-page pipeline">
       <div className="panel-page-head">
         <h2>{run.recipe.name}</h2>
-        <span className={`run-pill ${run.status}`}>{run.status}</span>
+        <StatusPill signal={runSignal(run.status, Object.values(run.nodes).some((n) => n.status === 'approval'))} />
         <span className="muted">{done}/{run.recipe.nodes.length} steps · {run.worktree.branch} from {run.worktree.base}</span>
         <span className="grow" />
         {(run.status === 'paused' || run.status === 'stopped' || run.status === 'failed') && (
@@ -236,7 +236,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
       <div className="pn-head">
         <Icon size={13} />
         <b>{node.id}</b>
-        <span className={`pn-status ${nr.status}`}>{nodeLabel[nr.status]}</span>
+        <span className="pn-status"><StatusPill signal={nodeSignal(nr.status)} /></span>
       </div>
       <div className="pn-who" title={who}>{who}</div>
       <div className="pn-meta">

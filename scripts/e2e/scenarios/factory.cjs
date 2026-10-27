@@ -96,7 +96,7 @@ module.exports = async (h) => {
   h.expect((await h.js(`window.api.store.get('missions')`)).missions.length === missions.length, 'no mission was started by the restart')
   await h.click('.activitybar button[title^="Factory"]')
   await h.wait(500)
-  h.expect(await h.js(`document.querySelector('.run-row .run-pill')?.textContent === 'Paused'`), 'the sidebar lists the paused run')
+  h.expect(await h.js(`document.querySelector('.run-row .spill')?.textContent === 'Paused'`), 'the sidebar lists the paused run')
   await h.click('.run-row')
   await h.wait(600)
   await h.shot('4-after-restart')

@@ -4,11 +4,14 @@ import { issueText, runtimeNames, type FactoryRun } from '@shared/factory'
 import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
-import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, removeRun, startRun } from '../state/factory'
+import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, startRun } from '../state/factory'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
 import { ViewShell } from './RuntimesView'
+import { StatusPill } from './StatusDot'
+import { runSignal } from '@shared/status'
+import { removeRunFlow } from '../lib/removals'
 
 export function FactoryView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -62,8 +65,6 @@ export function FactoryView(): React.JSX.Element {
   )
 }
 
-const statusLabel: Record<FactoryRun['status'], string> = { running: 'Running', paused: 'Paused', done: 'Done', failed: 'Failed', stopped: 'Stopped' }
-
 function RunRow({ run }: { run: FactoryRun }): React.JSX.Element {
   const nodes = Object.values(run.nodes)
   const done = nodes.filter((n) => n.status === 'done').length
@@ -76,13 +77,13 @@ function RunRow({ run }: { run: FactoryRun }): React.JSX.Element {
         showContextMenu(e, [
           { label: 'Open pipeline', run: () => openPipeline(run.id) },
           { type: 'separator' },
-          { label: 'Remove from list (keep branches)', run: () => void removeRun(run.id, false) },
-          { label: 'Remove with its worktrees', run: () => void removeRun(run.id, true) }
+          { label: 'Remove from list (keep branches)…', run: () => void removeRunFlow(run, false) },
+          { label: 'Remove with its worktrees…', run: () => void removeRunFlow(run, true) }
         ])
       }
     >
       <div className="run-row-head">
-        <span className={`run-pill ${waiting && run.status === 'running' ? 'approval' : run.status}`}>{waiting && run.status === 'running' ? 'Needs you' : statusLabel[run.status]}</span>
+        <StatusPill signal={runSignal(run.status, waiting)} />
         <span className="run-recipe">{run.recipe.name}</span>
         <span className="run-progress">{done}/{nodes.length}</span>
       </div>

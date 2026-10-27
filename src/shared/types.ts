@@ -207,6 +207,15 @@ export interface WorktreeInfo {
   repo: string
 }
 
+export interface WorktreeStatus {
+  exists: boolean
+  /** changed tracked files (staged or not) */
+  modified: number
+  untracked: number
+  /** commits on the branch that its base doesn't have */
+  unmerged: number
+}
+
 export interface DiffStat {
   files: number
   insertions: number

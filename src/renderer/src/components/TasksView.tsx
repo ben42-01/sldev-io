@@ -11,9 +11,10 @@ import { buildTaskCommand, deleteTask, newTaskId, runTask, saveTask, tasks } fro
 import { workspace } from '../state/workspace'
 import { getAgent } from '../state/agents'
 import { showContextMenu, type MenuItem } from './ContextMenu'
-import { StatusDot } from './StatusDot'
+import { RunDot } from './StatusDot'
 import { ViewShell } from './RuntimesView'
 import { TaskEditor } from './TaskEditor'
+import { confirmDelete } from '../lib/removals'
 
 export function TasksView(): React.JSX.Element {
   const list = useStore(tasks, (t) => t.list)
@@ -89,11 +90,11 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JS
     { label: 'Duplicate', icon: <Copy size={13} />, run: () => saveTask({ ...task, id: newTaskId(), name: `${task.name} (copy)`, createdAt: Date.now(), lastRunAt: undefined }) },
     { label: 'Copy command', run: () => void navigator.clipboard.writeText(commandText(buildTaskCommand(task))) },
     { type: 'separator' },
-    { label: 'Delete', icon: <Trash2 size={13} />, run: () => deleteTask(task.id) }
+    { label: 'Delete…', icon: <Trash2 size={13} />, run: () => void confirmDelete('task', task.name).then((ok) => ok && deleteTask(task.id)) }
   ]
   return (
     <div className="rt-row" onDoubleClick={() => runTask(task)} onContextMenu={(e) => showContextMenu(e, menu())} title={commandText(buildTaskCommand(task))}>
-      {run ? <StatusDot run={run} /> : <span className="task-kind">{task.kind === 'agent' ? <Bot size={14} /> : <Terminal size={14} />}</span>}
+      {run ? <RunDot run={run} /> : <span className="task-kind">{task.kind === 'agent' ? <Bot size={14} /> : <Terminal size={14} />}</span>}
       <div className="rt-main">
         <div className="rt-name">{task.name}</div>
         <div className="rt-cmd">{subtitle}</div>

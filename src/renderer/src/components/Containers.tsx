@@ -4,6 +4,9 @@ import { ChevronRight, Copy, ExternalLink, Play, RotateCw, ScrollText, Square, S
 import { openTerminal } from '../dock/dockApi'
 import { openSetup } from '../state/setup'
 import { showContextMenu, type MenuItem } from './ContextMenu'
+import { StatusDot } from './StatusDot'
+import type { Signal } from '@shared/status'
+import { confirmDelete } from '../lib/removals'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
@@ -11,11 +14,11 @@ const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoki
 const shellCommand = (c: DockerContainer): string => `docker exec -it ${c.id} /bin/sh -c "command -v bash >/dev/null && exec bash || exec sh"`
 const logsCommand = (c: DockerContainer): string => `docker logs -f --tail 200 ${c.id}`
 
-function dotClass(state: string): string {
-  if (state === 'running') return 'running'
-  if (state === 'restarting' || state === 'paused' || state === 'created') return 'starting'
-  if (state === 'dead') return 'failed'
-  return 'idle'
+function containerSignal(state: string): Signal {
+  if (state === 'running') return { tone: 'working', label: 'Running', pulse: false }
+  if (state === 'restarting' || state === 'paused' || state === 'created') return { tone: 'attention', label: state, pulse: state === 'restarting' }
+  if (state === 'dead') return { tone: 'error', label: 'Dead', pulse: false }
+  return { tone: 'neutral', label: state, pulse: false }
 }
 
 export function Containers(): React.JSX.Element {
@@ -33,7 +36,7 @@ export function Containers(): React.JSX.Element {
   }, [])
 
   const act = async (c: DockerContainer, action: DockerAction): Promise<void> => {
-    if (action === 'rm' && !confirm(`Remove container ${c.name}?`)) return
+    if (action === 'rm' && !(await confirmDelete('container', c.name, { note: `docker rm ${c.name}: its filesystem changes are lost; the image and named volumes stay.` }))) return
     setBusy(c.id)
     setError('')
     try {
@@ -118,7 +121,7 @@ function ContainerRow({ c, busy, act }: { c: DockerContainer; busy: boolean; act
   ]
   return (
     <div className="rt-row" data-container={c.name} onDoubleClick={() => (running ? shell() : logs())} onContextMenu={(e) => showContextMenu(e, menu())} title={`${c.name}\n${c.image}\n${c.status}${c.ports ? `\n${c.ports}` : ''}`}>
-      <span className={`status-dot ${busy ? 'starting' : dotClass(c.state)}`} title={c.state} />
+      <StatusDot signal={busy ? { tone: 'neutral', label: 'Working…', pulse: true } : containerSignal(c.state)} title={c.state} />
       <div className="rt-main">
         <div className="rt-name">{title}</div>
         <div className="rt-cmd">

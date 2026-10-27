@@ -1,6 +1,6 @@
 import type { Mission } from '@shared/types'
-import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal } from 'lucide-react'
-import { focusOrResume, isLive, missions, removeMission, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
+import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
@@ -9,18 +9,12 @@ import { useProfiles } from '../state/profiles'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
-
-const LABEL: Record<Mission['status'], string> = {
-  starting: 'Starting',
-  working: 'Working',
-  waiting: 'Ready for you',
-  'needs-input': 'Needs you',
-  ended: 'Ended',
-  failed: 'Failed'
-}
+import { StatusPill } from './StatusDot'
+import { missionSignal } from '@shared/status'
+import { removeMissionFlow } from '../lib/removals'
 
 export function MissionStatusPill({ status }: { status: Mission['status'] }): React.JSX.Element {
-  return <span className={`mission-pill ${status}`}>{LABEL[status]}</span>
+  return <StatusPill signal={missionSignal(status)} />
 }
 
 export function MissionCard({ mission: m, large = false }: { mission: Mission; large?: boolean }): React.JSX.Element {
@@ -41,12 +35,7 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     { label: 'Copy prompt', run: () => void navigator.clipboard.writeText(m.prompt) },
     { label: 'Copy session id', disabled: !m.sessionId, run: () => void navigator.clipboard.writeText(m.sessionId ?? '') },
     { type: 'separator' },
-    ...(m.worktree
-      ? [
-          { label: 'Remove (keep branch)', run: () => void removeMission(m.id, { removeWorktree: true, deleteBranch: false }) },
-          { label: 'Remove worktree and branch', run: () => void removeMission(m.id, { removeWorktree: true, deleteBranch: true }) }
-        ]
-      : [{ label: 'Remove from list', run: () => void removeMission(m.id, { removeWorktree: false, deleteBranch: false }) }])
+    { label: m.worktree ? 'Remove mission and worktree…' : 'Remove from list…', icon: <Trash2 size={13} />, run: () => void removeMissionFlow(m.id) }
   ]
   return (
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>

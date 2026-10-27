@@ -8,6 +8,7 @@ import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
 import { ago } from './MissionCard'
 import { ViewShell } from './RuntimesView'
+import { showNotice } from './Modal'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
@@ -124,7 +125,7 @@ function RunRow({ run: r, root, onChange }: { run: GhRun; root: string; onChange
   const failed = r.status === 'completed' && r.conclusion !== 'success' && r.conclusion !== 'skipped' && r.conclusion !== 'cancelled'
   const watch = (): void => void openTerminal({ cwd: root, title: `run #${r.number}`, command: `gh run watch ${r.databaseId} --exit-status` })
   const logs = (): void => void openTerminal({ cwd: root, title: `logs #${r.number}`, command: `gh run view ${r.databaseId} ${failed ? '--log-failed' : '--log'} | less -R` })
-  const act = (fn: () => Promise<void>): void => void fn().then(onChange, (e) => alert(errText(e)))
+  const act = (fn: () => Promise<void>): void => void fn().then(onChange, (e) => void showNotice('That didn\'t work', errText(e)))
   return (
     <div
       className="rt-row run-row"

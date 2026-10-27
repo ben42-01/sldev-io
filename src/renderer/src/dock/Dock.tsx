@@ -16,7 +16,8 @@ import { Welcome } from './Welcome'
 import { onPanelRemoved, openTerminal, setDockApi } from './dockApi'
 import { runs } from '../state/runs'
 import { useStore } from '../state/store'
-import { StatusDot } from '../components/StatusDot'
+import { RunDot, StatusDot } from '../components/StatusDot'
+import { missionSignal } from '@shared/status'
 import { startupSetupCheck } from '../state/setup'
 import { startupWhatsNew } from '../state/whatsNew'
 
@@ -32,7 +33,7 @@ function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   })
   return (
     <div className="tab-wrap">
-      {missionStatus ? <span className={`mission-dot ${missionStatus}`} title={missionStatus} /> : run && <StatusDot run={run} />}
+      {missionStatus ? <StatusDot signal={missionSignal(missionStatus)} /> : run && <RunDot run={run} />}
       <DockviewDefaultTab {...props} />
     </div>
   )

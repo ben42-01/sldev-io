@@ -3,7 +3,8 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { ExternalLink, GitCommitHorizontal, GitMerge, GitPullRequest, RefreshCw, Trash2 } from 'lucide-react'
 import { parseDiff, type DiffFile } from '../lib/diff'
 import { openInEditor } from '../lib/actions'
-import { getMission, missionBase, refreshStats, removeMission, useMission } from '../state/missions'
+import { getMission, missionBase, refreshStats, useMission } from '../state/missions'
+import { removeMissionFlow } from '../lib/removals'
 
 const MAX_LINES = 3000
 
@@ -73,7 +74,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
             <button className="btn sm" disabled={!!busy} title="git push, then gh pr create" onClick={() => void act('Pull request', () => window.api.git.pushAndPr(mission.cwd, wt.branch, wt.base, mission.title))}>
               <GitPullRequest size={13} /> Push & PR
             </button>
-            <button className="btn sm danger" disabled={!!busy} title="Remove the worktree (keeps the branch)" onClick={() => void removeMission(mission.id, { removeWorktree: true, deleteBranch: false }).then(() => props.api.close())}>
+            <button className="btn sm danger" disabled={!!busy} title="Remove the mission and its worktree…" aria-label="Remove the mission and its worktree" onClick={() => void removeMissionFlow(mission.id)}>
               <Trash2 size={13} />
             </button>
           </>

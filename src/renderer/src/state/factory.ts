@@ -26,7 +26,7 @@ import { applyProfile } from '@shared/profiles'
 import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
 import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
-import type { AgentOptions, GhPrComment } from '@shared/types'
+import type { AgentOptions, GhPrComment, WorktreeInfo } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { allAgents, findAgent, slugify, stageMode } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
@@ -354,7 +354,8 @@ export async function keep(runId: string, nodeId: string, missionId: string): Pr
   if (!run || !nr || !winner) return
   await window.api.factory.copy(outFile(winner.worktree.path, run.id, nodeId), outFile(run.worktree.path, run.id, nodeId))
   const next = put(pickWinner(run, nodeId, missionId, Date.now()))
-  for (const c of nr.candidates ?? []) if (c !== winner) await window.api.git.removeWorktree(c.worktree, true).catch(() => undefined)
+  // picking the winner is the user's decision to drop the others (every stage was committed)
+  for (const c of nr.candidates ?? []) if (c !== winner) await window.api.git.removeWorktree(c.worktree, { deleteBranch: true, discard: true }).catch(() => undefined)
   if (next.status === 'done') await mergeFinished(runId, null)
   void tick(runId)
 }
@@ -483,12 +484,18 @@ export function stop(runId: string): void {
   if (run) put({ ...run, status: 'stopped', note: 'Stopped. Running agents keep their terminals.', updatedAt: Date.now() })
 }
 
-export async function removeRun(runId: string, removeWorktrees: boolean): Promise<void> {
+/** The run's main worktree first, then the per-stage ones (see removeRunFlow in lib/removals.tsx, which asks first). */
+export function runWorktrees(run: FactoryRun): WorktreeInfo[] {
+  return [run.worktree, ...Object.values(run.nodes).flatMap((nr) => (nr.worktree ? [nr.worktree] : []))]
+}
+
+export async function removeRun(runId: string, opts: { worktrees: boolean; discard?: boolean }): Promise<void> {
   const run = getRun(runId)
   if (!run) return
-  if (removeWorktrees) {
-    for (const nr of Object.values(run.nodes)) if (nr.worktree) await window.api.git.removeWorktree(nr.worktree, true).catch(() => undefined)
-    await window.api.git.removeWorktree(run.worktree, false).catch(() => undefined)
+  if (opts.worktrees) {
+    // stage branches are merged into the run's branch; the run's own branch is kept for its PR
+    for (const nr of Object.values(run.nodes)) if (nr.worktree) await window.api.git.removeWorktree(nr.worktree, { deleteBranch: true, discard: !!opts.discard })
+    await window.api.git.removeWorktree(run.worktree, { deleteBranch: false, discard: !!opts.discard })
   }
   factory.set((s) => ({ runs: s.runs.filter((r) => r.id !== runId) }))
   persist()

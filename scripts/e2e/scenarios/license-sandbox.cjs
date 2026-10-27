@@ -16,8 +16,9 @@ module.exports = async (h) => {
   await h.shot('1-licensed')
   const checked = await h.js('window.api.license.refresh().then(s => s.licensed).catch(e => String(e))')
   h.expect(checked === true, `"Check license" renews it (${checked})`)
-  await h.js('void (window.confirm = () => true)')
   await h.click('#settings-license .btn', 'Deactivate this machine')
+  await h.wait(300)
+  await h.click('dialog[open] .btn', 'Deactivate')
   await h.until(async () => !(await text(h, '#settings-license')).includes('Licensed'), 20000)
   h.expect(!(await text(h, '#settings-license')).includes('Licensed'), 'deactivated again')
 }

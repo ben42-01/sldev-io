@@ -5,6 +5,7 @@ import { beta, pricingUrl } from '../state/beta'
 import { activateLicense, checkLicense, deactivateLicense, license } from '../state/license'
 import { useStore } from '../state/store'
 import { openSettings } from '../lib/commands'
+import { confirmAction } from './Modal'
 
 const planName = { personal: 'Personal', team: 'Team' } as const
 
@@ -55,9 +56,14 @@ export function LicenseSection(): React.JSX.Element {
       setBusy(false)
     }
   }
-  const deactivate = (): void => {
-    if (confirm('Deactivate the license on this machine? You can activate it again here or on another machine.')) void act(deactivateLicense)
-  }
+  const deactivate = (): void =>
+    void confirmAction({
+      title: 'Deactivate the license on this machine?',
+      message: 'You can activate it again here or on another machine.',
+      confirmLabel: 'Deactivate',
+      cancelLabel: 'Keep it active',
+      danger: true
+    }).then((ok) => ok && act(deactivateLicense))
   const betaEnds = betaStatus && betaStatus.phase !== 'off' && betaStatus.config.endsAt ? formatBetaDate(betaStatus.config.endsAt) : null
   const betaEnded = betaStatus?.phase === 'ended'
 

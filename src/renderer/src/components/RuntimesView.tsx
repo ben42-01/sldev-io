@@ -7,7 +7,8 @@ import { customToDef, loadRuntimes, restartRuntime, runRuntime, runtimes, saveCu
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu, type MenuItem } from './ContextMenu'
-import { StatusDot } from './StatusDot'
+import { RunDot } from './StatusDot'
+import { confirmDelete } from '../lib/removals'
 
 const SOURCE_LABEL: Record<RuntimeSource, string> = {
   npm: 'scripts',
@@ -43,7 +44,8 @@ export function RuntimesView(): React.JSX.Element {
 
   if (!root) return <ViewShell title="Runtimes"><div className="empty-state"><p>Open a folder to see its scripts and commands.</p></div></ViewShell>
 
-  const deleteCustom = (id: string): void => void saveCustomRuntimes(custom.filter((c) => c.id !== id))
+  const deleteCustom = (id: string): void =>
+    void confirmDelete('runtime', custom.find((c) => c.id === id)?.name ?? id, { note: 'Only the saved command is deleted; nothing in the project changes.' }).then((ok) => { if (ok) void saveCustomRuntimes(custom.filter((c) => c.id !== id)) })
 
   return (
     <ViewShell
@@ -129,7 +131,7 @@ function RuntimeRow({ def, onEdit, onDelete }: { def: RuntimeDef; onEdit?: () =>
   }
   return (
     <div className="rt-row" onDoubleClick={() => runRuntime(def)} onContextMenu={(e) => showContextMenu(e, menu())} title={def.detail ?? def.command}>
-      <StatusDot run={run} />
+      <RunDot run={run} />
       <div className="rt-main">
         <div className="rt-name">{def.name}</div>
         <div className="rt-cmd">{def.detail ?? def.command}</div>

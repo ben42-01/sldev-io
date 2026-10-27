@@ -49,7 +49,7 @@ module.exports = async (h) => {
   await h.setValue('.form textarea', 'Badge task')
   await h.wait(200)
   await h.click('.form .btn.primary', 'Launch')
-  const needs = await h.until(() => h.js(`[...document.querySelectorAll('.mission-pill')].some(e => e.textContent === 'Needs you')`), 10000)
+  const needs = await h.until(() => h.js(`[...document.querySelectorAll('.mission-head .spill')].some(e => e.textContent === 'Needs you')`), 10000)
   h.expect(needs, 'mission reaches Needs you')
   const supported = app.setBadgeCount(app.getBadgeCount())
   if (supported) h.expect(app.getBadgeCount() === 1, 'badge shows 1 mission waiting')

@@ -3,6 +3,7 @@ import { ActivityBar } from './components/ActivityBar'
 import { CommandPalette } from './components/CommandPalette'
 import { ContextMenuHost } from './components/ContextMenu'
 import { PromptHost } from './components/PromptHost'
+import { ConfirmHost } from './components/Modal'
 import './lib/actions'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
@@ -41,6 +42,9 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     const commands = staticCommands()
     const onKey = (e: KeyboardEvent): void => {
+      // typing in a dialog or a form field isn't a shortcut (the terminal's hidden textarea still is)
+      const t = e.target instanceof HTMLElement ? e.target : null
+      if (t?.closest('dialog[open]') || (t?.closest('form') && t.matches('input, textarea, select'))) return
       const c = matchShortcut(e, commands)
       if (!c) return
       e.preventDefault()
@@ -68,6 +72,7 @@ export function App(): React.JSX.Element {
       <CommandPalette />
       <ContextMenuHost />
       <PromptHost />
+      <ConfirmHost />
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, shellKind, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
+import { errText, showNotice } from './removals'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -122,7 +123,7 @@ export function showBranchPicker(): void {
         id: b,
         label: b,
         detail: b === current ? 'current' : undefined,
-        run: () => void window.api.git.switch(root, b).then(refreshBranch, (e) => alert(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')))
+        run: () => void window.api.git.switch(root, b).then(refreshBranch, (e) => void showNotice(`Couldn't switch to ${b}`, errText(e)))
       }))
     )
   })

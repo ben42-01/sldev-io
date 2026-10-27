@@ -165,13 +165,14 @@ export function stopMission(id: string): void {
   if (panel) stopTerminal(panel)
 }
 
-export async function removeMission(id: string, opts: { removeWorktree: boolean; deleteBranch: boolean }): Promise<void> {
+/** Ask first: see removeMissionFlow in lib/removals.tsx. Removing the worktree runs before anything else, so a refusal leaves the mission listed. */
+export async function removeMission(id: string, opts: { removeWorktree: boolean; deleteBranch: boolean; discard?: boolean }): Promise<void> {
   const m = getMission(id)
   if (!m) return
+  if (m.worktree && opts.removeWorktree) await window.api.git.removeWorktree(m.worktree, { deleteBranch: opts.deleteBranch, discard: !!opts.discard })
   const panel = missions.get().panels[id]
   if (panel) closePanel(panel)
   closePanel(`diff-${id}`)
-  if (m.worktree && opts.removeWorktree) await window.api.git.removeWorktree(m.worktree, opts.deleteBranch)
   missions.set((s) => ({ list: s.list.filter((x) => x.id !== id) }))
   persist()
 }

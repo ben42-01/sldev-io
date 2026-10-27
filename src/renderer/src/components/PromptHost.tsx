@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { SshPrompt } from '@shared/types'
 import { ShieldAlert, ShieldQuestion, KeyRound } from 'lucide-react'
+import { Modal } from './Modal'
 
-/** Modal for questions the SSH layer asks: unknown/changed host keys, passwords, 2FA codes. */
+/** Questions the SSH layer asks: unknown/changed host keys, passwords, 2FA codes. */
 export function PromptHost(): React.JSX.Element | null {
   const [queue, setQueue] = useState<SshPrompt[]>([])
   const [values, setValues] = useState<string[]>([])
@@ -16,33 +17,33 @@ export function PromptHost(): React.JSX.Element | null {
   }
   const Icon = p.kind === 'confirm' ? ShieldAlert : p.kind === 'hostkey' ? ShieldQuestion : KeyRound
   return (
-    <div className="palette-backdrop">
-      <form
-        className={`modal brand-frame ${p.kind}`}
-        onSubmit={(e) => {
-          e.preventDefault()
-          answer(p.kind === 'secret' ? values : ['yes'])
-        }}
-        onKeyDown={(e) => e.key === 'Escape' && answer(null)}
-      >
-        <div className="modal-head">
-          <Icon size={18} />
-          <strong>{p.title}</strong>
-        </div>
-        {p.message && <pre className="modal-msg">{p.message}</pre>}
-        {p.fields?.map((f, i) => (
-          <label key={i} className="field">
-            <span>{f.label}</span>
-            <input autoFocus={i === 0} type={f.secret ? 'password' : 'text'} value={values[i] ?? ''} onChange={(e) => setValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))} />
-          </label>
-        ))}
-        <div className="form-actions">
-          <button type="button" className="btn" onClick={() => answer(null)} autoFocus={p.kind !== 'secret'}>Cancel</button>
-          <button type="submit" className={`btn ${p.kind === 'confirm' ? 'danger-solid' : 'primary'}`}>
+    <Modal
+      key={p.requestId}
+      title={
+        <>
+          <Icon size={16} /> {p.title}
+        </>
+      }
+      tone={p.kind === 'confirm' ? 'danger' : undefined}
+      onClose={() => answer(null)}
+      onSubmit={() => answer(p.kind === 'secret' ? values : ['yes'])}
+      footerNote={p.kind === 'secret' ? 'Sent to the server only; never stored unless you save it in Credentials.' : undefined}
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={() => answer(null)}>Cancel</button>
+          <button type="submit" className={`btn ${p.kind === 'confirm' ? 'danger-solid' : 'primary'}`} data-autofocus={p.kind !== 'secret' || undefined}>
             {p.kind === 'hostkey' ? 'Trust and connect' : p.kind === 'confirm' ? 'Connect anyway' : 'Continue'}
           </button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      {p.message && <pre className="modal-msg">{p.message}</pre>}
+      {p.fields?.map((f, i) => (
+        <label key={i} className="field">
+          <span>{f.label}</span>
+          <input className="input" type={f.secret ? 'password' : 'text'} spellCheck={false} value={values[i] ?? ''} onChange={(e) => setValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))} />
+        </label>
+      ))}
+    </Modal>
   )
 }
