@@ -8,6 +8,7 @@ import { workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
 import { getAgent, useAgents } from '../state/agents'
 import { compareRecipe, issueText } from '@shared/factory'
+import { missionPrompt } from '@shared/missionPrompt'
 import { startRun } from '../state/factory'
 import { getProfile } from '../state/profiles'
 import { IssuePicker } from './IssuePicker'
@@ -81,6 +82,7 @@ export function MissionsView(): React.JSX.Element {
 function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
   const [title, setTitle] = useState('')
+  const [criteria, setCriteria] = useState('')
   const [options, setOptions] = useState<AgentOptions>(() => ({ agent: workspace.get().defaultAgent }))
   const [isRepo, setIsRepo] = useState(false)
   const [worktree, setWorktree] = useState(true)
@@ -99,6 +101,10 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
     void window.api.git.branch(root).then((b) => setBase(b ?? ''))
   }, [root])
 
+  const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60)
+  /** exactly what the agent receives as its first message (the profile's role goes in separately) */
+  const sent = missionPrompt({ title: shownTitle, brief: prompt, criteria })
+
   const launch = async (): Promise<void> => {
     if (!prompt.trim() || busy) return
     setBusy(true)
@@ -108,7 +114,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
         const profile = getProfile(options.profile)
         const ids = [options.agent || workspace.get().defaultAgent, ...compare.filter((c) => c !== options.agent)]
         await startRun({ recipe: compareRecipe(ids.map((id) => (profile ? `${profile.name}@${id}` : id))), intent: prompt, root, base, issue })
-      } else await startMission({ prompt, title, root, options, worktree: isRepo && worktree, base })
+      } else await startMission({ prompt: sent, brief: prompt, criteria, title: shownTitle, root, options, worktree: isRepo && worktree, base })
       onDone()
     } catch (e) {
       setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
@@ -135,11 +141,18 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
       {isRepo && <IssuePicker root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
         <span>What should {getAgent(options.agent).name} do?</span>
-        <textarea autoFocus rows={6} value={prompt} placeholder="Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
+        <textarea autoFocus rows={6} value={prompt} placeholder="e.g. Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
+        <span className="field-hint">Required. Sent as one argument, line breaks and quotes intact.</span>
       </label>
       <label className="field">
-        <span>Title (optional)</span>
-        <input value={title} placeholder={prompt.split('\n')[0].slice(0, 60) || 'Users pagination'} onChange={(e) => setTitle(e.target.value)} />
+        <span>Acceptance criteria</span>
+        <textarea rows={2} value={criteria} placeholder={'e.g. GET /users?page=2 returns 20 items\nnpm test passes'} onChange={(e) => setCriteria(e.target.value)} />
+        <span className="field-hint">Optional. Included in the agent's prompt and shown again when you review the work.</span>
+      </label>
+      <label className="field">
+        <span>Title</span>
+        <input value={title} maxLength={120} placeholder={shownTitle || 'e.g. Users pagination'} onChange={(e) => setTitle(e.target.value)} />
+        <span className="field-hint">Optional. Names the mission, its tab and its branch.</span>
       </label>
       {isRepo && (
         <>
@@ -174,9 +187,15 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
           {compare.length > 0 && <div className="hint">Runs as a factory bake-off: every agent works in its own worktree, without stopping to ask, and you keep the best diff.</div>}
         </div>
       )}
-      {error && <div className="form-error">{error}</div>}
+      {prompt.trim() && !compare.length && (
+        <details className="prompt-preview">
+          <summary>Prompt preview</summary>
+          <pre className="cmd-preview selectable">{sent}</pre>
+        </details>
+      )}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onDone}>Cancel</button>
+        <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!prompt.trim() || busy} title="Ctrl/Cmd+Enter">
           <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>

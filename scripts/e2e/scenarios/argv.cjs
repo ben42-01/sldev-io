@@ -26,7 +26,8 @@ module.exports = async (h) => {
   await h.click('.form .btn.primary', 'Launch')
   h.expect(await h.until(async () => fs.existsSync(log), 10000), 'fake claude started')
   const argv = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0])
-  h.expect(argv[argv.length - 1] === PROMPT, `the prompt is the last argument, intact (got ${JSON.stringify(argv[argv.length - 1])})`)
+  const last = argv[argv.length - 1]
+  h.expect(last.startsWith('Mission: I need you to create a document\n\n') && last.includes(PROMPT), `the prompt is the last argument, intact (got ${JSON.stringify(last)})`)
   const n = argv.indexOf('-n')
   h.expect(n >= 0 && argv[n + 1] === 'I need you to create a document', `the session name is one argument (got ${JSON.stringify(argv[n + 1])})`)
   await h.wait(1500)

@@ -4,6 +4,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { ContextMenuHost } from './components/ContextMenu'
 import { PromptHost } from './components/PromptHost'
 import { ConfirmHost } from './components/Modal'
+import { MissionDetailsHost } from './components/MissionDetails'
 import './lib/actions'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
@@ -72,6 +73,7 @@ export function App(): React.JSX.Element {
       <CommandPalette />
       <ContextMenuHost />
       <PromptHost />
+      <MissionDetailsHost />
       <ConfirmHost />
     </div>
   )

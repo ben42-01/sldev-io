@@ -1,5 +1,5 @@
 import type { Mission } from '@shared/types'
-import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
 import { focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
@@ -12,6 +12,8 @@ import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusPill } from './StatusDot'
 import { missionSignal } from '@shared/status'
 import { removeMissionFlow } from '../lib/removals'
+import { openMissionDetails } from './MissionDetails'
+import { TimeAgo } from './TimeAgo'
 
 export function MissionStatusPill({ status }: { status: Mission['status'] }): React.JSX.Element {
   return <StatusPill signal={missionSignal(status)} />
@@ -22,6 +24,7 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
   const live = isLive(m.status)
   const profileName = useProfiles().find((p) => p.id === m.options.profile)?.name
   const menu = (): MenuItem[] => [
+    { label: 'Details and handoff…', icon: <NotebookText size={13} />, run: () => openMissionDetails(m.id) },
     { label: hasPanel ? 'Show terminal' : 'Resume session', icon: <SquareTerminal size={13} />, run: () => focusOrResume(m.id) },
     { label: 'Review changes', icon: <FileDiff size={13} />, run: () => reviewMission(m.id) },
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
@@ -42,9 +45,9 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
         <span className="mission-agent">{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}</span>
-        <span className="mission-time">{ago(m.updatedAt)}</span>
+        <TimeAgo t={m.updatedAt} className="mission-time" />
       </div>
-      <div className="mission-title" title={m.prompt}>{m.title}</div>
+      <button type="button" className="mission-title" title="Brief, report and handoff" onClick={() => openMissionDetails(m.id)}>{m.title}</button>
       {m.status === 'needs-input' && m.notification && <div className="mission-alert">{m.notification}</div>}
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}

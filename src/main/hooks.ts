@@ -6,6 +6,7 @@ import { MCP_SERVER } from './mcpServer'
 import { handleMcp, type McpDeps } from './mcp'
 import { join } from 'path'
 import type { HookEvent } from '@shared/types'
+import { clipReport } from '@shared/missionPrompt'
 
 /**
  * Claude Code hooks → sldev. Missions launch `claude --settings <file>` where the settings register
@@ -179,7 +180,7 @@ function lastAssistantText(path: unknown): string | undefined {
         const content = msg?.message?.content
         if (msg.type !== 'assistant' || !Array.isArray(content)) continue
         const text = content.filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('\n').trim()
-        if (text) return clip(text, 600)
+        if (text) return clipReport(text)
       } catch {
         // partial first line of the tail
       }

@@ -1,6 +1,7 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
+import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
 import { agentCommand, commandText, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
 import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
@@ -82,6 +83,9 @@ export interface StartMissionInput {
   base?: string
   taskId?: string
   factory?: Mission['factory']
+  brief?: string
+  criteria?: string
+  parent?: Mission['parent']
   /** where its terminal opens; default: a tab in the active group */
   placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
@@ -112,6 +116,9 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     status: 'starting',
     taskId: input.taskId,
     factory: input.factory,
+    brief: input.brief,
+    criteria: input.criteria?.trim() || undefined,
+    parent: input.parent,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     history: pushStatus(undefined, 'starting', Date.now())
@@ -182,21 +189,27 @@ export function reviewMission(id: string): void {
   if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { missionId: id }, 'right')
 }
 
-/** A second agent reviews a mission's changes, read-only, in the same folder. */
+/** A second agent reviews a mission's changes, read-only, in the same folder, with its brief and handoff. */
 export async function reviewWithAgent(id: string, agentId: string): Promise<Mission | undefined> {
   const m = getMission(id)
   if (!m) return undefined
-  const base = missionBase(m)
   const options = { ...applyProfile({ agent: agentId }, getProfile('builtin:reviewer')), agent: agentId }
-  const prompt = [
-    `Review the changes in this folder since ${base}: run \`git diff ${base}\` and look at untracked files too.`,
-    `${getAgent(m.options.agent).name} made them for this task:`,
-    '',
-    m.prompt,
-    '',
-    'List your findings, most important first. Do not edit any files.'
-  ].join('\n')
-  return startMission({ prompt, title: `Review: ${m.title}`.slice(0, 60), root: m.root, cwd: m.cwd, options, worktree: false })
+  const brief = secondOpinionBrief(m, getAgent(m.options.agent).name, missionBase(m))
+  return startMission({ prompt: brief, brief, title: `Review: ${m.title}`.slice(0, 60), root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'second-opinion' } })
+}
+
+/** Continue a mission's work in its folder (its worktree, if it has one) with a new instruction and its handoff. */
+export async function followUpMission(id: string, next: string, agentId?: string): Promise<Mission | undefined> {
+  const m = getMission(id)
+  if (!m || !next.trim()) return undefined
+  const brief = followUpBrief(m, next)
+  const title = next.trim().split('\n')[0].slice(0, 60)
+  const options = { ...m.options, agent: agentId || m.options.agent }
+  return startMission({ prompt: missionPrompt({ title, brief }), brief, title, root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'follow-up' } })
+}
+
+export function setHandoff(id: string, handoff: string): void {
+  update(id, { handoff: handoff.trim() || undefined })
 }
 
 export function missionBase(m: Mission): string {
@@ -250,7 +263,7 @@ window.api.missions.onHook((e: HookEvent) => {
       break
     }
     case 'stop': {
-      const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text ?? m.lastMessage, notification: undefined })
+      const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text?.slice(0, 600) ?? m.lastMessage, report: e.text ?? m.report, notification: undefined })
       if (next) notify(next, `${m.title} finished`, e.text ?? `${getAgent(m.options.agent).name} is waiting for your next message`)
       void refreshStats(m.id)
       break
@@ -277,12 +290,12 @@ window.api.missions.onMcp((e) => {
       const next = update(m.id, { status: 'needs-input', notification: e.text ?? `${agent} needs you` })
       if (next) notify(next, `${m.title} needs you`, e.text ?? `${agent} needs you`)
     } else {
-      const next = update(m.id, { status: 'waiting', notification: undefined, lastMessage: e.text ?? m.lastMessage })
+      const next = update(m.id, { status: 'waiting', notification: undefined, lastMessage: e.text?.slice(0, 600) ?? m.lastMessage })
       if (next) notify(next, `${m.title} finished`, e.text ?? `${agent} says it's done`)
       void refreshStats(m.id)
     }
   } else if (e.type === 'done' || e.type === 'output') {
-    if (e.text) update(m.id, { lastMessage: e.text.slice(0, 600) })
+    if (e.text) update(m.id, { lastMessage: e.text.slice(0, 600), ...(e.type === 'done' ? { report: clipReport(e.text) } : {}) })
   }
 })
 

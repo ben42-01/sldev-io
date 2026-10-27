@@ -248,7 +248,17 @@ export interface StatusChange {
 export interface Mission {
   id: string
   title: string
+  /** exactly what the agent was started with */
   prompt: string
+  /** the task as the user wrote it (missions from the New mission form, follow-ups, second opinions) */
+  brief?: string
+  criteria?: string
+  /** the agent's final reply (Claude's last message, or sldev_done), up to 6,000 characters */
+  report?: string
+  /** the reviewer's notes; handed to follow-ups instead of the report when present */
+  handoff?: string
+  /** the mission this one continues or reviews */
+  parent?: { id: string; kind: 'follow-up' | 'second-opinion' }
   /** project root the mission belongs to */
   root: string
   cwd: string

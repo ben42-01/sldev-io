@@ -856,6 +856,7 @@ svg.lucide {
 .form input,
 .form select,
 .form textarea,
+.modal-panel :is(input, select, textarea),
 .input {
   width: 100%;
   background: var(--background);
@@ -867,22 +868,22 @@ svg.lucide {
   outline: none;
   user-select: text;
 }
-:is(.form input, .form textarea, .input)::placeholder {
+:is(.form input, .form textarea, .modal-panel input, .modal-panel textarea, .input)::placeholder {
   color: var(--fg-subtle);
 }
 .view-filter input:focus,
 .form input:focus,
 .form select:focus,
 .form textarea:focus,
+.modal-panel :is(input, select, textarea):focus,
 .input:focus {
   border-color: var(--border-strong);
 }
-.form input[type='checkbox'],
-.form input[type='radio'] {
+:is(.form, .modal-panel) input:is([type='checkbox'], [type='radio']) {
   width: auto;
   accent-color: var(--accent);
 }
-.form textarea {
+:is(.form, .modal-panel) textarea {
   resize: vertical;
   line-height: 1.45;
 }
@@ -1181,6 +1182,19 @@ svg.lucide {
 .seg button.on {
   background: var(--muted);
   color: var(--fg);
+}
+.prompt-preview summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+.prompt-preview summary:hover {
+  color: var(--fg);
+}
+.prompt-preview .cmd-preview {
+  max-height: 220px;
+  overflow: auto;
 }
 .cmd-preview {
   margin: 0;
@@ -1583,10 +1597,19 @@ a {
   color: var(--fg-subtle);
 }
 .mission-title {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: left;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.mission-title:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--fg-subtle);
+  text-underline-offset: 2px;
 }
 .mission-card.large .mission-title {
   font-size: 14px;
@@ -2196,6 +2219,52 @@ a {
   font: 11px var(--font-mono);
   color: var(--fg);
   word-break: break-all;
+}
+/* section header: label, then a rule filling the row (§5.9) */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.section-head > i {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.detail-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  font-size: 11px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-text {
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.detail-text.report {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--background);
+  border: 1px solid var(--border);
 }
 /* alert banner: tinted, never a solid fill (§5.12) */
 .banner {
