@@ -63,7 +63,9 @@ const api = {
   fs: {
     readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke('fs:readDir', dir),
     home: (): Promise<string> => ipcRenderer.invoke('fs:home'),
-    pickFolder: (): Promise<string | null> => ipcRenderer.invoke('fs:pickFolder'),
+    /** native folder picker, opened at `start` when it exists */
+    pickFolder: (start?: string): Promise<string | null> => ipcRenderer.invoke('fs:pickFolder', start),
+    isDir: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:isDir', path),
     watch: (dir: string): void => ipcRenderer.send('fs:watch', dir),
     unwatch: (dir: string): void => ipcRenderer.send('fs:unwatch', dir),
     onChanged: (cb: (dir: string) => void): Unsubscribe => on('fs:changed', cb),

@@ -13,6 +13,7 @@
       "Agents dashboard: every running agent with what it's doing, how long it has run and its tokens. Ctrl+Shift+J jumps to the next one that needs you.",
       "Software Factory: recipes run agents and checks as a pipeline, with bake-offs, PR feedback and run history.",
       "Agent profiles, rules sync to every agent's instruction file, and a usage dashboard with a timeline and estimated cost.",
+      "Missions, factory runs, skills and tasks can work in any folder: type a path, Browse…, or pick a recent one.",
       "A new look: one colour per status everywhere, counts on the sidebar icons, start cards in the empty dock, Ping and Save & Connect for SSH hosts."
     ]
   },

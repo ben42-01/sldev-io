@@ -12,6 +12,7 @@ import { missionPrompt } from '@shared/missionPrompt'
 import { startRun } from '../state/factory'
 import { getProfile } from '../state/profiles'
 import { IssuePicker } from './IssuePicker'
+import { FolderField } from './FolderField'
 import { MissionCard } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 
@@ -35,6 +36,8 @@ export function MissionsView(): React.JSX.Element {
   const mine = useMemo(() => list.filter((m) => m.root === root), [list, root])
   const active = mine.filter((m) => isLive(m.status))
   const recent = mine.filter((m) => !isLive(m.status))
+  /** live missions started in another folder (picked in the form) stay visible here */
+  const elsewhere = useMemo(() => list.filter((m) => m.root !== root && isLive(m.status)), [list, root])
 
   return (
     <ViewShell
@@ -67,6 +70,8 @@ export function MissionsView(): React.JSX.Element {
         )}
         {active.length > 0 && <div className="section-label pad">Active · {active.length}</div>}
         <div className="mission-list">{active.map((m) => <MissionCard key={m.id} mission={m} />)}</div>
+        {elsewhere.length > 0 && <div className="section-label pad">Other folders · {elsewhere.length}</div>}
+        <div className="mission-list">{elsewhere.map((m) => <MissionCard key={m.id} mission={m} />)}</div>
         {recent.length > 0 && <div className="section-label pad">Recent</div>}
         <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} />)}</div>
         {root && !mine.length && !creating && (
@@ -79,7 +84,9 @@ export function MissionsView(): React.JSX.Element {
   )
 }
 
-function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+  /** where the agent works: the open project unless another folder is picked */
+  const [root, setRoot] = useState(projectRoot)
   const [prompt, setPrompt] = useState('')
   const [title, setTitle] = useState('')
   const [criteria, setCriteria] = useState('')
@@ -95,10 +102,21 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
   const [compare, setCompare] = useState<string[]>([])
   const agents = useAgents()
 
+  const [folderOk, setFolderOk] = useState(true)
+  // a new folder means new git facts; the base branch is reset rather than kept from the old repo
   useEffect(() => {
-    void window.api.git.isRepo(root).then(setIsRepo)
-    void window.api.git.branches(root).then(setBranches)
-    void window.api.git.branch(root).then((b) => setBase(b ?? ''))
+    let live = true
+    const t = setTimeout(() => {
+      void window.api.fs.isDir(root).then((ok) => {
+        if (!live) return
+        setFolderOk(ok)
+        if (!ok) return setIsRepo(false)
+        void window.api.git.isRepo(root).then((r) => live && setIsRepo(r))
+        void window.api.git.branches(root).then((b) => live && setBranches(b))
+        void window.api.git.branch(root).then((b) => live && setBase(b ?? ''))
+      })
+    }, 250)
+    return () => ((live = false), clearTimeout(t))
   }, [root])
 
   const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60)
@@ -107,6 +125,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
 
   const launch = async (): Promise<void> => {
     if (!prompt.trim() || busy) return
+    if (!folderOk) return setError('Choose an existing folder for the agent to work in.')
     setBusy(true)
     setError('')
     try {
@@ -138,7 +157,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
         if (e.key === 'Escape') onDone()
       }}
     >
-      {isRepo && <IssuePicker root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
+      {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
         <span>What should {getAgent(options.agent).name} do?</span>
         <textarea autoFocus rows={6} value={prompt} placeholder="e.g. Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
@@ -154,6 +173,11 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
         <input value={title} maxLength={120} placeholder={shownTitle || 'e.g. Users pagination'} onChange={(e) => setTitle(e.target.value)} />
         <span className="field-hint">Optional. Names the mission, its tab and its branch.</span>
       </label>
+      <FolderField
+        value={root}
+        onChange={setRoot}
+        hint={!folderOk ? undefined : isRepo ? (worktree ? 'A git repository: the mission gets its own worktree and branch, cut from the branch below. Uncommitted files are not copied.' : 'A git repository: the agent works in this folder and its checked-out branch directly.') : 'Not a git repository: the agent works in the folder directly, without a worktree or diff review.'}
+      />
       {isRepo && (
         <>
           <label className="check">
@@ -196,7 +220,7 @@ function NewMissionForm({ root, onDone }: { root: string; onDone: () => void }):
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={!prompt.trim() || busy} title="Ctrl/Cmd+Enter">
+        <button type="submit" className="btn primary" disabled={!prompt.trim() || busy || !folderOk} title="Ctrl/Cmd+Enter">
           <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>
       </div>

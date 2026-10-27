@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
-import { basename, join } from 'path'
+import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { PtyManager, setShellOverride } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
@@ -132,9 +132,16 @@ function registerIpc(): void {
   // filesystem
   ipcMain.handle('fs:readDir', (_e, dir: string) => readDir(dir))
   ipcMain.handle('fs:home', () => homedir())
-  ipcMain.handle('fs:pickFolder', async () => {
-    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
+  ipcMain.handle('fs:pickFolder', async (_e, start?: string) => {
+    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'], defaultPath: start && existsSync(start) ? start : undefined })
     return r.canceled ? null : r.filePaths[0]
+  })
+  ipcMain.handle('fs:isDir', (_e, p: string) => {
+    try {
+      return isAbsolute(p) && statSync(p).isDirectory()
+    } catch {
+      return false
+    }
   })
   ipcMain.handle('fs:existingFiles', (_e, paths: string[]) => existingFiles(paths))
   ipcMain.handle('fs:listFiles', async (_e, root: string) => ((await git.isRepo(root)) ? git.listFiles(root) : walkFiles(root)))

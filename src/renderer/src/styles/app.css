@@ -777,6 +777,9 @@ svg.lucide {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.form .launch-chip.mono {
+  font-size: 10.5px;
+}
 .launch-chip:hover {
   color: var(--fg);
 }
@@ -1308,6 +1311,19 @@ svg.lucide {
 .seg button.on {
   background: var(--muted);
   color: var(--fg);
+}
+.path-input {
+  display: flex;
+  gap: 4px;
+}
+.path-input input {
+  flex: 1;
+  min-width: 0;
+}
+.btn.icon {
+  width: 28px;
+  padding: 0;
+  flex-shrink: 0;
 }
 .prompt-preview summary {
   cursor: pointer;

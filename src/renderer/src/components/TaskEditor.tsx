@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { AgentOptions, Task } from '@shared/types'
-import { Bot, Terminal } from 'lucide-react'
-import { buildTaskCommand } from '../state/tasks'
+import { Bot, FolderOpen, Terminal } from 'lucide-react'
+import { buildTaskCommand, taskCwd } from '../state/tasks'
 import { commandText } from '../lib/agents'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
-import { basename } from '../lib/paths'
+import { basename, relative } from '../lib/paths'
 import { AgentOptionsFields } from './AgentOptionsFields'
 import { getAgent } from '../state/agents'
 
@@ -15,6 +15,12 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
   const set = (p: Partial<Task>): void => setT((x) => ({ ...x, ...p }))
   const setAgent = (p: Partial<AgentOptions>): void => setT((x) => ({ ...x, agent: { ...x.agent, ...p } }))
   const command = commandText(buildTaskCommand(t))
+  // inside the project the folder is kept relative, so the task still works if the project moves
+  const browse = async (): Promise<void> => {
+    const base = t.scope ?? root ?? undefined
+    const dir = await window.api.fs.pickFolder(taskCwd(t) ?? base)
+    if (dir) set({ cwd: t.scope ? (relative(t.scope, dir) === '.' ? '' : relative(t.scope, dir)) : dir })
+  }
   const valid = !!t.name.trim() && (t.kind === 'agent' ? !!t.prompt?.trim() || !!t.agent?.extraArgs : !!t.command?.trim())
 
   const submit = (run: boolean): void => {
@@ -77,10 +83,15 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
             <option value="global">Global</option>
           </select>
         </label>
-        <label className="field">
+        <div className="field">
           <span>Folder</span>
-          <input className="mono" value={t.cwd} placeholder={t.scope ? '(project root)' : '(current project)'} onChange={(e) => set({ cwd: e.target.value })} />
-        </label>
+          <div className="path-input">
+            <input className="mono" value={t.cwd} spellCheck={false} aria-label="Folder" placeholder={t.scope ? '(project root)' : '(current project)'} onChange={(e) => set({ cwd: e.target.value })} />
+            <button type="button" className="btn icon" title="Browse…" aria-label="Browse for a folder" onClick={() => void browse()}>
+              <FolderOpen size={13} />
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="field">

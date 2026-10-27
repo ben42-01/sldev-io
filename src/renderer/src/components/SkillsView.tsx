@@ -6,6 +6,7 @@ import { openInEditor } from '../lib/actions'
 import { writeToTerminal, focusTerminal, shellKind } from '../lib/terminals'
 import { shellQuote } from '../lib/paths'
 import { errText } from '../lib/removals'
+import { FolderField } from './FolderField'
 import { skillPrompt } from '../lib/agents'
 import { groupAssets, isGroupOpen } from '../lib/assets'
 import { getAgent, useAgents } from '../state/agents'
@@ -141,7 +142,11 @@ function AssetRow({ asset: a, onRun }: { asset: ClaudeAsset; onRun: () => void }
 }
 
 function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => void }): React.JSX.Element {
-  const root = useStore(workspace, (w) => w.rootFolder)
+  const project = useStore(workspace, (w) => w.rootFolder)
+  /** where the skill runs: the open project unless another folder is picked */
+  const [root, setRoot] = useState(project ?? '')
+  const [folderOk, setFolderOk] = useState(!!project)
+  useEffect(() => void window.api.fs.isDir(root).then(setFolderOk), [root])
   const [args, setArgs] = useState('')
   const [worktree, setWorktree] = useState(false)
   const agents = useAgents()
@@ -153,7 +158,7 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const run = async (): Promise<void> => {
-    if (!root || busy) return
+    if (!root || !folderOk || busy) return
     setBusy(true)
     setError('')
     try {
@@ -187,15 +192,15 @@ function RunAssetForm({ asset, onDone }: { asset: ClaudeAsset; onDone: () => voi
         <summary>Prompt preview</summary>
         <pre className="cmd-preview selectable">{prompt}</pre>
       </details>
+      <FolderField value={root} onChange={setRoot} disabled={busy} />
       <label className="check">
         <input type="checkbox" checked={worktree} onChange={(e) => setWorktree(e.target.checked)} />
         <span>In a new git worktree</span>
       </label>
-      {!root && <div className="form-error" role="alert">Open a folder first.</div>}
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn ghost" disabled={busy} onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={!root || busy}><Rocket size={13} /> {busy ? 'Launching…' : 'Run'}</button>
+        <button type="submit" className="btn primary" disabled={!root || !folderOk || busy}><Rocket size={13} /> {busy ? 'Launching…' : 'Run'}</button>
       </div>
     </form>
   )

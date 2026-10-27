@@ -12,6 +12,7 @@ import { ViewShell } from './RuntimesView'
 import { StatusPill } from './StatusDot'
 import { runSignal } from '@shared/status'
 import { removeRunFlow } from '../lib/removals'
+import { FolderField } from './FolderField'
 
 export function FactoryView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
@@ -21,6 +22,8 @@ export function FactoryView(): React.JSX.Element {
   const [importing, setImporting] = useState(false)
   useEffect(() => void loadRecipes(root), [root])
   const mine = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
+  /** unfinished runs in another repository (picked in the run form) stay visible */
+  const elsewhere = useMemo(() => runs.filter((r) => r.root !== root && (r.status === 'running' || r.status === 'paused')), [runs, root])
 
   return (
     <ViewShell
@@ -55,6 +58,8 @@ export function FactoryView(): React.JSX.Element {
         ))}
         {mine.length > 0 && <div className="section-label pad">Runs</div>}
         {mine.map((r) => <RunRow key={r.id} run={r} />)}
+        {elsewhere.length > 0 && <div className="section-label pad">Other repositories · {elsewhere.length}</div>}
+        {elsewhere.map((r) => <RunRow key={r.id} run={r} />)}
         {root && !mine.length && !creating && (
           <div className="muted-note">
             A recipe is a graph of steps: agents write specs and code, commands check the result, you approve the steps that matter, and the last step opens a pull request. Each run works in its own branch and worktree.
@@ -93,7 +98,10 @@ function RunRow({ run }: { run: FactoryRun }): React.JSX.Element {
   )
 }
 
-function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+function NewRunForm({ root: projectRoot, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+  /** the repository the run works in: the open project unless another one is picked */
+  const [root, setRoot] = useState(projectRoot)
+  const [isRepo, setIsRepo] = useState(true)
   const recipes = useStore(factory, (s) => s.recipes)
   const [pick, setPick] = useState(0)
   const [intent, setIntent] = useState('')
@@ -104,10 +112,23 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
   const [scripts, setScripts] = useState<string[] | null>(null)
   const [issue, setIssue] = useState<number | undefined>()
   useEffect(() => {
-    void window.api.runtimes.detect(root).then((d) => setScripts(d.map((r) => r.name)), () => setScripts([]))
-    void window.api.git.branches(root).then(setBranches)
-    void window.api.git.branch(root).then((b) => setBase(b ?? ''))
-  }, [root])
+    let live = true
+    const t = setTimeout(() => {
+      void window.api.git.isRepo(root).then((r) => {
+        if (!live) return
+        setIsRepo(r)
+        if (!r) return
+        // the picked repo's own recipes, checks and branches; the base is reset, never carried over
+        if (root !== projectRoot) void loadRecipes(root)
+        void window.api.runtimes.detect(root).then((d) => live && setScripts(d.map((x) => x.name)), () => setScripts([]))
+        void window.api.git.branches(root).then((b) => live && setBranches(b))
+        void window.api.git.branch(root).then((b) => live && setBase(b ?? ''))
+      })
+    }, 250)
+    return () => ((live = false), clearTimeout(t))
+  }, [root, projectRoot])
+  // the sidebar lists the open project's recipes again once the form closes
+  useEffect(() => () => void loadRecipes(projectRoot), [projectRoot])
   const entry = recipes[pick]
 
   const submit = async (e: React.FormEvent): Promise<void> => {
@@ -178,7 +199,9 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
           </div>
         </>
       )}
-      <IssuePicker root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />
+      <FolderField label="Repository" value={root} onChange={setRoot} hint={isRepo ? 'The run gets its own worktree and branch here; your checkout is not touched.' : undefined} />
+      {!isRepo && <div className="field-hint tone-error">The factory needs a git repository. Pick a folder inside one.</div>}
+      {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />}
       <label className="field">
         <span>What should the factory build?</span>
         <textarea rows={4} value={intent} autoFocus placeholder="Add a dark mode toggle to the settings page" onChange={(e) => setIntent(e.target.value)} />
@@ -189,10 +212,10 @@ function NewRunForm({ root, onDone }: { root: string; onDone: () => void }): Rea
           {branches.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       </label>
-      {error && <div className="bad">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={busy || !intent.trim() || !entry}>
+        <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
+        <button type="submit" className="btn primary" disabled={busy || !intent.trim() || !entry || !isRepo}>
           <Factory size={14} /> {busy ? 'Starting…' : 'Start'}
         </button>
       </div>
