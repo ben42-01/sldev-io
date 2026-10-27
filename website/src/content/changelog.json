@@ -1,7 +1,7 @@
 [
   {
     "version": "0.1.0-beta.5",
-    "date": null,
+    "date": "2026-10-27",
     "changes": [
       "What's new: after an update, sldev-io shows what changed (also under Help → What's new, and on the website's changelog).",
       "Report a bug or send an idea from the app: it opens a GitHub issue with your versions already filled in.",
