@@ -2,7 +2,7 @@
   "name": "sldev-io",
   "productName": "sldev-io",
   "desktopName": "sldev-io.desktop",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "Agentic coding workspace: terminals, agents, runtimes, skills, workflows.",
   "main": "out/main/index.js",
   "license": "UNLICENSED",

@@ -1,5 +1,18 @@
 [
   {
+    "version": "0.1.0-beta.6",
+    "date": "2026-10-29",
+    "changes": [
+      "A right sidebar with Overview, Agents, Skills and Workflows tabs. Overview shows what needs you, today's usage and the latest missions. Hide it to a slim icon rail (Ctrl+Alt+Shift+B, ⌘⌥B on Mac).",
+      "Copy from terminals: right-click for Copy, Paste, Select all and Copy all output. Ctrl+C copies when text is selected, and Ctrl+V pastes on Windows. In agent screens, hold Shift while dragging to select (Option on Mac).",
+      "Fix: Cursor missions failed on Windows. Cursor now starts as \"agent\" (or \"cursor-agent\" on older installs), and prompts arrive whole.",
+      "Fix: on Windows, a task that runs a .ps1 script opened it in Notepad. It now runs in PowerShell.",
+      "Fix: the app could freeze for a while, mostly on Windows. Token usage is now read incrementally, and tool lookups no longer block the app. If it still happens, About → Copy diagnostics lists each freeze.",
+      "GitHub Workflows splits into Workflows and Runs sections that scroll on their own, and workflow logs open on Windows too.",
+      "New shell tasks offer the scripts in their folder (package.json, Makefile, justfile, …) to pick from."
+    ]
+  },
+  {
     "version": "0.1.0-beta.5",
     "date": "2026-10-27",
     "changes": [
@@ -37,7 +50,10 @@
   {
     "version": "0.1.0-beta.2",
     "date": "2026-10-24",
-    "changes": ["Installers are published to the public downloads page.", "The free beta runs until the date on the website."]
+    "changes": [
+      "Installers are published to the public downloads page.",
+      "The free beta runs until the date on the website."
+    ]
   },
   {
     "version": "0.1.0-beta.1",
