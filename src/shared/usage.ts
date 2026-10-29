@@ -86,61 +86,84 @@ export function priced(t: Pick<TokenUsage, 'input' | 'output' | 'cacheRead' | 'c
   return { ...t, cost: price ? costOf(t, price) : 0, unpriced: price ? 0 : t.input + t.output + t.cacheRead + t.cacheWrite }
 }
 
+/** A log parser that takes one line at a time, so a growing log is only ever read once. */
+export interface LineReader<T> {
+  line: (line: string) => void
+  result: () => T
+}
+
 /**
  * Claude Code transcript (JSONL): each assistant message carries `usage`. A message can span several
  * lines with the same id, so the last line per id counts.
  */
-export function claudeTranscriptUsage(jsonl: string): TokenUsage | null {
+export function claudeTranscriptReader(): LineReader<TokenUsage | null> {
   const byId = new Map<string, TokenUsage>()
-  for (const line of jsonl.split('\n')) {
-    if (!line.includes('"usage"')) continue
-    try {
-      const d = JSON.parse(line) as { type?: string; message?: { id?: string; model?: string; usage?: Record<string, number> } }
-      const u = d.type === 'assistant' ? d.message?.usage : undefined
-      if (!u) continue
-      // each message is priced with its own model: /model can switch mid-session
-      byId.set(
-        d.message?.id ?? String(byId.size),
-        priced({ input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 }, d.message?.model)
-      )
-    } catch {
-      // a partly written line
-    }
+  return {
+    line: (line) => {
+      if (!line.includes('"usage"')) return
+      try {
+        const d = JSON.parse(line) as { type?: string; message?: { id?: string; model?: string; usage?: Record<string, number> } }
+        const u = d.type === 'assistant' ? d.message?.usage : undefined
+        if (!u) return
+        // each message is priced with its own model: /model can switch mid-session
+        byId.set(
+          d.message?.id ?? String(byId.size),
+          priced({ input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 }, d.message?.model)
+        )
+      } catch {
+        // a partly written line
+      }
+    },
+    result: () => (byId.size ? [...byId.values()].reduce(addTokens, NO_TOKENS) : null)
   }
-  return byId.size ? [...byId.values()].reduce(addTokens, NO_TOKENS) : null
+}
+
+export interface CodexSession {
+  cwd?: string
+  startedAt?: number
+  usage: TokenUsage | null
 }
 
 /**
  * Codex session log (JSONL): a session_meta line with the cwd and start time, turn_context lines with
  * the model, then token_count events whose `total_token_usage` is the running total.
  */
-export function codexSessionUsage(jsonl: string): { cwd?: string; startedAt?: number; usage: TokenUsage | null } {
-  let cwd: string | undefined
-  let startedAt: number | undefined
-  let usage: TokenUsage | null = null
+export function codexSessionReader(): LineReader<CodexSession> {
+  const out: CodexSession = { usage: null }
   let model: string | undefined
-  for (const line of jsonl.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      const d = JSON.parse(line) as { type?: string; timestamp?: string; payload?: Record<string, unknown> }
-      const p = d.payload ?? {}
-      if (d.type === 'session_meta') {
-        cwd = typeof p.cwd === 'string' ? p.cwd : cwd
-        const t = Date.parse(String(p.timestamp ?? d.timestamp ?? ''))
-        if (!Number.isNaN(t)) startedAt = t
+  return {
+    line: (line) => {
+      // most lines are messages and tool output: skip them without parsing
+      if (!line.includes('"session_meta"') && !line.includes('"model"') && !line.includes('"token_count"')) return
+      try {
+        const d = JSON.parse(line) as { type?: string; timestamp?: string; payload?: Record<string, unknown> }
+        const p = d.payload ?? {}
+        if (d.type === 'session_meta') {
+          out.cwd = typeof p.cwd === 'string' ? p.cwd : out.cwd
+          const t = Date.parse(String(p.timestamp ?? d.timestamp ?? ''))
+          if (!Number.isNaN(t)) out.startedAt = t
+        }
+        if (typeof p.model === 'string') model = p.model
+        const total = p.type === 'token_count' ? ((p.info as Record<string, unknown> | undefined)?.total_token_usage as Record<string, number> | undefined) : undefined
+        if (total) {
+          const cached = total.cached_input_tokens ?? 0
+          out.usage = priced({ input: Math.max(0, (total.input_tokens ?? 0) - cached), output: (total.output_tokens ?? 0) + (total.reasoning_output_tokens ?? 0), cacheRead: cached, cacheWrite: 0 }, model)
+        }
+      } catch {
+        // a partly written line
       }
-      if (typeof p.model === 'string') model = p.model
-      const total = p.type === 'token_count' ? ((p.info as Record<string, unknown> | undefined)?.total_token_usage as Record<string, number> | undefined) : undefined
-      if (total) {
-        const cached = total.cached_input_tokens ?? 0
-        usage = priced({ input: Math.max(0, (total.input_tokens ?? 0) - cached), output: (total.output_tokens ?? 0) + (total.reasoning_output_tokens ?? 0), cacheRead: cached, cacheWrite: 0 }, model)
-      }
-    } catch {
-      // a partly written line
-    }
+    },
+    result: () => ({ ...out })
   }
-  return { cwd, startedAt, usage }
 }
+
+function readAll<T>(reader: LineReader<T>, jsonl: string): T {
+  for (const line of jsonl.split('\n')) if (line.trim()) reader.line(line)
+  return reader.result()
+}
+
+export const claudeTranscriptUsage = (jsonl: string): TokenUsage | null => readAll(claudeTranscriptReader(), jsonl)
+export const codexSessionUsage = (jsonl: string): CodexSession => readAll(codexSessionReader(), jsonl)
 
 /** Evenly spaced time ticks at a readable step (minutes, hours or days). */
 export function timeTicks(start: number, end: number, max = 6): number[] {

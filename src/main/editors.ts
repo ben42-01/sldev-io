@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import { accessSync, constants, existsSync } from 'fs'
+import { constants, existsSync, promises as fsp } from 'fs'
 import { delimiter, join } from 'path'
 import type { EditorInfo } from '@shared/types'
 
@@ -26,21 +26,27 @@ const EDITORS: EditorDef[] = [
   { id: 'vim', name: 'Vim', kind: 'terminal', bins: ['vim'] }
 ]
 
-export function findOnPath(bin: string): string | null {
+const lookups = new Map<string, { at: number; found: Promise<string | null> }>()
+
+/**
+ * findOnPath without blocking the main process. On Windows a lookup is PATH folders × PATHEXT checks,
+ * and a folder on a network or WSL drive can stall each one for seconds; done synchronously, that froze
+ * the whole app. Results are kept for 30 s (polled views ask often), and per PATH, so a reload sees new tools.
+ */
+export function whichAsync(bin: string): Promise<string | null> {
+  const key = `${process.env.PATH ?? ''}\0${bin}`
+  const hit = lookups.get(key)
+  if (hit && Date.now() - hit.at < 30000) return hit.found
+  const found = lookup(bin)
+  lookups.set(key, { at: Date.now(), found })
+  return found
+}
+
+async function lookup(bin: string): Promise<string | null> {
   const exts = process.platform === 'win32' ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';') : ['']
-  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
-    if (!dir) continue
-    for (const ext of exts) {
-      const p = join(dir, bin + ext)
-      try {
-        accessSync(p, constants.X_OK)
-        return p
-      } catch {
-        // not here
-      }
-    }
-  }
-  return null
+  const candidates = (process.env.PATH ?? '').split(delimiter).filter(Boolean).flatMap((dir) => exts.map((ext) => join(dir, bin + ext)))
+  const ok = await Promise.all(candidates.map((p) => fsp.access(p, constants.X_OK).then(() => true, () => false)))
+  return candidates[ok.indexOf(true)] ?? null
 }
 
 function macAppPath(app?: string): string | null {
@@ -54,12 +60,9 @@ function macAppPath(app?: string): string | null {
 
 let detected: Array<EditorDef & { bin: string | null; app: string | null }> | null = null
 
-export function detectEditors(): EditorInfo[] {
-  detected = EDITORS.map((e) => ({
-    ...e,
-    bin: e.bins.map(findOnPath).find(Boolean) ?? null,
-    app: macAppPath(e.macApp)
-  })).filter((e) => e.bin || e.app)
+export async function detectEditors(): Promise<EditorInfo[]> {
+  const found = await Promise.all(EDITORS.map(async (e) => ({ ...e, bin: (await Promise.all(e.bins.map(whichAsync))).find(Boolean) ?? null, app: macAppPath(e.macApp) })))
+  detected = found.filter((e) => e.bin || e.app)
   return detected.map(({ id, name, kind }) => ({ id, name, kind }))
 }
 

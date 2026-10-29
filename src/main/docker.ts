@@ -1,6 +1,6 @@
 import { homedir } from 'os'
 import type { DockerAction, DockerContainer, DockerList } from '@shared/types'
-import { findOnPath } from './editors'
+import { whichAsync } from './editors'
 import { run } from './git'
 
 const ID = /^[0-9a-f]{6,64}$/
@@ -42,7 +42,7 @@ export function parseContainers(stdout: string): DockerContainer[] {
 }
 
 export async function listContainers(): Promise<DockerList> {
-  if (!findOnPath('docker')) return { available: false, error: 'Docker is not installed.', containers: [] }
+  if (!(await whichAsync('docker'))) return { available: false, error: 'Docker is not installed.', containers: [] }
   const r = await run('docker', ['ps', '-a', '--format', '{{json .}}'], homedir(), 15000)
   if (r.code !== 0) return { available: false, error: r.stderr.trim().split('\n')[0] || 'Could not reach the Docker daemon.', containers: [] }
   return { available: true, containers: parseContainers(r.stdout) }

@@ -83,6 +83,10 @@ const api = {
     terminalCommand: (id: string): Promise<string | null> => ipcRenderer.invoke('editors:terminalCommand', id),
     terminalGoto: (id: string, file: string, line: number): Promise<string | null> => ipcRenderer.invoke('editors:terminalGoto', id, file, line)
   },
+  clipboard: {
+    writeText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
+    readText: (): Promise<string> => ipcRenderer.invoke('clipboard:read')
+  },
   shell: {
     reveal: (p: string): Promise<void> => ipcRenderer.invoke('shell:reveal', p),
     openPath: (p: string): Promise<string> => ipcRenderer.invoke('shell:openPath', p),
@@ -224,7 +228,9 @@ const api = {
     set: <K extends keyof StoreFiles>(name: K, data: StoreFiles[K]): Promise<void> => ipcRenderer.invoke('store:set', name, data)
   },
   runtimes: {
-    detect: (root: string): Promise<RuntimeDef[]> => ipcRenderer.invoke('runtimes:detect', root)
+    detect: (root: string): Promise<RuntimeDef[]> => ipcRenderer.invoke('runtimes:detect', root),
+    /** scripts in exactly this folder (package.json, Makefile, justfile, …) */
+    scripts: (dir: string): Promise<RuntimeDef[]> => ipcRenderer.invoke('runtimes:scripts', dir)
   },
   setup: {
     /** reloadEnv: re-read the login-shell PATH first, to find tools installed since startup */

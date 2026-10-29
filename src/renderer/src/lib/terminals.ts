@@ -169,6 +169,8 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
     scrollback: 10000,
     allowProposedApi: true,
     macOptionIsMeta: true,
+    // agent TUIs capture the mouse; Option-drag (Shift-drag elsewhere) still selects text to copy
+    macOptionClickForcesSelection: true,
     theme: TERMINAL_THEME
   })
   const fit = new FitAddon()
@@ -483,20 +485,72 @@ function fitNow(s: Session): void {
 }
 
 function handleKey(s: Session, e: KeyboardEvent): boolean {
-  // macOS copy/paste go through the Edit menu roles; elsewhere use Ctrl+Shift+C / Ctrl+Shift+V.
-  if (isMac || e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey || e.altKey) return true
+  // macOS copy/paste go through the Edit menu roles; elsewhere Ctrl+Shift+C / Ctrl+Shift+V, plus the
+  // Windows Terminal habits: Ctrl+C copies when text is selected (else it interrupts), Ctrl+V pastes on Windows
+  if (isMac || e.type !== 'keydown' || !e.ctrlKey || e.altKey || e.metaKey) return true
   const key = e.key.toLowerCase()
-  if (key === 'c') {
+  if (key === 'c' && (e.shiftKey || s.term.hasSelection())) {
     e.preventDefault()
-    if (s.term.hasSelection()) void navigator.clipboard.writeText(s.term.getSelection())
+    copyFrom(s)
+    if (!e.shiftKey) s.term.clearSelection()
     return false
   }
-  if (key === 'v') {
+  if (key === 'v' && (e.shiftKey || window.api.platform === 'win32')) {
     e.preventDefault()
-    void navigator.clipboard.readText().then((t) => t && s.term.paste(t))
+    pasteInto(s)
     return false
   }
   return true
+}
+
+function copyFrom(s: Session): boolean {
+  const text = s.term.getSelection()
+  if (text) void window.api.clipboard.writeText(text)
+  return !!text
+}
+
+function pasteInto(s: Session): void {
+  void window.api.clipboard.readText().then((t) => t && s.term.paste(t))
+}
+
+export function terminalHasSelection(id: string): boolean {
+  return !!sessions.get(id)?.term.hasSelection()
+}
+
+/** Copy the selection; false when nothing is selected. */
+export function copyTerminalSelection(id: string): boolean {
+  const s = sessions.get(id)
+  return !!s && copyFrom(s)
+}
+
+export function pasteIntoTerminal(id: string): void {
+  const s = sessions.get(id)
+  if (s) pasteInto(s)
+}
+
+export function selectAllInTerminal(id: string): void {
+  sessions.get(id)?.term.selectAll()
+}
+
+/** Copy the whole scrollback as plain text (for when a TUI makes selecting awkward). */
+export function copyTerminalBuffer(id: string): void {
+  const s = sessions.get(id)
+  if (!s) return
+  const b = s.term.buffer.active
+  const lines: string[] = []
+  for (let i = 0; i < b.length; i++) {
+    const line = b.getLine(i)
+    if (!line) continue
+    const text = line.translateToString(true)
+    // wrapped rows continue the previous line
+    if (line.isWrapped && lines.length) lines[lines.length - 1] += text
+    else lines.push(text)
+  }
+  void window.api.clipboard.writeText(lines.join('\n').replace(/\s+$/, '') + '\n')
+}
+
+export function clearTerminal(id: string): void {
+  sessions.get(id)?.term.clear()
 }
 
 // ── broadcast input ──────────────────────────────────────────────

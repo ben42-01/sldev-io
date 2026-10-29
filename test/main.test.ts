@@ -3,7 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { workflowInputs } from '../src/main/github'
-import { detectRuntimes } from '../src/main/runtimes'
+import { detectRuntimes, detectScripts } from '../src/main/runtimes'
 import { parseContainers } from '../src/main/docker'
 
 function project(files: Record<string, string>): string {
@@ -59,6 +59,16 @@ describe('detectRuntimes', () => {
     expect(byId['npm::dev']?.command).toBe('pnpm run dev')
     expect(byId['npm:packages/api:start']).toMatchObject({ command: 'pnpm run start', group: 'packages/api/package.json' })
     expect(found.some((r) => r.source === 'make' && r.name === 'build')).toBe(true)
+  })
+
+  it("lists one folder's scripts for a task, with the package manager from the lockfile above it", async () => {
+    const root = project({
+      'pnpm-lock.yaml': '',
+      'package.json': JSON.stringify({ scripts: { lint: 'eslint .' } }),
+      'packages/api/package.json': JSON.stringify({ scripts: { start: 'node .', 'build:prod': 'tsc' } })
+    })
+    const found = await detectScripts(join(root, 'packages', 'api'))
+    expect(found.map((r) => r.command)).toEqual(['pnpm run start', 'pnpm run build:prod'])
   })
 })
 

@@ -4,6 +4,7 @@ import { AgentStrip, Hero } from './components/Hero'
 import { Nav } from './components/Nav'
 import { HomeFaq } from './components/Pricing'
 import { WhySection } from './components/Story'
+import { WorkflowsSpotlight } from './components/Workflows'
 
 export function App() {
   return (
@@ -14,6 +15,7 @@ export function App() {
         <AgentStrip />
         <WhySection />
         <FeatureHighlights />
+        <WorkflowsSpotlight />
         <HomeFaq />
         <FinalCta />
       </main>

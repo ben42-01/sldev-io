@@ -1,6 +1,6 @@
 import { homedir } from 'os'
 import type { PackageManager, SetupCheck, SetupLevel, SetupReport } from '@shared/types'
-import { findOnPath } from './editors'
+import { whichAsync } from './editors'
 import { run } from './git'
 import { loadShellEnv } from './shellEnv'
 
@@ -128,7 +128,7 @@ async function version(bin: string): Promise<string | undefined> {
 
 async function check(tool: ToolDef, pm: PackageManager | null): Promise<SetupCheck> {
   const base = { id: tool.id, name: tool.name, why: tool.why, level: tool.level, docs: tool.docs }
-  if (!findOnPath(tool.bin)) return { ...base, state: 'missing', install: installCommand(tool, process.platform, pm) }
+  if (!(await whichAsync(tool.bin))) return { ...base, state: 'missing', install: installCommand(tool, process.platform, pm) }
   const [v, notReady] = await Promise.all([version(tool.bin), tool.ready?.() ?? null])
   return notReady ? { ...base, state: 'not-ready', version: v, ...notReady } : { ...base, state: 'ok', version: v }
 }
@@ -136,7 +136,9 @@ async function check(tool: ToolDef, pm: PackageManager | null): Promise<SetupChe
 /** Check the tools the app relies on. `reloadEnv` re-reads the login-shell PATH first, to see tools installed since startup. */
 export async function checkSetup(reloadEnv = false): Promise<SetupReport> {
   if (reloadEnv) await loadShellEnv()
-  const pm = detectPackageManager(process.platform, (b) => !!findOnPath(b))
+  const managers = ['brew', 'winget', ...LINUX_MANAGERS.map(([bin]) => bin)]
+  const onPath = new Set((await Promise.all(managers.map(async (b) => ((await whichAsync(b)) ? b : null)))).filter(Boolean))
+  const pm = detectPackageManager(process.platform, (b) => onPath.has(b))
   const tools = TOOLS.filter((t) => !t.platforms || t.platforms.includes(process.platform))
   return { platform: process.platform, packageManager: pm, checks: await Promise.all(tools.map((t) => check(t, pm))) }
 }

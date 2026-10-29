@@ -87,7 +87,13 @@ export function SkillsView(): React.JSX.Element {
                     <span>{g.label}</span>
                     <span className="rt-source">{g.assets.length}</span>
                   </button>
-                  {open && g.assets.map((a) => <AssetRow key={a.path} asset={a} onRun={() => setRunning(a)} />)}
+                  {open && (
+                    <div className="asset-group-body">
+                      {g.assets.map((a) => (
+                        <AssetRow key={a.path} asset={a} onRun={() => setRunning(a)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}

@@ -1,4 +1,4 @@
-import type { AppSettings, EditorInfo } from '@shared/types'
+import type { AppSettings, EditorInfo, RightTab } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { createStore } from './store'
 import { loadRuntimes } from './runtimes'
@@ -7,7 +7,11 @@ import { loadMissions } from './missions'
 import { loadProjectProfiles } from './profiles'
 import { loadFactory, loadRecipes } from './factory'
 
-export type ViewId = 'explorer' | 'runtimes' | 'agents' | 'factory' | 'tasks' | 'skills' | 'workflows' | 'notes' | 'remote'
+export type ViewId = 'explorer' | 'runtimes' | 'factory' | 'tasks' | 'notes' | 'remote' | RightTab
+
+const RIGHT_TABS: RightTab[] = ['overview', 'agents', 'skills', 'workflows']
+/** Views that live in the right sidebar; the rest are in the left one. */
+export const isRightView = (v: ViewId): v is RightTab => (RIGHT_TABS as string[]).includes(v)
 
 export interface WorkspaceState extends AppSettings {
   ready: boolean

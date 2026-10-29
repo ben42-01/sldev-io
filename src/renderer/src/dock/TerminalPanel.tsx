@@ -1,6 +1,20 @@
 import { useEffect, useRef } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { attachTerminal, detachTerminal, ensureTerminal, focusTerminal, setTerminalListeners as setListeners } from '../lib/terminals'
+import { ClipboardCopy, ClipboardPaste, Copy, Eraser, TextSelect } from 'lucide-react'
+import {
+  attachTerminal,
+  clearTerminal,
+  copyTerminalBuffer,
+  copyTerminalSelection,
+  detachTerminal,
+  ensureTerminal,
+  focusTerminal,
+  pasteIntoTerminal,
+  selectAllInTerminal,
+  setTerminalListeners as setListeners,
+  terminalHasSelection
+} from '../lib/terminals'
+import { showContextMenu, type MenuItem } from '../components/ContextMenu'
 import { consumeFresh, type TerminalPanelParams } from './dockApi'
 import { linkPanel } from '../state/runs'
 import { linkMissionPanel, missionEnv, missionResumeCommand } from '../state/missions'
@@ -36,9 +50,26 @@ export function TerminalPanel(props: IDockviewPanelProps<TerminalPanelParams>): 
   return (
     <div className="terminal-panel">
       <TerminalSearch id={id} panelApi={props.api} />
-      <div className="terminal-mount" ref={ref} />
+      <div className="terminal-mount" ref={ref} onContextMenu={(e) => showContextMenu(e, terminalMenu(id))} />
     </div>
   )
+}
+
+const isMac = window.api.platform === 'darwin'
+
+function terminalMenu(id: string): MenuItem[] {
+  const after = (fn: () => void) => () => {
+    fn()
+    focusTerminal(id)
+  }
+  return [
+    { label: 'Copy', icon: <Copy size={14} />, shortcut: isMac ? '⌘C' : 'Ctrl+C', disabled: !terminalHasSelection(id), run: after(() => copyTerminalSelection(id)) },
+    { label: 'Paste', icon: <ClipboardPaste size={14} />, shortcut: isMac ? '⌘V' : window.api.platform === 'win32' ? 'Ctrl+V' : 'Ctrl+Shift+V', run: after(() => pasteIntoTerminal(id)) },
+    { label: 'Select all', icon: <TextSelect size={14} />, run: after(() => selectAllInTerminal(id)) },
+    { label: 'Copy all output', icon: <ClipboardCopy size={14} />, run: after(() => copyTerminalBuffer(id)) },
+    { type: 'separator' },
+    { label: 'Clear', icon: <Eraser size={14} />, run: after(() => clearTerminal(id)) }
+  ]
 }
 
 function setTerminalListeners(o: { id: string; keepTitle: boolean; baseTitle: string; setTitle: (t: string) => void }): void {

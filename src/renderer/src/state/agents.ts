@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { allAgents, findAgent, type AgentDef } from '../lib/agents'
+import { allAgents, findAgent, installedBin, setInstalledBins, type AgentDef } from '../lib/agents'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
 
@@ -7,8 +7,10 @@ import { workspace } from './workspace'
 const installed = createStore<{ bins: string[] | null }>({ bins: null })
 
 export async function refreshInstalledAgents(): Promise<void> {
-  const bins = allAgents(workspace.get().customAgents).map((a) => a.bin)
-  installed.set({ bins: await window.api.agents.installed(bins) })
+  const bins = allAgents(workspace.get().customAgents).flatMap((a) => [a.bin, ...(a.aliases ?? [])])
+  const found = await window.api.agents.installed(bins)
+  setInstalledBins(found)
+  installed.set({ bins: found })
 }
 
 export interface AgentEntry extends AgentDef {
@@ -22,7 +24,7 @@ export function useAgents(): AgentEntry[] {
   useEffect(() => {
     void refreshInstalledAgents()
   }, [custom])
-  return allAgents(custom).map((a) => ({ ...a, installed: bins ? bins.includes(a.bin) : undefined }))
+  return allAgents(custom).map((a) => ({ ...a, installed: bins ? !!installedBin(a) : undefined }))
 }
 
 export const getAgent = (id: string | undefined): AgentDef => findAgent(id, workspace.get().customAgents)

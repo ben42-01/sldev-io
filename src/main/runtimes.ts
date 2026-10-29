@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { existsSync, promises as fsp } from 'fs'
-import { dirname, join, relative, sep } from 'path'
+import { dirname, join, parse, relative, sep } from 'path'
 import type { RuntimeDef, RuntimeSource } from '@shared/types'
 
 const MONOREPO_DIRS = ['apps', 'packages', 'services', 'libs', 'crates', 'examples']
@@ -18,6 +18,13 @@ export async function detectRuntimes(root: string): Promise<RuntimeDef[]> {
     })
   )
   return results.flat()
+}
+
+/** Scripts in one folder only (the task editor's pick list); the package manager comes from the nearest lockfile above it. */
+export async function detectScripts(dir: string): Promise<RuntimeDef[]> {
+  const ctx = { root: parse(dir).root, dir, rel: '' }
+  const found = await Promise.all([npm(ctx), make(ctx), just(ctx), cargo(ctx), python(ctx), compose(ctx), go(ctx), deno(ctx)])
+  return found.flat()
 }
 
 interface Ctx {

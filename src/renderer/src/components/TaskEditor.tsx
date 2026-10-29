@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { AgentOptions, Task } from '@shared/types'
+import { useEffect, useState } from 'react'
+import type { AgentOptions, RuntimeDef, Task } from '@shared/types'
 import { Bot, FolderOpen, Terminal } from 'lucide-react'
 import { buildTaskCommand, taskCwd } from '../state/tasks'
 import { commandText } from '../lib/agents'
@@ -21,6 +21,26 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
     const dir = await window.api.fs.pickFolder(taskCwd(t) ?? base)
     if (dir) set({ cwd: t.scope ? (relative(t.scope, dir) === '.' ? '' : relative(t.scope, dir)) : dir })
   }
+  // scripts in the task's folder (package.json, Makefile, …) to pick from; re-read when the folder changes
+  const folder = taskCwd(t) ?? root ?? undefined
+  const [scripts, setScripts] = useState<RuntimeDef[]>([])
+  useEffect(() => {
+    setScripts([])
+    if (t.kind !== 'shell' || !folder || !/^([/\\]|[A-Za-z]:)/.test(folder)) return
+    let live = true
+    const timer = setTimeout(() => void window.api.runtimes.scripts(folder).then((r) => live && setScripts(r), () => undefined), 250)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [folder, t.kind])
+  const groups = [...new Set(scripts.map((r) => r.group))]
+  const picked = scripts.find((r) => r.command === t.command?.trim())
+  const pick = (id: string): void => {
+    const r = scripts.find((x) => x.id === id)
+    if (r) set({ command: r.command, name: t.name.trim() ? t.name : r.name })
+  }
+
   const valid = !!t.name.trim() && (t.kind === 'agent' ? !!t.prompt?.trim() || !!t.agent?.extraArgs : !!t.command?.trim())
 
   const submit = (run: boolean): void => {
@@ -69,10 +89,33 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
           </label>
         </>
       ) : (
-        <label className="field">
-          <span>Command</span>
-          <textarea className="mono" rows={4} value={t.command ?? ''} placeholder="npm ci && npm test" onChange={(e) => set({ command: e.target.value })} />
-        </label>
+        <>
+          {scripts.length > 0 && (
+            <label className="field">
+              <span>Script</span>
+              <select value={picked?.id ?? ''} onChange={(e) => pick(e.target.value)}>
+                <option value="">{picked ? '' : `Pick a script from ${basename(folder ?? '')}…`}</option>
+                {groups.map((g) => (
+                  <optgroup key={g} label={g}>
+                    {scripts
+                      .filter((r) => r.group === g)
+                      .map((r) => (
+                        <option key={r.id} value={r.id} title={r.detail}>
+                          {r.name}
+                          {r.detail ? `  ·  ${r.detail.length > 50 ? r.detail.slice(0, 49) + '…' : r.detail}` : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+              <span className="field-hint">Fills in the command below; change the folder to pick from another package.</span>
+            </label>
+          )}
+          <label className="field">
+            <span>Command</span>
+            <textarea className="mono" rows={4} value={t.command ?? ''} placeholder="npm ci && npm test" onChange={(e) => set({ command: e.target.value })} />
+          </label>
+        </>
       )}
 
       <div className="field-row">
@@ -97,7 +140,7 @@ export function TaskEditor({ initial, onSave, onCancel }: { initial: Task; onSav
       <div className="field">
         <span>Runs</span>
         <pre className="cmd-preview">{command || '…'}</pre>
-        {t.kind === 'agent' && <span className="hint">Runs as a {getAgent(t.agent?.agent).name} mission: live status, notifications and diff review{t.agent?.worktree ? ', in its own worktree' : ''}.</span>}
+        {t.kind === 'agent' && <span className="field-hint">Runs as a {getAgent(t.agent?.agent).name} mission: live status, notifications and diff review{t.agent?.worktree ? ', in its own worktree' : ''}.</span>}
       </div>
 
       <div className="form-actions">

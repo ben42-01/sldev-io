@@ -7,7 +7,7 @@ module.exports = async (h) => {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'SKILL.md'), '---\nname: tidy\ndescription: Tidy up the code\n---\nRemove dead code.\n')
   await h.openFixture()
-  await h.click('.activitybar button[title^="Skills"]')
+  await h.click('.right-tab[title^="Skills"]')
   await h.wait(1000)
   h.expect(await h.js(`document.querySelector('.asset-group')?.dataset.group === 'project'`), 'skills are grouped, this project first')
   h.expect(await h.js(`[...document.querySelectorAll('.asset-group[data-group="project"] .asset-row')].length === 1`), 'project group holds the project skill')

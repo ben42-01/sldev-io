@@ -7,11 +7,13 @@ import { ConfirmHost } from './components/Modal'
 import { MissionDetailsHost } from './components/MissionDetails'
 import './lib/actions'
 import { Sidebar } from './components/Sidebar'
+import { RightPanel } from './components/RightPanel'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Dock } from './dock/Dock'
 import { matchShortcut, staticCommands } from './lib/commands'
 import { initWorkspace, workspace } from './state/workspace'
+import { refreshInstalledAgents } from './state/agents'
 import { useStore } from './state/store'
 import { beta, initBeta } from './state/beta'
 import { initUpdates } from './state/updates'
@@ -27,7 +29,8 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     // the beta check decides whether the workspace (and its terminals) start at all
     void initBeta().then(() => {
-      if (!beta.get().locked) void initWorkspace()
+      // agents start under whichever name their CLI is installed as, so look before anything runs
+      if (!beta.get().locked) void initWorkspace().then(refreshInstalledAgents)
     })
     void initUpdates()
     initBadge()
@@ -68,6 +71,7 @@ export function App(): React.JSX.Element {
         <div className="dock-area">
           <Dock />
         </div>
+        <RightPanel />
       </div>
       <StatusBar home={home} />
       <CommandPalette />

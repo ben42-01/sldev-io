@@ -45,7 +45,9 @@ src/main/       Electron main process (Node): everything privileged
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
   profiles.ts     project agent profiles (.sldev/agents/*.md) and export to Claude/OpenCode agent files
   rules.ts        rules sync: .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
-  usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions)
+  usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions); reads only the
+                  appended bytes on each poll, never whole logs (re-parsing them froze the app)
+  stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
@@ -57,7 +59,8 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote
   dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Agents, Preview, Settings
-  components/     sidebar views (ActivityBar → Sidebar routes by ViewId) and shared UI
+  components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
+                  notes, remote), the right RightPanel tabs (overview, agents, skills, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
                   src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,
@@ -120,10 +123,12 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   restored missions resume their session instead of re-sending the prompt.
 - **Agent spawning**: agents start from an **argv array** (`agentCommand` in `lib/agents.ts` returns one
   element per argument, never quoted) and main spawns it without a shell (`src/main/launch.ts`: a real
-  `.exe` first, npm `.cmd` shims unwrapped to `node <script>`, cmd.exe only as a last resort that refuses
-  multi-line prompts). Never join an agent command into a string or run it through `cmd /c`/`sh -c`: on
+  `.exe` first, npm `.cmd` shims unwrapped to `node <script>`, versioned launchers like Cursor's `agent.cmd`
+  run as `versions\<newest>\node.exe index.js`, cmd.exe only as a last resort, and a `.ps1` next to the `.cmd`
+  for multi-line prompts cmd.exe can't take). Never join an agent command into a string or run it through `cmd /c`/`sh -c`: on
   Windows that once delivered the prompt as the single word "need". `commandText()` is for display only.
-  Shell strings (`command: string`) are for user-typed runtime/task commands.
+  Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
+  except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **Destructive actions** ask first with `confirmAction`/`confirmDelete` (`components/Modal.tsx`,
   flows in `lib/removals.tsx`), saying what is removed and kept. Never `window.confirm`/`alert`.
   Worktrees are removed without `--force` unless the user ticked "discard", and never while something

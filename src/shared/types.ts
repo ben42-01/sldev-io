@@ -34,12 +34,18 @@ export interface PtyInfo {
   cwd: string
 }
 
+export type RightTab = 'overview' | 'agents' | 'skills' | 'workflows'
+
 export interface AppSettings {
   rootFolder: string | null
   recentFolders: string[]
   preferredEditor: string | null
   sidebarWidth: number
   sidebarVisible: boolean
+  /** the right sidebar: overview, agents, skills, workflows */
+  rightPanelWidth: number
+  rightPanelVisible: boolean
+  rightPanelTab: RightTab
   terminalFontSize: number
   terminalFontFamily: string
   notifications: boolean
@@ -63,7 +69,7 @@ export interface AppSettings {
   setupSeen: boolean
   /** the version whose What's new was last shown; null until the first launch records it */
   lastSeenVersion: string | null
-  /** Skills view groups the user opened (true) or closed (false), keyed by `${tab}:${group}` */
+  /** Skills groups and Workflows sections the user opened (true) or closed (false), keyed by `${tab}:${group}` / `workflows:${section}` */
   assetGroups: Record<string, boolean>
 }
 
@@ -120,6 +126,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   preferredEditor: null,
   sidebarWidth: 280,
   sidebarVisible: true,
+  rightPanelWidth: 320,
+  rightPanelVisible: true,
+  rightPanelTab: 'overview',
   terminalFontSize: 13,
   terminalFontFamily:
     '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace',
@@ -502,6 +511,8 @@ export interface AppInfo {
   platform: NodeJS.Platform
   arch: string
   os: string
+  /** freezes noticed this session (main-process stalls, unresponsive window) */
+  stalls?: string[]
 }
 
 export interface UpdateStatus {

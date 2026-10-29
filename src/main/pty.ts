@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import type { WebContents } from 'electron'
 import type { PtyCreateOptions, PtyInfo } from '@shared/types'
-import { resolveLaunch } from './launch'
+import { resolveLaunch, windowsShellLaunch } from './launch'
 
 // Output is coalesced and sent to the renderer in frames instead of per chunk.
 const FLUSH_MS = 8
@@ -55,9 +55,9 @@ export class PtyManager {
       ;({ file: shell, args } = resolveLaunch(opts.command, env))
     } else if (opts.command) {
       if (process.platform === 'win32') {
-        shell = process.env.COMSPEC || 'cmd.exe'
-        // verbatim: as an array node-pty would turn every " in the command into \", which cmd.exe misreads
-        args = `/d /s /c "${opts.command}"`
+        // a .ps1 runs in the same PowerShell the terminals use
+        const ps = /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(def.shell) ? def.shell : undefined
+        ;({ file: shell, args } = windowsShellLaunch(opts.command, env, ps))
       } else {
         // env already comes from the resolved login shell (see shellEnv.ts), so no -l needed
         args = ['-c', opts.command]
@@ -125,6 +125,8 @@ export class PtyManager {
     this.sessions.delete(id)
     if (s.timer) clearTimeout(s.timer)
     try {
+      // a paused ConPTY can't drain its output, and closing it then blocks the main thread on Windows
+      if (s.paused) s.proc.resume()
       s.proc.kill()
     } catch {
       // already gone

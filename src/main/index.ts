@@ -1,11 +1,12 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
 import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
 import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { PtyManager, setShellOverride } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
-import { detectEditors, findOnPath, openInEditor, terminalEditorCommand, terminalEditorGoto } from './editors'
+import { detectEditors, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
+import { recentStalls, watchMainLoop, watchWindow } from './stalls'
 import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
@@ -19,7 +20,7 @@ import { hookInfo, startHookServer } from './hooks'
 import { importSshConfig, ping as pingHost, SshManager } from './ssh'
 import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
-import { detectRuntimes } from './runtimes'
+import { detectRuntimes, detectScripts } from './runtimes'
 import { loadShellEnv } from './shellEnv'
 import { betaStatus, refreshBeta, startBetaChecks } from './beta'
 import { checkSetup } from './setup'
@@ -74,6 +75,7 @@ function createWindow(): void {
   })
 
   win.once('ready-to-show', () => win?.show())
+  watchWindow(win)
   const wc = win.webContents
   const cleanup = (): void => {
     ptys.killOwnedBy(wc)
@@ -150,12 +152,18 @@ function registerIpc(): void {
 
   // editors & OS integration
   ipcMain.handle('editors:list', () => detectEditors())
-  ipcMain.handle('agents:installed', (_e, bins: string[]) => bins.filter((b) => !!b && findOnPath(b)))
+  ipcMain.handle('agents:installed', async (_e, bins: string[]) => {
+    const found = await Promise.all(bins.map((b) => (b ? whichAsync(b) : null)))
+    return bins.filter((_b, i) => !!found[i])
+  })
   ipcMain.handle('editors:open', (_e, id: string, target: string, line?: number, col?: number) => openInEditor(id, target, line, col))
   ipcMain.handle('editors:terminalCommand', (_e, id: string) => terminalEditorCommand(id))
   ipcMain.handle('editors:terminalGoto', (_e, id: string, file: string, line: number) => terminalEditorGoto(id, file, line))
   ipcMain.handle('shell:reveal', (_e, p: string) => shell.showItemInFolder(p))
   ipcMain.handle('shell:openPath', (_e, p: string) => shell.openPath(p))
+  // the page's clipboard API refuses while the window isn't focused; terminals copy through here
+  ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(String(text)))
+  ipcMain.handle('clipboard:read', () => clipboard.readText())
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
@@ -171,7 +179,8 @@ function registerIpc(): void {
     node: process.versions.node,
     platform: process.platform,
     arch: arch(),
-    os: `${osType()} ${release()}`
+    os: `${osType()} ${release()}`,
+    stalls: recentStalls()
   }))
 
   // license
@@ -305,12 +314,14 @@ function registerIpc(): void {
 
   // runtimes
   ipcMain.handle('runtimes:detect', (_e, root: string) => detectRuntimes(root))
+  ipcMain.handle('runtimes:scripts', (_e, dir: string) => detectScripts(dir))
 
   // first-run setup check
   ipcMain.handle('setup:check', (_e, reloadEnv: boolean) => checkSetup(!!reloadEnv))
 }
 
 app.whenReady().then(async () => {
+  watchMainLoop()
   settings = new JsonStore('settings', DEFAULT_SETTINGS)
   layout = new JsonStore<{ layout: unknown }>('layout', { layout: null })
   stores = {

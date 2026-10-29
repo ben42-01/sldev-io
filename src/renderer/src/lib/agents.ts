@@ -12,6 +12,8 @@ export interface AgentDef {
   name: string
   /** executable looked up on PATH to tell whether it's installed */
   bin: string
+  /** other names the same CLI is installed under; argv[0] becomes the first one on PATH */
+  aliases?: string[]
   install?: string
   /** model suggestions; the field also accepts free text */
   models: string[]
@@ -144,7 +146,9 @@ const codex: AgentDef = {
 const cursor: AgentDef = {
   id: 'cursor',
   name: 'Cursor Agent',
-  bin: 'cursor-agent',
+  // `agent` since late 2025; older installs only have cursor-agent
+  bin: 'agent',
+  aliases: ['cursor-agent'],
   install: 'curl https://cursor.com/install -fsS | bash',
   models: [],
   modelPlaceholder: 'default',
@@ -154,9 +158,10 @@ const cursor: AgentDef = {
   canPrint: true,
   canResume: true,
   build: (o, prompt, _name, { resume }) => [
-    'cursor-agent',
+    'agent',
     ...flag(resume, 'resume'),
-    ...flag(o.print && !resume, '-p'),
+    // print mode can't answer the workspace-trust question, and factory worktrees are always new folders
+    ...flag(o.print && !resume, '-p', '--trust'),
     ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode === 'force', '--force'),
     ...extraArgs(o),
@@ -294,6 +299,18 @@ export function stageMode(agent: AgentDef, settings: Record<string, string> | un
   return (picked === undefined ? agent.unattendedMode : picked) || undefined
 }
 
+let onPath: string[] | null = null
+
+/** Executables found on PATH (state/agents.ts), so an agent starts under whichever name is installed. */
+export function setInstalledBins(bins: string[]): void {
+  onPath = bins
+}
+
+/** The installed name of an agent's CLI: its bin, else the first installed alias. */
+export function installedBin(agent: AgentDef): string | undefined {
+  return [agent.bin, ...(agent.aliases ?? [])].find((b) => onPath?.includes(b))
+}
+
 /** The argv that starts (or resumes) an agent session; the prompt is one element. */
 export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | undefined, name: string | undefined, extra: CommandExtra = {}): string[] {
   const role = extra.resume ? undefined : extra.role?.trim()
@@ -301,6 +318,8 @@ export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | 
   const parts = agent.build(o, p, name, agent.hooks ? { ...extra, role } : { resume: extra.resume })
   // right after the executable: global options come before subcommands like `codex exec`
   if (extra.mcp && agent.mcpArgs) parts.splice(1, 0, ...agent.mcpArgs(extra.mcp))
+  const bin = installedBin(agent)
+  if (bin && parts[0] === agent.bin) parts[0] = bin
   return parts
 }
 

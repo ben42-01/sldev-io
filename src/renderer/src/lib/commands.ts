@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
-import { pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
+import { isRightView, pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
 import { openSetup } from '../state/setup'
 import { checkForUpdates, reportBug } from '../state/updates'
@@ -59,11 +59,16 @@ const VIEWS: Array<[ViewId, string]> = [
   ['workflows', 'GitHub Workflows'],
   ['notes', 'Notes'],
   ['remote', 'Remote'],
-  ['factory', 'Factory']
+  ['factory', 'Factory'],
+  ['overview', 'Overview']
 ]
 
 export function showView(view: ViewId): void {
   const w = workspace.get()
+  if (isRightView(view)) {
+    if (w.rightPanelTab !== view || !w.rightPanelVisible) updateSettings({ rightPanelTab: view, rightPanelVisible: true })
+    return
+  }
   if (w.activeView === view && w.sidebarVisible) return
   workspace.set({ activeView: view })
   if (!w.sidebarVisible) updateSettings({ sidebarVisible: true })
@@ -171,6 +176,7 @@ export function staticCommands(): Command[] {
     { id: 'terminal.fontDown', category: 'Terminal', title: 'Decrease font size', keys: { mac: 'Cmd+-', other: 'Ctrl+Shift+-' }, run: () => changeFontSize(-1) },
     { id: 'terminal.fontReset', category: 'Terminal', title: 'Reset font size', keys: { mac: 'Cmd+0', other: 'Ctrl+Shift+0' }, run: () => changeFontSize(null) },
     { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => updateSettings({ sidebarVisible: !workspace.get().sidebarVisible }) },
+    { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible }) },
     { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => {
         showView('agents')
         // let the Missions view mount before asking it to open the form
@@ -217,7 +223,7 @@ export function staticCommands(): Command[] {
         id: `view.${view}`,
         category: 'View',
         title: `Show ${label}`,
-        keys: { mac: `Cmd+${i + 1}`, other: `Ctrl+Shift+${i + 1}` },
+        keys: i < 9 ? { mac: `Cmd+${i + 1}`, other: `Ctrl+Shift+${i + 1}` } : undefined,
         run: () => showView(view)
       })
     )

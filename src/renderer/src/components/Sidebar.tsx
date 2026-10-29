@@ -8,9 +8,6 @@ import { useStore } from '../state/store'
 import { FileTree, type FileTreeHandle } from './FileTree'
 import { RuntimesView } from './RuntimesView'
 import { TasksView } from './TasksView'
-import { MissionsView } from './MissionsView'
-import { SkillsView } from './SkillsView'
-import { WorkflowsView } from './WorkflowsView'
 import { NotesView } from './NotesView'
 import { RemoteView } from './RemoteView'
 import { FactoryView } from './FactoryView'
@@ -24,11 +21,8 @@ export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
     <aside className="sidebar" style={{ width }}>
       {view === 'explorer' && <Explorer home={home} />}
       {view === 'runtimes' && <RuntimesView />}
-      {view === 'agents' && <MissionsView />}
       {view === 'factory' && <FactoryView />}
       {view === 'tasks' && <TasksView />}
-      {view === 'skills' && <SkillsView />}
-      {view === 'workflows' && <WorkflowsView />}
       {view === 'notes' && <NotesView />}
       {view === 'remote' && <RemoteView />}
       <ResizeHandle />
@@ -95,22 +89,24 @@ function Explorer({ home }: { home: string }): React.JSX.Element {
   )
 }
 
-function ResizeHandle(): React.JSX.Element {
+export function ResizeHandle({ side = 'left' }: { side?: 'left' | 'right' }): React.JSX.Element {
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     const startX = e.clientX
-    const startW = workspace.get().sidebarWidth
+    const key = side === 'left' ? 'sidebarWidth' : 'rightPanelWidth'
+    const startW = workspace.get()[key]
     const el = e.currentTarget
     el.setPointerCapture(e.pointerId)
     document.body.classList.add('resizing')
-    const move = (ev: PointerEvent): void => workspace.set({ sidebarWidth: Math.min(640, Math.max(180, startW + ev.clientX - startX)) })
+    // the right sidebar grows as its left edge moves left
+    const move = (ev: PointerEvent): void => workspace.set({ [key]: Math.min(640, Math.max(180, startW + (side === 'left' ? 1 : -1) * (ev.clientX - startX))) })
     const up = (): void => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
       document.body.classList.remove('resizing')
-      updateSettings({ sidebarWidth: workspace.get().sidebarWidth })
+      updateSettings({ [key]: workspace.get()[key] })
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
   }
-  return <div className="sidebar-resize" onPointerDown={onPointerDown} />
+  return <div className={`sidebar-resize ${side}`} onPointerDown={onPointerDown} />
 }

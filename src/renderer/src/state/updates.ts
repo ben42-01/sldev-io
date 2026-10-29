@@ -30,7 +30,8 @@ export function diagnostics(info: AppInfo, status: UpdateStatus | null): string 
     `${info.name} ${info.version} (${info.channel})`,
     `Electron ${info.electron} · Chromium ${info.chrome} · Node ${info.node}`,
     `${info.os} (${info.platform} ${info.arch})`,
-    `Updates: ${status?.state ?? 'unknown'}${status?.version ? ` ${status.version}` : ''}${status?.error ? ` (${status.error})` : ''}`
+    `Updates: ${status?.state ?? 'unknown'}${status?.version ? ` ${status.version}` : ''}${status?.error ? ` (${status.error})` : ''}`,
+    ...(info.stalls?.length ? ['Freezes this session:', ...info.stalls.map((s) => `  ${s}`)] : [])
   ].join('\n')
 }
 

@@ -10,7 +10,7 @@ module.exports = async (h) => {
   await h.setValue('.form select', 'codex', `e.querySelector('option[value=codex]')`)
   await h.setValue('.form textarea', 'Codex task', `e.placeholder.includes('pagination')`)
   await h.click('.form .btn.primary', 'Launch')
-  h.expect(await h.until(() => h.js(`document.querySelector('.activity-btn[aria-label^="Agent Missions"] .live-dot') !== null`), 6000), 'sidebar icon shows a live dot while the agent works')
+  h.expect(await h.until(() => h.js(`document.querySelector('.right-tab[aria-label^="Agent Missions"] .live-dot') !== null`), 6000), 'right sidebar tab shows a live dot while the agent works')
   await h.js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true }))`)
   await h.wait(300)
   h.type('agents dashboard')
@@ -18,7 +18,7 @@ module.exports = async (h) => {
   h.key('Return')
   h.expect(await h.until(() => h.js(`!!document.querySelector('.agents-board .agent-row')`), 4000), 'dashboard lists the running agent')
   // the fake codex rings the bell after a while: needs you
-  h.expect(await h.until(() => h.js(`document.querySelector('.activity-btn[aria-label^="Agent Missions"] .count-bubble')?.textContent === '1'`), 20000), 'sidebar icon counts 1 needing you')
+  h.expect(await h.until(() => h.js(`document.querySelector('.right-tab[aria-label^="Agent Missions"] .count-bubble')?.textContent === '1'`), 20000), 'right sidebar tab counts 1 needing you')
   h.expect(await h.js(`document.querySelector('.agent-row.attention')?.textContent.includes('Needs you')`), 'board row is marked for attention')
   await h.shot('1-agents-board')
   await h.click('.agents-board .btn', 'Next')

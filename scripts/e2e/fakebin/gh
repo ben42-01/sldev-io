@@ -1,5 +1,24 @@
 #!/bin/sh
 # Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
+# FAKE_GH_AUTHED=1 (a scenario's env) logs it in, with a repo, workflows and runs for the Workflows view.
+if [ -n "$FAKE_GH_AUTHED" ]; then
+  case "$1 $2" in
+    "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;
+    "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"}}'; exit 0 ;;
+    "workflow list")
+      printf '['
+      for i in $(seq 1 24); do printf '{"id":%d,"name":"Job %02d","path":".github/workflows/job%d.yml","state":"active"},' "$((100 + i))" "$i" "$i"; done
+      echo '{"id":1,"name":"Deploy","path":".github/workflows/deploy.yml","state":"active"}]'
+      exit 0 ;;
+    "run list")
+      printf '['
+      for i in $(seq 1 29); do printf '{"databaseId":%d,"displayTitle":"Commit %d","workflowName":"CI","status":"completed","conclusion":"%s","headBranch":"main","event":"push","createdAt":"2026-01-02T10:00:00Z","url":"https://github.com/acme/shop/actions/runs/%d","number":%d},' "$((500 + i))" "$i" "$([ $((i % 5)) -eq 0 ] && echo failure || echo success)" "$((500 + i))" "$i"; done
+      echo '{"databaseId":999,"displayTitle":"Deploy to staging","workflowName":"Deploy","status":"in_progress","conclusion":"","headBranch":"main","event":"workflow_dispatch","createdAt":"2026-01-02T11:00:00Z","url":"https://github.com/acme/shop/actions/runs/999","number":212}]'
+      exit 0 ;;
+    "workflow run") echo "$*" > gh-dispatch-marker.txt; exit 0 ;;
+  esac
+  [ "$1 $2 $3" = "pr view --json" ] && { echo '{"number":128,"title":"Rate limit the API","state":"OPEN","url":"https://github.com/acme/shop/pull/128","isDraft":false,"statusCheckRollup":[{"conclusion":"SUCCESS"},{"conclusion":"SUCCESS"},{"status":"IN_PROGRESS"}]}'; exit 0; }
+fi
 case "$1 $2" in
   "--version "*) echo "gh version 2.0.0-fake (e2e)" ;;
   "auth status") echo "You are not logged into any GitHub hosts." >&2; exit 1 ;;

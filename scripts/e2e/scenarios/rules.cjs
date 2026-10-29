@@ -6,7 +6,7 @@ module.exports = async (h) => {
   const f = (p) => path.join(h.fixture, p)
   fs.writeFileSync(f('AGENTS.md'), '# Agents\n\nRun npm test before finishing.\n')
   await h.openFixture()
-  await h.click('.activitybar button[title^="Skills"]')
+  await h.click('.right-tab[title^="Skills"]')
   await h.wait(600)
   await h.click('.tabs button', 'Rules')
   await h.wait(500)

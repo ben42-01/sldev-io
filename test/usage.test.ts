@@ -1,3 +1,7 @@
+import { appendFileSync, mkdtempSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { missionTokens } from '../src/main/usage'
 import { describe, expect, it } from 'vitest'
 import { claudeTranscriptUsage, codexSessionUsage, median, responseTimes, segments, timeIn, timeTicks } from '@shared/usage'
 import type { Mission } from '@shared/types'
@@ -75,6 +79,26 @@ describe('Codex sessions', () => {
       JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 300, cached_input_tokens: 100, output_tokens: 30, reasoning_output_tokens: 5 } } } })
     ].join('\n')
     expect(codexSessionUsage(text)).toEqual({ cwd: '/wt', startedAt: Date.parse('2026-10-25T10:00:00.000Z'), usage: { input: 200, output: 35, cacheRead: 100, cacheWrite: 0, cost: (200 * 1.25 + 35 * 10 + 100 * 0.125) / 1e6, unpriced: 0 } })
+  })
+})
+
+describe('reading a growing transcript', () => {
+  it('only parses what was appended, including a line finished between polls', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sldev-usage-'))
+    const file = join(dir, 't.jsonl')
+    const line = (id: string) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })
+    const poll = async () => (await missionTokens([{ id: 'm', agent: 'claude', cwd: dir, from: 0, to: 1, transcriptPath: file }])).m
+    writeFileSync(file, line('a') + '\n')
+    expect((await poll())?.output).toBe(2)
+    const c = line('c')
+    appendFileSync(file, line('b') + '\n' + c.slice(0, 20))
+    expect((await poll())?.output).toBe(4)
+    appendFileSync(file, c.slice(20) + '\n')
+    expect((await poll())?.output).toBe(6)
+    // two panels polling at once must not count lines twice
+    appendFileSync(file, line('d') + '\n')
+    const [x, y] = await Promise.all([poll(), poll()])
+    expect([x?.output, y?.output]).toEqual([8, 8])
   })
 })
 

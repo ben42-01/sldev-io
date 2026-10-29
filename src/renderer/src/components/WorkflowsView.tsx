@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
-import { CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
+import { ChevronRight, CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
 import { openSetup } from '../state/setup'
 import { useStore } from '../state/store'
-import { workspace } from '../state/workspace'
+import { updateSettings, workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
 import { ago } from './MissionCard'
 import { ViewShell } from './RuntimesView'
@@ -65,51 +65,71 @@ export function WorkflowsView(): React.JSX.Element {
         </button>
       }
     >
-      <div className="view-scroll">
-        {repo === null && <div className="muted-note">Checking GitHub…</div>}
-        {repo?.error && (
-          <div className="empty-state">
-            <p>{repo.error}</p>
-            {!repo.authed && <button className="btn" onClick={openSetup}>Set up the GitHub CLI</button>}
+      {repo === null && <div className="muted-note">Checking GitHub…</div>}
+      {repo?.error && (
+        <div className="empty-state">
+          <p>{repo.error}</p>
+          {!repo.authed && <button className="btn" onClick={openSetup}>Set up the GitHub CLI</button>}
+        </div>
+      )}
+      {repo?.repo && (
+        <>
+          <div className="wf-top">
+          <div className="gh-repo">
+            <a onClick={() => void window.api.shell.openExternal(repo.url!)}>{repo.repo}</a>
           </div>
-        )}
-        {repo?.repo && (
-          <>
-            <div className="gh-repo">
-              <a onClick={() => void window.api.shell.openExternal(repo.url!)}>{repo.repo}</a>
-            </div>
-            {pr && (
-              <div className="pr-card" onClick={() => void window.api.shell.openExternal(pr.url)}>
-                <GitPullRequest size={14} className={pr.state === 'OPEN' ? 'ok' : 'muted'} />
-                <div className="rt-main">
-                  <div className="rt-name">#{pr.number} {pr.title}</div>
-                  <div className="rt-meta">
-                    {pr.isDraft ? 'Draft · ' : ''}{pr.state.toLowerCase()} · <span className="add">{pr.checks.passed} passed</span>
-                    {pr.checks.failed > 0 && <> · <span className="del">{pr.checks.failed} failed</span></>}
-                    {pr.checks.pending > 0 && <> · {pr.checks.pending} pending</>}
-                  </div>
+          {pr && (
+            <div className="pr-card" onClick={() => void window.api.shell.openExternal(pr.url)}>
+              <GitPullRequest size={14} className={pr.state === 'OPEN' ? 'ok' : 'muted'} />
+              <div className="rt-main">
+                <div className="rt-name">#{pr.number} {pr.title}</div>
+                <div className="rt-meta">
+                  {pr.isDraft ? 'Draft · ' : ''}{pr.state.toLowerCase()} · <span className="add">{pr.checks.passed} passed</span>
+                  {pr.checks.failed > 0 && <> · <span className="del">{pr.checks.failed} failed</span></>}
+                  {pr.checks.pending > 0 && <> · {pr.checks.pending} pending</>}
                 </div>
               </div>
-            )}
-            <div className="section-label pad">Workflows</div>
-            <div className={`wf-row${!selected ? ' on' : ''}`} onClick={() => setSelected(null)}>All workflows</div>
-            {workflows.map((w) => (
-              <div key={w.id} className={`wf-row${selected?.id === w.id ? ' on' : ''}${w.state !== 'active' ? ' dim' : ''}`} onClick={() => setSelected(w)}>
-                <span className="wf-name">{w.name}</span>
-                <button className="icon-btn go" title="Run workflow…" aria-label="Run workflow…" onClick={(e) => (e.stopPropagation(), setDispatching(w))}>
-                  <Play size={12} />
-                </button>
-              </div>
-            ))}
-            {dispatching && <DispatchForm root={root} workflow={dispatching} defaultRef={repo.defaultBranch} onDone={(ran) => (setDispatching(null), ran && setTimeout(() => void loadRuns(), 2500))} />}
-            <div className="section-label pad">Runs{selected ? ` · ${selected.name}` : ''}</div>
-            {error && <div className="form-error pad">{error}</div>}
-            {runs?.map((r) => <RunRow key={r.databaseId} run={r} root={root} onChange={() => setTimeout(() => void loadRuns(), 1500)} />)}
-            {runs && !runs.length && <div className="muted-note">No runs yet.</div>}
-          </>
-        )}
-      </div>
+            </div>
+          )}
+          {dispatching && <DispatchForm root={root} workflow={dispatching} defaultRef={repo.defaultBranch} onDone={(ran) => (setDispatching(null), ran && setTimeout(() => void loadRuns(), 2500))} />}
+          </div>
+          {/* two sections, each scrolling on its own, so a long workflow list never buries the runs */}
+          <div className="wf-sections">
+            <Section id="list" label="Workflows" count={workflows.length}>
+              <div className={`wf-row${!selected ? ' on' : ''}`} onClick={() => setSelected(null)}>All workflows</div>
+              {workflows.map((w) => (
+                <div key={w.id} className={`wf-row${selected?.id === w.id ? ' on' : ''}${w.state !== 'active' ? ' dim' : ''}`} onClick={() => setSelected(w)}>
+                  <span className="wf-name">{w.name}</span>
+                  <button className="icon-btn go" title="Run workflow…" aria-label="Run workflow…" onClick={(e) => (e.stopPropagation(), setDispatching(w))}>
+                    <Play size={12} />
+                  </button>
+                </div>
+              ))}
+            </Section>
+            <Section id="runs" label={`Runs${selected ? ` · ${selected.name}` : ''}`} count={runs?.length}>
+              {error && <div className="form-error pad">{error}</div>}
+              {runs?.map((r) => <RunRow key={r.databaseId} run={r} root={root} onChange={() => setTimeout(() => void loadRuns(), 1500)} />)}
+              {runs && !runs.length && <div className="muted-note">No runs yet.</div>}
+            </Section>
+          </div>
+        </>
+      )}
     </ViewShell>
+  )
+}
+
+function Section({ id, label, count, children }: { id: 'list' | 'runs'; label: string; count?: number; children: React.ReactNode }): React.JSX.Element {
+  const open = useStore(workspace, (w) => w.assetGroups[`workflows:${id}`] ?? true)
+  const toggle = (): void => updateSettings({ assetGroups: { ...workspace.get().assetGroups, [`workflows:${id}`]: !open } })
+  return (
+    <section className={`wf-section ${id}${open ? ' open' : ''}`} data-section={id}>
+      <button className="rt-group-header wf-section-header" aria-expanded={open} onClick={toggle}>
+        <ChevronRight size={13} className={`chev${open ? ' open' : ''}`} />
+        <span>{label}</span>
+        {count !== undefined && <span className="rt-source">{count}</span>}
+      </button>
+      {open && <div className="wf-section-body">{children}</div>}
+    </section>
   )
 }
 
@@ -124,7 +144,9 @@ function RunRow({ run: r, root, onChange }: { run: GhRun; root: string; onChange
   const active = r.status !== 'completed'
   const failed = r.status === 'completed' && r.conclusion !== 'success' && r.conclusion !== 'skipped' && r.conclusion !== 'cancelled'
   const watch = (): void => void openTerminal({ cwd: root, title: `run #${r.number}`, command: `gh run watch ${r.databaseId} --exit-status` })
-  const logs = (): void => void openTerminal({ cwd: root, title: `logs #${r.number}`, command: `gh run view ${r.databaseId} ${failed ? '--log-failed' : '--log'} | less -R` })
+  const view = `gh run view ${r.databaseId} ${failed ? '--log-failed' : '--log'}`
+  // Windows has no less: the log goes straight into the terminal (scroll and Find work there)
+  const logs = (): void => void openTerminal({ cwd: root, title: `logs #${r.number}`, command: window.api.platform === 'win32' ? view : `${view} | less -R` })
   const act = (fn: () => Promise<void>): void => void fn().then(onChange, (e) => void showNotice('That didn\'t work', errText(e)))
   return (
     <div

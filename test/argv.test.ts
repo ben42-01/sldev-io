@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { cmdShimCommandLine, formatArgv, posixQuote, quoteWindowsArg, splitArgs, windowsCommandLine } from '@shared/argv'
-import { findOnPath, resolveLaunch, shimTarget, type LaunchFs } from '../src/main/launch'
+import { findOnPath, resolveLaunch, shimTarget, versionedTarget, windowsShellLaunch, type LaunchFs } from '../src/main/launch'
 
 /** The prompt that once reached Claude on Windows as the single word "need". */
 const NASTY = [
@@ -94,16 +94,28 @@ describe('resolveLaunch on Windows', () => {
     'C:\\node\\node.exe': '',
     'C:\\npm\\claude.cmd': 'old shim',
     'C:\\Users\\me\\.local\\bin\\claude.exe': '',
-    'C:\\tools\\weird.cmd': '@echo off\r\nsomething %*\r\n'
+    'C:\\tools\\weird.cmd': '@echo off\r\nsomething %*\r\n',
+    'C:\\tools\\pwshy.cmd': '@echo off\r\npowershell -File "%~dp0pwshy.ps1" %*\r\n',
+    'C:\\tools\\pwshy.ps1': '',
+    // Cursor's Windows install: agent.cmd → agent.ps1 → versions\<newest>\node.exe index.js
+    'C:\\cursor\\agent.cmd': '@echo off\r\npowershell.exe -NoProfile -File "%SCRIPT_DIR%\\cursor-agent.ps1" %*\r\n',
+    'C:\\cursor\\agent.ps1': '',
+    'C:\\cursor\\versions\\2026.9.30-aaaaaaa\\node.exe': '',
+    'C:\\cursor\\versions\\2026.9.30-aaaaaaa\\index.js': '',
+    'C:\\cursor\\versions\\2026.10.22-27dcf5f\\node.exe': '',
+    'C:\\cursor\\versions\\2026.10.22-27dcf5f\\index.js': '',
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe': ''
   }
   const fs: LaunchFs = {
     isFile: (p) => p in files,
     read: (p) => {
       if (!(p in files)) throw new Error('ENOENT')
       return files[p]
-    }
+    },
+    list: (dir) => [...new Set(Object.keys(files).filter((f) => f.startsWith(dir + '\\')).map((f) => f.slice(dir.length + 1).split('\\')[0]))]
   }
-  const env = { Path: 'C:\\npm;C:\\Users\\me\\.local\\bin;C:\\node;C:\\tools', ComSpec: 'C:\\Windows\\system32\\cmd.exe' }
+  const env = { Path: 'C:\\npm;C:\\Users\\me\\.local\\bin;C:\\node;C:\\tools;C:\\cursor', ComSpec: 'C:\\Windows\\system32\\cmd.exe', SystemRoot: 'C:\\Windows' }
+  const ps = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 
   it('prefers a real .exe over an npm shim earlier on PATH, and passes the prompt as one argument', () => {
     expect(findOnPath('claude', env, 'win32', fs)).toBe('C:\\Users\\me\\.local\\bin\\claude.exe')
@@ -125,6 +137,26 @@ describe('resolveLaunch on Windows', () => {
     expect(l.file).toBe('C:\\Windows\\system32\\cmd.exe')
     expect(l.args).toMatch(/^\/d \/s \/c "C:\\tools\\weird\.cmd /)
     expect(() => resolveLaunch(['weird', 'two\nlines'], env, 'win32', fs)).toThrow(/line breaks/)
+  })
+
+  it("runs the newest version's node behind a versioned launcher (Cursor's agent.cmd)", () => {
+    const v = 'C:\\cursor\\versions\\2026.10.22-27dcf5f'
+    expect(versionedTarget('C:\\cursor\\agent.cmd', fs)).toEqual([`${v}\\node.exe`, `${v}\\index.js`])
+    const l = resolveLaunch(['agent', '-p', NASTY], env, 'win32', fs)
+    expect(l.file).toBe(`${v}\\node.exe`)
+    expect(parseWindowsArgs(l.args as string)).toEqual([`${v}\\index.js`, '-p', NASTY])
+  })
+
+  it('takes a multi-line prompt through the PowerShell script next to a .cmd', () => {
+    const l = resolveLaunch(['pwshy', 'two\nlines'], env, 'win32', fs)
+    expect(l.file).toBe(ps)
+    expect(parseWindowsArgs(l.args as string)).toEqual(['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\tools\\pwshy.ps1', 'two\nlines'])
+  })
+
+  it('runs a typed .ps1 command with PowerShell instead of opening it in Notepad', () => {
+    expect(windowsShellLaunch('.\\deploy.ps1 -Env prod', env, undefined, fs)).toEqual({ file: ps, args: '-NoProfile -ExecutionPolicy Bypass -File .\\deploy.ps1 -Env prod' })
+    expect(windowsShellLaunch('& "C:\\my scripts\\build.ps1"', env, 'pwsh.exe', fs)).toEqual({ file: 'pwsh.exe', args: '-NoProfile -ExecutionPolicy Bypass -File "C:\\my scripts\\build.ps1"' })
+    expect(windowsShellLaunch('npm ci && npm test', env, undefined, fs)).toEqual({ file: 'C:\\Windows\\system32\\cmd.exe', args: '/d /s /c "npm ci && npm test"' })
   })
 
   it('says when a program is missing', () => {

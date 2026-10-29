@@ -37,8 +37,8 @@ const features: Feature[] = [
   { icon: GitPullRequest, title: 'Diff review to PR', text: 'Read the per-file diff, commit, merge into the base branch, or push and open a pull request without leaving the app.' },
   { icon: FileStack, title: 'One set of rules', text: 'Write your project rules once. sldev-io keeps AGENTS.md, CLAUDE.md, GEMINI.md, Cursor rules and Copilot instructions in sync, and never overwrites a hand edit.', home: true },
   { icon: Plug, title: 'Skills and MCP', text: 'Run skills with any agent, manage MCP servers, and give agents the sldev tools to report their own status and read each other\'s work.', home: true },
-  { icon: Boxes, title: 'Runtimes and tasks', text: 'Scripts from package.json, Makefile, Cargo, uv, Go, Docker Compose and more, with live status and one-click localhost links.' },
-  { icon: Workflow, title: 'GitHub issues and workflows', text: 'Start a mission or a factory run from an issue, dispatch workflows with typed inputs, follow runs and see the PR checks for your branch.', home: true },
+  { icon: Boxes, title: 'Runtimes and tasks', text: 'Scripts from package.json, Makefile, Cargo, uv, Go, Docker Compose and more, with live status and one-click localhost links.', home: true },
+  { icon: Workflow, title: 'GitHub issues and workflows', text: 'Start a mission or a factory run from an issue, dispatch workflows with typed inputs, follow runs and see the PR checks for your branch.' },
   { icon: Server, title: 'SSH, SFTP and Docker', text: 'Remote terminals, an SFTP browser, port forwards and local containers with shells and followed logs.', home: true },
   { icon: KeyRound, title: 'Encrypted vault', text: 'Passwords and keys are encrypted with your OS keychain and resolved in the main process. Secrets never reach the UI.' },
   { icon: NotebookPen, title: 'Notes that act', text: 'Markdown notes per project or global. Paste one into a terminal or turn it straight into a mission.' }
