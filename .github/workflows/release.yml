@@ -1,7 +1,7 @@
 name: Release
 
 # Push to a release branch (release/0.2.0, release/next, …) to build installers for every OS
-# and publish them on a GitHub release tagged v<package.json version>:
+# and publish them on a GitHub release tagged v<package.json version> (a draft until every build uploaded):
 #   - in the PUBLIC downloads repo (what users and the website download), using the
 #     RELEASES_TOKEN secret (fine-grained token: Contents read/write on that repo only)
 #   - in this private repo too, with generated notes, as an internal record
@@ -42,8 +42,56 @@ jobs:
       - id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-  build:
+  # Draft releases first, in the public downloads repo and in this one. Drafts can't be seen or
+  # downloaded, so nobody gets a half-uploaded release; the release job publishes them once every
+  # build has uploaded its files. Re-runs reuse the existing drafts.
+  prepare:
     needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Draft in the public downloads repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_REPO: ${{ env.DOWNLOADS_REPO }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASES_TOKEN secret is missing (see docs/go-to-production.md, Phase 1)"
+            exit 1
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 && exit 0
+          # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
+          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          cat > notes.md <<EOF
+          The easiest way to install is https://sldev-io.vercel.app/download, which picks the right
+          file for your system. On macOS and Linux you can also run:
+
+              curl -fsSL https://sldev-io.vercel.app/install.sh | sh
+
+          | System | File |
+          |---|---|
+          | Windows | \`-setup.exe\` |
+          | macOS (Apple Silicon) | \`-arm64.dmg\` |
+          | macOS (Intel) | \`-x64.dmg\` |
+          | Linux (Debian/Ubuntu) | \`.deb\` |
+
+          Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
+          right-click the app and choose **Open** the first time.
+          EOF
+          # the downloads repo has no source, so the tag points at its default branch
+          gh release create "$TAG" --draft --title "sldev-io $TAG" --notes-file notes.md $PRE
+      - name: Draft in this repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 && exit 0
+          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "sldev-io $TAG" --generate-notes $PRE
+
+  build:
+    needs: [check, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -95,73 +143,40 @@ jobs:
           max=$(find dist/linux-unpacked -name '*.node' -path '*/build/Release/*' -exec objdump -T {} + | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
           echo "highest glibc symbol: $max"
           [ "$(printf '%s\n' "$max" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35 ]
-      - uses: actions/upload-artifact@v4
+      # straight onto the draft releases, not through artifacts: artifact storage counts against the
+      # account's quota for hours after the files expire, and a full quota blocked beta.6 and beta.7
+      - name: Upload to the draft releases
         if: env.skip != '1'
-        with:
-          name: installers-${{ matrix.name }}
-          if-no-files-found: error
-          # only the release job below reads these, minutes later; the default 90 days filled the
-          # private repo's artifact storage quota and blocked the beta.6 release
-          retention-days: 1
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          PRIVATE_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          shopt -s nullglob
           # installers (the website's /download/<os> and install.sh pick from these) plus what
           # electron-updater reads: latest*.yml, .blockmap, and the macOS zip
-          path: |
-            dist/*.deb
-            dist/*.dmg
-            dist/*.exe
-            dist/*.zip
-            dist/*.blockmap
-            dist/latest*.yml
+          files=(dist/*.deb dist/*.dmg dist/*.exe dist/*.zip dist/*.blockmap dist/latest*.yml)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no installers in dist/"; exit 1; }
+          if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$DOWNLOADS_REPO"
+          GH_TOKEN="$PRIVATE_TOKEN" gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
   release:
     needs: [check, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: installers-*
-          path: dist
-          merge-multiple: true
-      - name: Checksums (log only)
-        working-directory: dist
-        run: sha256sum *
-      - name: Publish to the public downloads repo
+      - name: Publish in the public downloads repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           GH_REPO: ${{ env.DOWNLOADS_REPO }}
           TAG: v${{ needs.check.outputs.version }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::RELEASES_TOKEN secret is missing (see docs/go-to-production.md, Phase 1)"
-            exit 1
-          fi
-          # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
-          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
-          cat > notes.md <<EOF
-          The easiest way to install is https://sldev-io.vercel.app/download, which picks the right
-          file for your system. On macOS and Linux you can also run:
-
-              curl -fsSL https://sldev-io.vercel.app/install.sh | sh
-
-          | System | File |
-          |---|---|
-          | Windows | \`-setup.exe\` |
-          | macOS (Apple Silicon) | \`-arm64.dmg\` |
-          | macOS (Intel) | \`-x64.dmg\` |
-          | Linux (Debian/Ubuntu) | \`.deb\` |
-
-          Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
-          right-click the app and choose **Open** the first time.
-          EOF
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
-          else
-            # the downloads repo has no source, so the tag points at its default branch
-            gh release create "$TAG" dist/* --title "sldev-io $TAG" --notes-file notes.md $PRE
-          fi
+          gh release view "$TAG" --json assets -q '.assets[].name'
+          gh release edit "$TAG" --draft=false
 
       # Only the newest installers stay downloadable: older betas would otherwise float around, and
-      # installed apps update from the newest release anyway. Runs only after the upload succeeded.
+      # installed apps update from the newest release anyway. Runs only after publishing succeeded.
       - name: Remove older releases from the public downloads repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -176,15 +191,9 @@ jobs:
             fi
           done
 
-      - name: Record the release in this repo
+      - name: Publish the record in this repo
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: v${{ needs.check.outputs.version }}
-        run: |
-          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
-          else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "sldev-io $TAG" --generate-notes $PRE
-          fi
+        run: gh release edit "$TAG" --draft=false
