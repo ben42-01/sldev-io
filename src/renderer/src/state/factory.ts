@@ -96,7 +96,8 @@ export async function loadFactory(): Promise<void> {
   if (saved.some((r) => r.status === 'running')) persist()
 }
 
-export async function loadRecipes(root: string | null): Promise<void> {
+/** A repository's recipes: its own from .sldev/factory, then the built-ins it doesn't replace by name. */
+export async function readRecipes(root: string | null): Promise<{ recipes: RecipeEntry[]; recipeErrors: Record<string, string> }> {
   const recipes: RecipeEntry[] = []
   const recipeErrors: Record<string, string> = {}
   for (const f of root ? await window.api.factory.recipes(root).catch(() => []) : []) {
@@ -108,7 +109,11 @@ export async function loadRecipes(root: string | null): Promise<void> {
     const r = parseRecipe(b.text)
     if (r.recipe && !recipes.some((x) => x.recipe.name === r.recipe.name)) recipes.push({ recipe: r.recipe, text: b.text, builtin: b.slug })
   }
-  factory.set({ recipes, recipeErrors })
+  return { recipes, recipeErrors }
+}
+
+export async function loadRecipes(root: string | null): Promise<void> {
+  factory.set(await readRecipes(root))
 }
 
 /** The recipe and its agent profiles as one text to paste anywhere. */

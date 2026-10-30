@@ -98,8 +98,8 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
   return { number: pr.number, title: pr.title, state: pr.state, url: pr.url, isDraft: pr.isDraft, checks }
 }
 
-export const listIssues = (cwd: string): Promise<GhIssue[]> =>
-  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url'], cwd, [])
+export const listIssues = (cwd: string, label?: string): Promise<GhIssue[]> =>
+  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', ...(label ? ['--label', label] : []), '--json', 'number,title,body,url'], cwd, [])
 
 interface Author { login?: string }
 

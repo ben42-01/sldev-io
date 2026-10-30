@@ -4076,3 +4076,46 @@ a {
   font: 600 10px var(--font-mono);
   color: var(--fg);
 }
+
+/* automations (Factory view) */
+.automations-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.automation-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px 6px;
+  padding: 8px 6px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.automation-row.off {
+  opacity: 0.6;
+}
+.automation-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.automation-name {
+  font-size: 12px;
+  color: var(--fg);
+}
+.automation-when,
+.automation-note {
+  font-size: 11px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.automation-when svg {
+  vertical-align: -1px;
+}
+.automation-form {
+  margin: 0 8px 8px;
+}

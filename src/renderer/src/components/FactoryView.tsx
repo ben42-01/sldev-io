@@ -19,6 +19,7 @@ import { StatusPill } from './StatusDot'
 import { runSignal } from '@shared/status'
 import { removeRunFlow } from '../lib/removals'
 import { FolderField } from './FolderField'
+import { AutomationsSection } from './AutomationsSection'
 
 /** What the run form starts with, e.g. a plan from a finished mission. */
 export interface RunDraft {
@@ -87,6 +88,7 @@ export function FactoryView(): React.JSX.Element {
         {mine.map((r) => <RunRow key={r.id} run={r} />)}
         {elsewhere.length > 0 && <div className="section-label pad">Other repositories · {elsewhere.length}</div>}
         {elsewhere.map((r) => <RunRow key={r.id} run={r} />)}
+        {root && <AutomationsSection root={root} />}
         {root && !mine.length && !creating && (
           <div className="muted-note">
             A recipe is a graph of steps: agents write specs and code, commands check the result, you approve the steps that matter, and the last step opens a pull request. Each run works in its own branch and worktree.

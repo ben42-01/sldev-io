@@ -161,6 +161,10 @@ const privacy: LegalPage = {
         under their own privacy policies. sldev-io doesn't see or relay that traffic.
       </p>
       <p>
+        Automations you set up to react to failed CI runs or labelled issues ask GitHub through your GitHub CLI every five minutes while
+        they are switched on and the app is open. That goes from your computer to GitHub, signed in as you; nothing goes to us.
+      </p>
+      <p>
         Remote connections you open (SSH sessions, and Ping, which only checks that a saved host's SSH port answers) go straight from
         your computer to that host and nowhere else.
       </p>

@@ -248,7 +248,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
-  ipcMain.handle('gh:issues', (_e, cwd: string) => gh.listIssues(cwd))
+  ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes
@@ -333,7 +333,8 @@ app.whenReady().then(async () => {
     runtimes: new JsonStore<StoreFiles['runtimes']>('runtimes', { custom: {} }),
     missions: new JsonStore<StoreFiles['missions']>('missions', { missions: [] }),
     connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] }),
-    factoryRuns: new JsonStore<StoreFiles['factoryRuns']>('factory-runs', { runs: [] })
+    factoryRuns: new JsonStore<StoreFiles['factoryRuns']>('factory-runs', { runs: [] }),
+    automations: new JsonStore<StoreFiles['automations']>('automations', { automations: [] })
   }
   vault.initVault()
   setShellOverride(settings.get().shell)

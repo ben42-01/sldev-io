@@ -6,6 +6,7 @@ import { loadTasks } from './tasks'
 import { loadMissions } from './missions'
 import { loadProjectProfiles } from './profiles'
 import { loadFactory, loadRecipes } from './factory'
+import { loadAutomations } from './automations'
 
 export type ViewId = 'explorer' | 'runtimes' | 'factory' | 'tasks' | 'notes' | 'remote' | RightTab
 
@@ -48,6 +49,7 @@ export async function initWorkspace(): Promise<void> {
   void loadProjectProfiles(settings.rootFolder)
   void loadFactory()
   void loadRecipes(settings.rootFolder)
+  void loadAutomations()
 }
 
 export async function refreshBranch(): Promise<void> {

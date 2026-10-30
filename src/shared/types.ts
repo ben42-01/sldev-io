@@ -1,4 +1,5 @@
 import type { FactoryRun } from './factory'
+import type { Automation } from './automations'
 
 export interface DirEntry {
   name: string
@@ -215,6 +216,7 @@ export interface StoreFiles {
   connections: { connections: SshConnection[] }
   runtimes: { custom: Record<string, CustomRuntime[]> }
   factoryRuns: { runs: FactoryRun[] }
+  automations: { automations: Automation[] }
 }
 
 export interface WorktreeInfo {
