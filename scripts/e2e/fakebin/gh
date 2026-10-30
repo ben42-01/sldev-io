@@ -1,6 +1,13 @@
 #!/bin/sh
 # Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
 # FAKE_GH_AUTHED=1 (a scenario's env) logs it in, with a repo, workflows and runs for the Workflows view.
+# FAKE_GH_NO_WORKFLOWS=1 adds a repo without Actions: real gh prints nothing for `workflow list --json`, and [] for runs.
+if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
+  case "$1 $2" in
+    "workflow list") exit 0 ;;
+    "run list") echo '[]'; exit 0 ;;
+  esac
+fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;

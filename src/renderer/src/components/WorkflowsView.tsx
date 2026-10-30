@@ -105,6 +105,7 @@ export function WorkflowsView(): React.JSX.Element {
                   </button>
                 </div>
               ))}
+              {!workflows.length && !error && <div className="muted-note">No workflows in this repository yet. Add one under .github/workflows.</div>}
             </Section>
             <Section id="runs" label={`Runs${selected ? ` · ${selected.name}` : ''}`} count={runs?.length}>
               {error && <div className="form-error pad">{error}</div>}

@@ -6,10 +6,16 @@ import { run } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
 
-async function ghJson<T>(args: string[], cwd: string): Promise<T> {
+/** `empty` is what an empty answer means: gh prints nothing (not `[]`) for a repo without workflows. */
+async function ghJson<T>(args: string[], cwd: string, empty?: T): Promise<T> {
   const r = await gh(args, cwd)
   if (r.code !== 0) throw new Error(r.stderr.trim() || `gh ${args.join(' ')} failed`)
-  return JSON.parse(r.stdout) as T
+  if (!r.stdout.trim() && empty !== undefined) return empty
+  try {
+    return JSON.parse(r.stdout) as T
+  } catch {
+    throw new Error(`Unexpected output from gh ${args.slice(0, 2).join(' ')}. Check that gh is up to date (gh --version).`)
+  }
 }
 
 export async function repoInfo(cwd: string): Promise<GhRepoInfo> {
@@ -26,10 +32,10 @@ export async function repoInfo(cwd: string): Promise<GhRepoInfo> {
   }
 }
 
-export const listWorkflows = (cwd: string): Promise<GhWorkflow[]> => ghJson(['workflow', 'list', '--all', '--json', 'id,name,path,state'], cwd)
+export const listWorkflows = (cwd: string): Promise<GhWorkflow[]> => ghJson(['workflow', 'list', '--all', '--json', 'id,name,path,state'], cwd, [])
 
 export const listRuns = (cwd: string, workflow?: string): Promise<GhRun[]> =>
-  ghJson(['run', 'list', '--limit', '30', ...(workflow ? ['--workflow', workflow] : []), '--json', 'databaseId,displayTitle,workflowName,status,conclusion,headBranch,event,createdAt,url,number'], cwd)
+  ghJson(['run', 'list', '--limit', '30', ...(workflow ? ['--workflow', workflow] : []), '--json', 'databaseId,displayTitle,workflowName,status,conclusion,headBranch,event,createdAt,url,number'], cwd, [])
 
 /** Inputs declared under `on.workflow_dispatch.inputs` in the local workflow file. null = not dispatchable. */
 export async function workflowInputs(cwd: string, path: string): Promise<GhWorkflowInput[] | null> {
@@ -76,7 +82,12 @@ export async function cancelRun(cwd: string, runId: number): Promise<void> {
 export async function currentPr(cwd: string): Promise<GhPr | null> {
   const r = await gh(['pr', 'view', '--json', 'number,title,state,url,isDraft,statusCheckRollup'], cwd)
   if (r.code !== 0) return null
-  const pr = JSON.parse(r.stdout)
+  let pr
+  try {
+    pr = JSON.parse(r.stdout)
+  } catch {
+    return null
+  }
   const checks = { passed: 0, failed: 0, pending: 0 }
   for (const c of pr.statusCheckRollup ?? []) {
     const v = String(c.conclusion || c.state || c.status || '').toUpperCase()
@@ -88,7 +99,7 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
 }
 
 export const listIssues = (cwd: string): Promise<GhIssue[]> =>
-  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url'], cwd)
+  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url'], cwd, [])
 
 interface Author { login?: string }
 
@@ -102,7 +113,8 @@ export async function prComments(cwd: string, n: number): Promise<GhPrComment[]>
     // {owner}/{repo} is filled in by gh from the repository in cwd
     ghJson<{ id: number; user: Author; body: string; created_at: string; html_url: string; path: string; line: number | null; original_line: number | null }[]>(
       ['api', `repos/{owner}/{repo}/pulls/${n}/comments`, '--paginate'],
-      cwd
+      cwd,
+      []
     )
   ])
   const who = (a: Author | null | undefined): string => a?.login || 'someone'
