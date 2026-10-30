@@ -278,6 +278,8 @@ export interface Mission {
   criteria?: string
   /** the agent's final reply (Claude's last message, or sldev_done), up to 6,000 characters */
   report?: string
+  /** set when the report is the agent's terminal screen, for agents that don't report back (no hooks, no sldev_done) */
+  reportFrom?: 'terminal'
   /** the reviewer's notes; handed to follow-ups instead of the report when present */
   handoff?: string
   /** what kind of work it is (Build, Research, Plan, a custom kind…); missing = Build */

@@ -154,17 +154,22 @@ function MissionDetails({ id, onClose }: { id: string; onClose: () => void }): R
               <div className="detail-text selectable">{m.criteria}</div>
             </Section>
           )}
-          <Section title="Final report">
+          <Section title={m.reportFrom === 'terminal' ? 'Final screen' : 'Final report'}>
             {m.report || m.lastMessage ? (
-              <div className="detail-text report selectable">{m.report ?? m.lastMessage}</div>
+              <>
+                <div className="detail-text report selectable">{m.report ?? m.lastMessage}</div>
+                {m.reportFrom === 'terminal' && (
+                  <p className="hint">{agent.name} doesn't report back to sldev-io, so this is its terminal when it went quiet. The terminal has the full conversation.</p>
+                )}
+              </>
             ) : (
               <p className="hint">Nothing yet. The agent's last reply appears here when it finishes a turn.</p>
             )}
           </Section>
           <label className="field">
-            <span>Handoff notes</span>
+            <span>Your handoff notes</span>
             <textarea rows={3} value={handoff} placeholder="e.g. Pagination works; the empty-page case still returns 500" onChange={(e) => setDraft(e.target.value)} onBlur={saveHandoff} />
-            <span className="field-hint">Optional. Follow-ups and second opinions get these instead of the agent's report.</span>
+            <span className="field-hint">Optional, written by you. Follow-ups and second opinions get these instead of the agent's report.</span>
           </label>
           <RememberField root={m.root} source={`${agent.name}, mission "${m.title}"`} />
           <details className="prompt-preview">

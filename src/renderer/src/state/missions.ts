@@ -4,6 +4,7 @@ import { patchMission, pushStatus } from '@shared/missionHistory'
 import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
 import { agentCommand, commandText, installedBin, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
 import { failoverBrief, limitLine, TAIL_ROWS, nextAgent } from '@shared/failover'
+import { screenReport } from '@shared/screenReport'
 import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
@@ -313,6 +314,20 @@ function checkLimit(id: string, extra?: string): void {
   else notify(next, `${m.title}: ${agent.name} hit its usage limit`, to ? `Continue it on ${getAgent(to).name} from the mission card.` : hit)
 }
 
+/**
+ * Agents that don't report back (no hooks, no sldev_done) get their terminal screen as the report
+ * when they go quiet or exit, so a finished mission never shows an empty report. A real report wins;
+ * on exit, a full-screen agent has already cleared its screen, so the snapshot from going quiet stays.
+ */
+function captureScreen(id: string, onExit = false): void {
+  const m = getMission(id)
+  const panel = missions.get().panels[id]
+  if (!m || !panel || getAgent(m.options.agent).hooks) return
+  if (m.report && (m.reportFrom !== 'terminal' || onExit)) return
+  const report = screenReport(terminalTail(panel, TAIL_ROWS), m.prompt)
+  if (report && report !== m.report) update(id, { report, reportFrom: 'terminal' })
+}
+
 /** Every agent, hooks or not, is checked for a limit message once its output settles. */
 const LIMIT_QUIET_MS = 3000
 const limitTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -359,7 +374,7 @@ window.api.missions.onHook((e: HookEvent) => {
       break
     }
     case 'stop': {
-      const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text?.slice(0, 600) ?? m.lastMessage, report: e.text ?? m.report, notification: undefined })
+      const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text?.slice(0, 600) ?? m.lastMessage, report: e.text ?? m.report, ...(e.text ? { reportFrom: undefined } : {}), notification: undefined })
       if (next) notify(next, `${m.title} finished`, e.text ?? `${getAgent(m.options.agent).name} is waiting for your next message`)
       void refreshStats(m.id)
       checkLimit(m.id, e.text)
@@ -387,12 +402,13 @@ window.api.missions.onMcp((e) => {
       const next = update(m.id, { status: 'needs-input', notification: e.text ?? `${agent} needs you` })
       if (next) notify(next, `${m.title} needs you`, e.text ?? `${agent} needs you`)
     } else {
+      captureScreen(m.id)
       const next = update(m.id, { status: 'waiting', notification: undefined, lastMessage: e.text?.slice(0, 600) ?? m.lastMessage })
       if (next) notify(next, `${m.title} finished`, e.text ?? `${agent} says it's done`)
       void refreshStats(m.id)
     }
   } else if (e.type === 'done' || e.type === 'output') {
-    if (e.text) update(m.id, { lastMessage: e.text.slice(0, 600), ...(e.type === 'done' ? { report: clipReport(e.text) } : {}) })
+    if (e.text) update(m.id, { lastMessage: e.text.slice(0, 600), ...(e.type === 'done' ? { report: clipReport(e.text), reportFrom: undefined } : {}) })
   }
 })
 
@@ -412,6 +428,7 @@ function onAgentActivity(m: Mission): void {
       idleTimers.delete(m.id)
       const cur = getMission(m.id)
       if (cur?.status !== 'working') return
+      captureScreen(m.id)
       const next = update(m.id, { status: 'waiting' })
       // updatedAt is when it started working: don't ping for a quick redraw, only after a real stretch of work
       if (next && Date.now() - cur.updatedAt > 2 * IDLE_MS) notify(next, `${m.title} is waiting`, `${getAgent(m.options.agent).name} went quiet; it's probably your turn`)
@@ -454,6 +471,7 @@ onTerminalEvent((e) => {
     clearTimeout(limitTimers.get(missionId))
     // before the status changes, so a factory stage sees the limit when it sees the exit
     checkLimit(missionId)
+    captureScreen(missionId, true)
     update(missionId, { status: failed ? 'failed' : 'ended' })
     void refreshStats(missionId)
   } else if (e.type === 'status' && e.status === 'starting' && m && !isLive(m.status)) {

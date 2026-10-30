@@ -391,7 +391,14 @@ against the real tools (on a scratch repo, with a cheap model):
       mode; Codex `--sandbox read-only` can still run read-only commands.
 - [ ] **Skills in print mode**: `claude -p "/<skill> args"` runs a project skill.
 - [ ] Website `/compare` (on `v1`): check the AI code editor column against what current editors ship
-      before launch; it compares categories, not products, and should stay fair.
+      before launch; it compares categories, not products, and should stay fair. Same for the cloud agents column.
+- [ ] **OpenCode 2** (v2.0.22 here): its interactive mode only lists `--prompt`, `--session`, `--continue` and
+      `--auto`. Check that `--model` and `--agent plan` (Research's read-only mode) still work there, or move
+      them; `opencode run` still has `--model` and `--agent`. Its `--session <id>` (create with our id) and
+      `session export` could give real final reports instead of the terminal screen, and
+      `OPENCODE_CONFIG_CONTENT` may carry the sldev MCP server per run.
+- [ ] **Final screen**: for agents that don't report back, the report is the terminal after the prompt
+      (`src/shared/screenReport.ts`). Check it reads well for OpenCode's full-screen UI, Gemini and Copilot.
 
 Known gaps, fine for 1.0: "retry this stage with a different agent" (retry reruns the same agent),
 interactive factory stages finish with Done or `sldev_done` only, OpenCode/Cursor/Copilot/Gemini get

@@ -32,4 +32,16 @@ module.exports = async (h) => {
   h.expect((await pills(h))['Codex task'] === 'Needs you / Codex', 'codex: bell → Needs you')
   await h.shot('2-codex-needs-you')
   h.expect(await h.js(`document.querySelector('.mission-card .stats')?.textContent.includes('1 file')`), 'diff stats counted for the worktree')
+
+  // Codex doesn't report back here, so its report is its terminal when it went quiet
+  const codexMission = () => h.js(`window.api.store.get('missions').then(s => s.missions.find(m => m.title === 'Codex task'))`)
+  h.expect(await h.until(async () => (await codexMission())?.reportFrom === 'terminal', 4000), 'codex: terminal screen stored as the report')
+  h.expect((await codexMission())?.report?.includes('done editing'), "codex: the report has the agent's last output")
+  await h.click('.mission-title', 'Codex task')
+  const dialog = () => h.js(`document.querySelector('dialog[open]')?.textContent ?? ''`)
+  h.expect(await h.until(async () => (await dialog()).includes('Final screen'), 4000), 'details: "Final screen" with the terminal snapshot')
+  h.expect((await dialog()).includes("doesn't report back"), 'details: says where the report came from')
+  await h.wait(500)
+  await h.shot('3-codex-final-screen')
+  h.key('Escape')
 }

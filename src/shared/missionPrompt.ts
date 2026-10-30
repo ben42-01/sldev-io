@@ -14,9 +14,10 @@ export function missionPrompt(o: { title: string; brief: string; criteria?: stri
 }
 
 /** What the next agent gets from a finished mission: the human's notes win over the agent's own report. */
-export function handoffText(m: { handoff?: string; report?: string; lastMessage?: string }): string {
+export function handoffText(m: { handoff?: string; report?: string; reportFrom?: 'terminal'; lastMessage?: string }): string {
   if (m.handoff?.trim()) return `Handoff notes from the reviewer:\n${m.handoff.trim()}`
   const report = m.report?.trim() || m.lastMessage?.trim()
+  if (report && m.report?.trim() && m.reportFrom === 'terminal') return `The previous agent's terminal when it finished (it wrote no report):\n${report}`
   if (report) return `Final report from the previous agent:\n${report}`
   return 'No handoff notes were recorded.'
 }
@@ -28,6 +29,7 @@ interface Previous {
   criteria?: string
   handoff?: string
   report?: string
+  reportFrom?: 'terminal'
   lastMessage?: string
 }
 

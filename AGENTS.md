@@ -55,7 +55,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
-                  Research, Plan… templates), failover.ts (usage-limit handoff), automations.ts (schedules, CI and
+                  Research, Plan… templates), failover.ts (usage-limit handoff), screenReport.ts (terminal screen as a report), automations.ts (schedules, CI and
                   issue triggers), memory.ts
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
@@ -128,6 +128,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Mission kinds**: the closing lines of a mission prompt come from its kind (`src/shared/missionKinds.ts`), never
   hard-coded: a Research mission told to "summarize what changed" goes and changes something. Freeform sends the
   brief exactly as written (no memory line either). Read-only kinds preselect the agent's `readOnlyMode`.
+- **Reports**: a mission's report is the agent's own (Claude's Stop hook, `sldev_done`). Agents that don't report back
+  get their terminal screen after the prompt instead (`reportFrom: 'terminal'`, `src/shared/screenReport.ts`), and the UI
+  says so; a real report always replaces it, never the other way round.
 - **Usage limits**: what counts as "hit the limit" is per agent (`usageLimit` in `lib/agents.ts`), checked only against
   the last lines of output; the handoff to the next agent replaces the limit line, or the next agent's own echo of its
   prompt would flag it too. Factory stages continue on their own only with Settings → Agents → continue automatically.
