@@ -593,7 +593,6 @@ stages:
   ]
 }
 
-
 const missions: DocPage = {
   id: 'missions',
   title: 'Missions, limits, memory and automations',
@@ -699,4 +698,310 @@ defaults. Do not change any files. List findings with file and line.
   ]
 }
 
-export const docs: DocPage[] = [recipes, missions]
+const workspace: DocPage = {
+  id: 'workspace',
+  title: 'Runtimes, tasks and terminals',
+  summary:
+    "The everyday workspace: start your project's dev servers and scripts with one click, save the commands and agent prompts you run often as tasks, and work across split terminals with the keyboard.",
+  sections: [
+    {
+      id: 'runtimes',
+      title: 'Runtimes',
+      body: (
+        <>
+          <p>
+            Open a folder and the <b>Runtimes</b> view lists what it can run, grouped by the file it came from. Monorepo packages under{' '}
+            <code>apps/</code>, <code>packages/</code>, <code>services/</code>, <code>libs/</code>, <code>crates/</code> and{' '}
+            <code>examples/</code> are found too.
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><code>package.json</code></td><td>Every script, run with npm, pnpm, yarn or bun depending on the lockfile</td></tr>
+              <tr><td><code>Makefile</code>, <code>justfile</code></td><td>Make targets and just recipes</td></tr>
+              <tr><td><code>Cargo.toml</code>, <code>go.mod</code></td><td>run, build and test (plus check and clippy for Cargo)</td></tr>
+              <tr><td><code>pyproject.toml</code>, <code>manage.py</code></td><td>Project scripts, pytest, and Django's runserver and migrate</td></tr>
+              <tr><td><code>compose.yml</code></td><td><code>docker compose</code> up, down and logs</td></tr>
+              <tr><td><code>deno.json</code></td><td>Deno tasks</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Click play (or double-click the row) to start one in its own terminal. Running runtimes share one group of tabs, so a dev server, a
+            watcher and a database sit together. Clicking a running one shows its terminal; restart and stop are on the row and in its
+            right-click menu.
+          </p>
+          <p>
+            Missing something? <b>+</b> adds a custom command, with its own folder relative to the project, such as{' '}
+            <code>npm run dev -- --port 4000</code> in <code>web</code>. Custom commands are kept per project.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'preview',
+      title: 'Ports and the preview',
+      body: (
+        <>
+          <p>
+            When a running command prints a local address like <code>http://localhost:5173</code>, its port shows up under the runtime. Click
+            the port to open the page in a preview panel next to your terminals, or right-click it to open it in your browser.{' '}
+            <b>Open browser preview</b> in the command palette opens one for any address.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'tasks',
+      title: 'Tasks',
+      body: (
+        <>
+          <p>A task is something you run often, saved under a name. There are two kinds:</p>
+          <ul>
+            <li>
+              <b>Shell</b>: a command line, like <code>npm ci &amp;&amp; npm test</code>. The editor can fill it in from the project's scripts.
+            </li>
+            <li>
+              <b>Agent</b>: a prompt for one of your agents, with its model, permission mode and profile. It runs as a mission, so you get its
+              live status, notifications and the diff to review, in its own worktree if you tick that.
+            </li>
+          </ul>
+          <p>
+            A task belongs to the open project or is <b>global</b> and shows in every project ("update my dotfiles", "clean Docker images").
+            The editor always shows the exact command it will run.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'terminals',
+      title: 'Terminals',
+      body: (
+        <>
+          <p>
+            Terminals open in your login shell, so your <code>PATH</code> and aliases work. Split them right or down, drag tabs to rearrange
+            them, or open a floating terminal from the command palette. <b>Broadcast</b> sends what you type to every visible terminal, which helps for the
+            same command on several servers.
+          </p>
+          <p>
+            When you reopen the app your layout comes back. Restored runtimes and tasks wait for you to press Enter instead of running again,
+            and agents resume their session instead of starting over.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'shortcuts',
+      title: 'Keyboard shortcuts',
+      body: (
+        <>
+          <p>
+            Everything is in the command palette. On Windows and Linux the shortcuts use <b>Ctrl+Shift</b> so they don't take keys from the
+            programs in your terminals:
+          </p>
+          <table className="docs-table">
+            <thead>
+              <tr><th>Action</th><th>macOS</th><th>Windows and Linux</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>All commands</td><td><code>Cmd+Shift+P</code></td><td><code>Ctrl+Shift+P</code></td></tr>
+              <tr><td>Quick open a file</td><td><code>Cmd+P</code></td><td><code>Ctrl+Alt+P</code></td></tr>
+              <tr><td>New terminal</td><td><code>Cmd+T</code></td><td><code>Ctrl+Shift+T</code></td></tr>
+              <tr><td>Split right / down</td><td><code>Cmd+D</code> / <code>Cmd+Shift+D</code></td><td><code>Ctrl+Shift+D</code> / <code>Ctrl+Alt+Shift+D</code></td></tr>
+              <tr><td>Find in terminal</td><td><code>Cmd+F</code></td><td><code>Ctrl+Shift+F</code></td></tr>
+              <tr><td>Broadcast input</td><td><code>Cmd+Shift+B</code></td><td><code>Ctrl+Alt+B</code></td></tr>
+              <tr><td>Close panel</td><td><code>Cmd+W</code></td><td><code>Ctrl+Shift+W</code></td></tr>
+              <tr><td>New mission</td><td><code>Cmd+Shift+M</code></td><td><code>Ctrl+Shift+M</code></td></tr>
+              <tr><td>Next mission that needs you</td><td><code>Cmd+Shift+J</code></td><td><code>Ctrl+Shift+J</code></td></tr>
+              <tr><td>Sidebar views</td><td><code>Cmd+1</code> … <code>Cmd+9</code></td><td><code>Ctrl+Shift+1</code> … <code>Ctrl+Shift+9</code></td></tr>
+              <tr><td>Toggle sidebar</td><td><code>Cmd+B</code></td><td><code>Ctrl+Shift+B</code></td></tr>
+              <tr><td>Open folder</td><td><code>Cmd+O</code></td><td><code>Ctrl+Shift+O</code></td></tr>
+              <tr><td>Open the project in your editor</td><td><code>Cmd+Shift+O</code></td><td><code>Ctrl+Alt+O</code></td></tr>
+              <tr><td>Settings</td><td><code>Cmd+,</code></td><td><code>Ctrl+,</code></td></tr>
+            </tbody>
+          </table>
+        </>
+      )
+    },
+    {
+      id: 'more',
+      title: 'Notes and GitHub workflows',
+      body: (
+        <>
+          <p>
+            <b>Notes</b> are plain Markdown files, for one project or for all of them. They stay on your machine in the app's data folder,
+            not in the repository.
+          </p>
+          <p>
+            <b>GitHub Workflows</b> lists the repository's workflows and recent runs through the GitHub CLI (<code>gh</code>). Run a workflow
+            with its inputs, watch a run live in a terminal, read its logs, re-run failed jobs or cancel it.
+          </p>
+        </>
+      )
+    }
+  ]
+}
+
+const agents: DocPage = {
+  id: 'agents',
+  title: 'Agents, skills and shared rules',
+  summary:
+    'sldev-io works with the coding agents you already use. Add any other CLI, give every agent the same project rules from one file, and run your skills on any of them.',
+  sections: [
+    {
+      id: 'clis',
+      title: 'Supported agents',
+      body: (
+        <>
+          <p>
+            Built in: <b>Claude Code</b> (<code>claude</code>), <b>Codex</b> (<code>codex</code>), <b>Cursor Agent</b>, <b>GitHub Copilot</b>,{' '}
+            <b>OpenCode</b> and <b>Gemini CLI</b>. sldev-io starts the CLI you installed, with your own login and plan; it doesn't sign in for
+            you and doesn't send your code anywhere. <b>Settings → Agents</b> shows which ones it found and how to install the rest.
+          </p>
+          <p>
+            Claude Code reports its status through hooks, so its mission cards show exactly when it's working or waiting. For the others,
+            sldev-io watches the terminal: output means working, a few quiet seconds means ready, and a bell means it needs you. Claude Code and
+            Codex can also report through the sldev tools (MCP).
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'custom',
+      title: 'Adding another CLI',
+      body: (
+        <>
+          <p>
+            <b>Settings → Agents → Add custom agent</b> takes any command line. <code>{'{prompt}'}</code>, <code>{'{model}'}</code> and{' '}
+            <code>{'{name}'}</code> are filled in; without <code>{'{prompt}'}</code> the prompt goes at the end. Give it a non-interactive
+            command too, and it can run factory stages:
+          </p>
+          <Code file="Aider as a custom agent">{`
+Interactive:      aider
+Non-interactive:  aider --message {prompt} --yes
+Continue:         aider --restore-chat-history
+`}</Code>
+        </>
+      )
+    },
+    {
+      id: 'rules',
+      title: 'One set of rules for every agent',
+      body: (
+        <>
+          <p>
+            Each agent reads its own instructions file. Keep one <code>.sldev/rules.md</code> instead, and sldev-io writes it to all of them (
+            <b>Skills → Rules</b>):
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><code>AGENTS.md</code></td><td>Codex, OpenCode, Cursor, Copilot and most other agents</td></tr>
+              <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td></tr>
+              <tr><td><code>GEMINI.md</code></td><td>Gemini CLI</td></tr>
+              <tr><td><code>.cursor/rules/sldev.mdc</code></td><td>Cursor</td></tr>
+              <tr><td><code>.github/copilot-instructions.md</code></td><td>GitHub Copilot</td></tr>
+            </tbody>
+          </table>
+          <p>
+            <b>Create from this project's agent files</b> starts <code>rules.md</code> from the files you already have. Turn off the files you
+            don't want. A file someone edited by hand is never overwritten without asking.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'skills',
+      title: 'Skills, commands and MCP servers',
+      body: (
+        <>
+          <p>
+            The <b>Skills</b> view lists the project's and your own skills, slash commands and subagents, plus the MCP servers configured for
+            Claude Code. Run a skill on any agent: Claude Code gets its slash command, other agents are pointed at its <code>SKILL.md</code>.
+            Skills in <code>.sldev/skills</code> or <code>.agents/skills</code> are meant for every agent.
+          </p>
+          <p>
+            Skills also work as factory stages (<code>skill: our-spec</code>); see <a href="/docs/recipes#skills">your own skills and specs</a>.
+            Agent profiles (a role like Reviewer, with its CLI and model) are covered under{' '}
+            <a href="/docs/recipes#agents">choosing agents</a>.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'usage',
+      title: 'Usage and the agents dashboard',
+      body: (
+        <p>
+          The usage dashboard reads the token counts Claude Code and Codex already write to their local logs, and shows a timeline of your
+          missions and how long each waited on you. The agents dashboard shows every running agent in one view. Nothing leaves your machine.
+        </p>
+      )
+    }
+  ]
+}
+
+const remote: DocPage = {
+  id: 'remote',
+  title: 'Remote servers and containers',
+  summary: 'Connect to servers over SSH, keep their credentials encrypted, forward ports, browse files, and manage your Docker containers, all next to your local terminals.',
+  sections: [
+    {
+      id: 'ssh',
+      title: 'SSH connections',
+      body: (
+        <>
+          <p>
+            In <b>Remote → Connections</b>, add a server with its host, port and user. It can sign in three ways: through your ssh-agent (or
+            Pageant on Windows), with a saved credential, or by asking for the password each time. Choose a <b>jump host</b> to go through a
+            bastion, and a <b>start folder</b> for new terminals.
+          </p>
+          <p>
+            The first time you connect, sldev-io shows the server's key fingerprint and asks you to trust it. If the key ever changes, it warns
+            you before connecting, like <code>ssh</code> does.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'credentials',
+      title: 'Credentials',
+      body: (
+        <>
+          <p>
+            <b>Remote → Credentials</b> holds passwords and private keys, encrypted with your system's keychain (Keychain on macOS, Windows'
+            data protection, the secret service on Linux). They're only decrypted for connecting and are never
+            shown again. For a <b>key file</b>, only the path is saved, and the key is read from disk on each connect.
+          </p>
+          <Note>On Linux without a keyring (gnome-keyring, KWallet), sldev-io says so and doesn't save secrets; use ssh-agent instead.</Note>
+        </>
+      )
+    },
+    {
+      id: 'forwards',
+      title: 'Port forwards and files',
+      body: (
+        <>
+          <p>
+            A connection can forward local ports to the server, such as local <code>8080</code> to <code>localhost:80</code> over there. Turn
+            each one on or off from the connection's row.
+          </p>
+          <p>
+            Browse the server's files from the connection, download one, or open a terminal in any folder. Agents can run on the server too:
+            open a terminal there and start the CLI.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'containers',
+      title: 'Docker containers',
+      body: (
+        <p>
+          <b>Remote → Containers</b> lists your Docker containers, grouped by compose project. Start, stop, restart or remove one, open a shell
+          in it, follow its logs in a terminal, or open its published ports in your browser. It uses the <code>docker</code> CLI you already
+          have.
+        </p>
+      )
+    }
+  ]
+}
+
+export const docs: DocPage[] = [recipes, missions, workspace, agents, remote]

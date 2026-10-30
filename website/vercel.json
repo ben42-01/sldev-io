@@ -28,8 +28,8 @@
       "destination": "/docs/index.html"
     },
     {
-      "source": "/docs/recipes",
-      "destination": "/docs/recipes/index.html"
+      "source": "/docs/:page",
+      "destination": "/docs/:page/index.html"
     },
     {
       "source": "/download/:os",

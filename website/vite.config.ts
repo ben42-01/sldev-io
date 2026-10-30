@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Connect, type Plugin } from 'vite'
@@ -47,8 +47,13 @@ function downloadRedirect(): Plugin {
   }
 }
 
+// /docs/<id> pages are found on disk, so a new guide only needs its docs/<id>/index.html (test/docsPages.test.ts checks there is one)
+const docPages = readdirSync(new URL('./docs/', import.meta.url), { withFileTypes: true })
+  .filter((e) => e.isDirectory() && existsSync(new URL(`./docs/${e.name}/index.html`, import.meta.url)))
+  .map((e) => `docs/${e.name}`)
+
 // extra HTML pages next to index.html (each has <name>/index.html)
-const pages = ['features', 'pricing', 'download', 'changelog', 'compare', 'docs', 'docs/recipes', 'terms', 'privacy', 'refunds', 'thanks']
+const pages = ['features', 'pricing', 'download', 'changelog', 'compare', 'docs', ...docPages, 'terms', 'privacy', 'refunds', 'thanks']
 
 /** /terms → /terms/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
 function pageRoutes(): Plugin {
