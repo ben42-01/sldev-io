@@ -63,6 +63,10 @@ export interface AppSettings {
   factoryModes: Record<string, string>
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
+  /** agents to continue on, in order, when one stops at its usage limit */
+  failoverOrder: string[]
+  /** continue on the next agent without asking (missions and factory stages) */
+  failoverAuto: boolean
   /** give Claude Code and Codex missions the sldev MCP tools (status, output, other missions) */
   agentTools: boolean
   /** agent profiles kept for every project (project ones live in .sldev/agents) */
@@ -141,6 +145,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   globalHotkey: 'CommandOrControl+Shift+Space',
   defaultAgent: 'claude',
   customAgents: [],
+  failoverOrder: [],
+  failoverAuto: false,
   factoryModes: {},
   agentProfiles: [],
   agentTools: true,
@@ -272,7 +278,11 @@ export interface Mission {
   /** what kind of work it is (Build, Research, Plan, a custom kind…); missing = Build */
   kind?: { id: string; name: string; readOnly: boolean }
   /** the mission this one continues or reviews */
-  parent?: { id: string; kind: 'follow-up' | 'second-opinion' }
+  parent?: { id: string; kind: 'follow-up' | 'second-opinion' | 'failover' }
+  /** the agent stopped at its usage limit: when, and the line that said so */
+  limited?: { at: number; text: string }
+  /** the mission that took over after the limit */
+  continuedBy?: string
   /** project root the mission belongs to */
   root: string
   cwd: string

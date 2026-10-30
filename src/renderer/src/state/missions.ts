@@ -2,9 +2,10 @@ import type { AgentOptions, HookEvent, Mission, MissionStatus } from '@shared/ty
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
 import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
-import { agentCommand, commandText, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
+import { agentCommand, commandText, installedBin, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
+import { failoverBrief, limitLine, TAIL_ROWS, nextAgent } from '@shared/failover'
 import { playChime } from '../lib/sound'
-import { onTerminalEvent, stopTerminal } from '../lib/terminals'
+import { onTerminalEvent, stopTerminal, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
 import { getKind } from './missionKinds'
@@ -213,6 +214,35 @@ export async function followUpMission(id: string, next: string, agentId?: string
   return startMission({ prompt: missionPrompt({ title, brief }, kind), brief, title, root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'follow-up' }, kind: m.kind })
 }
 
+/**
+ * Another agent takes over a mission whose agent stopped at its usage limit: same folder, same kind,
+ * the original task, and the old agent's last output so it can pick up where that one stopped.
+ */
+export async function continueOnAgent(id: string, agentId: string): Promise<Mission | undefined> {
+  const m = getMission(id)
+  if (!m) return undefined
+  const prev = getAgent(m.options.agent).name
+  const panel = missions.get().panels[id]
+  const brief = failoverBrief(m, prev, panel ? terminalTail(panel, TAIL_ROWS) : (m.lastMessage ?? ''), getAgent(m.options.agent).usageLimit)
+  const kind = getKind(m.kind?.id)
+  const agent = getAgent(agentId)
+  // the old agent's model, mode and effort mean nothing to the new one; a read-only kind stays read-only
+  const options = { ...m.options, agent: agentId, model: undefined, effort: undefined, permissionMode: kind.readOnly ? agent.readOnlyMode : undefined }
+  const next = await startMission({ prompt: missionPrompt({ title: m.title, brief }, kind), brief, title: m.title, root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'failover' }, kind: m.kind })
+  update(id, { continuedBy: next.id, notification: `Continued on ${agent.name}` })
+  return next
+}
+
+/** Another mission took over this one's work (a factory stage that moved on after a limit). */
+export function markContinued(id: string, by: string): void {
+  update(id, { continuedBy: by })
+}
+
+/** The agent a mission (or factory stage) moves to when its own hits the limit: the first installed one in Settings → Agents. */
+export function failoverAgent(current: string | undefined): string | undefined {
+  return nextAgent(workspace.get().failoverOrder ?? [], current || 'claude', (id) => !!installedBin(getAgent(id)))
+}
+
 /** What the New mission form starts with: a Build mission whose brief is a plan's or a research mission's result. */
 export interface MissionDraft {
   kind?: string
@@ -247,6 +277,35 @@ export async function refreshStats(id: string): Promise<void> {
 
 // ── live updates ─────────────────────────────────────────────────
 
+/**
+ * Did the agent just stop at its usage limit? Checked when it goes quiet, asks for attention, stops
+ * or exits, against the end of its output (and the hook's text). Flags the mission once; with
+ * Settings → Agents → "continue automatically", a mission moves on to the next agent.
+ */
+function checkLimit(id: string, extra?: string): void {
+  const m = getMission(id)
+  if (!m || m.limited || m.continuedBy) return
+  const agent = getAgent(m.options.agent)
+  const panel = missions.get().panels[id]
+  const hit = limitLine(`${panel ? terminalTail(panel, TAIL_ROWS) : ''}\n${extra ?? ''}`, agent.usageLimit)
+  if (!hit) return
+  const live = isLive(m.status) && !m.factory
+  const next = update(id, { limited: { at: Date.now(), text: hit }, notification: `${agent.name} hit its usage limit`, ...(live ? { status: 'needs-input' as const } : {}) })
+  if (!next || m.factory) return
+  const to = failoverAgent(m.options.agent)
+  if (to && workspace.get().failoverAuto) void continueOnAgent(id, to)
+  else notify(next, `${m.title}: ${agent.name} hit its usage limit`, to ? `Continue it on ${getAgent(to).name} from the mission card.` : hit)
+}
+
+/** Every agent, hooks or not, is checked for a limit message once its output settles. */
+const LIMIT_QUIET_MS = 3000
+const limitTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function watchLimit(id: string): void {
+  clearTimeout(limitTimers.get(id))
+  limitTimers.set(id, setTimeout(() => (limitTimers.delete(id), checkLimit(id)), LIMIT_QUIET_MS))
+}
+
 function notify(m: Mission, title: string, body: string): void {
   const { notifications, notificationSound } = workspace.get()
   if (m.factory && m.status !== 'needs-input') return
@@ -270,7 +329,8 @@ window.api.missions.onHook((e: HookEvent) => {
       update(m.id, { ...base, status: m.status === 'starting' && m.prompt ? 'working' : 'waiting' })
       break
     case 'prompt':
-      update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text ? `Prompt: ${e.text}` : m.activity, activityAt: Date.now() })
+      // a new message means the limit is behind it (a new model, a reset, an upgrade)
+      update(m.id, { ...base, status: 'working', notification: undefined, limited: undefined, activity: e.text ? `Prompt: ${e.text}` : m.activity, activityAt: Date.now() })
       break
     case 'tool':
       update(m.id, { ...base, status: 'working', notification: undefined, activity: e.text, activityAt: Date.now() })
@@ -279,12 +339,14 @@ window.api.missions.onHook((e: HookEvent) => {
       const idle = /waiting for your input/i.test(e.text ?? '')
       const next = update(m.id, { ...base, status: idle ? 'waiting' : 'needs-input', notification: idle ? undefined : e.text })
       if (next && !idle) notify(next, `${m.title} needs you`, e.text ?? '')
+      checkLimit(m.id, e.text)
       break
     }
     case 'stop': {
       const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text?.slice(0, 600) ?? m.lastMessage, report: e.text ?? m.report, notification: undefined })
       if (next) notify(next, `${m.title} finished`, e.text ?? `${getAgent(m.options.agent).name} is waiting for your next message`)
       void refreshStats(m.id)
+      checkLimit(m.id, e.text)
       break
     }
     case 'session-end':
@@ -354,6 +416,8 @@ onTerminalEvent((e) => {
   if (!entry) return
   const [missionId] = entry
   const m = getMission(missionId)
+  if (m && e.type === 'activity' && isLive(m.status)) watchLimit(m.id)
+  if (m && e.type === 'attention') checkLimit(m.id, e.text)
   if (m && (e.type === 'activity' || e.type === 'attention')) {
     if (getAgent(m.options.agent).hooks || !isLive(m.status) || reporting.has(m.id)) return
     if (e.type === 'activity') onAgentActivity(m)
@@ -371,6 +435,9 @@ onTerminalEvent((e) => {
   } else if (e.type === 'status' && e.status === 'exited' && m && isLive(m.status)) {
     clearTimeout(idleTimers.get(missionId))
     const failed = e.exitCode !== undefined && e.exitCode !== 0 && e.exitCode !== 130
+    clearTimeout(limitTimers.get(missionId))
+    // before the status changes, so a factory stage sees the limit when it sees the exit
+    checkLimit(missionId)
     update(missionId, { status: failed ? 'failed' : 'ended' })
     void refreshStats(missionId)
   } else if (e.type === 'status' && e.status === 'starting' && m && !isLive(m.status)) {

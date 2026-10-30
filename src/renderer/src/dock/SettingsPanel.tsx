@@ -62,6 +62,7 @@ export function SettingsPanel(): React.JSX.Element {
       <section>
         <h3>Agents</h3>
         <AgentSettings />
+        <FailoverSettings />
         <AgentProfiles />
         <label className="check">
           <input type="checkbox" checked={s.agentTools !== false} onChange={(e) => updateSettings({ agentTools: e.target.checked })} />
@@ -108,6 +109,44 @@ export function SettingsPanel(): React.JSX.Element {
       <LicenseSection />
       <AboutSection />
     </div>
+  )
+}
+
+/** Where work goes when an agent stops at its plan's usage limit. */
+function FailoverSettings(): React.JSX.Element {
+  const agents = useAgents().filter((a) => !a.custom)
+  const order = useStore(workspace, (w) => w.failoverOrder ?? [])
+  const auto = useStore(workspace, (w) => w.failoverAuto)
+  const toggle = (id: string, on: boolean): void => updateSettings({ failoverOrder: on ? [...order.filter((x) => x !== id), id] : order.filter((x) => x !== id) })
+  return (
+    <>
+      <div className="field">
+        <span>When an agent hits its usage limit, continue on</span>
+        <div className="failover-list">
+          {agents.map((a) => {
+            const i = order.indexOf(a.id)
+            return (
+              <label key={a.id} className="check">
+                <input type="checkbox" checked={i >= 0} onChange={(e) => toggle(a.id, e.target.checked)} />
+                <span>
+                  {i >= 0 ? <b className="failover-rank">{i + 1}</b> : null}
+                  {a.name}
+                  {a.installed === false ? ' (not installed)' : ''}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <span className="field-hint">
+          Tick them in the order to try. The next agent gets the original task, the work so far (it stays in the same folder) and the last
+          output of the one that stopped. The agent that stopped is skipped.
+        </span>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={auto} disabled={!order.length} onChange={(e) => updateSettings({ failoverAuto: e.target.checked })} />
+        <span>Continue automatically, without asking (missions and factory stages). Off: the mission shows a Continue button.</span>
+      </label>
+    </>
   )
 }
 

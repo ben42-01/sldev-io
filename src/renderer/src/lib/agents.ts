@@ -28,6 +28,11 @@ export interface AgentDef {
   efforts: string[]
   /** a mode that can read but not change anything, preselected for read-only mission kinds (Research, Plan, Review) */
   readOnlyMode?: string
+  /**
+   * the line an agent prints when it stops at its plan's usage limit; specific on purpose, since only
+   * the last lines of output are checked and a false match would hand the work to another agent
+   */
+  usageLimit?: RegExp
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
   /** runs skills and commands from ~/.claude and .claude as `/name` */
@@ -90,6 +95,7 @@ const claude: AgentDef = {
   unattendedMode: 'auto',
   readOnlyMode: 'plan',
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+  usageLimit: /(?:usage|session|weekly|5-hour|opus) limit reached|limit will reset at|you've hit your (?:usage|session|weekly) limit/i,
   hooks: true,
   claudeSkills: true,
   canPrint: true,
@@ -126,6 +132,7 @@ const codex: AgentDef = {
   unattendedMode: 'full-auto',
   readOnlyMode: 'read-only',
   efforts: ['minimal', 'low', 'medium', 'high'],
+  usageLimit: /you've hit your usage limit|usage limit (?:reached|exceeded)|rate limit reached for|last status: 429/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -158,6 +165,7 @@ const cursor: AgentDef = {
   modelPlaceholder: 'default',
   modes: [{ value: 'force', label: 'Auto-approve commands (--force)' }],
   efforts: [],
+  usageLimit: /you've hit your usage limit|usage limit (?:reached|exceeded)/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -182,6 +190,7 @@ const copilot: AgentDef = {
   modelPlaceholder: 'default',
   modes: [{ value: 'allow-all-tools', label: 'Allow all tools' }],
   efforts: [],
+  usageLimit: /quota exceeded|exceeded your .{0,40}(?:allowance|quota)|rate limit exceeded/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -209,6 +218,7 @@ const opencode: AgentDef = {
   ],
   readOnlyMode: 'plan',
   efforts: [],
+  usageLimit: /usage limit (?:reached|exceeded)|quota exceeded|rate limit exceeded|429 Too Many Requests/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -236,6 +246,7 @@ const gemini: AgentDef = {
   ],
   unattendedMode: 'auto_edit',
   efforts: [],
+  usageLimit: /quota exceeded|RESOURCE_EXHAUSTED|usage limit reached/i,
   hooks: false,
   canPrint: true,
   canResume: true,

@@ -1,6 +1,6 @@
 import type { Mission } from '@shared/types'
 import { Bot, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
-import { buildDraft, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
+import { buildDraft, continueOnAgent, failoverAgent, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { openNewMission } from './MissionsView'
 import { openNewRun } from './FactoryView'
 import { useStore } from '../state/store'
@@ -37,6 +37,14 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
         ]
       : []),
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
+    ...(m.limited && !m.continuedBy
+      ? [
+          { type: 'header' as const, label: 'Continue on another agent' },
+          ...allAgents(workspace.get().customAgents)
+            .filter((a) => a.id !== (m.options.agent || 'claude'))
+            .map((a): MenuItem => ({ label: a.name, icon: <Bot size={13} />, run: () => void continueOnAgent(m.id, a.id) }))
+        ]
+      : []),
     { type: 'header', label: 'Review with another agent' },
     ...allAgents(workspace.get().customAgents)
       .filter((a) => a.id !== (m.options.agent || 'claude'))
@@ -58,7 +66,11 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
         <TimeAgo t={m.updatedAt} className="mission-time" />
       </div>
       <button type="button" className="mission-title" title="Brief, report and handoff" onClick={() => openMissionDetails(m.id)}>{m.title}</button>
-      {m.status === 'needs-input' && m.notification && <div className="mission-alert">{m.notification}</div>}
+      {m.limited && !m.continuedBy ? (
+        <LimitAlert mission={m} />
+      ) : (
+        m.status === 'needs-input' && m.notification && <div className="mission-alert">{m.notification}</div>
+      )}
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}
       <div className="mission-branch" title={m.worktree?.path ?? m.cwd}>
@@ -92,6 +104,27 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
           <Ellipsis size={13} />
         </button>
       </div>
+    </div>
+  )
+}
+
+/** The agent stopped at its usage limit: one click hands the mission to the next agent. */
+function LimitAlert({ mission: m }: { mission: Mission }): React.JSX.Element {
+  const to = failoverAgent(m.options.agent)
+  const others = allAgents(workspace.get().customAgents).filter((a) => a.id !== (m.options.agent || 'claude'))
+  return (
+    <div className="mission-alert limit" title={m.limited?.text}>
+      <span>{getAgent(m.options.agent).name} hit its usage limit.</span>
+      {to ? (
+        <button className="btn sm" onClick={() => void continueOnAgent(m.id, to)}>Continue on {getAgent(to).name}</button>
+      ) : (
+        <button
+          className="btn sm"
+          onClick={(e) => showContextMenu(e, others.map((a): MenuItem => ({ label: a.name, icon: <Bot size={13} />, run: () => void continueOnAgent(m.id, a.id) })))}
+        >
+          Continue on…
+        </button>
+      )}
     </div>
   )
 }

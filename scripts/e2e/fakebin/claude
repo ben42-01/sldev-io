@@ -9,6 +9,15 @@ const settings = JSON.parse(fs.readFileSync(args[si + 1], 'utf8'))
 const fire = (ev, payload) => spawnSync('/bin/sh', ['-c', settings.hooks[ev][0].hooks[0].command], { input: JSON.stringify({ session_id: 'sess-123', ...payload }), env: process.env, stdio: ['pipe', 'inherit', 'inherit'] })
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 console.log('\x1b[35m✻ fake claude\x1b[0m  args:', args.slice(2).join(' '))
+// HIT_LIMIT: stop at the plan's usage limit like the real CLI (print mode exits with an error, interactive waits)
+if (args[args.length - 1].includes('HIT_LIMIT')) {
+  fire('SessionStart', { source: 'startup' }); sleep(300)
+  fs.appendFileSync('PARTIAL.md', 'half done by claude\n')
+  console.log('Claude usage limit reached. Your limit will reset at 3pm (Europe/Berlin).')
+  if (args.includes('-p')) process.exit(1)
+  process.stdin.resume()
+  return
+}
 // print mode (-p), as the factory runs it: do the work, write the output file it was asked for, exit
 if (args.includes('-p')) {
   const prompt = args[args.length - 1]

@@ -36,7 +36,9 @@ import type { AgentOptions, GhPrComment, WorktreeInfo } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { allAgents, findAgent, skillPrompt, slugify, stageMode } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
-import { getMission, missions, startMission } from './missions'
+import { failoverAgent, getMission, markContinued, missions, startMission } from './missions'
+import { getAgent } from './agents'
+import { failoverNote, TAIL_ROWS, respec } from '@shared/failover'
 import { allProfiles, loadProjectProfiles } from './profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
@@ -586,6 +588,46 @@ export async function pushPrUpdate(runId: string): Promise<void> {
   put({ ...cur, pr: { ...cur.pr!, pushedAt: Date.now() }, updatedAt: Date.now() })
 }
 
+// ── usage limits ─────────────────────────────────────────────────
+
+const failingOver = new Set<string>()
+
+/** A stage's agent stopped at its usage limit: the next agent takes over when that's switched on, else the stage fails and says why. */
+async function stageHitLimit(runId: string, nodeId: string, missionId: string): Promise<void> {
+  if (failingOver.has(missionId)) return
+  failingOver.add(missionId)
+  const m = getMission(missionId)!
+  const to = workspace.get().failoverAuto ? failoverAgent(m.options.agent) : undefined
+  if (to) return continueStage(runId, nodeId, to)
+  const prev = getAgent(m.options.agent).name
+  await complete(runId, nodeId, { ok: false, reason: `${prev} hit its usage limit`, log: `${prev} stopped at its usage limit (${m.limited?.text ?? 'limit reached'}).` })
+}
+
+/** The same stage on another agent, in the same folder, told where the last one stopped (first, so the stage's own task and output file come last). */
+export async function continueStage(runId: string, nodeId: string, agentId: string): Promise<void> {
+  let run = getRun(runId)
+  const node = run?.recipe.nodes.find((n) => n.id === nodeId)
+  const nr = run?.nodes[nodeId]
+  const last = nr?.missionIds[0] ? getMission(nr.missionIds[0]) : undefined
+  if (!run || !node || !nr || node.kind !== 'agent' || !last) return
+  const prev = getAgent(last.options.agent).name
+  const panel = missions.get().panels[last.id]
+  const note = failoverNote(prev, panel ? terminalTail(panel, TAIL_ROWS) : (last.lastMessage ?? ''), getAgent(last.options.agent).usageLimit)
+  if (nr.status !== 'running') run = put({ ...nodeStarted(run, nodeId, Date.now()), status: 'running', note: undefined })
+  try {
+    const spec = respec(node.agents[0], agentId, allAgents(workspace.get().customAgents).map((a) => a.id))
+    const options = stageOptions(spec, node.interactive)
+    const outs = Object.fromEntries(run.recipe.nodes.map((n) => [n.id, outFile(run!.worktree.path, run!.id, n.id)]))
+    const body = await stagePrompt(run, node, run.nodes[nodeId], { intent: run.intent, base: run.worktree.base, out: outFile(last.cwd, run.id, nodeId), outs, log: nr.feedback }, options.agent)
+    const nm = await startMission({ prompt: `${note}\n\n---\n\n${body}`, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd: last.cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })
+    markContinued(last.id, nm.id)
+    const cur = getRun(runId)!
+    put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], missionIds: [nm.id, ...cur.nodes[nodeId].missionIds], note: `Continued on ${getAgent(agentId).name}: ${prev} hit its usage limit` } } })
+  } catch (e) {
+    finish(runId, nodeId, { ok: false, log: (e as Error).message })
+  }
+}
+
 // ── watching missions and terminals ─────────────────────────────
 
 /** Agent nodes finish when their mission's process ends (print mode exits when the agent is done). */
@@ -599,7 +641,8 @@ missions.subscribe(() => {
         continue
       }
       const m = getMission(nr.missionIds[0])
-      if (m?.status === 'ended') void complete(run.id, nodeId, { ok: true })
+      if (m?.limited && (m.status === 'ended' || m.status === 'failed')) void stageHitLimit(run.id, nodeId, m.id)
+      else if (m?.status === 'ended') void complete(run.id, nodeId, { ok: true })
       else if (m?.status === 'failed') void complete(run.id, nodeId, { ok: false, log: `${m.title} exited with an error` })
     }
   }

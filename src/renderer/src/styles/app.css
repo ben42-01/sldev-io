@@ -4056,3 +4056,23 @@ a {
 .stage-choice select {
   min-width: 0;
 }
+
+/* usage-limit failover */
+.mission-alert.limit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.failover-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.failover-rank {
+  display: inline-block;
+  min-width: 14px;
+  margin-right: 4px;
+  font: 600 10px var(--font-mono);
+  color: var(--fg);
+}

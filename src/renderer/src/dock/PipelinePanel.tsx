@@ -7,7 +7,11 @@ import { getAgent } from '../state/agents'
 import { terminalTail } from '../lib/terminals'
 import { openInEditor } from '../lib/actions'
 import type { GhPrComment } from '@shared/types'
-import { addressPrFeedback, approve, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, sendBack, stop, useRun } from '../state/factory'
+import { addressPrFeedback, approve, continueStage, keep, markDone, prFeedback, pushPrUpdate, reject, resume, retry, sendBack, stop, useRun } from '../state/factory'
+import { getMission } from '../state/missions'
+import { allAgents } from '../lib/agents'
+import { workspace } from '../state/workspace'
+import { showContextMenu } from '../components/ContextMenu'
 import { focusOrResume, isLive, missions, reviewMission, useMission } from '../state/missions'
 import { ago } from '../components/MissionCard'
 import { StatusPill } from '../components/StatusDot'
@@ -309,6 +313,18 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           )}
           {node.kind === 'agent' && (nr.status === 'done' || nr.status === 'approval') && (
             <button className="icon-btn" title="Open its output" aria-label="Open its output" onClick={() => void openInEditor(out)}><FileText size={13} /></button>
+          )}
+          {nr.status === 'failed' && node.kind === 'agent' && nr.missionIds[0] && getMission(nr.missionIds[0])?.limited && (
+            <button
+              className="btn sm"
+              title="Run this stage on another agent, starting from where this one stopped"
+              onClick={(e) => {
+                const current = getMission(nr.missionIds[0])?.options.agent
+                showContextMenu(e, allAgents(workspace.get().customAgents).filter((a) => a.id !== current).map((a) => ({ label: a.name, run: () => void continueStage(run.id, node.id, a.id) })))
+              }}
+            >
+              <Bot size={11} /> Continue on…
+            </button>
           )}
           {nr.status === 'failed' && run.status !== 'running' && targets.length > 0 && (
             <button className="btn sm" title="Run it again with the failure and your note" onClick={() => setAsking('send')}>
