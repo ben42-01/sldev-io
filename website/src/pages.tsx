@@ -86,7 +86,7 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
               Where <span className="brand-text">sldev-io</span> fits
             </>
           }
-          lead="Next to your editor and your terminal, not instead of them. What each kind of tool does out of the box."
+          lead="Next to your editor and your terminal, and on your machine instead of someone else's cloud. What each kind of tool does out of the box."
         />
         <CompareTable />
       </Layout>

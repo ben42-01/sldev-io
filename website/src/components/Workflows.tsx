@@ -25,7 +25,7 @@ function RunIcon({ st }: { st: (typeof runs)[number]['st'] }) {
 }
 
 /** One line of the pane, revealed after the previous ones. */
-function L({ i, children, className }: { i: number; children?: ReactNode; className?: string }) {
+export function L({ i, children, className }: { i: number; children?: ReactNode; className?: string }) {
   return (
     <div className={`ln${className ? ` ${className}` : ''}`} style={{ '--i': i } as CSSProperties}>
       {children ?? ' '}
@@ -34,7 +34,7 @@ function L({ i, children, className }: { i: number; children?: ReactNode; classN
 }
 
 /** Replays the run's output each time the mock scrolls into view. */
-function useSeen<T extends Element>(): [React.RefObject<T | null>, number] {
+export function useSeen<T extends Element>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T>(null)
   const [seen, setSeen] = useState(0)
   useEffect(() => {

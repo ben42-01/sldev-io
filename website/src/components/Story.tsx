@@ -4,12 +4,14 @@ const before = [
   'A terminal tab per agent, and guessing which one is waiting for you',
   'Two agents editing the same folder at once',
   'Copying diffs around to review what an agent changed',
+  'An agent hits its usage limit and the work waits hours for the reset',
   'Yet another tool rewriting your agent settings'
 ]
 const after = [
   'One window, live status for every agent, a ping when one needs you',
   'Each mission in its own git worktree',
   'Diff, commit and pull request built in',
+  'Another agent continues where the stopped one left off',
   'Your own agent settings left untouched'
 ]
 

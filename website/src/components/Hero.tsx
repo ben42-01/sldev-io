@@ -16,11 +16,12 @@ export function Hero() {
         <h1>
           Every coding agent.
           <br />
-          <span className="brand-text">One workspace.</span>
+          <span className="brand-text">Working as one team.</span>
         </h1>
         <p className="lead">
-          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side, or chain them into a Software Factory
-          that takes an idea from spec to reviewed pull request. You only step in where it matters.
+          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini on your own machine. When one hits its usage limit, the
+          next one picks up the work. Chain them into a Software Factory that turns an issue into a reviewed pull request, and step in
+          only where it matters.
         </p>
         <div className="hero-cta">
           <DownloadButton />

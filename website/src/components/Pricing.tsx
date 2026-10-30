@@ -71,6 +71,7 @@ function FaqItem({ item }: { item: Faq }) {
 const generalFaq: Faq[] = [
   { q: 'Is sldev-io an IDE?', a: 'No. There is no code editor. Files open in the editor you already use (Cursor, VS Code, Zed, JetBrains, Neovim and more). sldev-io is where your terminals and agents live.' },
   { q: 'Which platforms are supported?', a: 'Windows 10/11, macOS (Intel and Apple Silicon) and Debian/Ubuntu Linux (.deb). Early builds are unsigned, so Windows shows a SmartScreen prompt and macOS needs a right-click → Open the first time.' },
+  { q: 'What happens when an agent hits its usage limit?', a: 'The mission says so and offers to continue on the next agent in your order, for example Codex after Claude Code. The next agent works in the same folder with the original task and the last output, so it finishes the work instead of starting over. Factory runs can do this on their own.' },
   { q: 'Does it change my agent configuration?', a: 'No. Claude Code missions get a separate settings file passed on the command line, and your own settings are left alone.' }
 ]
 
@@ -92,7 +93,7 @@ export function FaqSection() {
 
 /** The three questions people ask first, on the home page. */
 export function HomeFaq() {
-  const picks = [generalFaq[0], pricing.faq[2], pricing.faq[5]]
+  const picks = [generalFaq[0], generalFaq[2], pricing.faq[2], pricing.faq[5]]
   return (
     <section className="section alt" id="faq">
       <div className="container narrow">

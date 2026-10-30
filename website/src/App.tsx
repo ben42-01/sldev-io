@@ -1,3 +1,4 @@
+import { FailoverSpotlight } from './components/Failover'
 import { FeatureHighlights } from './components/Features'
 import { FinalCta, Footer } from './components/Footer'
 import { AgentStrip, Hero } from './components/Hero'
@@ -14,6 +15,7 @@ export function App() {
         <Hero />
         <AgentStrip />
         <WhySection />
+        <FailoverSpotlight />
         <FeatureHighlights />
         <WorkflowsSpotlight />
         <HomeFaq />

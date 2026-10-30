@@ -316,6 +316,24 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .card h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .card p { margin-top: 8px; font-size: 14.5px; color: var(--fg-muted); }
 
+/* home: the three pillars, each listing what makes it up */
+.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 56px; background: var(--border); border: 1px solid var(--border); }
+.pillar { padding: 32px 28px; background: var(--bg); border-top: 2px solid transparent; border-image: var(--brand) 1; border-image-slice: 1 0 0 0; }
+.pillar > svg { color: var(--fg); margin-bottom: 18px; }
+.pillar h3 { font-size: 20px; letter-spacing: -0.02em; }
+.pillar p { margin-top: 8px; color: var(--fg-muted); font-size: 15px; }
+.pillar ul { margin-top: 22px; display: grid; gap: 2px; }
+.pillar li a { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14.5px; color: var(--fg); border-top: 1px solid var(--border); }
+.pillar li a:hover { color: var(--fg-muted); }
+.pillar li svg { flex: none; color: var(--fg-muted); }
+@media (max-width: 900px) { .pillars { grid-template-columns: 1fr; } }
+
+/* /features: one block per group */
+.feature-group { scroll-margin-top: 80px; }
+.feature-group + .feature-group { margin-top: 96px; }
+.feature-group .grid { margin-top: 32px; }
+.feature-group-h { font-size: clamp(24px, 3.4vw, 34px); }
+
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; }
 .step { padding: 28px; border: 1px solid var(--border); background: var(--bg); border-top: 2px solid transparent; border-image: var(--brand) 1; border-image-slice: 1 0 0 0; }
 .step-n { font: 500 13px var(--font-mono); color: var(--fg-subtle); }
@@ -505,6 +523,14 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .wfm-term-h { padding: 7px 14px; font: 11px var(--font-mono); color: var(--fg-muted); border-bottom: 1px solid var(--border); }
 .wfm-term pre { margin: 0; padding: 12px 14px; font: 12px/1.6 var(--font-mono); overflow: hidden; }
 .wfm-term .ln { white-space: pre; animation: line-in 0.35s ease-out both; animation-delay: calc(var(--i) * 260ms + 150ms); }
+.failover pre { font-size: 12px; }
+.failover pre .ln { white-space: pre; animation: line-in 0.35s ease-out both; animation-delay: calc(var(--i) * 260ms + 150ms); }
+.failover-btn { padding: 1px 8px; border: 1px solid var(--border-strong); color: var(--fg); }
+.spot-more { margin-top: 28px; }
+/* the terminal's long lines scroll inside the pane instead of widening the page on phones */
+.split > * { min-width: 0; }
+.failover pre { overflow-x: auto; }
+@media (max-width: 720px) { .failover pre { font-size: 11px; } }
 @media (max-width: 900px) {
   .wfm-body { grid-template-columns: 1fr; height: auto; }
   .wfm-side { display: none; }
@@ -561,17 +587,17 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 
 /* /compare */
 .vs-wrap { overflow-x: auto; border: 1px solid var(--border); }
-.vs-table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 14.5px; }
+.vs-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 14.5px; }
 .vs-table th, .vs-table td { padding: 14px 18px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .vs-table tbody tr:last-child th, .vs-table tbody tr:last-child td { border-bottom: 0; }
 .vs-table thead th { font: 500 12px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-subtle); }
-.vs-table tbody th { font-weight: 400; color: var(--fg); width: 38%; }
+.vs-table tbody th { font-weight: 400; color: var(--fg); width: 32%; }
 .vs-table td { color: var(--fg-muted); }
 .vs-table .vs-us { background: var(--bg-elev); color: var(--fg); }
 .vs-table thead .vs-us { color: var(--fg); }
 .vs-yes { color: var(--green); }
 .vs-no { color: var(--fg-subtle); }
-.vs-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 44px; }
+.vs-notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 44px; }
 .vs-notes h3 { font-size: 17px; letter-spacing: -0.01em; }
 .vs-notes p { margin-top: 8px; color: var(--fg-muted); font-size: 14.5px; }
 .vs-notes + .hero-cta { margin-top: 44px; justify-content: center; }
