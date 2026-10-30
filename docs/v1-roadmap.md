@@ -397,6 +397,9 @@ against the real tools (on a scratch repo, with a cheap model):
       them; `opencode run` still has `--model` and `--agent`. Its `--session <id>` (create with our id) and
       `session export` could give real final reports instead of the terminal screen, and
       `OPENCODE_CONFIG_CONTENT` may carry the sldev MCP server per run.
+- [ ] **Approval prompts** (`asks` in `lib/agents.ts`): trigger one approval in each real CLI and check the
+      pattern matches its question. OpenCode's ("Permission required", Allow once / Always allow / Reject) is
+      from its binary; Codex, Cursor, Copilot and Gemini are from their docs and need a look.
 - [ ] **Final screen**: for agents that don't report back, the report is the terminal after the prompt
       (`src/shared/screenReport.ts`). Check it reads well for OpenCode's full-screen UI, Gemini and Copilot.
 

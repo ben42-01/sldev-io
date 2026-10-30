@@ -73,6 +73,8 @@ export type TerminalEvent =
   | { type: 'activity'; id: string }
   /** the program rang the bell or sent an OSC 9 / 777 desktop notification */
   | { type: 'attention'; id: string; text?: string }
+  /** the user typed into the running program (answered a prompt, sent a message) */
+  | { type: 'input'; id: string }
 
 const eventListeners = new Set<(e: TerminalEvent) => void>()
 
@@ -213,6 +215,7 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
 
   term.onData((d) => {
     s.lastInput = Date.now()
+    if (s.status === 'running') emit({ type: 'input', id })
     if (s.status === 'running' && broadcast.has(id)) {
       for (const bid of broadcast) if (sessions.get(bid)?.status === 'running') window.api.pty.write(bid, d)
     } else if (s.status === 'running') window.api.pty.write(id, d)
@@ -323,13 +326,20 @@ export function runningTerminalsIn(dir: string): string[] {
 }
 
 /** The last lines a terminal printed, as plain text (a failing check's output, for the agent that fixes it). */
-export function terminalTail(id: string, maxLines = 120): string {
+/** The last lines of the screen and scrollback; with fromLine, nothing above that row (see terminalCursor). */
+export function terminalTail(id: string, maxLines = 120, fromLine = 0): string {
   const s = sessions.get(id)
   if (!s) return ''
   const b = s.term.buffer.active
   const out: string[] = []
-  for (let i = Math.max(0, b.length - maxLines); i < b.length; i++) out.push(b.getLine(i)?.translateToString(true) ?? '')
+  for (let i = Math.max(fromLine, b.length - maxLines); i < b.length; i++) out.push(b.getLine(i)?.translateToString(true) ?? '')
   return out.join('\n').trim()
+}
+
+/** The row the cursor is on, counted from the top of the scrollback, and whether a full-screen program owns the screen. */
+export function terminalCursor(id: string): { line: number; alt: boolean } | undefined {
+  const b = sessions.get(id)?.term.buffer.active
+  return b && { line: b.baseY + b.cursorY, alt: b.type === 'alternate' }
 }
 
 export function terminalStatus(id: string): TerminalStatus | undefined {

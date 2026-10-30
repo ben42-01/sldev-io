@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, BookmarkPlus, Bot, CornerDownRight, FileDiff, GitBranch, MessagesSquare, SquareTerminal, Trash2 } from 'lucide-react'
 import { missionSignal } from '@shared/status'
-import { allAgents } from '../lib/agents'
+import { allAgents, statusSource } from '../lib/agents'
 import { openInEditor } from '../lib/actions'
 import { removeMissionFlow } from '../lib/removals'
 import { focusOrResume, followUpMission, getMission, reviewMission, reviewWithAgent, setHandoff, useMission } from '../state/missions'
@@ -127,6 +127,7 @@ function MissionDetails({ id, onClose }: { id: string; onClose: () => void }): R
           m.cwd
         )}
       </div>
+      <p className="hint detail-tracking">{statusSource(agent)}</p>
 
       {following ? (
         <>

@@ -5,8 +5,9 @@ import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@s
 import { agentCommand, commandText, installedBin, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
 import { failoverBrief, limitLine, TAIL_ROWS, nextAgent } from '@shared/failover'
 import { screenReport } from '@shared/screenReport'
+import { ASK_GENERIC, askLine } from '@shared/attention'
 import { playChime } from '../lib/sound'
-import { onTerminalEvent, stopTerminal, terminalTail } from '../lib/terminals'
+import { onTerminalEvent, stopTerminal, terminalCursor, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
 import { getKind } from './missionKinds'
@@ -427,7 +428,7 @@ function onAgentActivity(m: Mission): void {
     setTimeout(() => {
       idleTimers.delete(m.id)
       const cur = getMission(m.id)
-      if (cur?.status !== 'working') return
+      if (cur?.status !== 'working' || checkAsk(m.id)) return
       captureScreen(m.id)
       const next = update(m.id, { status: 'waiting' })
       // updatedAt is when it started working: don't ping for a quick redraw, only after a real stretch of work
@@ -435,6 +436,64 @@ function onAgentActivity(m: Mission): void {
       void refreshStats(m.id)
     }, IDLE_MS)
   )
+}
+
+/**
+ * Approval prompts on screen, for every agent without hooks: full-screen agents wait in a dialog
+ * without a bell. Checked while output arrives (at most every ASK_CHECK_MS) and once it settles, so
+ * the dialog's final frame is seen. The prompt comes from the CLI, not the model, so this runs even for
+ * agents that report through the sldev tools.
+ */
+const ASK_CHECK_MS = 1000
+const ASK_SETTLE_MS = 400
+const askChecked = new Map<string, number>()
+const askTimers = new Map<string, ReturnType<typeof setTimeout>>()
+/** missions that need you because of a prompt on screen; they're working again once it's gone or answered */
+const asking = new Set<string>()
+/**
+ * Where the user last typed, per mission: a prompt above it was answered. Inline CLIs leave the answered
+ * question on screen; full-screen ones redraw, so there the whole screen counts.
+ */
+const answeredAt = new Map<string, number>()
+/** the question last notified about: moving through a dialog's options with the arrow keys doesn't ping again */
+const askNotified = new Map<string, string>()
+
+function onUserInput(id: string): void {
+  const panel = missions.get().panels[id]
+  const cur = panel ? terminalCursor(panel) : undefined
+  if (cur && !cur.alt) answeredAt.set(id, cur.line + 1)
+  const m = getMission(id)
+  if (asking.delete(id) && m?.status === 'needs-input') update(id, { status: 'working', notification: undefined, activityAt: Date.now() })
+}
+
+function checkAsk(id: string): boolean {
+  const m = getMission(id)
+  const panel = missions.get().panels[id]
+  if (!m || !panel || !isLive(m.status)) return false
+  const agent = getAgent(m.options.agent)
+  if (agent.hooks) return false
+  askChecked.set(id, Date.now())
+  const cur = terminalCursor(panel)
+  const from = cur && !cur.alt ? (answeredAt.get(id) ?? 0) : 0
+  const line = askLine(terminalTail(panel, TAIL_ROWS, from), agent.asks ?? ASK_GENERIC, m.prompt)
+  if (line) {
+    clearTimeout(idleTimers.get(id))
+    if (asking.has(id) && m.status === 'needs-input') return true
+    asking.add(id)
+    const next = update(id, { status: 'needs-input', notification: line })
+    if (next && m.status !== 'needs-input' && askNotified.get(id) !== line) notify(next, `${m.title} needs you`, line)
+    askNotified.set(id, line)
+    return true
+  }
+  askNotified.delete(id)
+  if (asking.delete(id) && m.status === 'needs-input') update(id, { status: 'working', notification: undefined, activityAt: Date.now() })
+  return false
+}
+
+function watchAsk(id: string): void {
+  if (Date.now() - (askChecked.get(id) ?? 0) >= ASK_CHECK_MS) checkAsk(id)
+  clearTimeout(askTimers.get(id))
+  askTimers.set(id, setTimeout(() => (askTimers.delete(id), checkAsk(id)), ASK_SETTLE_MS))
 }
 
 function onAgentAttention(m: Mission, text?: string): void {
@@ -451,11 +510,19 @@ onTerminalEvent((e) => {
   const m = getMission(missionId)
   if (m && e.type === 'activity' && isLive(m.status)) watchLimit(m.id)
   if (m && e.type === 'attention') checkLimit(m.id, e.text)
+  if (m && e.type === 'activity' && isLive(m.status) && !getAgent(m.options.agent).hooks) watchAsk(m.id)
+  if (m && e.type === 'input' && isLive(m.status) && !getAgent(m.options.agent).hooks) onUserInput(m.id)
   if (m && (e.type === 'activity' || e.type === 'attention')) {
     if (getAgent(m.options.agent).hooks || !isLive(m.status) || reporting.has(m.id)) return
     if (e.type === 'activity') onAgentActivity(m)
     else onAgentAttention(m, e.text)
     return
+  }
+  if (e.type === 'closed' || e.type === 'status') {
+    clearTimeout(askTimers.get(missionId))
+    asking.delete(missionId)
+    answeredAt.delete(missionId)
+    askNotified.delete(missionId)
   }
   if (e.type === 'closed') {
     clearTimeout(idleTimers.get(missionId))

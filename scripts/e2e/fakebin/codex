@@ -15,6 +15,16 @@ if [ "$1" = "exec" ]; then
   echo "done (exec)"
   exit 0
 fi
+# ASK_SCREEN: an approval dialog without a bell, like full-screen agents draw (OpenCode, Codex's TUI)
+case "$*" in *ASK_SCREEN*)
+  echo "thinking"; sleep 1
+  printf 'Would you like to run the following command?\n  $ npm test\n> 1. Yes, proceed\n  2. No, and tell Codex what to do differently\n'
+  read ans
+  for i in 1 2 3 4 5 6; do echo "running npm test $i"; sleep 0.5; done
+  echo "tests passed"
+  sleep 60
+  exit 0;;
+esac
 for i in 1 2 3 4 5 6 7 8; do echo "thinking $i"; sleep 0.5; done
 echo "change from codex" >> codex-change.txt
 echo "done editing"

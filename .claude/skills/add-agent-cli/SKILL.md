@@ -45,7 +45,10 @@ Rules:
 ## 3. Status tracking
 
 Non-hook agents are tracked from the terminal (`state/missions.ts`): output means *Working*,
-5 s of silence means *Ready for you*, and a bell or OSC 9/777 means *Needs you*. If the CLI has
+5 s of silence means *Ready for you*, and a bell, OSC 9/777 or an approval prompt on screen means
+*Needs you*. Set `asks` to what its approval prompt says (run it, trigger one, copy the question and
+the option labels); most agents wait in a dialog without a bell, and without `asks` only the generic
+patterns in `src/shared/attention.ts` catch it. Set `usageLimit` the same way. If the CLI has
 its own notification hook (e.g. a config option that runs a command when a turn ends), it can
 call the relay the way Claude's hooks do (see `src/main/hooks.ts`). Treat that as a separate,
 deliberate feature.

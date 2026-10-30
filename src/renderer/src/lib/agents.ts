@@ -33,6 +33,11 @@ export interface AgentDef {
    * the last lines of output are checked and a false match would hand the work to another agent
    */
   usageLimit?: RegExp
+  /**
+   * what the agent shows when it waits for an approval; agents without hooks are "needs you" while it's on
+   * screen (ASK_GENERIC in src/shared/attention.ts when unset). Checked after the prompt, near the bottom only.
+   */
+  asks?: RegExp
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
   /** runs skills and commands from ~/.claude and .claude as `/name` */
@@ -133,6 +138,7 @@ const codex: AgentDef = {
   readOnlyMode: 'read-only',
   efforts: ['minimal', 'low', 'medium', 'high'],
   usageLimit: /you've hit your usage limit|usage limit (?:reached|exceeded)|rate limit reached for|last status: 429/i,
+  asks: /Would you like to (?:run|make|apply)|Yes, proceed|Allow command|\[y\/N\]/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -166,6 +172,7 @@ const cursor: AgentDef = {
   modes: [{ value: 'force', label: 'Auto-approve commands (--force)' }],
   efforts: [],
   usageLimit: /you've hit your usage limit|usage limit (?:reached|exceeded)/i,
+  asks: /Run this command\?|Waiting for approval|Accept (?:changes|this)|\[y\/N\]|\(y\/n\)/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -191,6 +198,7 @@ const copilot: AgentDef = {
   modes: [{ value: 'allow-all-tools', label: 'Allow all tools' }],
   efforts: [],
   usageLimit: /quota exceeded|exceeded your .{0,40}(?:allowance|quota)|rate limit exceeded/i,
+  asks: /Do you want to (?:run|edit|create|make|allow)|don't ask again|\[y\/N\]/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -219,6 +227,8 @@ const opencode: AgentDef = {
   readOnlyMode: 'plan',
   efforts: [],
   usageLimit: /usage limit (?:reached|exceeded)|quota exceeded|rate limit exceeded|429 Too Many Requests/i,
+  // OpenCode 2's permission dialog: "Permission required", then Allow once / Always allow / Reject
+  asks: /Permission required|Allow once|Always allow/,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -247,6 +257,7 @@ const gemini: AgentDef = {
   unattendedMode: 'auto_edit',
   efforts: [],
   usageLimit: /quota exceeded|RESOURCE_EXHAUSTED|usage limit reached/i,
+  asks: /Allow execution|Apply this change\?|Yes, allow (?:once|always)|\[y\/N\]/i,
   hooks: false,
   canPrint: true,
   canResume: true,
@@ -340,6 +351,13 @@ export function agentCommand(agent: AgentDef, o: AgentOptions, prompt: string | 
 }
 
 /** A command as one readable line: shell commands as typed, argv quoted for this platform's shell. */
+/** How a mission's status is known for this agent, in one sentence for the mission details. */
+export function statusSource(a: AgentDef): string {
+  if (a.hooks) return `Status comes from ${a.name} itself: its hooks report every prompt, tool, approval and finish.`
+  const tools = a.mcpArgs ? ` ${a.name} can also report its own status through the sldev tools.` : ''
+  return `${a.name} doesn't report its status, so sldev-io watches its terminal: output means working, 5 seconds of quiet means ready for you, and an approval prompt on screen or a bell means it needs you.${tools}`
+}
+
 export function commandText(command: string | string[] | undefined): string {
   return Array.isArray(command) ? formatArgv(command, window.api.platform) : (command ?? '')
 }
