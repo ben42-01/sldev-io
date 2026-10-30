@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.0-beta.7",
+    "date": "2026-10-30",
+    "changes": [
+      "Tab layout: keep open terminals as tabs on top, or list them down the left side of each group (Settings → Terminal → Tab layout, or \"Toggle tab layout\" in the command palette).",
+      "Fix: the resize cursor (↔) could stay stuck everywhere after dragging a sidebar edge if the window lost focus mid-drag.",
+      "Fix: GitHub Workflows showed \"Unexpected end of JSON input\" for a repository without Actions. It now says the repository has no workflows yet."
+    ]
+  },
+  {
     "version": "0.1.0-beta.6",
     "date": "2026-10-29",
     "changes": [
