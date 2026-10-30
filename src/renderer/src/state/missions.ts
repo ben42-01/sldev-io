@@ -7,6 +7,7 @@ import { playChime } from '../lib/sound'
 import { onTerminalEvent, stopTerminal } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
+import { getKind } from './missionKinds'
 import { applyProfile } from '@shared/profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
@@ -86,6 +87,7 @@ export interface StartMissionInput {
   brief?: string
   criteria?: string
   parent?: Mission['parent']
+  kind?: Mission['kind']
   /** where its terminal opens; default: a tab in the active group */
   placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
@@ -119,6 +121,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     brief: input.brief,
     criteria: input.criteria?.trim() || undefined,
     parent: input.parent,
+    kind: input.kind,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     history: pushStatus(undefined, 'starting', Date.now())
@@ -205,7 +208,23 @@ export async function followUpMission(id: string, next: string, agentId?: string
   const brief = followUpBrief(m, next)
   const title = next.trim().split('\n')[0].slice(0, 60)
   const options = { ...m.options, agent: agentId || m.options.agent }
-  return startMission({ prompt: missionPrompt({ title, brief }), brief, title, root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'follow-up' } })
+  // a follow-up to a research mission is still research: it keeps the kind's framing
+  const kind = getKind(m.kind?.id)
+  return startMission({ prompt: missionPrompt({ title, brief }, kind), brief, title, root: m.root, cwd: m.cwd, options, worktree: false, parent: { id, kind: 'follow-up' }, kind: m.kind })
+}
+
+/** What the New mission form starts with: a Build mission whose brief is a plan's or a research mission's result. */
+export interface MissionDraft {
+  kind?: string
+  brief?: string
+  title?: string
+}
+
+export function buildDraft(id: string): MissionDraft | undefined {
+  const m = getMission(id)
+  const report = m?.handoff?.trim() || m?.report?.trim() || m?.lastMessage?.trim()
+  if (!m || !report) return undefined
+  return { kind: 'build', title: m.title, brief: `Implement this ${m.kind?.id === 'plan' ? 'plan' : 'result'} from the mission "${m.title}":\n\n${report}` }
 }
 
 export function setHandoff(id: string, handoff: string): void {

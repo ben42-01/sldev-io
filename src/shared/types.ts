@@ -269,6 +269,8 @@ export interface Mission {
   report?: string
   /** the reviewer's notes; handed to follow-ups instead of the report when present */
   handoff?: string
+  /** what kind of work it is (Build, Research, Plan, a custom kind…); missing = Build */
+  kind?: { id: string; name: string; readOnly: boolean }
   /** the mission this one continues or reviews */
   parent?: { id: string; kind: 'follow-up' | 'second-opinion' }
   /** project root the mission belongs to */

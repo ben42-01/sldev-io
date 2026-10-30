@@ -11,6 +11,7 @@ import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
 import * as profiles from './profiles'
+import * as missionKinds from './missionKinds'
 import * as rules from './rules'
 import * as factory from './factory'
 import { missionTokens, type UsageRequest } from './usage'
@@ -262,6 +263,8 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root))
+  ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))
   ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
   ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))

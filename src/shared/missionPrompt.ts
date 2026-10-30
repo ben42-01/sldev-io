@@ -4,18 +4,13 @@
  * make the agent's last reply a usable report, which becomes the handoff to whoever comes next.
  */
 
+import { BUILTIN_KINDS, DEFAULT_KIND, findKind, renderKind, type MissionKind } from './missionKinds'
+
 export const REPORT_LIMIT = 6000
 
-export const CLOSING = [
-  'Work only in your current working folder.',
-  'When finished, summarize what changed, the checks you ran, and the remaining risks, for human review. Do not commit, push or merge unless the task explicitly asks.'
-].join('\n')
-
-export function missionPrompt(o: { title: string; brief: string; criteria?: string }): string {
-  const parts = [`Mission: ${o.title.trim()}`, o.brief.trim()]
-  if (o.criteria?.trim()) parts.push(`Acceptance criteria:\n${o.criteria.trim()}`)
-  parts.push(CLOSING)
-  return parts.join('\n\n')
+/** A mission's first message; without a kind it is a Build mission. */
+export function missionPrompt(o: { title: string; brief: string; criteria?: string }, kind: Pick<MissionKind, 'template'> = findKind(BUILTIN_KINDS, DEFAULT_KIND)): string {
+  return renderKind(kind, o)
 }
 
 /** What the next agent gets from a finished mission: the human's notes win over the agent's own report. */

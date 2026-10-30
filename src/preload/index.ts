@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BetaStatus } from '@shared/beta'
 import type { LicenseStatus } from '@shared/license'
 import type { TokenUsage } from '@shared/usage'
+import type { MissionKind } from '@shared/missionKinds'
 import type {
   AgentProfile,
   RulesState,
@@ -187,6 +188,10 @@ const api = {
     create: (root: string): Promise<string> => ipcRenderer.invoke('rules:create', root),
     setTarget: (root: string, id: string, on: boolean): Promise<void> => ipcRenderer.invoke('rules:target', root, id, on),
     sync: (root: string, overwrite: string[] = []): Promise<RulesState> => ipcRenderer.invoke('rules:sync', root, overwrite)
+  },
+  kinds: {
+    list: (root: string | null): Promise<MissionKind[]> => ipcRenderer.invoke('kinds:list', root),
+    create: (scope: 'project' | 'user', root: string | null, name: string, text: string): Promise<string> => ipcRenderer.invoke('kinds:create', scope, root, name, text)
   },
   profiles: {
     list: (root: string): Promise<AgentProfile[]> => ipcRenderer.invoke('profiles:list', root),

@@ -1,6 +1,7 @@
 import type { Mission } from '@shared/types'
-import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
-import { focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
+import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Hammer, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { buildDraft, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
+import { openNewMission } from './MissionsView'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
@@ -27,6 +28,8 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     { label: 'Details and handoff…', icon: <NotebookText size={13} />, run: () => openMissionDetails(m.id) },
     { label: hasPanel ? 'Show terminal' : 'Resume session', icon: <SquareTerminal size={13} />, run: () => focusOrResume(m.id) },
     { label: 'Review changes', icon: <FileDiff size={13} />, run: () => reviewMission(m.id) },
+    // a plan or findings become the brief of a Build mission
+    ...(m.kind && m.kind.id !== 'build' ? [{ label: 'Build from this…', icon: <Hammer size={13} />, disabled: !buildDraft(m.id), run: () => openNewMission(buildDraft(m.id)) }] : []),
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
     { type: 'header', label: 'Review with another agent' },
     ...allAgents(workspace.get().customAgents)
@@ -44,6 +47,7 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
+        {m.kind && m.kind.id !== 'build' && <span className="mission-kind">{m.kind.name}</span>}
         <span className="mission-agent">{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}</span>
         <TimeAgo t={m.updatedAt} className="mission-time" />
       </div>
@@ -61,9 +65,15 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
           </span>
         ) : <span className="stats">no changes</span>)}
         <span className="spacer" />
-        <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
-          <FileDiff size={13} />
-        </button>
+        {m.kind?.readOnly ? (
+          <button className="icon-btn" title="Build from this" aria-label="Build from this" disabled={!buildDraft(m.id)} onClick={() => openNewMission(buildDraft(m.id))}>
+            <Hammer size={13} />
+          </button>
+        ) : (
+          <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
+            <FileDiff size={13} />
+          </button>
+        )}
         {hasPanel && live ? (
           <button className="icon-btn danger" title="Stop" aria-label="Stop" onClick={() => stopMission(m.id)}>
             <Square size={13} />

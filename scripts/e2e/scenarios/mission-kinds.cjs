@@ -1,0 +1,63 @@
+// Mission kinds: a Research mission is framed as research, runs in place with the agent's read-only
+// mode, and a custom kind is a file in .sldev/missions that the form picks up.
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+
+const log = path.join(os.tmpdir(), `sldev-e2e-kinds-${process.pid}.jsonl`)
+
+module.exports = async (h) => {
+  fs.rmSync(log, { force: true })
+  await h.openFixture()
+  h.key('3', ['control', 'shift'])
+  await h.wait(500)
+  await h.click('.btn', 'New mission')
+  await h.wait(400)
+  h.expect(await h.js(`[...document.querySelectorAll('.kind-picker button')].map(b => b.textContent).join(',') === 'Build,Research,Investigate,Plan,Review,Freeform'`), 'the built-in kinds are offered')
+  h.expect(await h.js(`document.querySelector('.kind-picker button.on').textContent === 'Build'`), 'Build is the default')
+  h.expect(await h.js(`[...document.querySelectorAll('.form .check input')][0]?.checked === true`), 'Build isolates in a worktree by default')
+
+  await h.click('.kind-picker button', 'Research')
+  await h.wait(200)
+  h.expect(await h.js(`[...document.querySelectorAll('.form .check input')][0]?.checked === false`), 'Research works in place')
+  h.expect(await h.js(`!document.querySelector('.compare-agents')`), 'no bake-off for a read-only kind')
+  await h.setValue('.form textarea', 'How does the app start? Do not change anything.')
+  await h.wait(300)
+  await h.click('.prompt-preview summary')
+  await h.wait(200)
+  h.expect(await h.js(`document.querySelector('.prompt-preview pre').textContent.startsWith('Research: How does the app start?')`), 'the preview shows the research framing')
+  h.expect(await h.js(`!document.querySelector('.prompt-preview pre').textContent.includes('what changed')`), 'no "summarize what changed" in a research prompt')
+  await h.shot('1-research-form')
+  await h.click('.form .btn.primary', 'Launch')
+  h.expect(await h.until(async () => fs.existsSync(log), 10000), 'fake claude started')
+  const argv = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0])
+  const mode = argv.indexOf('--permission-mode')
+  h.expect(mode >= 0 && argv[mode + 1] === 'plan', `Claude runs in plan mode (got ${JSON.stringify(argv)})`)
+  h.expect(argv[argv.length - 1].startsWith('Research: How does the app start?'), 'the prompt is framed as research')
+  h.expect(await h.until(() => h.js(`document.querySelector('.mission-card .mission-kind')?.textContent === 'Research'`), 5000), 'the card shows the kind')
+  h.expect(await h.js(`document.querySelector('.mission-card .mission-branch').textContent.includes('in place')`), 'no worktree was made')
+  await h.shot('2-research-card')
+
+  // a custom kind: written from the picked one, then edited like any file
+  await h.click('.btn', 'New mission')
+  await h.wait(400)
+  await h.click('.kind-picker button', 'Review')
+  await h.click('.field-hint .link', 'New kind from this one')
+  await h.wait(200)
+  await h.setValue('.kind-new input', 'Security audit')
+  await h.click('.kind-new .btn', 'Create and edit')
+  const file = path.join(h.fixture, '.sldev', 'missions', 'security-audit.md')
+  h.expect(await h.until(async () => fs.existsSync(file), 5000), 'the kind file is written to .sldev/missions')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/Review: \{title\}/, 'Security audit: {title}\n\nLook for injection, secrets and unsafe defaults.'))
+  await h.js(`window.dispatchEvent(new Event('focus'))`)
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.kind-picker button')].some(b => b.textContent === 'Security audit')`), 5000), 'the custom kind shows up in the picker')
+  await h.click('.kind-picker button', 'Security audit')
+  await h.setValue('.form textarea', 'Check the login handler')
+  await h.wait(300)
+  await h.click('.prompt-preview summary')
+  await h.wait(200)
+  h.expect(await h.js(`document.querySelector('.prompt-preview pre').textContent.startsWith('Security audit: Check the login handler\\n\\nLook for injection')`), 'the edited template is what gets sent')
+  await h.shot('3-custom-kind')
+}
+
+module.exports.env = { SLDEV_E2E_ARGV: log }

@@ -26,6 +26,8 @@ export interface AgentDef {
    */
   unattendedMode?: string
   efforts: string[]
+  /** a mode that can read but not change anything, preselected for read-only mission kinds (Research, Plan, Review) */
+  readOnlyMode?: string
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
   /** runs skills and commands from ~/.claude and .claude as `/name` */
@@ -86,6 +88,7 @@ const claude: AgentDef = {
     { value: 'bypassPermissions', label: 'Bypass permissions' }
   ],
   unattendedMode: 'auto',
+  readOnlyMode: 'plan',
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   hooks: true,
   claudeSkills: true,
@@ -121,6 +124,7 @@ const codex: AgentDef = {
     { value: 'yolo', label: 'No sandbox, no approvals' }
   ],
   unattendedMode: 'full-auto',
+  readOnlyMode: 'read-only',
   efforts: ['minimal', 'low', 'medium', 'high'],
   hooks: false,
   canPrint: true,
@@ -203,6 +207,7 @@ const opencode: AgentDef = {
     { value: 'build', label: 'Build agent' },
     { value: 'plan', label: 'Plan agent' }
   ],
+  readOnlyMode: 'plan',
   efforts: [],
   hooks: false,
   canPrint: true,

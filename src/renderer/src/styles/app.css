@@ -183,7 +183,7 @@ kbd {
   opacity: 0.5;
   cursor: default;
 }
-:is(.btn, .icon-btn, .seg button, .activity-btn):focus-visible {
+:is(.btn, .icon-btn, .seg button, .kind-picker button, .activity-btn):focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--ring);
 }
@@ -3990,4 +3990,43 @@ a {
   flex: 1;
   min-width: 0;
   white-space: pre-wrap;
+}
+
+/* mission kinds: a wrapping segmented control */
+.kind-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+.kind-picker button {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.kind-picker button:hover {
+  color: var(--fg);
+}
+.kind-picker button.on {
+  background: var(--muted);
+  color: var(--fg);
+}
+.kind-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.kind-new input {
+  flex: 1 1 140px;
+}
+.mission-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
 }

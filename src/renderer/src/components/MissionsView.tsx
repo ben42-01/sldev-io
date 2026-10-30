@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentOptions } from '@shared/types'
-import { ChartGantt, LayoutGrid, Plus, Rocket } from 'lucide-react'
+import { ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket } from 'lucide-react'
 import { openPanel } from '../dock/dockApi'
-import { isLive, missions, startMission } from '../state/missions'
+import { isLive, missions, startMission, type MissionDraft } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
 import { getAgent, useAgents } from '../state/agents'
 import { compareRecipe, issueText } from '@shared/factory'
-import { missionPrompt } from '@shared/missionPrompt'
+import { renderKind, type MissionKind } from '@shared/missionKinds'
+import { getKind, createKind, loadKinds, useKinds } from '../state/missionKinds'
+import { openInEditor } from '../lib/actions'
+import { showView } from '../lib/commands'
 import { startRun } from '../state/factory'
 import { getProfile } from '../state/profiles'
 import { IssuePicker } from './IssuePicker'
@@ -24,12 +27,23 @@ export function openDashboard(): void {
   openPanel('dashboard', 'usage-dashboard', 'Usage')
 }
 
+/** Shows the Missions view with the New mission form open, optionally filled in. */
+export function openNewMission(draft?: MissionDraft): void {
+  showView('agents')
+  // let the Missions view mount before asking it to open the form
+  setTimeout(() => window.dispatchEvent(new CustomEvent('sldev:new-mission', { detail: draft })), 50)
+}
+
 export function MissionsView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
   const [creating, setCreating] = useState(false)
+  const [draft, setDraft] = useState<MissionDraft | undefined>()
   useEffect(() => {
-    const open = (): void => setCreating(true)
+    const open = (e: Event): void => {
+      setDraft((e as CustomEvent<MissionDraft | undefined>).detail)
+      setCreating(true)
+    }
     window.addEventListener('sldev:new-mission', open)
     return () => window.removeEventListener('sldev:new-mission', open)
   }, [])
@@ -60,10 +74,10 @@ export function MissionsView(): React.JSX.Element {
         {!root ? (
           <div className="empty-state"><p>Open a folder to launch agent missions in it.</p></div>
         ) : creating ? (
-          <NewMissionForm root={root} onDone={() => setCreating(false)} />
+          <NewMissionForm key={draft?.brief ?? ''} root={root} draft={draft} onDone={() => (setCreating(false), setDraft(undefined))} />
         ) : (
           <div className="view-footer">
-            <button className="btn primary full" onClick={() => setCreating(true)}>
+            <button className="btn primary full" onClick={() => (setDraft(undefined), setCreating(true))}>
               <Rocket size={14} /> New mission
             </button>
           </div>
@@ -84,15 +98,19 @@ export function MissionsView(): React.JSX.Element {
   )
 }
 
-function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
+function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; draft?: MissionDraft; onDone: () => void }): React.JSX.Element {
   /** where the agent works: the open project unless another folder is picked */
   const [root, setRoot] = useState(projectRoot)
-  const [prompt, setPrompt] = useState('')
-  const [title, setTitle] = useState('')
+  const [prompt, setPrompt] = useState(draft?.brief ?? '')
+  const [title, setTitle] = useState(draft?.title ?? '')
   const [criteria, setCriteria] = useState('')
-  const [options, setOptions] = useState<AgentOptions>(() => ({ agent: workspace.get().defaultAgent }))
+  const kinds = useKinds()
+  // the id, not the object: a kind file edited while the form is open applies straight away
+  const [kindId, setKindId] = useState(() => getKind(draft?.kind).id)
+  const kind = kinds.find((k) => k.id === kindId) ?? getKind(kindId)
+  const [options, setOptions] = useState<AgentOptions>(() => withAccess({ agent: workspace.get().defaultAgent }, kind))
   const [isRepo, setIsRepo] = useState(false)
-  const [worktree, setWorktree] = useState(true)
+  const [worktree, setWorktree] = useState(kind.worktree)
   const [branches, setBranches] = useState<string[]>([])
   const [base, setBase] = useState('')
   const [busy, setBusy] = useState(false)
@@ -101,6 +119,21 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
   /** other agents to run the same prompt on (a bake-off) */
   const [compare, setCompare] = useState<string[]>([])
   const agents = useAgents()
+
+  // custom kinds are files the user edits in their editor: pick up changes when the window comes back
+  useEffect(() => {
+    void loadKinds(projectRoot)
+    const again = (): void => void loadKinds(projectRoot)
+    window.addEventListener('focus', again)
+    return () => window.removeEventListener('focus', again)
+  }, [projectRoot])
+
+  const pickKind = (k: MissionKind): void => {
+    setKindId(k.id)
+    setWorktree(k.worktree)
+    setOptions((o) => withAccess(o, k, kind))
+    if (k.readOnly) setCompare([])
+  }
 
   const [folderOk, setFolderOk] = useState(true)
   // a new folder means new git facts; the base branch is reset rather than kept from the old repo
@@ -121,7 +154,7 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
 
   const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60)
   /** exactly what the agent receives as its first message (the profile's role goes in separately) */
-  const sent = missionPrompt({ title: shownTitle, brief: prompt, criteria })
+  const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria })
 
   const launch = async (): Promise<void> => {
     if (!prompt.trim() || busy) return
@@ -133,7 +166,8 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
         const profile = getProfile(options.profile)
         const ids = [options.agent || workspace.get().defaultAgent, ...compare.filter((c) => c !== options.agent)]
         await startRun({ recipe: compareRecipe(ids.map((id) => (profile ? `${profile.name}@${id}` : id))), intent: prompt, root, base, issue })
-      } else await startMission({ prompt: sent, brief: prompt, criteria, title: shownTitle, root, options, worktree: isRepo && worktree, base })
+      } else
+        await startMission({ prompt: sent, brief: prompt, criteria, title: shownTitle, root, options, worktree: isRepo && worktree, base, kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly } })
       onDone()
     } catch (e) {
       setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
@@ -157,16 +191,17 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
         if (e.key === 'Escape') onDone()
       }}
     >
+      <KindPicker kinds={kinds} value={kind} onChange={pickKind} root={projectRoot} />
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
-        <span>What should {getAgent(options.agent).name} do?</span>
-        <textarea autoFocus rows={6} value={prompt} placeholder="e.g. Add pagination to the /users endpoint and cover it with tests" onChange={(e) => setPrompt(e.target.value)} />
+        <span>{kind.readOnly ? `What should ${getAgent(options.agent).name} find out?` : `What should ${getAgent(options.agent).name} do?`}</span>
+        <textarea autoFocus rows={6} value={prompt} placeholder={kind.placeholder ?? 'What the agent should do'} onChange={(e) => setPrompt(e.target.value)} />
         <span className="field-hint">Required. Sent as one argument, line breaks and quotes intact.</span>
       </label>
       <label className="field">
         <span>Acceptance criteria</span>
         <textarea rows={2} value={criteria} placeholder={'e.g. GET /users?page=2 returns 20 items\nnpm test passes'} onChange={(e) => setCriteria(e.target.value)} />
-        <span className="field-hint">Optional. Included in the agent's prompt and shown again when you review the work.</span>
+        <span className="field-hint">Optional. Included in the agent's prompt and shown again when you review the work.{kind.template.includes('{criteria}') ? '' : ` The ${kind.name} kind doesn't use them.`}</span>
       </label>
       <label className="field">
         <span>Title</span>
@@ -194,8 +229,10 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
           )}
         </>
       )}
-      <AgentOptionsFields value={options} onChange={(p) => setOptions((o) => ({ ...o, ...p }))} showPrint={false} />
-      {isRepo && (
+      {/* a new agent clears the mode, so a read-only kind picks that agent's read-only mode again */}
+      <AgentOptionsFields value={options} onChange={(p) => setOptions((o) => (p.agent && p.agent !== o.agent ? withAccess({ ...o, ...p }, kind) : { ...o, ...p }))} showPrint={false} />
+      {kind.readOnly && !getAgent(options.agent).readOnlyMode && <div className="hint">{getAgent(options.agent).name} has no read-only mode: the prompt asks it not to change anything, and its normal approvals still apply.</div>}
+      {isRepo && !kind.readOnly && (
         <div className="field compare-agents">
           <span>Also run it on (compare the versions, keep one)</span>
           <div className="compare-list">
@@ -225,5 +262,82 @@ function NewMissionForm({ root: projectRoot, onDone }: { root: string; onDone: (
         </button>
       </div>
     </form>
+  )
+}
+
+/** A read-only kind preselects the agent's read-only mode; leaving one drops that mode again. */
+function withAccess(o: AgentOptions, next: MissionKind, prev?: MissionKind): AgentOptions {
+  const ro = getAgent(o.agent).readOnlyMode
+  if (!ro) return o
+  if (next.readOnly) return { ...o, permissionMode: ro }
+  return prev?.readOnly && o.permissionMode === ro ? { ...o, permissionMode: undefined } : o
+}
+
+function KindPicker({ kinds, value, onChange, root }: { kinds: MissionKind[]; value: MissionKind; onChange: (k: MissionKind) => void; root: string }): React.JSX.Element {
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const [scope, setScope] = useState<'project' | 'user'>('project')
+  const [error, setError] = useState('')
+  const create = async (): Promise<void> => {
+    if (!name.trim()) return
+    try {
+      const path = await createKind(scope, root, name.trim(), value)
+      setNaming(false)
+      setName('')
+      void openInEditor(path)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  return (
+    <div className="field">
+      <span>Kind</span>
+      <div className="kind-picker" role="radiogroup" aria-label="Mission kind">
+        {kinds.map((k) => (
+          <button
+            key={k.id}
+            type="button"
+            role="radio"
+            aria-checked={k.id === value.id}
+            className={k.id === value.id ? 'on' : ''}
+            title={k.path ?? k.description}
+            onClick={() => onChange(k)}
+          >
+            {k.name}
+          </button>
+        ))}
+      </div>
+      <span className="field-hint">
+        {value.description}
+        {value.path ? (
+          <> <span className="link" onClick={() => void openInEditor(value.path!)}>Edit</span></>
+        ) : null}{' '}
+        <span className="link" onClick={() => setNaming((n) => !n)}>
+          <FilePlus2 size={11} /> New kind from this one
+        </span>
+      </span>
+      {naming && (
+        <div className="kind-new">
+          <input
+            autoFocus
+            value={name}
+            placeholder="e.g. Security audit"
+            aria-label="New kind name"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.preventDefault(), void create())
+              if (e.key === 'Escape') (e.stopPropagation(), setNaming(false))
+            }}
+          />
+          <select value={scope} aria-label="Where to keep it" onChange={(e) => setScope(e.target.value as 'project' | 'user')}>
+            <option value="project">This project (.sldev/missions)</option>
+            <option value="user">All my projects</option>
+          </select>
+          <button type="button" className="btn sm" disabled={!name.trim()} onClick={() => void create()}>Create and edit</button>
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <div className="field-hint">A Markdown file: front matter for the defaults, then the prompt template with {'{title}'}, {'{brief}'} and {'{criteria}'}. It opens in your editor.</div>
+        </div>
+      )}
+    </div>
   )
 }
