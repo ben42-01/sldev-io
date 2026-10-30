@@ -175,6 +175,7 @@ export function staticCommands(): Command[] {
     { id: 'terminal.fontUp', category: 'Terminal', title: 'Increase font size', keys: { mac: 'Cmd+=', other: 'Ctrl+Shift+=' }, run: () => changeFontSize(1) },
     { id: 'terminal.fontDown', category: 'Terminal', title: 'Decrease font size', keys: { mac: 'Cmd+-', other: 'Ctrl+Shift+-' }, run: () => changeFontSize(-1) },
     { id: 'terminal.fontReset', category: 'Terminal', title: 'Reset font size', keys: { mac: 'Cmd+0', other: 'Ctrl+Shift+0' }, run: () => changeFontSize(null) },
+    { id: 'view.tabLayout', category: 'View', title: 'Toggle tab layout (top / side list)', run: () => updateSettings({ tabLayout: workspace.get().tabLayout === 'side' ? 'top' : 'side' }) },
     { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => updateSettings({ sidebarVisible: !workspace.get().sidebarVisible }) },
     { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible }) },
     { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => {

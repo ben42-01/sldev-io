@@ -143,3 +143,11 @@ export function activeTerminalId(): string | null {
 export function onPanelRemoved(id: string): void {
   if (id.startsWith(TERMINAL_PREFIX)) disposeTerminal(id)
 }
+
+/** Put every group's tabs on top or in a list down the left side (Settings → Terminal → Tab layout). */
+export function applyTabLayout(): void {
+  const position = workspace.get().tabLayout === 'side' ? 'left' : 'top'
+  for (const g of api?.groups ?? []) {
+    if (g.api.getHeaderPosition() !== position) g.api.setHeaderPosition(position)
+  }
+}

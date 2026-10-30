@@ -136,6 +136,8 @@ app.whenReady().then(async () => {
     key: (keyCode, modifiers = []) => {
       for (const type of ['keyDown', 'keyUp']) wc.sendInputEvent({ type, keyCode, modifiers })
     },
+    /** a raw mouse event (mouseDown/mouseMove/mouseUp) at window coordinates */
+    mouse: (event) => wc.sendInputEvent(event),
     type: (text) => {
       for (const ch of text) wc.sendInputEvent({ type: 'char', keyCode: ch })
     },

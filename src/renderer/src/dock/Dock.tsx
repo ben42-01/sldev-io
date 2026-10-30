@@ -15,8 +15,9 @@ import { WhatsNewPanel } from './WhatsNewPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
-import { onPanelRemoved, openTerminal, setDockApi } from './dockApi'
+import { applyTabLayout, onPanelRemoved, openTerminal, setDockApi } from './dockApi'
 import { runs } from '../state/runs'
+import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { RunDot, StatusDot } from '../components/StatusDot'
 import { missionSignal } from '@shared/status'
@@ -97,6 +98,15 @@ async function onReady(e: DockviewReadyEvent): Promise<void> {
       api.clear()
     }
   }
+  // saved layouts carry each group's header position; the setting wins
+  applyTabLayout()
+  api.onDidAddGroup(() => applyTabLayout())
+  let tabLayout = workspace.get().tabLayout
+  workspace.subscribe(() => {
+    if (workspace.get().tabLayout === tabLayout) return
+    tabLayout = workspace.get().tabLayout
+    applyTabLayout()
+  })
 
   let timer: ReturnType<typeof setTimeout> | undefined
   api.onDidLayoutChange(() => {

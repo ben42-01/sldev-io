@@ -38,6 +38,13 @@ export function SettingsPanel(): React.JSX.Element {
           <input type="number" min={8} max={32} value={s.terminalFontSize} onChange={(e) => font(s.terminalFontFamily, Number(e.target.value) || 13)} />
         </label>
         <label className="field">
+          <span>Tab layout</span>
+          <select value={s.tabLayout} onChange={(e) => updateSettings({ tabLayout: e.target.value as 'top' | 'side' })}>
+            <option value="top">Tabs on top</option>
+            <option value="side">Tabs in a side list</option>
+          </select>
+        </label>
+        <label className="field">
           <span>Shell (empty = system default; applies to new terminals)</span>
           <input className="mono" value={shell} placeholder={window.api.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'} onChange={(e) => setShell(e.target.value)} onBlur={() => updateSettings({ shell: shell.trim() || null })} />
         </label>

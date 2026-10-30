@@ -48,6 +48,8 @@ export interface AppSettings {
   rightPanelTab: RightTab
   terminalFontSize: number
   terminalFontFamily: string
+  /** where open tabs sit in each dock group: a strip on top, or a list down the left side */
+  tabLayout: 'top' | 'side'
   notifications: boolean
   /** a short chime when a mission needs you and you aren't looking at it */
   notificationSound: boolean
@@ -132,6 +134,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalFontSize: 13,
   terminalFontFamily:
     '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace',
+  tabLayout: 'top',
   notifications: true,
   notificationSound: false,
   shell: null,
