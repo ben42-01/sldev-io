@@ -77,3 +77,13 @@ export async function runSetup(dir: string, command: string): Promise<SetupResul
   if (r.ok) await writeRunFile(setupMarker(dir), `${command}\n`)
   return r
 }
+
+/** A spec or plan a run starts from: a text file inside the repository, at most 200 KB. */
+export async function readSeedFile(root: string, p: string): Promise<string> {
+  const abs = resolve(root, p)
+  if (!abs.startsWith(resolve(root) + sep)) throw new Error('Pick a file inside the repository')
+  const st = await fsp.stat(abs).catch(() => null)
+  if (!st?.isFile()) throw new Error(`No file at ${p}`)
+  if (st.size > 200_000) throw new Error(`${p} is over 200 KB`)
+  return fsp.readFile(abs, 'utf8')
+}

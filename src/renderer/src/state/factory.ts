@@ -1,5 +1,7 @@
 import {
   ancestors,
+  applyOverrides,
+  findSkill,
   approveNode,
   isBakeoff,
   pickWinner,
@@ -15,12 +17,16 @@ import {
   resolveAgentSpec,
   resolveRun,
   retryNode,
+  seedNode,
   sendBack as sendBackNode,
   totalLines,
   type FactoryRun,
+  type FillContext,
   type Finish,
   type NodeRun,
-  type Recipe
+  type Recipe,
+  type RecipeNode,
+  type StageOverride
 } from '@shared/factory'
 import { applyProfile } from '@shared/profiles'
 import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
@@ -28,7 +34,7 @@ import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import type { AgentOptions, GhPrComment, WorktreeInfo } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
-import { allAgents, findAgent, slugify, stageMode } from '../lib/agents'
+import { allAgents, findAgent, skillPrompt, slugify, stageMode } from '../lib/agents'
 import { onTerminalEvent, terminalTail } from '../lib/terminals'
 import { getMission, missions, startMission } from './missions'
 import { allProfiles, loadProjectProfiles } from './profiles'
@@ -145,19 +151,34 @@ export function checkRecipe(recipe: Recipe): string | null {
   return null
 }
 
-export async function startRun(input: { recipe: Recipe; intent: string; root: string; base?: string; issue?: number }): Promise<FactoryRun> {
-  const problem = checkRecipe(input.recipe)
+export interface StartRunInput {
+  recipe: Recipe
+  intent: string
+  root: string
+  base?: string
+  issue?: number
+  /** the run form's agent and skill choices per stage */
+  overrides?: Record<string, StageOverride>
+  /** start past this stage: its output is this text (a spec file, a mission's plan) */
+  seed?: { node: string; text: string; from: string }
+}
+
+export async function startRun(input: StartRunInput): Promise<FactoryRun> {
+  const recipe = applyOverrides(input.recipe, input.overrides ?? {}, workspace.get().defaultAgent)
+  const problem = checkRecipe(recipe)
   if (problem) throw new Error(problem)
+  if (input.seed && !recipe.nodes.some((n) => n.id === input.seed!.node)) throw new Error(`The recipe has no stage "${input.seed.node}"`)
   if (!(await window.api.git.isRepo(input.root))) throw new Error('The factory needs a git repository')
   const base = input.base || (await window.api.git.branch(input.root)) || 'HEAD'
   const id = `f-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const worktree = await window.api.git.addWorktree(input.root, `factory-${slugify(input.intent).slice(0, 30)}`, base)
   const outDir = `${worktree.path}/.sldev/runs/${id}`
   await window.api.factory.prepare(outDir)
+  if (input.seed) await window.api.factory.write(outFile(worktree.path, id, input.seed.node), input.seed.text)
   const now = Date.now()
-  const run: FactoryRun = {
+  let run: FactoryRun = {
     id,
-    recipe: input.recipe,
+    recipe,
     intent: input.intent.trim(),
     root: input.root,
     worktree,
@@ -168,6 +189,7 @@ export async function startRun(input: { recipe: Recipe; intent: string; root: st
     createdAt: now,
     updatedAt: now
   }
+  if (input.seed) run = seedNode(run, input.seed.node, `From ${input.seed.from}`, now)
   factory.set((s) => ({ runs: [recordEvents(undefined, run, now), ...s.runs] }))
   persist()
   openPipeline(id)
@@ -256,6 +278,15 @@ function stageOptions(spec: string, interactive: boolean): AgentOptions {
   return { ...o, permissionMode: stageMode(findAgent(o.agent, customAgents), factoryModes) }
 }
 
+/** A skill stage's prompt runs the skill with the recipe prompt as its arguments; others get the recipe prompt. */
+async function stagePrompt(run: FactoryRun, node: RecipeNode, nr: NodeRun, c: FillContext, agentId: string | undefined): Promise<string> {
+  if (!node.skill) return nodePrompt(node, nr, c)
+  const skill = findSkill(await window.api.claude.assets(run.root).catch(() => []), node.skill)
+  if (!skill) throw new Error(`No skill or command called "${node.skill}" in .claude/skills, .sldev/skills or ~/.claude`)
+  const agent = findAgent(agentId, workspace.get().customAgents)
+  return nodePrompt(node, nr, c, (args) => skillPrompt(agent, skill, args))
+}
+
 /** Installs dependencies in a worktree before its first stage. False = it failed and the run is paused. */
 async function setUp(runId: string, dir: string): Promise<boolean> {
   const run = getRun(runId)!
@@ -313,7 +344,7 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
 
   try {
     const options = stageOptions(node.agents[0], node.interactive)
-    const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback })
+    const prompt = await stagePrompt(run, node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback }, options.agent)
     const m = await startMission({ prompt, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })
     const cur = getRun(runId)!
     put({ ...cur, nodes: { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], missionIds: [m.id] } } })
@@ -335,7 +366,7 @@ async function startBakeoff(runId: string, nodeId: string, outs: Record<string, 
       const worktree = await window.api.git.addWorktree(run.worktree.repo, slug, run.worktree.branch)
       await window.api.factory.prepare(`${worktree.path}/.sldev/runs/${run.id}`)
       if (!(await setUp(runId, worktree.path))) return
-      const prompt = nodePrompt(node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(worktree.path, run.id, nodeId), outs, log: nr.feedback })
+      const prompt = await stagePrompt(run, node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(worktree.path, run.id, nodeId), outs, log: nr.feedback }, options.agent)
       const m = await startMission({ prompt, title: `${nodeId} (${spec}): ${run.intent}`.slice(0, 60), root: run.root, cwd: worktree.path, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(getRun(runId)!) })
       candidates.push({ spec, missionId: m.id, worktree, status: 'running' })
       const cur = getRun(runId)!

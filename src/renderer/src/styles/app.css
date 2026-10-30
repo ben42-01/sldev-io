@@ -4030,3 +4030,29 @@ a {
   letter-spacing: 0.04em;
   color: var(--fg-muted);
 }
+
+/* factory run form: agent and skill per stage */
+.stage-choices summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.stage-choices[open] summary {
+  margin-bottom: 6px;
+}
+.stage-choice {
+  display: grid;
+  grid-template-columns: 64px 1fr 1fr;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.stage-choice .stage-id {
+  font: 11px var(--font-mono);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage-choice select {
+  min-width: 0;
+}

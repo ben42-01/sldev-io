@@ -139,3 +139,10 @@ describe('groupAssets', () => {
     expect(isGroupOpen(groups[1], undefined, false)).toBe(true)
   })
 })
+
+describe('skillPrompt outside .claude', () => {
+  it('points even Claude Code at a SKILL.md it cannot know by name', () => {
+    const skill = { name: 'spec', invocation: '/spec', path: '/repo/.sldev/skills/spec/SKILL.md' }
+    expect(skillPrompt(findAgent('claude'), skill, 'x')).toContain('read /repo/.sldev/skills/spec/SKILL.md')
+  })
+})

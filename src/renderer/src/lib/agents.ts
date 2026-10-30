@@ -342,7 +342,8 @@ export function slugify(s: string): string {
  * is pointed at the SKILL.md (skills are plain Markdown plus files next to it).
  */
 export function skillPrompt(agent: AgentDef, skill: { name: string; invocation: string; path: string }, args: string): string {
-  if (agent.claudeSkills) return `${skill.invocation} ${args.trim()}`.trim()
+  // Claude Code only knows skills under a .claude folder (project, user, plugins) by their slash name
+  if (agent.claudeSkills && /[\\/]\.claude[\\/]/.test(skill.path)) return `${skill.invocation} ${args.trim()}`.trim()
   return [
     `Use the "${skill.name}" skill for this task: read ${skill.path} completely and follow its instructions.`,
     'Files and scripts it mentions are relative to that folder; keep working in your current folder.',

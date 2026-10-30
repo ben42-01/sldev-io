@@ -227,7 +227,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
   const targets = nr.status === 'failed' ? sendBackTargets(run, node.id) : []
   const cwd = nr.worktree?.path ?? run.worktree.path
   const Icon = node.kind === 'agent' ? Bot : node.kind === 'run' ? SquareTerminal : GitPullRequest
-  const who = node.kind === 'agent' ? node.agents.join(' vs ') : node.kind === 'run' ? node.run.join(' · ') : `into ${run.worktree.base}`
+  const who = node.kind === 'agent' ? `${node.agents.join(' vs ')}${node.skill ? ` · ${node.skill}` : ''}` : node.kind === 'run' ? node.run.join(' · ') : `into ${run.worktree.base}`
   const out = `${run.outDir}/${node.id}.md`
   const time = nr.startedAt ? (nr.endedAt ? duration(nr.endedAt - nr.startedAt) : `started ${ago(nr.startedAt)}`) : ''
 

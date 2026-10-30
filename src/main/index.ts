@@ -273,6 +273,7 @@ function registerIpc(): void {
   ipcMain.handle('factory:write', (_e, p: string, text: string) => factory.writeRunFile(p, text))
   ipcMain.handle('factory:copy', (_e, from: string, to: string) => factory.copyRunFile(from, to))
   ipcMain.handle('factory:setupPlan', (_e, dir: string, command: string | false | undefined) => factory.setupPlan(dir, command))
+  ipcMain.handle('factory:readSeed', (_e, root: string, p: string) => factory.readSeedFile(root, p))
   ipcMain.handle('factory:setup', (_e, dir: string, command: string) => factory.runSetup(dir, command))
   ipcMain.handle('rules:state', (_e, root: string) => rules.rulesState(root))
   ipcMain.handle('rules:create', (_e, root: string) => rules.createRules(root))

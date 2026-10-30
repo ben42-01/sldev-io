@@ -181,7 +181,9 @@ const api = {
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('factory:write', path, text),
     copy: (from: string, to: string): Promise<boolean> => ipcRenderer.invoke('factory:copy', from, to),
     setupPlan: (dir: string, command: string | false | undefined): Promise<string | null> => ipcRenderer.invoke('factory:setupPlan', dir, command),
-    setup: (dir: string, command: string): Promise<{ ok: boolean; log: string }> => ipcRenderer.invoke('factory:setup', dir, command)
+    setup: (dir: string, command: string): Promise<{ ok: boolean; log: string }> => ipcRenderer.invoke('factory:setup', dir, command),
+    /** a spec or plan inside the repository to start a run from */
+    readSeed: (root: string, path: string): Promise<string> => ipcRenderer.invoke('factory:readSeed', root, path)
   },
   rules: {
     state: (root: string): Promise<RulesState> => ipcRenderer.invoke('rules:state', root),

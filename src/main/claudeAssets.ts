@@ -85,6 +85,8 @@ export async function listClaudeAssets(root: string | null): Promise<ClaudeAsset
   if (root) {
     const pc = join(root, '.claude')
     jobs.push(skillsIn(join(pc, 'skills'), 'project'), commandsIn(join(pc, 'commands'), 'project'), agentsIn(join(pc, 'agents'), 'project'))
+    // agent-neutral skill folders: sldev's own and the shared .agents convention
+    jobs.push(skillsIn(join(root, '.sldev', 'skills'), 'project'), skillsIn(join(root, '.agents', 'skills'), 'project'))
   }
   for (const p of await installedPlugins()) {
     jobs.push(skillsIn(join(p.path, 'skills'), 'plugin', p.name), commandsIn(join(p.path, 'commands'), 'plugin', p.name), agentsIn(join(p.path, 'agents'), 'plugin', p.name))

@@ -279,6 +279,44 @@ Ignore style and naming.
       )
     },
     {
+      id: 'skills',
+      title: 'Your own skills and specs',
+      body: (
+        <>
+          <p>
+            If you already have a skill for specs, reviews or builds, a stage can run it instead of the recipe's prompt. <code>skill</code> takes
+            the skill's name; the stage prompt, if any, becomes its arguments (without one, the intent is).
+          </p>
+          <Code file=".sldev/factory/house.yml">{`
+name: House flow
+stages:
+  - id: spec
+    skill: our-spec          # .claude/skills, .sldev/skills, .agents/skills or ~/.claude
+    gate: approve
+  - id: build
+    agent: Implementer
+    prompt: Implement {spec.out}. Commit when done.
+  - id: review
+    agent: Reviewer@codex
+    skill: security-review
+    prompt: the changes on this branch; write findings to {out}
+`}</Code>
+          <p>
+            Any agent can run a skill: Claude Code by its slash name, the others are pointed at its <code>SKILL.md</code>. Skills in{' '}
+            <code>.sldev/skills</code> or <code>.agents/skills</code> work the same for every agent.
+          </p>
+          <p>
+            You don't have to edit a recipe to try this. In the run form, <b>Agents and skills per stage</b> swaps the agent or skill of any stage
+            for that run, and <b>Save as a project recipe</b> keeps your choices as a copy.
+          </p>
+          <p>
+            Already have a spec? <b>Start from</b> skips the first stage and uses a file from the repository, or the result of a finished Plan
+            or Research mission, as that stage's output. The run starts at the stage after it.
+          </p>
+        </>
+      )
+    },
+    {
       id: 'checks',
       title: 'Checks and retry loops',
       body: (
@@ -538,6 +576,7 @@ stages:
             <tbody>
               <tr><td><code>id</code></td><td>Letters, digits, <code>-</code> and <code>_</code>; unique. Default: <code>stage-1</code>, <code>stage-2</code>…</td></tr>
               <tr><td><code>agent</code> + <code>prompt</code></td><td>An agent stage. <code>agent</code>: a profile, a CLI id, <code>Profile@cli</code>, or a list for a bake-off</td></tr>
+              <tr><td><code>skill</code></td><td>Run this skill in an agent stage; the prompt becomes its arguments (default <code>{'{intent}'}</code>), <code>agent</code> defaults to your default agent</td></tr>
               <tr><td><code>run</code></td><td>A run stage: a command, a script name (<code>test</code>, <code>test?</code> = optional) or a list of them</td></tr>
               <tr><td><code>pr</code></td><td>A PR stage: <code>{'{ title, body }'}</code>, both optional (title defaults to <code>{'{intent}'}</code>)</td></tr>
               <tr><td><code>needs</code></td><td>Stage ids to wait for. Default: the stage above. Several = run in parallel and merge here</td></tr>
@@ -547,7 +586,7 @@ stages:
               <tr><td><code>interactive: true</code></td><td>A normal session you type into; finishes with Done</td></tr>
             </tbody>
           </table>
-          <p>A stage is exactly one of agent, run or pr.</p>
+          <p>A stage is exactly one of agent (or skill), run or pr.</p>
         </>
       )
     }

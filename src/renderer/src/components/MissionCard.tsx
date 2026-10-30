@@ -1,7 +1,8 @@
 import type { Mission } from '@shared/types'
-import { Bot, Ellipsis, FileDiff, FolderGit2, GitBranch, Hammer, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { Bot, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
 import { buildDraft, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { openNewMission } from './MissionsView'
+import { openNewRun } from './FactoryView'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
@@ -29,7 +30,12 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     { label: hasPanel ? 'Show terminal' : 'Resume session', icon: <SquareTerminal size={13} />, run: () => focusOrResume(m.id) },
     { label: 'Review changes', icon: <FileDiff size={13} />, run: () => reviewMission(m.id) },
     // a plan or findings become the brief of a Build mission
-    ...(m.kind && m.kind.id !== 'build' ? [{ label: 'Build from this…', icon: <Hammer size={13} />, disabled: !buildDraft(m.id), run: () => openNewMission(buildDraft(m.id)) }] : []),
+    ...(m.kind && m.kind.id !== 'build'
+      ? [
+          { label: 'Build from this…', icon: <Hammer size={13} />, disabled: !buildDraft(m.id), run: () => openNewMission(buildDraft(m.id)) },
+          { label: 'Run a factory recipe from this…', icon: <Factory size={13} />, disabled: !buildDraft(m.id), run: () => openNewRun({ intent: m.title, seedMission: m.id }) }
+        ]
+      : []),
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
     { type: 'header', label: 'Review with another agent' },
     ...allAgents(workspace.get().customAgents)

@@ -1,5 +1,5 @@
-import { parse } from 'yaml'
-import type { AgentProfile, WorktreeInfo } from './types'
+import { parse, parseDocument } from 'yaml'
+import type { AgentProfile, ClaudeAsset, WorktreeInfo } from './types'
 
 /**
  * Software Factory: a recipe is a graph of nodes. An agent node is a mission, a run node runs
@@ -14,6 +14,8 @@ export interface RecipeNode {
   needs: string[]
   /** agent nodes: profile name, CLI id or "Profile@cli"; several = bake-off */
   agents: string[]
+  /** agent nodes: run this skill (a SKILL.md or command); the prompt becomes its arguments */
+  skill?: string
   prompt: string
   /** normal session instead of print mode; finishes with a Done click */
   interactive: boolean
@@ -63,10 +65,12 @@ export function parseRecipe(text: string, path?: string): ParseResult {
     if (nodes.some((n) => n.id === id)) return { error: `Two stages are called "${id}"` }
     const agents = list(s.agent)
     const run = list(s.run)
-    const kinds = [agents.length > 0, run.length > 0, s.pr !== undefined && s.pr !== false].filter(Boolean).length
-    if (kinds !== 1) return { error: `Stage "${id}": give exactly one of agent, run or pr` }
-    const kind: RecipeNode['kind'] = agents.length ? 'agent' : run.length ? 'run' : 'pr'
-    if (kind === 'agent' && (typeof s.prompt !== 'string' || !s.prompt.trim())) return { error: `Stage "${id}": an agent stage needs a prompt` }
+    const skill = typeof s.skill === 'string' && s.skill.trim() ? s.skill.trim().replace(/^\//, '') : undefined
+    // a skill stage without an agent runs on the default agent (filled in when the run starts)
+    const kinds = [agents.length > 0 || !!skill, run.length > 0, s.pr !== undefined && s.pr !== false].filter(Boolean).length
+    if (kinds !== 1) return { error: `Stage "${id}": give exactly one of agent (or skill), run or pr` }
+    const kind: RecipeNode['kind'] = agents.length || skill ? 'agent' : run.length ? 'run' : 'pr'
+    if (kind === 'agent' && !skill && (typeof s.prompt !== 'string' || !s.prompt.trim())) return { error: `Stage "${id}": an agent stage needs a prompt or a skill` }
     const needs = s.needs === undefined ? (nodes.length ? [nodes[nodes.length - 1].id] : []) : list(s.needs)
     for (const n of needs) if (!nodes.some((x) => x.id === n)) return { error: `Stage "${id}" needs "${n}", which isn't defined above it` }
     let onFail: RecipeNode['onFail']
@@ -83,7 +87,9 @@ export function parseRecipe(text: string, path?: string): ParseResult {
       kind,
       needs,
       agents,
-      prompt: typeof s.prompt === 'string' ? s.prompt.trim() : '',
+      skill,
+      // a skill stage without a prompt gets the run's intent as its arguments
+      prompt: typeof s.prompt === 'string' && s.prompt.trim() ? s.prompt.trim() : skill ? '{intent}' : '',
       interactive: s.interactive === true,
       run,
       onFail,
@@ -102,6 +108,71 @@ export function parseRecipe(text: string, path?: string): ParseResult {
       path
     }
   }
+}
+
+// ── choosing agents and skills per run ───────────────────────────
+
+/** What the run form changes on one agent stage: another agent or profile, a skill instead of the prompt, or neither. */
+export interface StageOverride {
+  agent?: string
+  /** a skill name; '' = the recipe's own prompt even if it names a skill */
+  skill?: string
+}
+
+/** The recipe with the run form's choices applied. Skill stages without an agent get the default one. */
+export function applyOverrides(r: Recipe, overrides: Record<string, StageOverride>, defaultAgent: string): Recipe {
+  return {
+    ...r,
+    nodes: r.nodes.map((n) => {
+      if (n.kind !== 'agent') return n
+      const o = overrides[n.id] ?? {}
+      const agents = o.agent ? [o.agent] : n.agents.length ? n.agents : [defaultAgent]
+      const skill = o.skill === undefined ? n.skill : o.skill || undefined
+      return { ...n, agents, skill }
+    })
+  }
+}
+
+/**
+ * The recipe text with the same choices written into it, comments kept, for "save as a project
+ * recipe". The name gets a suffix so it doesn't shadow the original.
+ */
+export function recipeTextWithOverrides(text: string, overrides: Record<string, StageOverride>, suffix: string): string {
+  const doc = parseDocument(text)
+  const stages = doc.get('stages', true) as { items?: unknown[] } | undefined
+  const items = (stages?.items ?? []) as Array<{ get(k: string): unknown; set(k: string, v: unknown): void; delete(k: string): void }>
+  items.forEach((item, i) => {
+    const id = String(item.get('id') ?? `stage-${i + 1}`)
+    const o = overrides[id]
+    if (!o) return
+    if (o.agent) item.set('agent', o.agent)
+    if (o.skill) item.set('skill', o.skill)
+    else if (o.skill === '') {
+      item.delete('skill')
+      // a skill stage may have had no prompt of its own: keep what it ran with
+      if (!item.get('prompt')) item.set('prompt', '{intent}')
+    }
+  })
+  doc.set('name', `${String(doc.get('name') ?? 'Recipe')} ${suffix}`.trim())
+  return doc.toString()
+}
+
+/** "spec", "/spec" or "plugin:spec"; skills before commands, the project's before the user's. */
+export function findSkill(assets: ClaudeAsset[], name: string): ClaudeAsset | undefined {
+  const want = name.replace(/^\//, '').toLowerCase()
+  const order = ['project', 'user', 'synced', 'plugin']
+  return assets
+    .filter((a) => a.kind !== 'agent' && (a.name.toLowerCase() === want || a.invocation.slice(1).toLowerCase() === want))
+    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'skill' ? -1 : 1) || order.indexOf(a.source) - order.indexOf(b.source))[0]
+}
+
+/** A run can start past a stage whose output already exists (a spec you wrote, a plan from a mission): stages nothing comes before. */
+export const seedableNodes = (r: Recipe): RecipeNode[] => r.nodes.filter((n) => n.kind === 'agent' && !n.needs.length && !isBakeoff(n))
+
+/** The seeded stage counts as done; its output file is written before anything runs. */
+export function seedNode(run: FactoryRun, id: string, note: string, now: number): FactoryRun {
+  if (!run.nodes[id]) return run
+  return setNode(run, id, { status: 'done', startedAt: now, endedAt: now, note }, now)
 }
 
 // ── worktree setup ───────────────────────────────────────────────
@@ -402,8 +473,9 @@ export function sendBack(run: FactoryRun, id: string, note: string, now: number)
 }
 
 /** The prompt an agent node gets: the recipe prompt, then any feedback from a failed check or a rejection. */
-export function nodePrompt(node: RecipeNode, nr: NodeRun, c: FillContext): string {
-  const base = fill(node.prompt, c)
+export function nodePrompt(node: RecipeNode, nr: NodeRun, c: FillContext, skill?: (args: string) => string): string {
+  const args = fill(node.prompt, c)
+  const base = skill ? skill(args) : args
   const out = c.out && !node.prompt.includes('{out}') ? `\n\nWrite a short summary of what you did to ${c.out}.` : ''
   const fb = nr.feedback ? `\n\n---\n\n${fill(nr.feedback, c)}` : ''
   return `${base}${out}${fb}`
