@@ -191,6 +191,12 @@ const api = {
     setTarget: (root: string, id: string, on: boolean): Promise<void> => ipcRenderer.invoke('rules:target', root, id, on),
     sync: (root: string, overwrite: string[] = []): Promise<RulesState> => ipcRenderer.invoke('rules:sync', root, overwrite)
   },
+  memory: {
+    info: (root: string): Promise<{ path: string; exists: boolean; entries: number }> => ipcRenderer.invoke('memory:info', root),
+    /** creates .sldev/memory.md when missing; returns its path */
+    ensure: (root: string): Promise<string> => ipcRenderer.invoke('memory:ensure', root),
+    remember: (root: string, note: string, source: string): Promise<void> => ipcRenderer.invoke('memory:remember', root, note, source)
+  },
   kinds: {
     list: (root: string | null): Promise<MissionKind[]> => ipcRenderer.invoke('kinds:list', root),
     create: (scope: 'project' | 'user', root: string | null, name: string, text: string): Promise<string> => ipcRenderer.invoke('kinds:create', scope, root, name, text)

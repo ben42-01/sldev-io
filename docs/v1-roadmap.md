@@ -29,6 +29,11 @@ scenario per feature (`profiles`, `rules`, `factory`, `bakeoff`, `mission-action
 | 10 | Run history and replay | S | Trust in an automated pipeline: see what happened when, and the graph at any moment |
 | 11 | Share recipes | S | A recipe and its agents as one paste; lets people trade recipes (and the website show some) |
 | 12 | Cost estimate | S | "What did that run cost me?" is the first question buyers ask |
+| 13 | Mission kinds | M | A research task must not be told to "summarize what changed"; kinds set the framing and defaults |
+| 14 | Your own skills in the Factory | M | Teams already have spec/review skills; stages run them, per run or in the recipe |
+| 15 | Usage-limit failover | M | Hitting Claude's limit mid-task stops nothing: the work continues on the next agent |
+| 16 | Automations | L | Runs that start themselves: schedules, a red CI, a labelled issue |
+| 17 | Project memory | S | Every mission starts with what earlier agents learned here |
 
 Not in 1.0 (candidates for 1.x, in rough order): project map / code graph for
 agent context, project memory ("lore"), headless `sldev run` for CI, sandboxed
@@ -299,6 +304,50 @@ counts as *unpriced* and is shown as such, never guessed. Shown as "Est. cost" a
 API list prices: on a subscription you pay your plan instead. The table goes stale, so the release
 playbook says to check it.
 
+## 13. Mission kinds
+
+The New mission form starts with a **kind**: Build (as before), Research, Investigate, Plan, Review, Freeform, or
+a custom one. A kind is a template (`{title}`, `{brief}`, `{criteria}`) plus defaults: worktree on or off, and
+read-only, which preselects the agent's `readOnlyMode` (Claude `plan`, Codex `read-only`, OpenCode `plan`).
+Custom kinds are Markdown files in `.sldev/missions/` (commit them) or the user folder; "New kind from this
+one" writes one and opens it in the editor, and edits apply while the form is open. Follow-ups keep the
+kind. Plan and Research missions have **Build from this** (a Build mission with the result as its brief)
+and **Run a factory recipe from this** (see 14). e2e: `mission-kinds`.
+
+## 14. Your own skills in the Factory
+
+- `skill: <name>` on a stage runs that skill (from `.claude/skills`, `.sldev/skills`, `.agents/skills`,
+  `~/.claude` or a plugin) on any agent; the prompt becomes its arguments (default `{intent}`), the agent
+  defaults to the default agent. Claude Code gets the slash name for `.claude` skills, others the SKILL.md.
+- The run form's **Agents and skills per stage** swaps any stage's agent or skill for one run; **Save as a
+  project recipe** writes the choices into a copy (comments kept).
+- **Start from** skips the first stage: a file in the repository or a finished mission's result becomes
+  its output. e2e: `factory-skills`.
+
+## 15. Usage-limit failover
+
+Each agent declares the line it prints at its plan's limit (`usageLimit`). When a mission's output ends
+with it, the card says so and offers **Continue on <next agent>** (Settings → Agents: the order to try,
+and whether to continue automatically). The next agent works in the same folder with the original task,
+the handoff and the last output. Factory stages do the same: automatically when switched on, otherwise
+the stage fails with **Continue on…**. e2e: `failover`.
+
+## 16. Automations
+
+Factory view → Automations: run a recipe or start a mission **on a schedule** (hourly, daily, weekdays,
+weekly), **when CI fails** on a branch, or **when an issue gets a label** (gh, every 5 minutes). Only while
+the app is open; a time missed while it was closed is skipped; one live run or mission per automation;
+nothing pushes. The privacy page mentions the polling. e2e: `automations`.
+
+Not yet: a headless runner (`sldev run`) so automations work with the app closed and in CI. The factory
+runner lives in the renderer today (terminals, missions), so this needs it moved behind an interface first.
+
+## 17. Project memory
+
+`.sldev/memory.md`: one dated line per thing learned. Missions (not Freeform) are pointed at it; agents
+with the sldev tools add to it with `sldev_remember`; people add from mission details (**Remember**).
+Settings → Agents can switch it off. e2e: `memory`.
+
 ## Build order
 
 1. Mission status history (tiny, starts collecting dashboard data), agent builder, rules sync
@@ -336,6 +385,11 @@ against the real tools (on a scratch repo, with a cheap model):
       `turn_context` line with `model`; the dashboard prices them (unpriced otherwise).
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list
       (on `v1`, so they go live with the launch).
+- [ ] **Usage-limit lines**: trigger a real limit (or read one from a past log) for Claude Code, Codex and
+      Gemini and check `usageLimit` in `lib/agents.ts` matches what they print today.
+- [ ] **Read-only modes**: Research in Claude `--permission-mode plan` answers without asking to exit plan
+      mode; Codex `--sandbox read-only` can still run read-only commands.
+- [ ] **Skills in print mode**: `claude -p "/<skill> args"` runs a project skill.
 - [ ] Website `/compare` (on `v1`): check the AI code editor column against what current editors ship
       before launch; it compares categories, not products, and should stay fair.
 

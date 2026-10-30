@@ -69,6 +69,10 @@ export function SettingsPanel(): React.JSX.Element {
           <span>Give Claude Code and Codex missions the sldev tools (MCP): they report their own status, hand over results and can read other missions</span>
         </label>
         <label className="check">
+          <input type="checkbox" checked={s.projectMemory !== false} onChange={(e) => updateSettings({ projectMemory: e.target.checked })} />
+          <span>Project memory: point missions at .sldev/memory.md, and let agents with the sldev tools add what they learn to it (Freeform missions get nothing added)</span>
+        </label>
+        <label className="check">
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />
           <span>Desktop notifications when a mission needs you or finishes</span>
         </label>

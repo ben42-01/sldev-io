@@ -47,17 +47,22 @@ src/main/       Electron main process (Node): everything privileged
   rules.ts        rules sync: .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
   usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions); reads only the
                   appended bytes on each poll, never whole logs (re-parsing them froze the app)
+  missionKinds.ts custom mission kinds: .sldev/missions/*.md (project) and <userData>/missions (user)
+  memory.ts       project memory (.sldev/memory.md): read by missions, appended by sldev_remember and "Remember"
   stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
-                  missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff)
+                  missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
+                  Research, Plan… templates), failover.ts (usage-limit handoff), automations.ts (schedules, CI and
+                  issue triggers), memory.ts
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
                   and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
-                  tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote
+                  tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
+                  missionKinds, automations (the trigger loop, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Agents, Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote), the right RightPanel tabs (overview, agents, skills, workflows); showView() routes by ViewId
@@ -119,6 +124,14 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
 - **Factory**: never add agent-specific behaviour to the runner; stages talk to agents only through
   prompts, files and (optionally) the sldev MCP tools. Pushing (the pr stage) only happens on a click.
+- **Mission kinds**: the closing lines of a mission prompt come from its kind (`src/shared/missionKinds.ts`), never
+  hard-coded: a Research mission told to "summarize what changed" goes and changes something. Freeform sends the
+  brief exactly as written (no memory line either). Read-only kinds preselect the agent's `readOnlyMode`.
+- **Usage limits**: what counts as "hit the limit" is per agent (`usageLimit` in `lib/agents.ts`), checked only against
+  the last lines of output; the handoff to the next agent replaces the limit line, or the next agent's own echo of its
+  prompt would flag it too. Factory stages continue on their own only with Settings → Agents → continue automatically.
+- **Automations** run only while the app is open, skip (never catch up) a time missed while it was closed, never start
+  a second thing while their last one is live, and never push.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.
 - **Agent spawning**: agents start from an **argv array** (`agentCommand` in `lib/agents.ts` returns one

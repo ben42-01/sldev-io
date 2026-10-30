@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { AgentOptions } from '@shared/types'
 import { ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket } from 'lucide-react'
 import { openPanel } from '../dock/dockApi'
-import { isLive, missions, startMission, type MissionDraft } from '../state/missions'
+import { isLive, missionMemory, missions, startMission, type MissionDraft } from '../state/missions'
+import { withMemory } from '@shared/memory'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
@@ -155,6 +156,9 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60)
   /** exactly what the agent receives as its first message (the profile's role goes in separately) */
   const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria })
+  // startMission adds the memory line itself; this is only so the preview shows it
+  const [memory, setMemory] = useState('')
+  useEffect(() => void missionMemory(root, options.agent, kind.id).then(setMemory), [root, options.agent, kind.id])
 
   const launch = async (): Promise<void> => {
     if (!prompt.trim() || busy) return
@@ -251,7 +255,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       {prompt.trim() && !compare.length && (
         <details className="prompt-preview">
           <summary>Prompt preview</summary>
-          <pre className="cmd-preview selectable">{sent}</pre>
+          <pre className="cmd-preview selectable">{withMemory(sent, memory)}</pre>
         </details>
       )}
       {error && <div className="form-error" role="alert">{error}</div>}

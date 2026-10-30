@@ -9,6 +9,7 @@ import { onTerminalEvent, stopTerminal, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
 import { getKind } from './missionKinds'
+import { memoryPointer, withMemory } from '@shared/memory'
 import { applyProfile } from '@shared/profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
@@ -33,9 +34,11 @@ export async function loadMissions(): Promise<void> {
   missions.set({ list })
 }
 
+const save = (): Promise<unknown> => window.api.store.set('missions', { missions: missions.get().list.slice(0, 200) })
+
 function persist(): void {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void window.api.store.set('missions', { missions: missions.get().list.slice(0, 200) }), 400)
+  saveTimer = setTimeout(() => void save(), 400)
 }
 
 function update(id: string, patch: Partial<Mission>): Mission | undefined {
@@ -93,9 +96,20 @@ export interface StartMissionInput {
   placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
 
+/** The memory line for a mission's prompt; '' when memory is off, for Freeform missions, or when there is nothing to say. */
+export async function missionMemory(root: string, agentId: string | undefined, kind: string | undefined): Promise<string> {
+  if (workspace.get().projectMemory === false || kind === 'freeform') return ''
+  const info = await window.api.memory.info(root).catch(() => null)
+  if (!info) return ''
+  const canRemember = workspace.get().agentTools !== false && !!getAgent(agentId).mcpArgs
+  return memoryPointer(info.path, info.exists, canRemember)
+}
+
 export async function startMission(input: StartMissionInput): Promise<Mission> {
   if (!hook) hook = await window.api.missions.hookInfo()
   const agent = getAgent(input.options.agent)
+  // the prompt stored on the mission is exactly what the agent got
+  input = { ...input, prompt: withMemory(input.prompt, await missionMemory(input.root, agent.id, input.kind?.id)) }
   const title = input.title?.trim() || input.prompt.trim().split('\n')[0].slice(0, 60) || `${agent.name} session`
   const id = `m-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   let cwd = input.cwd ?? input.root
@@ -128,7 +142,9 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     history: pushStatus(undefined, 'starting', Date.now())
   }
   missions.set((s) => ({ list: [mission, ...s.list] }))
-  persist()
+  // saved before the agent starts: main answers its sldev tool calls from the stored missions
+  clearTimeout(saveTimer)
+  await save()
   const prompt = await launchPrompt(id, input.prompt)
   openTerminal({
     cwd,

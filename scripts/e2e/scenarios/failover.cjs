@@ -36,7 +36,7 @@ module.exports = async (h) => {
   h.expect(next.options.agent === 'codex' && next.cwd === first.cwd, 'on Codex, in the same folder')
   h.expect(next.prompt.includes('Claude Code stopped at its usage limit') && next.prompt.includes('Refactor the parser'), 'with the original task and where it stopped')
   h.expect(next.prompt.includes('fake claude') && !next.prompt.includes('usage limit reached'), "with Claude's last output, minus the limit line")
-  h.expect(first.continuedBy === next.id, 'the first mission points at the one that took over')
+  h.expect(await h.until(async () => (await missionsList()).find((m) => m.id === first.id)?.continuedBy === next.id, 3000), 'the first mission points at the one that took over')
   await h.wait(800)
   await h.shot('2-continued')
 

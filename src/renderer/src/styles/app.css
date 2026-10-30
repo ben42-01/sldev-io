@@ -4119,3 +4119,14 @@ a {
 .automation-form {
   margin: 0 8px 8px;
 }
+
+/* project memory, in mission details */
+.remember-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.remember-row input {
+  flex: 1;
+  min-width: 0;
+}

@@ -12,6 +12,7 @@ import * as gh from './github'
 import * as notes from './notes'
 import * as profiles from './profiles'
 import * as missionKinds from './missionKinds'
+import * as memory from './memory'
 import * as rules from './rules'
 import * as factory from './factory'
 import { missionTokens, type UsageRequest } from './usage'
@@ -263,6 +264,9 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('memory:info', (_e, root: string) => memory.memoryInfo(root))
+  ipcMain.handle('memory:ensure', (_e, root: string) => memory.ensureMemory(root))
+  ipcMain.handle('memory:remember', (_e, root: string, note: string, source: string) => memory.remember(root, note, source))
   ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root))
   ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))

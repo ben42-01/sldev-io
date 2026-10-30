@@ -39,6 +39,12 @@ export const MCP_TOOLS = [
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
   },
   {
+    name: 'sldev_remember',
+    description:
+      "Add one line to the project's memory (.sldev/memory.md), which every future agent in this project is pointed at. Record what would have saved you time: a gotcha, a command that works, a convention, where something lives. Not a summary of your task.",
+    inputSchema: { type: 'object', properties: { note: { type: 'string', description: 'One line, under 500 characters' } }, required: ['note'] }
+  },
+  {
     name: 'sldev_rules',
     description: "The project's agent rules (.sldev/rules.md, or AGENTS.md when there is none).",
     inputSchema: { type: 'object', properties: {} }

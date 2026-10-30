@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, CornerDownRight, FileDiff, GitBranch, MessagesSquare, SquareTerminal, Trash2 } from 'lucide-react'
+import { BookOpen, BookmarkPlus, Bot, CornerDownRight, FileDiff, GitBranch, MessagesSquare, SquareTerminal, Trash2 } from 'lucide-react'
 import { missionSignal } from '@shared/status'
 import { allAgents } from '../lib/agents'
+import { openInEditor } from '../lib/actions'
 import { removeMissionFlow } from '../lib/removals'
 import { focusOrResume, followUpMission, getMission, reviewMission, reviewWithAgent, setHandoff, useMission } from '../state/missions'
 import { getAgent, useAgents } from '../state/agents'
@@ -113,7 +114,7 @@ function MissionDetails({ id, onClose }: { id: string; onClose: () => void }): R
         <TimeAgo t={m.updatedAt} />
         {parent && (
           <button type="button" className="link small" onClick={() => openMissionDetails(parent.id)}>
-            {m.parent?.kind === 'follow-up' ? 'Follows up on' : 'Reviews'} “{parent.title}”
+            {{ 'follow-up': 'Follows up on', 'second-opinion': 'Reviews', failover: 'Continues' }[m.parent!.kind]} “{parent.title}”
           </button>
         )}
       </div>
@@ -165,6 +166,7 @@ function MissionDetails({ id, onClose }: { id: string; onClose: () => void }): R
             <textarea rows={3} value={handoff} placeholder="e.g. Pagination works; the empty-page case still returns 500" onChange={(e) => setDraft(e.target.value)} onBlur={saveHandoff} />
             <span className="field-hint">Optional. Follow-ups and second opinions get these instead of the agent's report.</span>
           </label>
+          <RememberField root={m.root} source={`${agent.name}, mission "${m.title}"`} />
           <details className="prompt-preview">
             <summary>Prompt sent</summary>
             <pre className="cmd-preview selectable">{m.prompt}</pre>
@@ -172,5 +174,43 @@ function MissionDetails({ id, onClose }: { id: string; onClose: () => void }): R
         </>
       )}
     </Modal>
+  )
+}
+
+/** Adds one line to the project memory; the next missions here are pointed at it. */
+function RememberField({ root, source }: { root: string; source: string }): React.JSX.Element {
+  const [note, setNote] = useState('')
+  const [saved, setSaved] = useState('')
+  const [error, setError] = useState('')
+  const save = async (): Promise<void> => {
+    try {
+      await window.api.memory.remember(root, note, source)
+      setSaved(note.trim())
+      setNote('')
+      setError('')
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  return (
+    <div className="field">
+      <span>Remember for this project</span>
+      <div className="remember-row">
+        <input
+          value={note}
+          aria-label="Note for the project memory"
+          placeholder="e.g. Tests need Postgres running: docker compose up db"
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void save())}
+        />
+        <button type="button" className="btn sm" disabled={!note.trim()} onClick={() => void save()}>
+          <BookmarkPlus size={13} /> Remember
+        </button>
+        <button type="button" className="icon-btn" title="Open the project memory" aria-label="Open the project memory" onClick={() => void window.api.memory.ensure(root).then((p) => openInEditor(p))}>
+          <BookOpen size={13} />
+        </button>
+      </div>
+      {error ? <span className="form-error" role="alert">{error}</span> : <span className="field-hint">{saved ? `Saved: “${saved}”. ` : ''}One line in .sldev/memory.md. Every later mission in this project is pointed at it.</span>}
+    </div>
   )
 }

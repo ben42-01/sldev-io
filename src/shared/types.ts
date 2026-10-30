@@ -70,6 +70,8 @@ export interface AppSettings {
   failoverAuto: boolean
   /** give Claude Code and Codex missions the sldev MCP tools (status, output, other missions) */
   agentTools: boolean
+  /** point missions at the project's .sldev/memory.md when it exists */
+  projectMemory: boolean
   /** agent profiles kept for every project (project ones live in .sldev/agents) */
   agentProfiles: AgentProfile[]
   /** the setup check has been shown once; after that it only opens itself when a required tool is missing */
@@ -151,6 +153,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   factoryModes: {},
   agentProfiles: [],
   agentTools: true,
+  projectMemory: true,
   setupSeen: false,
   lastSeenVersion: null,
   assetGroups: {}

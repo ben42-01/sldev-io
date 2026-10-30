@@ -2,6 +2,7 @@ import { promises as fsp } from 'fs'
 import { join } from 'path'
 import type { McpEvent, Mission } from '@shared/types'
 import { diff } from './git'
+import { remember } from './memory'
 
 /** Tool calls from the sldev MCP server, answered here; status, output and done also go to the window. */
 
@@ -49,6 +50,12 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
       if (!m) return { error: 'No mission with that id in this project. Use sldev_missions.' }
       const d = await diff(m.cwd, m.worktree?.base ?? m.baseCommit ?? 'HEAD').catch((e: Error) => `Could not read the diff: ${e.message}`)
       return { text: d.length > 60_000 ? `${d.slice(0, 60_000)}\n… diff cut at 60k characters` : d || 'No changes.' }
+    }
+    case 'sldev_remember': {
+      const note = str(r.args.note)
+      if (!note.trim()) return { error: 'note is empty' }
+      await remember(self.root, note, `${self.options.agent ?? 'claude'}, mission "${self.title}"`)
+      return { text: 'Saved to the project memory.' }
     }
     case 'sldev_rules': {
       for (const f of ['.sldev/rules.md', 'AGENTS.md']) {

@@ -593,4 +593,110 @@ stages:
   ]
 }
 
-export const docs: DocPage[] = [recipes]
+
+const missions: DocPage = {
+  id: 'missions',
+  title: 'Missions, limits, memory and automations',
+  summary:
+    'A mission is one agent on one task. This guide covers mission kinds (research is not a build), what happens when an agent hits its usage limit, the project memory every mission starts from, and automations that start work on their own.',
+  sections: [
+    {
+      id: 'kinds',
+      title: 'Mission kinds',
+      body: (
+        <>
+          <p>
+            Every mission starts with a kind. It decides how your brief is framed, how the agent should end, and the defaults of the form:
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><b>Build</b></td><td>Change code. Own worktree, ends with a diff to review.</td></tr>
+              <tr><td><b>Research</b></td><td>Answer a question. Nothing is changed; the agent runs in its read-only mode where it has one.</td></tr>
+              <tr><td><b>Investigate</b></td><td>Find the root cause with evidence. Fixes only if you ask.</td></tr>
+              <tr><td><b>Plan</b></td><td>A plan, no code. Hand it to a Build mission or a factory run.</td></tr>
+              <tr><td><b>Review</b></td><td>Review a branch, a diff or part of the code. Read-only.</td></tr>
+              <tr><td><b>Freeform</b></td><td>Your prompt exactly as you wrote it, nothing added.</td></tr>
+            </tbody>
+          </table>
+          <p>
+            A finished Plan or Research mission has <b>Build from this</b> and <b>Run a factory recipe from this</b>: its result becomes the
+            brief, or the spec the run starts from.
+          </p>
+          <p>
+            Your own kinds are Markdown files. <b>New kind from this one</b> in the form copies the selected kind to{' '}
+            <code>.sldev/missions/</code> (or your user folder) and opens it in your editor:
+          </p>
+          <Code file=".sldev/missions/security-audit.md">{`
+---
+name: Security audit
+description: Look for security problems only
+worktree: false
+access: read          # read = the agent's read-only mode; write = normal
+---
+Security audit: {title}
+
+{brief}
+
+{criteria}
+
+Look for injection, authentication mistakes, secrets in code and unsafe
+defaults. Do not change any files. List findings with file and line.
+`}</Code>
+        </>
+      )
+    },
+    {
+      id: 'limits',
+      title: 'When an agent hits its usage limit',
+      body: (
+        <>
+          <p>
+            When Claude Code, Codex, Gemini or another agent stops at its plan's usage limit, the mission card says so and offers{' '}
+            <b>Continue on</b> another agent. The next agent works in the same folder, with the original task, your handoff notes and the last
+            output of the one that stopped, so it picks up where that one left off instead of starting over.
+          </p>
+          <p>
+            Choose the order in <b>Settings → Agents → When an agent hits its usage limit</b>. With <b>Continue automatically</b> on,
+            missions and factory stages move on without asking; otherwise a factory stage stops with a <b>Continue on…</b> button.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'memory',
+      title: 'Project memory',
+      body: (
+        <>
+          <p>
+            <code>.sldev/memory.md</code> holds one line for each thing someone learned about the project: a command that works, a gotcha,
+            where something lives. Every mission (except Freeform) is pointed at it, so the next agent doesn't rediscover it.
+          </p>
+          <p>
+            Add a line from a mission's details (<b>Remember</b>). Claude Code and Codex missions with the sldev tools add to it
+            themselves through <code>sldev_remember</code>. It's a plain file: edit it, prune it, commit it to share it with your team.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'automations',
+      title: 'Automations',
+      body: (
+        <>
+          <p>In the Factory view, an automation runs a recipe or starts a mission by itself:</p>
+          <ul>
+            <li><b>On a schedule</b>: every hour, day, weekday or week. "Every weekday at 9: review yesterday's commits."</li>
+            <li><b>When CI fails</b> on a branch: the newest failure gets one run, with the failing run's id and log command.</li>
+            <li><b>When an issue gets a label</b>: one run per issue, one at a time; a recipe's pull request closes the issue.</li>
+          </ul>
+          <Note>
+            Automations run while sldev-io is open. A time missed while it was closed is skipped, not caught up. An automation never starts
+            a second run while its last one is still going, and nothing is pushed until you click.
+          </Note>
+        </>
+      )
+    }
+  ]
+}
+
+export const docs: DocPage[] = [recipes, missions]
