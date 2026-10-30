@@ -99,14 +99,25 @@ export function ResizeHandle({ side = 'left' }: { side?: 'left' | 'right' }): Re
     document.body.classList.add('resizing')
     // the right sidebar grows as its left edge moves left
     const move = (ev: PointerEvent): void => workspace.set({ [key]: Math.min(640, Math.max(180, startW + (side === 'left' ? 1 : -1) * (ev.clientX - startX))) })
+    // a drag can end without a pointerup on the handle (cancelled, window lost focus, handle unmounted);
+    // any of those must still clear the body class, or the resize cursor sticks everywhere
     const up = (): void => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
+      el.removeEventListener('pointercancel', up)
+      el.removeEventListener('lostpointercapture', up)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('blur', up)
+      if (!document.body.classList.contains('resizing')) return
       document.body.classList.remove('resizing')
       updateSettings({ [key]: workspace.get()[key] })
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
+    el.addEventListener('pointercancel', up)
+    el.addEventListener('lostpointercapture', up)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('blur', up)
   }
   return <div className={`sidebar-resize ${side}`} onPointerDown={onPointerDown} />
 }
