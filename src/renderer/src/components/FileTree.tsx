@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '@shared/types'
-import { ChevronRight, Copy, ExternalLink, File, FileCode2, FileJson, FileText, Folder, FolderOpen, FolderInput, PanelTop, SquareTerminal, Columns2 } from 'lucide-react'
+import { ChevronRight, Copy, ExternalLink, File, FileCode2, FileJson, FileText, Folder, FolderOpen, FolderInput, PanelTop, Pin, SquareTerminal, Columns2 } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
 import { dirname, relative } from '../lib/paths'
@@ -8,6 +8,7 @@ import { PATH_MIME } from '../lib/terminals'
 import { preferredEditor, setRootFolder, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu, type MenuItem } from './ContextMenu'
+import { showNotice } from '../lib/removals'
 
 interface Row {
   entry: DirEntry
@@ -126,6 +127,16 @@ export function FileTree({ root, handle }: { root: string; handle?: React.RefObj
       { label: 'Copy path', icon: <Copy size={14} />, run: () => void navigator.clipboard.writeText(e.path) },
       { label: 'Copy relative path', run: () => void navigator.clipboard.writeText(relative(root, e.path)) }
     )
+    if (!e.isDir && e.path !== root) {
+      items.push(
+        { type: 'separator' },
+        {
+          label: 'Pin to project context',
+          icon: <Pin size={14} />,
+          run: () => void window.api.context.pin(root, e.path).catch((err: Error) => showNotice('Could not pin the file', err.message))
+        }
+      )
+    }
     if (e.isDir) {
       items.push({ type: 'separator' }, { label: 'Open as workspace root', icon: <FolderInput size={14} />, run: () => setRootFolder(e.path) })
     }

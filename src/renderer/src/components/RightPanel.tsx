@@ -1,4 +1,4 @@
-import { Bot, LayoutDashboard, PanelRightClose, Sparkles, Workflow } from 'lucide-react'
+import { Bot, Brain, LayoutDashboard, PanelRightClose, Sparkles, Workflow } from 'lucide-react'
 import type { RightTab } from '@shared/types'
 import { shortcutLabel, showView, staticCommands } from '../lib/commands'
 import { useViewBadges, type ViewBadge } from '../state/attention'
@@ -8,12 +8,14 @@ import { MissionsView } from './MissionsView'
 import { OverviewView } from './OverviewView'
 import { ResizeHandle } from './Sidebar'
 import { SkillsView } from './SkillsView'
+import { ContextView } from './ContextTab'
 import { WorkflowsView } from './WorkflowsView'
 
 const TABS: Array<{ id: RightTab; label: string; title: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: 'overview', label: 'Overview', title: 'Overview', icon: LayoutDashboard },
   { id: 'agents', label: 'Agents', title: 'Agent Missions', icon: Bot },
   { id: 'skills', label: 'Skills', title: 'Skills', icon: Sparkles },
+  { id: 'context', label: 'Context', title: 'Project Context', icon: Brain },
   { id: 'workflows', label: 'Workflows', title: 'GitHub Workflows', icon: Workflow }
 ]
 
@@ -29,7 +31,7 @@ function Badge({ b }: { b: ViewBadge | undefined }): React.JSX.Element | null {
   return b?.live ? <span className="live-dot sdot small pulse tone-working" /> : null
 }
 
-/** The right sidebar: overview, agent missions, skills and workflows as tabs; a slim rail when closed. */
+/** The right sidebar: overview, agent missions, skills, project context and workflows as tabs; a slim rail when closed. */
 export function RightPanel(): React.JSX.Element {
   const visible = useStore(workspace, (w) => w.rightPanelVisible)
   const width = useStore(workspace, (w) => w.rightPanelWidth)
@@ -75,6 +77,7 @@ export function RightPanel(): React.JSX.Element {
         {tab === 'overview' && <OverviewView />}
         {tab === 'agents' && <MissionsView />}
         {tab === 'skills' && <SkillsView />}
+        {tab === 'context' && <ContextView />}
         {tab === 'workflows' && <WorkflowsView />}
       </div>
       <ResizeHandle side="right" />

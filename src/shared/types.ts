@@ -35,7 +35,7 @@ export interface PtyInfo {
   cwd: string
 }
 
-export type RightTab = 'overview' | 'agents' | 'skills' | 'workflows'
+export type RightTab = 'overview' | 'agents' | 'skills' | 'context' | 'workflows'
 
 export interface AppSettings {
   rootFolder: string | null
@@ -43,7 +43,7 @@ export interface AppSettings {
   preferredEditor: string | null
   sidebarWidth: number
   sidebarVisible: boolean
-  /** the right sidebar: overview, agents, skills, workflows */
+  /** the right sidebar: overview, agents, skills, context, workflows */
   rightPanelWidth: number
   rightPanelVisible: boolean
   rightPanelTab: RightTab

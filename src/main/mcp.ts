@@ -3,6 +3,8 @@ import { join } from 'path'
 import type { McpEvent, Mission } from '@shared/types'
 import { diff } from './git'
 import { remember } from './memory'
+import { recall } from './context'
+import { normalizePath, recallText } from '@shared/context'
 
 /** Tool calls from the sldev MCP server, answered here; status, output and done also go to the window. */
 
@@ -19,6 +21,9 @@ export interface McpDeps {
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+/** A path from an agent: absolute in its worktree or the project, or already relative. */
+const projectPath = (self: Mission, p: string): string | undefined => normalizePath(p, self.cwd) ?? normalizePath(p, self.root)
 
 export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: string; error?: string }> {
   const all = deps.missions()
@@ -54,8 +59,16 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
     case 'sldev_remember': {
       const note = str(r.args.note)
       if (!note.trim()) return { error: 'note is empty' }
-      await remember(self.root, note, `${self.options.agent ?? 'claude'}, mission "${self.title}"`)
+      const paths = Array.isArray(r.args.paths) ? r.args.paths.map((p) => (typeof p === 'string' ? projectPath(self, p) : undefined)).filter((p): p is string => !!p).slice(0, 12) : []
+      await remember(self.root, note, `${self.options.agent ?? 'claude'}, mission "${self.title}"`, paths)
       return { text: 'Saved to the project memory.' }
+    }
+    case 'sldev_recall': {
+      const query = str(r.args.query).slice(0, 500)
+      const path = str(r.args.path).slice(0, 300)
+      if (!query.trim() && !path.trim()) return { error: 'Give a query, a path, or both' }
+      const { hits, related } = await recall(self.root, { query, path: path ? (projectPath(self, path) ?? path) : undefined })
+      return { text: recallText(hits, self.root, related) }
     }
     case 'sldev_rules': {
       for (const f of ['.sldev/rules.md', 'AGENTS.md']) {

@@ -11,7 +11,8 @@ import { onTerminalEvent, stopTerminal, terminalCursor, terminalTail } from '../
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
 import { getKind } from './missionKinds'
-import { memoryPointer, withMemory } from '@shared/memory'
+import { withMemory } from '@shared/memory'
+import { contextPointer } from '@shared/context'
 import { applyProfile } from '@shared/profiles'
 import { createStore, useStore } from './store'
 import { workspace } from './workspace'
@@ -98,20 +99,27 @@ export interface StartMissionInput {
   placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
 
-/** The memory line for a mission's prompt; '' when memory is off, for Freeform missions, or when there is nothing to say. */
-export async function missionMemory(root: string, agentId: string | undefined, kind: string | undefined): Promise<string> {
+/**
+ * The project-context lines for a mission's prompt: the notes that match its brief, where the memory
+ * is, and how to add to it. '' when memory is off, for Freeform missions, or when there's nothing to say.
+ */
+export async function missionMemory(root: string, agentId: string | undefined, kind: string | undefined, brief = ''): Promise<string> {
   if (workspace.get().projectMemory === false || kind === 'freeform') return ''
-  const info = await window.api.memory.info(root).catch(() => null)
+  const [info, hits] = await Promise.all([window.api.memory.info(root).catch(() => null), brief.trim() ? window.api.context.search(root, brief, CONTEXT_HITS).catch(() => []) : Promise.resolve([])])
   if (!info) return ''
-  const canRemember = workspace.get().agentTools !== false && !!getAgent(agentId).mcpArgs
-  return memoryPointer(info.path, info.exists, canRemember)
+  const tools = workspace.get().agentTools !== false && !!getAgent(agentId).mcpArgs
+  // the memory file is already named as a whole; its lines are listed only when they match
+  return contextPointer(hits, root, { memoryPath: info.path, memoryExists: info.exists, tools })
 }
+
+/** how many notes a mission's prompt lists at most: enough to help, few enough to read */
+const CONTEXT_HITS = 6
 
 export async function startMission(input: StartMissionInput): Promise<Mission> {
   if (!hook) hook = await window.api.missions.hookInfo()
   const agent = getAgent(input.options.agent)
   // the prompt stored on the mission is exactly what the agent got
-  input = { ...input, prompt: withMemory(input.prompt, await missionMemory(input.root, agent.id, input.kind?.id)) }
+  input = { ...input, prompt: withMemory(input.prompt, await missionMemory(input.root, agent.id, input.kind?.id, input.brief ?? input.prompt)) }
   const title = input.title?.trim() || input.prompt.trim().split('\n')[0].slice(0, 60) || `${agent.name} session`
   const id = `m-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   let cwd = input.cwd ?? input.root

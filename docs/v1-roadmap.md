@@ -348,6 +348,27 @@ runner lives in the renderer today (terminals, missions), so this needs it moved
 with the sldev tools add to it with `sldev_remember`; people add from mission details (**Remember**).
 Settings → Agents can switch it off. e2e: `memory`.
 
+### 17b. Project context
+
+The memory grew into a context layer every agent shares. Sources stay Markdown in the repo:
+`.sldev/memory.md` (learnings, optionally ending in ` · files: a, b`), `.sldev/context/**/*.md` (reference
+docs, one node per section), `.sldev/pinned.md` (pinned files; Markdown ones are indexed by section) and
+project skills. `src/main/context.ts` indexes them into SQLite (`node:sqlite` from Electron's Node, so no
+native module) in `<userData>/context/<hash>.db`: nodes, edges from each node to the files it mentions
+(only real paths, or ones the note listed), and an FTS5 table. The index rebuilds when a source's mtime
+or size changes, and is only a cache.
+
+- **Prompts**: a mission's brief is matched (full text, plus notes about files the brief names) and the
+  best six are listed as absolute paths with line numbers, so worktrees can read them.
+- **Tools**: `sldev_recall` (by topic, or by file with one hop to related files) and `paths` on `sldev_remember`.
+- **Staleness**: a note is flagged when a file it's about changed after it was written (last commit time,
+  mtime only for untracked files, so a fresh clone doesn't look changed) or is gone.
+- **UI**: right sidebar → Context (search like a brief, flagged notes, forget, unpin), explorer → Pin to
+  project context, the **Map project** mission kind and an installable `map-project` skill.
+
+Not yet: embeddings (FTS covers it for now; a local model is heavy and a remote one is a privacy change).
+e2e: `context`.
+
 ## Build order
 
 1. Mission status history (tiny, starts collecting dashboard data), agent builder, rules sync

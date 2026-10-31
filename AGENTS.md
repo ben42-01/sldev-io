@@ -49,13 +49,15 @@ src/main/       Electron main process (Node): everything privileged
                   appended bytes on each poll, never whole logs (re-parsing them froze the app)
   missionKinds.ts custom mission kinds: .sldev/missions/*.md (project) and <userData>/missions (user)
   memory.ts       project memory (.sldev/memory.md): read by missions, appended by sldev_remember and "Remember"
+  context.ts      project context index: memory, .sldev/context docs, .sldev/pinned.md and skills in a per-project
+                  SQLite db (node:sqlite, FTS5 + file edges) under <userData>/context; a cache, rebuilt when a source changes
   stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
-                  Research, Plan… templates), failover.ts (usage-limit handoff), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
+                  Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
@@ -65,7 +67,7 @@ src/renderer/src/
                   missionKinds, automations (the trigger loop, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Agents, Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
-                  notes, remote), the right RightPanel tabs (overview, agents, skills, workflows); showView() routes by ViewId
+                  notes, remote), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
                   src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,
@@ -128,6 +130,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Mission kinds**: the closing lines of a mission prompt come from its kind (`src/shared/missionKinds.ts`), never
   hard-coded: a Research mission told to "summarize what changed" goes and changes something. Freeform sends the
   brief exactly as written (no memory line either). Read-only kinds preselect the agent's `readOnlyMode`.
+- **Project context**: the Markdown in `.sldev/` is the source of truth and the SQLite index is a disposable cache;
+  never store anything only in the index. Prompts point at notes (absolute path and line), they don't paste them, and
+  Freeform missions get nothing added. No embeddings or remote calls: search stays local.
 - **Reports**: a mission's report is the agent's own (Claude's Stop hook, `sldev_done`). Agents that don't report back
   get their terminal screen after the prompt instead (`reportFrom: 'terminal'`, `src/shared/screenReport.ts`), and the UI
   says so; a real report always replaces it, never the other way round.

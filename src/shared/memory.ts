@@ -14,11 +14,16 @@ export const MEMORY_HEADER = [
   ''
 ].join('\n')
 
-/** One line per entry: notes are flattened and capped, so the file stays a quick read. */
-export function memoryEntry(note: string, source: string, at: Date): string {
-  const text = note.replace(/\s+/g, ' ').trim().slice(0, 500)
+/**
+ * One line per entry: notes are flattened and capped, so the file stays a quick read. The files a note
+ * is about go at the end (` · files: a, b`); the project context links the note to them and flags it
+ * when they change.
+ */
+export function memoryEntry(note: string, source: string, at: Date, paths: string[] = []): string {
+  const text = note.replace(/\s+/g, ' ').replace(/ · files: /g, ' - files: ').trim().slice(0, 500)
   const day = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
-  return `- ${day}: ${text}${source.trim() ? ` (${source.trim()})` : ''}`
+  const files = [...new Set(paths.map((p) => p.trim().replace(/\\/g, '/').replace(/,/g, '')).filter(Boolean))].slice(0, 12)
+  return `- ${day}: ${text}${source.trim() ? ` (${source.trim()})` : ''}${files.length ? ` · files: ${files.join(', ')}` : ''}`
 }
 
 /** What a mission's prompt gets: where the memory is (once it exists), and how to add to it (agents with the sldev tools). */

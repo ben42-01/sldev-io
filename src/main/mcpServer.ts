@@ -41,8 +41,27 @@ export const MCP_TOOLS = [
   {
     name: 'sldev_remember',
     description:
-      "Add one line to the project's memory (.sldev/memory.md), which every future agent in this project is pointed at. Record what would have saved you time: a gotcha, a command that works, a convention, where something lives. Not a summary of your task.",
-    inputSchema: { type: 'object', properties: { note: { type: 'string', description: 'One line, under 500 characters' } }, required: ['note'] }
+      "Add one line to the project's memory (.sldev/memory.md), which future agents in this project are pointed at. Record what would have saved you time: a gotcha, a command that works, a convention, where something lives. Not a summary of your task.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        note: { type: 'string', description: 'One line, under 500 characters' },
+        paths: { type: 'array', items: { type: 'string' }, description: 'The files or folders the note is about (relative to the project). Later agents working on them are pointed at the note, and it is flagged when they change.' }
+      },
+      required: ['note']
+    }
+  },
+  {
+    name: 'sldev_recall',
+    description:
+      "Look up what earlier agents and the team know about this project: learnings, reference docs (.sldev/context), pinned files and skills. Ask by topic (query) or by file (path), for example before you change a file or when you are stuck. With a path you also get the other files those notes link to.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A topic or question, e.g. "how are tests run" or "auth tokens"' },
+        path: { type: 'string', description: 'A file or folder relative to the project, e.g. src/server/auth.ts' }
+      }
+    }
   },
   {
     name: 'sldev_rules',

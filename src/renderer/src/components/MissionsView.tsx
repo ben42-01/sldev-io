@@ -153,15 +153,26 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
     return () => ((live = false), clearTimeout(t))
   }, [root])
 
-  const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60)
+  // a Map mission needs no brief: mapping the whole project is the task
+  const briefOptional = kind.id === 'map'
+  const ready = !!prompt.trim() || briefOptional
+  const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60) || (briefOptional ? 'Map this project' : '')
   /** exactly what the agent receives as its first message (the profile's role goes in separately) */
   const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria })
   // startMission adds the memory line itself; this is only so the preview shows it
   const [memory, setMemory] = useState('')
-  useEffect(() => void missionMemory(root, options.agent, kind.id).then(setMemory), [root, options.agent, kind.id])
+  useEffect(() => {
+    // the context matches depend on the brief: look them up once typing pauses
+    let live = true
+    const t = setTimeout(() => void missionMemory(root, options.agent, kind.id, prompt).then((m) => live && setMemory(m)), 300)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [root, options.agent, kind.id, prompt])
 
   const launch = async (): Promise<void> => {
-    if (!prompt.trim() || busy) return
+    if (!ready || busy) return
     if (!folderOk) return setError('Choose an existing folder for the agent to work in.')
     setBusy(true)
     setError('')
@@ -252,7 +263,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
           {compare.length > 0 && <div className="hint">Runs as a factory bake-off: every agent works in its own worktree, without stopping to ask, and you keep the best diff.</div>}
         </div>
       )}
-      {prompt.trim() && !compare.length && (
+      {ready && !compare.length && (
         <details className="prompt-preview">
           <summary>Prompt preview</summary>
           <pre className="cmd-preview selectable">{withMemory(sent, memory)}</pre>
@@ -261,7 +272,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={!prompt.trim() || busy || !folderOk} title="Ctrl/Cmd+Enter">
+        <button type="submit" className="btn primary" disabled={!ready || busy || !folderOk} title="Ctrl/Cmd+Enter">
           <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>
       </div>

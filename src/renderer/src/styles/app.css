@@ -3024,6 +3024,49 @@ a {
 .rules-actions .icon-btn {
   margin-left: auto;
 }
+/* ── project context (Skills → Context) ─────── */
+.context-tab .empty code {
+  font: 11px var(--font-mono);
+}
+.context-row {
+  padding-left: 12px;
+}
+.asset-group .context-row {
+  padding-left: 26px;
+}
+.context-title {
+  font-size: 12.5px;
+  color: var(--fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.context-paths {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.context-paths .chip {
+  max-width: 100%;
+}
+.context-stale-count {
+  font-size: 11px;
+  color: var(--status-attention);
+  margin-left: 6px;
+}
+.context-results-hint,
+.context-foot {
+  display: block;
+  padding: 2px 12px 6px;
+}
+.context-foot {
+  padding-top: 10px;
+}
 .rules .muted-note code {
   font: 11px var(--font-mono);
 }

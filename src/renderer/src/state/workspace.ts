@@ -10,7 +10,7 @@ import { loadAutomations } from './automations'
 
 export type ViewId = 'explorer' | 'runtimes' | 'factory' | 'tasks' | 'notes' | 'remote' | RightTab
 
-const RIGHT_TABS: RightTab[] = ['overview', 'agents', 'skills', 'workflows']
+const RIGHT_TABS: RightTab[] = ['overview', 'agents', 'skills', 'context', 'workflows']
 /** Views that live in the right sidebar; the rest are in the left one. */
 export const isRightView = (v: ViewId): v is RightTab => (RIGHT_TABS as string[]).includes(v)
 

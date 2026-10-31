@@ -70,7 +70,7 @@ export function SettingsPanel(): React.JSX.Element {
         </label>
         <label className="check">
           <input type="checkbox" checked={s.projectMemory !== false} onChange={(e) => updateSettings({ projectMemory: e.target.checked })} />
-          <span>Project memory: point missions at .sldev/memory.md, and let agents with the sldev tools add what they learn to it (Freeform missions get nothing added)</span>
+          <span>Project context: point missions at .sldev/memory.md and at the notes, docs (.sldev/context), pinned files and skills that match their brief, and let agents with the sldev tools look things up and add what they learn (Freeform missions get nothing added)</span>
         </label>
         <label className="check">
           <input type="checkbox" checked={s.notifications} onChange={(e) => updateSettings({ notifications: e.target.checked })} />

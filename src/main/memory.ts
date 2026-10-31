@@ -1,6 +1,7 @@
 import { promises as fsp } from 'fs'
 import { dirname, join } from 'path'
 import { MEMORY_FILE, MEMORY_HEADER, memoryEntry } from '@shared/memory'
+import { normalizePath } from '@shared/context'
 
 export const memoryPath = (root: string): string => join(root, ...MEMORY_FILE.split('/'))
 
@@ -18,9 +19,19 @@ export async function ensureMemory(root: string): Promise<string> {
   return path
 }
 
-export async function remember(root: string, note: string, source: string): Promise<void> {
+export async function remember(root: string, note: string, source: string, paths: string[] = []): Promise<void> {
   if (!note.trim()) throw new Error('The note is empty')
   const path = await ensureMemory(root)
   const text = await fsp.readFile(path, 'utf8')
-  await fsp.appendFile(path, `${text.endsWith('\n') ? '' : '\n'}${memoryEntry(note, source, new Date())}\n`)
+  const files = paths.map((p) => normalizePath(p, root)).filter((p): p is string => !!p)
+  await fsp.appendFile(path, `${text.endsWith('\n') ? '' : '\n'}${memoryEntry(note, source, new Date(), files)}\n`)
+}
+
+/** Removes one entry, only if line `line` still says `expect` (the file may have changed since it was shown). */
+export async function forget(root: string, line: number, expect: string): Promise<void> {
+  const path = memoryPath(root)
+  const lines = (await fsp.readFile(path, 'utf8')).split('\n')
+  if (lines[line - 1] === undefined || !lines[line - 1].includes(expect)) throw new Error('The memory file changed; reopen the list and try again')
+  lines.splice(line - 1, 1)
+  await fsp.writeFile(path, lines.join('\n'))
 }

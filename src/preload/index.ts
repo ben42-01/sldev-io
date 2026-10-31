@@ -3,6 +3,7 @@ import type { BetaStatus } from '@shared/beta'
 import type { LicenseStatus } from '@shared/license'
 import type { TokenUsage } from '@shared/usage'
 import type { MissionKind } from '@shared/missionKinds'
+import type { ContextHit, ContextStats } from '@shared/context'
 import type {
   AgentProfile,
   RulesState,
@@ -195,7 +196,21 @@ const api = {
     info: (root: string): Promise<{ path: string; exists: boolean; entries: number }> => ipcRenderer.invoke('memory:info', root),
     /** creates .sldev/memory.md when missing; returns its path */
     ensure: (root: string): Promise<string> => ipcRenderer.invoke('memory:ensure', root),
-    remember: (root: string, note: string, source: string): Promise<void> => ipcRenderer.invoke('memory:remember', root, note, source)
+    remember: (root: string, note: string, source: string, paths?: string[]): Promise<void> => ipcRenderer.invoke('memory:remember', root, note, source, paths),
+    /** removes the entry on `line`, only if it still contains `expect` */
+    forget: (root: string, line: number, expect: string): Promise<void> => ipcRenderer.invoke('memory:forget', root, line, expect)
+  },
+  /** project context: memory, .sldev/context docs, pinned files and skills, indexed for search by topic or file */
+  context: {
+    list: (root: string): Promise<{ nodes: ContextHit[]; stats: ContextStats }> => ipcRenderer.invoke('context:list', root),
+    /** the notes a mission with this brief would be pointed at */
+    search: (root: string, text: string, limit?: number): Promise<ContextHit[]> => ipcRenderer.invoke('context:search', root, text, limit),
+    rebuild: (root: string): Promise<void> => ipcRenderer.invoke('context:rebuild', root),
+    /** adds a file to .sldev/pinned.md; returns its project-relative path */
+    pin: (root: string, path: string, note?: string): Promise<string> => ipcRenderer.invoke('context:pin', root, path, note),
+    unpin: (root: string, path: string): Promise<void> => ipcRenderer.invoke('context:unpin', root, path),
+    /** writes .sldev/skills/map-project/SKILL.md (kept if it exists); returns its path */
+    installMapSkill: (root: string): Promise<string> => ipcRenderer.invoke('context:installMapSkill', root)
   },
   kinds: {
     list: (root: string | null): Promise<MissionKind[]> => ipcRenderer.invoke('kinds:list', root),

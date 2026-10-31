@@ -1,5 +1,6 @@
 import type { MissionStatus } from './types'
 import type { NodeStatus, RunStatus } from './factory'
+import type { ContextStale } from './context'
 
 /**
  * Every state in the app maps through here to one of six tones, so a colour always means the same
@@ -62,3 +63,6 @@ export function processSignal(status: 'idle' | 'starting' | 'running' | 'exited'
 
 /** Drives counters, sorting and notifications: the human has to act. */
 export const needsYou = (s: Signal): boolean => s.tone === 'attention' || s.tone === 'error'
+
+/** A project-context note whose files changed or went away since it was written: worth a human look. */
+export const staleSignal = (s: ContextStale): Signal => sig('attention', s.why === 'missing' ? `${s.path} is gone` : `${s.path} changed since`)

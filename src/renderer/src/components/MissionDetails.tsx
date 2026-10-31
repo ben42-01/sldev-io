@@ -216,7 +216,7 @@ function RememberField({ root, source }: { root: string; source: string }): Reac
           <BookOpen size={13} />
         </button>
       </div>
-      {error ? <span className="form-error" role="alert">{error}</span> : <span className="field-hint">{saved ? `Saved: “${saved}”. ` : ''}One line in .sldev/memory.md. Every later mission in this project is pointed at it.</span>}
+      {error ? <span className="form-error" role="alert">{error}</span> : <span className="field-hint">{saved ? `Saved: “${saved}”. ` : ''}One line in .sldev/memory.md. Name the files it is about, and later missions on them are pointed at it.</span>}
     </div>
   )
 }

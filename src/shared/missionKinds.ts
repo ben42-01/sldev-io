@@ -1,4 +1,5 @@
 import { parse, stringify } from 'yaml'
+import { MAP_INSTRUCTIONS } from './context'
 
 /**
  * What kind of work a mission is: it decides how the brief is framed, how the agent should end, and
@@ -105,6 +106,16 @@ export const BUILTIN_KINDS: MissionKind[] = [
       `You review; ${NO_EDITS}`,
       'List findings, most important first: file and line, what goes wrong, and a concrete fix. Skip nits a formatter would catch. End with a one-line verdict.'
     ].join('\n\n')
+  },
+  {
+    id: 'map',
+    name: 'Map project',
+    description: 'Write the reference docs in .sldev/context that later missions are pointed at.',
+    worktree: false,
+    readOnly: false,
+    placeholder: 'Optional: what to focus on, e.g. the payment flow and how releases work',
+    scope: 'builtin',
+    template: ['Mission: {title}', '{brief}', '{criteria}', MAP_INSTRUCTIONS, 'End with: the files you wrote, and what you could not verify.'].join('\n\n')
   },
   {
     id: 'freeform',

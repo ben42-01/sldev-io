@@ -13,6 +13,7 @@ import * as notes from './notes'
 import * as profiles from './profiles'
 import * as missionKinds from './missionKinds'
 import * as memory from './memory'
+import * as context from './context'
 import * as rules from './rules'
 import * as factory from './factory'
 import { missionTokens, type UsageRequest } from './usage'
@@ -266,7 +267,14 @@ function registerIpc(): void {
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
   ipcMain.handle('memory:info', (_e, root: string) => memory.memoryInfo(root))
   ipcMain.handle('memory:ensure', (_e, root: string) => memory.ensureMemory(root))
-  ipcMain.handle('memory:remember', (_e, root: string, note: string, source: string) => memory.remember(root, note, source))
+  ipcMain.handle('memory:remember', (_e, root: string, note: string, source: string, paths?: string[]) => memory.remember(root, note, source, paths))
+  ipcMain.handle('memory:forget', (_e, root: string, line: number, expect: string) => memory.forget(root, line, expect))
+  ipcMain.handle('context:list', (_e, root: string) => context.list(root))
+  ipcMain.handle('context:search', (_e, root: string, text: string, limit?: number) => context.search(root, text, limit))
+  ipcMain.handle('context:rebuild', (_e, root: string) => context.ensureIndex(root, true))
+  ipcMain.handle('context:pin', (_e, root: string, path: string, note?: string) => context.pin(root, path, note))
+  ipcMain.handle('context:unpin', (_e, root: string, path: string) => context.unpin(root, path))
+  ipcMain.handle('context:installMapSkill', (_e, root: string) => context.installMapSkill(root))
   ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root))
   ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))
@@ -341,6 +349,7 @@ app.whenReady().then(async () => {
     automations: new JsonStore<StoreFiles['automations']>('automations', { automations: [] })
   }
   vault.initVault()
+  context.initContext(app.getPath('userData'))
   setShellOverride(settings.get().shell)
   // runs alongside startup; the renderer awaits the first result before showing the app
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
@@ -380,6 +389,7 @@ app.on('before-quit', () => {
   ptys.killAll()
   ssh.disconnectAll()
   vault.flushVault()
+  context.closeContext()
   settings?.flush()
   layout?.flush()
   if (stores) Object.values(stores).forEach((s) => s.flush())
