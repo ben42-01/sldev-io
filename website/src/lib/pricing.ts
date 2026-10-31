@@ -13,8 +13,10 @@ export interface Plan {
   highlight: boolean
   ctaLabel: string
   ctaLabelPaid: string
-  /** Stripe payment link. While empty (or price is 0) the plan's button downloads the app. */
+  /** Polar live checkout link, used on the production site. While empty (or price is 0) the plan's button downloads the app. */
   checkoutUrl: string
+  /** Polar sandbox checkout link, used on previews and local builds, so they never take real money. */
+  sandboxCheckoutUrl: string
   features: string[]
 }
 
@@ -77,9 +79,13 @@ export function formatPrice(amount: number, currency = pricing.currency): string
   }).format(amount)
 }
 
+/** Production sells through Polar live; previews and local builds through the sandbox, like api/_polar.ts. */
+export const checkoutUrl = (plan: Plan): string => (__LIVE_CHECKOUT__ ? plan.checkoutUrl : plan.sandboxCheckoutUrl)
+
 export function planCta(plan: Plan): { label: string; href: string; external: boolean } {
-  const paid = plan.price > 0 && plan.checkoutUrl !== ''
+  const href = checkoutUrl(plan)
+  const paid = plan.price > 0 && href !== ''
   return paid
-    ? { label: plan.ctaLabelPaid, href: plan.checkoutUrl, external: true }
+    ? { label: plan.ctaLabelPaid, href, external: true }
     : { label: plan.ctaLabel, href: '/download', external: false }
 }

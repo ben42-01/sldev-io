@@ -72,6 +72,8 @@ function pageRoutes(): Plugin {
 const page = (path: string): string => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
+  // Vercel production builds link the live Polar checkout; previews and local builds the sandbox
+  define: { __LIVE_CHECKOUT__: JSON.stringify(process.env.VERCEL_ENV === 'production') },
   plugins: [react(), betaJson(), downloadRedirect(), pageRoutes()],
   build: {
     rollupOptions: {

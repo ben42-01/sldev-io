@@ -1,7 +1,7 @@
 {
   "currency": "EUR",
   "billing": "one-time",
-  "announcement": "Free while in beta. At launch, each license becomes a single payment with every future update included.",
+  "announcement": "Pay once, every future update included. Every download starts with a free 14-day trial.",
   "beta": {
     "startsAt": "2026-10-24",
     "endsAt": "2026-12-31",
@@ -12,13 +12,14 @@
       "id": "personal",
       "name": "Personal",
       "tagline": "For one developer, on up to 3 of their machines.",
-      "price": 0,
+      "price": 10.99,
       "listPrice": 10.99,
-      "priceNote": "Free during the beta, then pay once.",
+      "priceNote": "Pay once. Every future update included.",
       "highlight": true,
-      "ctaLabel": "Download the beta",
+      "ctaLabel": "Download free trial",
       "ctaLabelPaid": "Buy Personal",
       "checkoutUrl": "",
+      "sandboxCheckoutUrl": "",
       "features": [
         "Every agent: Claude Code, Codex, Cursor Agent, Copilot, OpenCode, Gemini, custom",
         "Unlimited terminals, missions and worktrees",
@@ -35,13 +36,14 @@
       "id": "team",
       "name": "Team",
       "tagline": "One license key for a small team.",
-      "price": 0,
+      "price": 50,
       "listPrice": 50,
-      "priceNote": "5 seats. Free during the beta, then pay once.",
+      "priceNote": "5 seats. Pay once, every future update included.",
       "highlight": false,
-      "ctaLabel": "Download the beta",
+      "ctaLabel": "Download free trial",
       "ctaLabelPaid": "Buy Team",
       "checkoutUrl": "",
+      "sandboxCheckoutUrl": "",
       "features": [
         "Everything in Personal",
         "5 seats on a single license, up to 3 machines each",
@@ -58,7 +60,7 @@
     },
     {
       "q": "What does it cost today?",
-      "a": "Nothing. sldev-io is free while it is in beta. When paid licenses launch, the prices on this page are the ones you will see."
+      "a": "Personal is €10.99 and Team is €50 (5 seats), each a single payment with every future update included. Every download starts with a free 14-day trial, no card needed."
     },
     {
       "q": "Do I need an account with every agent?",

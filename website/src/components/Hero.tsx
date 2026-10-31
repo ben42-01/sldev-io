@@ -9,7 +9,7 @@ export function Hero() {
       <div className="hero-glow" aria-hidden="true" />
       <div className="container hero-inner">
         <a className="pill" href="/pricing">
-          <span className="pill-dot" /> v{site.version} · free during the beta
+          <span className="pill-dot" /> v{site.version} · free 14-day trial
           {betaStatus().active && <span className="pill-limited">· {betaMessage().toLowerCase()}</span>}
           <ArrowRight size={12} />
         </a>

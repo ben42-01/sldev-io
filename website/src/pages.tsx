@@ -69,7 +69,7 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
               Get <span className="brand-text">sldev-io</span>
             </>
           }
-          lead={`Version ${site.version}, free during the beta. Pick your system, or install from a terminal.`}
+          lead={`Version ${site.version}. Try it free for 14 days, then pay once. Pick your system, or install from a terminal.`}
         />
         <DownloadOptions />
       </Layout>
