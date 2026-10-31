@@ -325,6 +325,13 @@ svg.lucide {
 .activity-btn:hover {
   color: var(--fg);
 }
+.activity-sep {
+  width: 20px;
+  height: 1px;
+  margin: 3px 0;
+  background: var(--border);
+  flex-shrink: 0;
+}
 .activity-btn.active {
   color: var(--fg);
   background: var(--bg-hover);
@@ -2002,6 +2009,7 @@ a {
   margin-left: auto;
   font-size: 11px;
   color: var(--fg-subtle);
+  white-space: nowrap;
 }
 .mission-title {
   display: block;
@@ -3976,7 +3984,7 @@ a {
   opacity: 0;
   transition: opacity 150ms;
 }
-:is(.agent-row, .rt-row, .mission-card, .tree-row):is(:hover, :focus-within) .reveal {
+:is(.agent-row, .rt-row, .mission-card, .mission-row, .tree-row):is(:hover, :focus-within) .reveal {
   opacity: 1;
 }
 
@@ -4172,4 +4180,223 @@ a {
 .remember-row input {
   flex: 1;
   min-width: 0;
+}
+
+/* ── Mission Control (dock panel: missions, factory runs, usage) ─ */
+.mc {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.mc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.mc-head .board-title {
+  padding-bottom: 12px;
+}
+.mc-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  align-self: flex-end;
+}
+.mc-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 9px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.mc-tab:hover {
+  color: var(--fg);
+}
+.mc-tab.on {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+.mc-tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+.mc-body {
+  flex: 1;
+  min-height: 0;
+}
+.mc-body > .panel-page {
+  height: 100%;
+}
+.mc-page {
+  container-type: inline-size;
+}
+/* four columns when there's room, two by two when the sidebars leave the dock narrow */
+.mc-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+@container (min-width: 960px) {
+  .mc-columns {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.mc-column {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+.mc-column-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--border);
+}
+.mc-column-head .seg-count {
+  margin-left: auto;
+}
+.mc-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.mc-column-empty {
+  padding: 10px 4px;
+  font-size: 12px;
+  color: var(--fg-subtle);
+  text-align: center;
+}
+.mc-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.mc-list .mission-row + .mission-row {
+  border-top: 1px solid var(--border);
+}
+.mc-list .mission-row {
+  border-radius: 0;
+  border-left-width: 0;
+  padding: 8px 12px;
+}
+.mc-runs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.mc-runs .run-row {
+  margin: 0;
+}
+.mc-page .section-label {
+  margin: 4px 0 8px;
+}
+
+/* compact mission row (right sidebar compact mode, Mission Control list) */
+.mission-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border-left: 2px solid transparent;
+  min-width: 0;
+}
+.mission-row:hover {
+  background: var(--surface-raised);
+}
+.mission-row.needs-input {
+  border-left-color: var(--status-attention);
+  background: color-mix(in oklch, var(--status-attention) 5%, transparent);
+}
+.mission-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.mission-row .mission-title {
+  font-size: 12px;
+}
+.mission-row-sub {
+  font-size: 11px;
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-row-sub.alert {
+  color: var(--status-attention);
+}
+.mission-row-stats {
+  font: 11px var(--font-mono);
+  white-space: nowrap;
+}
+.mission-row .mission-time {
+  margin-left: 0;
+  white-space: nowrap;
+}
+.mission-list:has(> .mission-row) {
+  gap: 1px;
+}
+/* compact rows: the actions take the time's place on hover instead of reserving room for it */
+.mission-row .reveal {
+  display: none;
+}
+.mission-row:is(:hover, :focus-within) .reveal {
+  display: flex;
+}
+.mission-row:is(:hover, :focus-within) .mission-time {
+  display: none;
+}
+/* narrow cards (board columns): the agent chip and kind give way, the status and time stay whole */
+.mission-head {
+  min-width: 0;
+}
+.mission-head .mission-agent,
+.mission-head .mission-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-head .spill,
+.mission-head .mission-time {
+  flex-shrink: 0;
+}
+.mc-column-body > .mission-card {
+  min-width: 0;
+}
+/* the New mission and New factory run dialogs: the fields scroll, Launch and Cancel stay pinned at the bottom like a modal footer */
+.modal-body > :is(.mission-form, .factory-form) {
+  padding: 0;
+  gap: 12px;
+}
+.modal-body > :is(.mission-form, .factory-form) > .form-actions {
+  position: sticky;
+  bottom: -16px;
+  z-index: 1;
+  margin: 4px -16px -16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }

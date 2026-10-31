@@ -65,7 +65,8 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
                   missionKinds, automations (the trigger loop, while the app is open)
-  dock/           dockview panels: Terminal, Diff, Note, MissionBoard, Pipeline, Dashboard, Agents, Preview, Settings
+  dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
+                  the top of the left ActivityBar), Pipeline, Dashboard, Agents, Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root

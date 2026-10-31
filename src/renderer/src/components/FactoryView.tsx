@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClaudeAsset, Mission } from '@shared/types'
 import { missions } from '../state/missions'
 import { useProfiles } from '../state/profiles'
 import { useAgents } from '../state/agents'
-import { showView } from '../lib/commands'
 import { slugify } from '../lib/agents'
 import { Check, Factory, FilePlus2, Import, Plus, Share2 } from 'lucide-react'
 import { isBakeoff, issueText, recipeTextWithOverrides, runtimeNames, seedableNodes, type FactoryRun, type Recipe, type StageOverride } from '@shared/factory'
@@ -11,13 +10,14 @@ import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
 import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, startRun } from '../state/factory'
-import { useStore } from '../state/store'
+import { createStore, useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
 import { ViewShell } from './RuntimesView'
 import { StatusPill } from './StatusDot'
 import { runSignal } from '@shared/status'
-import { removeRunFlow } from '../lib/removals'
+import { removeRunFlow, showNotice } from '../lib/removals'
+import { Modal } from './Modal'
 import { FolderField } from './FolderField'
 import { AutomationsSection } from './AutomationsSection'
 
@@ -27,26 +27,25 @@ export interface RunDraft {
   seedMission?: string
 }
 
-/** Shows the Factory with the new-run form open, optionally starting from a mission's plan. */
+const newRun = createStore<{ open: boolean; draft?: RunDraft; n: number }>({ open: false, n: 0 })
+
+/** Opens the New factory run dialog, optionally starting from a mission's plan; works with the sidebars closed. */
 export function openNewRun(draft?: RunDraft): void {
-  showView('factory')
-  setTimeout(() => window.dispatchEvent(new CustomEvent('sldev:new-run', { detail: draft })), 50)
+  if (!workspace.get().rootFolder) return void showNotice('No folder open', 'Open a git project to run factory recipes in it.')
+  newRun.set({ open: true, draft, n: newRun.get().n + 1 })
+}
+
+export function NewRunHost(): React.JSX.Element | null {
+  const s = useStore(newRun, (x) => x)
+  const root = useStore(workspace, (w) => w.rootFolder)
+  if (!s.open || !root) return null
+  return <NewRunForm key={s.n} root={root} draft={s.draft} onDone={() => newRun.set({ open: false, n: s.n })} />
 }
 
 export function FactoryView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const runs = useStore(factory, (s) => s.runs)
   const errors = useStore(factory, (s) => s.recipeErrors)
-  const [creating, setCreating] = useState(false)
-  const [draft, setDraft] = useState<RunDraft | undefined>()
-  useEffect(() => {
-    const open = (e: Event): void => {
-      setDraft((e as CustomEvent<RunDraft | undefined>).detail)
-      setCreating(true)
-    }
-    window.addEventListener('sldev:new-run', open)
-    return () => window.removeEventListener('sldev:new-run', open)
-  }, [])
   const [importing, setImporting] = useState(false)
   useEffect(() => void loadRecipes(root), [root])
   const mine = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
@@ -57,7 +56,7 @@ export function FactoryView(): React.JSX.Element {
     <ViewShell
       title="Factory"
       actions={
-        <button className="icon-btn" title="New run" aria-label="New run" onClick={() => setCreating(true)}>
+        <button className="icon-btn" title="New run" aria-label="New run" onClick={() => openNewRun()}>
           <Plus size={14} />
         </button>
       }
@@ -65,13 +64,11 @@ export function FactoryView(): React.JSX.Element {
       <div className="view-scroll">
         {!root ? (
           <div className="empty-state"><p>Open a git project to run factory recipes in it.</p></div>
-        ) : creating ? (
-          <NewRunForm key={draft?.seedMission ?? ''} root={root} draft={draft} onDone={() => (setCreating(false), setDraft(undefined))} />
         ) : importing ? (
           <ImportForm root={root} onDone={() => setImporting(false)} />
         ) : (
           <div className="view-footer">
-            <button className="btn primary full" onClick={() => setCreating(true)}>
+            <button className="btn primary full" onClick={() => openNewRun()}>
               <Factory size={14} /> New factory run
             </button>
             <button className="btn full" onClick={() => setImporting(true)}>
@@ -89,7 +86,7 @@ export function FactoryView(): React.JSX.Element {
         {elsewhere.length > 0 && <div className="section-label pad">Other repositories · {elsewhere.length}</div>}
         {elsewhere.map((r) => <RunRow key={r.id} run={r} />)}
         {root && <AutomationsSection root={root} />}
-        {root && !mine.length && !creating && (
+        {root && !mine.length && (
           <div className="muted-note">
             A recipe is a graph of steps: agents write specs and code, commands check the result, you approve the steps that matter, and the last step opens a pull request. Each run works in its own branch and worktree.
           </div>
@@ -99,7 +96,7 @@ export function FactoryView(): React.JSX.Element {
   )
 }
 
-function RunRow({ run }: { run: FactoryRun }): React.JSX.Element {
+export function RunRow({ run }: { run: FactoryRun }): React.JSX.Element {
   const nodes = Object.values(run.nodes)
   const done = nodes.filter((n) => n.status === 'done').length
   const waiting = nodes.some((n) => n.status === 'approval')
@@ -160,8 +157,13 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     }, 250)
     return () => ((live = false), clearTimeout(t))
   }, [root, projectRoot])
-  // the sidebar lists the open project's recipes again once the form closes
-  useEffect(() => () => void loadRecipes(projectRoot), [projectRoot])
+  // the dialog can open without the Factory view ever having loaded the recipes; the sidebar lists the open
+  // project's recipes again once the form closes (another repository may have been picked)
+  useEffect(() => {
+    void loadRecipes(projectRoot)
+    return () => void loadRecipes(projectRoot)
+  }, [projectRoot])
+  const intentRef = useRef<HTMLTextAreaElement>(null)
   const entry = recipes[pick]
   // choices belong to one recipe's stages
   useEffect(() => {
@@ -170,9 +172,9 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     setSeed((s) => ({ ...s, node: s.source === 'mission' && s.mission && first ? first : '' }))
   }, [entry])
 
-  const submit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    if (!entry || !intent.trim()) return
+  const ready = !!entry && !!intent.trim() && isRepo && !(seed.node && !(seed.source === 'file' ? seed.file.trim() : seed.mission))
+  const submit = async (): Promise<void> => {
+    if (!ready || busy) return
     setBusy(true)
     setError('')
     try {
@@ -199,7 +201,13 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
   }
 
   return (
-    <form className="form inline-form factory-form" onSubmit={(e) => void submit(e)}>
+    <Modal title="New factory run" size="lg" onClose={onDone} busy={busy} initialFocus={intentRef} onSubmit={() => void submit()}>
+    <div
+      className="form factory-form"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), void submit())
+      }}
+    >
       <label className="field">
         <span>Recipe</span>
         <select value={pick} onChange={(e) => setPick(Number(e.target.value))}>
@@ -251,7 +259,7 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />}
       <label className="field">
         <span>{seed.node ? 'What should the factory build? (a short title is enough)' : 'What should the factory build?'}</span>
-        <textarea rows={4} value={intent} autoFocus placeholder="Add a dark mode toggle to the settings page" onChange={(e) => setIntent(e.target.value)} />
+        <textarea ref={intentRef} rows={4} value={intent} placeholder="Add a dark mode toggle to the settings page" onChange={(e) => setIntent(e.target.value)} />
       </label>
       <label className="field">
         <span>Branch from</span>
@@ -261,12 +269,14 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
       </label>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
-        <button type="submit" className="btn primary" disabled={busy || !intent.trim() || !entry || !isRepo || (!!seed.node && !(seed.source === 'file' ? seed.file.trim() : seed.mission))}>
+        <span className="form-note">Ctrl/Cmd+Enter starts</span>
+        <button type="button" className="btn ghost" disabled={busy} onClick={onDone}>Cancel</button>
+        <button type="submit" className="btn primary" disabled={busy || !ready}>
           <Factory size={14} /> {busy ? 'Starting…' : 'Start'}
         </button>
       </div>
-    </form>
+    </div>
+    </Modal>
   )
 }
 

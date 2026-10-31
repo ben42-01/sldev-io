@@ -11,7 +11,7 @@ import { useProfiles } from '../state/profiles'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
-import { StatusPill } from './StatusDot'
+import { StatusDot, StatusPill } from './StatusDot'
 import { missionSignal } from '@shared/status'
 import { removeMissionFlow } from '../lib/removals'
 import { openMissionDetails } from './MissionDetails'
@@ -21,7 +21,8 @@ export function MissionStatusPill({ status }: { status: Mission['status'] }): Re
   return <StatusPill signal={missionSignal(status)} />
 }
 
-export function MissionCard({ mission: m, large = false }: { mission: Mission; large?: boolean }): React.JSX.Element {
+/** `large` for wide boards; `compact` is one row (status, title, agent, time), the rest on hover and in the menu. */
+export function MissionCard({ mission: m, large = false, compact = false }: { mission: Mission; large?: boolean; compact?: boolean }): React.JSX.Element {
   const hasPanel = useStore(missions, (s) => !!s.panels[m.id])
   const live = isLive(m.status)
   const profileName = useProfiles().find((p) => p.id === m.options.profile)?.name
@@ -57,6 +58,35 @@ export function MissionCard({ mission: m, large = false }: { mission: Mission; l
     { type: 'separator' },
     { label: m.worktree ? 'Remove mission and worktree…' : 'Remove from list…', icon: <Trash2 size={13} />, run: () => void removeMissionFlow(m.id) }
   ]
+  if (compact) {
+    const signal = missionSignal(m.status)
+    const alert = m.limited && !m.continuedBy ? `${getAgent(m.options.agent).name} hit its usage limit` : m.status === 'needs-input' ? m.notification : undefined
+    const sub = alert ?? (live && m.status === 'working' ? m.activity : m.lastMessage)
+    return (
+      <div className={`mission-row ${m.status}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
+        <StatusDot signal={signal} />
+        <div className="mission-row-main">
+          <button type="button" className="mission-title" title={`${m.title}: brief, report and handoff`} onClick={() => openMissionDetails(m.id)}>{m.title}</button>
+          <div className={`mission-row-sub${alert ? ' alert' : ''}`} title={sub}>
+            <span className={`tone-${signal.tone}`}>{signal.label}</span>
+            {' · '}{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}
+            {m.kind && m.kind.id !== 'build' ? ` · ${m.kind.name}` : ''}
+            {sub ? ` · ${sub}` : ''}
+          </div>
+        </div>
+        {m.stats && m.stats.files > 0 && (
+          <span className="stats mission-row-stats"><span className="add">+{m.stats.insertions}</span> <span className="del">−{m.stats.deletions}</span></span>
+        )}
+        <TimeAgo t={m.updatedAt} className="mission-time" />
+        <button className="icon-btn reveal" title={hasPanel ? 'Show terminal' : 'Resume'} aria-label={hasPanel ? 'Show terminal' : 'Resume'} onClick={() => focusOrResume(m.id)}>
+          {hasPanel ? <SquareTerminal size={13} /> : <Play size={13} />}
+        </button>
+        <button className="icon-btn reveal" title="More" aria-label="More" onClick={(e) => showContextMenu(e, menu())}>
+          <Ellipsis size={13} />
+        </button>
+      </div>
+    )
+  }
   return (
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">

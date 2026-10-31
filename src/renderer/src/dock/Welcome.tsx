@@ -3,6 +3,7 @@ import { Bot, Command as CommandIcon, FolderOpen, Gauge, Home, Plus, Rocket, Ser
 import { openTerminal } from './dockApi'
 import { openAgentsDashboard } from './AgentsPanel'
 import { shortcutLabel, showCommandPalette, showView, staticCommands } from '../lib/commands'
+import { openNewMission } from '../components/MissionsView'
 import { basename, tildify } from '../lib/paths'
 import { pickRootFolder, setRootFolder, workspace } from '../state/workspace'
 import { loadRemote, openSshTerminal, remote } from '../state/remote'
@@ -23,7 +24,7 @@ export function Welcome(): React.JSX.Element {
     void window.api.fs.home().then(setHome)
     if (!loaded) void loadRemote()
   }, [loaded])
-  const newMission = (): void => (showView('agents'), void window.dispatchEvent(new Event('sldev:new-mission')))
+  const newMission = (): void => openNewMission()
   const others = recent.filter((f) => f !== root).slice(0, 4)
 
   return (

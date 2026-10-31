@@ -8,7 +8,7 @@ import { getAgent } from '../state/agents'
 import { nextNeedsYou } from '../state/attention'
 import { focusOrResume, isLive, missions } from '../state/missions'
 import { useStore } from '../state/store'
-import { showView } from '../lib/commands'
+import { openNewMission } from '../components/MissionsView'
 import { tildify } from '../lib/paths'
 import { openMissionDetails } from '../components/MissionDetails'
 import { StatusDot } from '../components/StatusDot'
@@ -102,7 +102,7 @@ export function AgentsPanel(): React.JSX.Element {
         <button className="btn sm" disabled={!counts.needs} onClick={() => nextNeedsYou()} title="Go to the next agent that needs you (Ctrl+Shift+J)">
           Next <ArrowRight size={13} />
         </button>
-        <button className="btn sm primary" onClick={() => (showView('agents'), window.dispatchEvent(new Event('sldev:new-mission')))}>
+        <button className="btn sm primary" onClick={() => openNewMission()}>
           <Rocket size={13} /> New mission
         </button>
       </header>
@@ -128,7 +128,7 @@ export function AgentsPanel(): React.JSX.Element {
             action={<button className="btn sm" onClick={() => (setFilter('live'), setQuery(''))}>Clear filters</button>}
           />
         ) : (
-          <Empty big icon={<Bot size={22} />} title="No agents running" hint="Start a mission and it shows up here with what it's doing, how long it has run and the tokens it used." action={<button className="btn sm" onClick={() => (showView('agents'), window.dispatchEvent(new Event('sldev:new-mission')))}><Rocket size={13} /> New mission</button>} />
+          <Empty big icon={<Bot size={22} />} title="No agents running" hint="Start a mission and it shows up here with what it's doing, how long it has run and the tokens it used." action={<button className="btn sm" onClick={() => openNewMission()}><Rocket size={13} /> New mission</button>} />
         )
       ) : (
         <div className="agent-table" role="table" aria-label="Agents">

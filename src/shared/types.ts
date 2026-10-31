@@ -47,6 +47,10 @@ export interface AppSettings {
   rightPanelWidth: number
   rightPanelVisible: boolean
   rightPanelTab: RightTab
+  /** how Mission Control lays out missions: status columns, a grid of cards, or one row each */
+  missionLayout: 'columns' | 'grid' | 'list'
+  /** mission cards in the right sidebar: full cards or one compact row each */
+  missionCards: 'cards' | 'compact'
   terminalFontSize: number
   terminalFontFamily: string
   /** where open tabs sit in each dock group: a strip on top, or a list down the left side */
@@ -138,6 +142,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   rightPanelWidth: 320,
   rightPanelVisible: true,
   rightPanelTab: 'overview',
+  missionLayout: 'columns',
+  missionCards: 'cards',
   terminalFontSize: 13,
   terminalFontFamily:
     '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace',

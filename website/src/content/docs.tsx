@@ -601,6 +601,30 @@ const missions: DocPage = {
     'A mission is one agent on one task. This guide covers mission kinds (research is not a build), what happens when an agent hits its usage limit, the project memory every mission starts from, and automations that start work on their own.',
   sections: [
     {
+      id: 'control',
+      title: 'Mission Control',
+      body: (
+        <>
+          <p>
+            <b>Mission Control</b> is a tab in the main area for all agent work, so you can keep both sidebars closed. Open it from the top
+            button of the left bar, which also counts what needs you, or with <b>Open Mission Control</b> in the command palette. It has three tabs:
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><b>Missions</b></td><td>Every mission of the project, as columns (Needs you, Working, Ready, Finished), a grid of cards, or a list with one row each. Your choice is remembered.</td></tr>
+              <tr><td><b>Factory runs</b></td><td>Running and finished runs; click one to open its pipeline.</td></tr>
+              <tr><td><b>Usage</b></td><td>The usage dashboard: timeline, time waiting on you, tokens and outcomes.</td></tr>
+            </tbody>
+          </table>
+          <p>
+            <b>New mission</b> (<code>Ctrl+Shift+M</code>, <code>Cmd+Shift+M</code> on a Mac) and <b>New factory run</b> open as dialogs,
+            so you can start work with both sidebars closed. The <b>Agents</b> tab of the right sidebar still lists your missions; its row
+            button switches the cards to compact rows when you have many.
+          </p>
+        </>
+      )
+    },
+    {
       id: 'kinds',
       title: 'Mission kinds',
       body: (
@@ -1100,8 +1124,9 @@ Continue:         aider --restore-chat-history
       title: 'Usage and the agents dashboard',
       body: (
         <p>
-          The usage dashboard reads the token counts Claude Code and Codex already write to their local logs, and shows a timeline of your
-          missions and how long each waited on you. The agents dashboard shows every running agent in one view. Nothing leaves your machine.
+          The usage dashboard (the <b>Usage</b> tab of <a href="/docs/missions#control">Mission Control</a>) reads the token counts Claude Code
+          and Codex already write to their local logs, and shows a timeline of your missions and how long each waited on you. The agents
+          dashboard shows every running agent in one view. Nothing leaves your machine.
         </p>
       )
     }

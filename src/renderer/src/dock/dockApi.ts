@@ -25,8 +25,18 @@ export interface TerminalPanelParams {
 
 export const TERMINAL_PREFIX = 'term-'
 
+const readyListeners = new Set<(a: DockviewApi) => void>()
+
 export function setDockApi(a: DockviewApi): void {
   api = a
+  for (const l of readyListeners) l(a)
+}
+
+/** Calls back with the dock API now if it's ready, or once it is (UI outside the dock mounts first). */
+export function whenDockReady(cb: (a: DockviewApi) => void): () => void {
+  if (api) cb(api)
+  readyListeners.add(cb)
+  return () => readyListeners.delete(cb)
 }
 
 export function getDockApi(): DockviewApi | null {

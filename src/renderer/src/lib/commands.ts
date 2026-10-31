@@ -12,6 +12,8 @@ import { basename, dirname, shellQuote, tildify } from './paths'
 import { errText, showNotice } from './removals'
 import { nextNeedsYou } from '../state/attention'
 import { openAgentsDashboard } from '../dock/AgentsPanel'
+import { openMissionControl } from '../dock/MissionControlPanel'
+import { openNewMission } from '../components/MissionsView'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -179,15 +181,12 @@ export function staticCommands(): Command[] {
     { id: 'view.tabLayout', category: 'View', title: 'Toggle tab layout (top / side list)', run: () => updateSettings({ tabLayout: workspace.get().tabLayout === 'side' ? 'top' : 'side' }) },
     { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => updateSettings({ sidebarVisible: !workspace.get().sidebarVisible }) },
     { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible }) },
-    { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => {
-        showView('agents')
-        // let the Missions view mount before asking it to open the form
-        setTimeout(() => window.dispatchEvent(new Event('sldev:new-mission')), 50)
-      } },
-    { id: 'missions.board', category: 'Agents', title: 'Open mission board', run: () => openPanel('missions', 'mission-board', 'Missions') },
+    { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => openNewMission() },
+    { id: 'missions.board', category: 'Agents', title: 'Open Mission Control (missions, factory runs, usage)', run: () => openMissionControl('missions') },
+    { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
     { id: 'missions.next', category: 'Agents', title: 'Next mission that needs you', keys: { mac: 'Cmd+Shift+J', other: 'Ctrl+Shift+J' }, run: () => void (nextNeedsYou() || showNotice('Nothing needs you', 'No mission or factory run is waiting for you right now.')) },
     { id: 'agents.dashboard', category: 'Agents', title: 'Open agents dashboard (every running agent)', run: openAgentsDashboard },
-    { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openPanel('dashboard', 'usage-dashboard', 'Usage') },
+    { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openMissionControl('usage') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },

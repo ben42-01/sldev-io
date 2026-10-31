@@ -1,53 +1,53 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentOptions } from '@shared/types'
-import { ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket } from 'lucide-react'
-import { openPanel } from '../dock/dockApi'
+import { ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, StretchHorizontal } from 'lucide-react'
+import { openMissionControl } from '../dock/MissionControlPanel'
 import { isLive, missionMemory, missions, startMission, type MissionDraft } from '../state/missions'
 import { withMemory } from '@shared/memory'
-import { useStore } from '../state/store'
-import { workspace } from '../state/workspace'
+import { createStore, useStore } from '../state/store'
+import { updateSettings, workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
 import { getAgent, useAgents } from '../state/agents'
 import { compareRecipe, issueText } from '@shared/factory'
 import { renderKind, type MissionKind } from '@shared/missionKinds'
 import { getKind, createKind, loadKinds, useKinds } from '../state/missionKinds'
 import { openInEditor } from '../lib/actions'
-import { showView } from '../lib/commands'
 import { startRun } from '../state/factory'
 import { getProfile } from '../state/profiles'
 import { IssuePicker } from './IssuePicker'
 import { FolderField } from './FolderField'
 import { MissionCard } from './MissionCard'
 import { ViewShell } from './RuntimesView'
+import { Modal } from './Modal'
+import { showNotice } from '../lib/removals'
 
 export function openMissionBoard(): void {
-  openPanel('missions', 'mission-board', 'Missions')
+  openMissionControl('missions')
 }
 
 export function openDashboard(): void {
-  openPanel('dashboard', 'usage-dashboard', 'Usage')
+  openMissionControl('usage')
 }
 
-/** Shows the Missions view with the New mission form open, optionally filled in. */
+const newMission = createStore<{ open: boolean; draft?: MissionDraft; n: number }>({ open: false, n: 0 })
+
+/** Opens the New mission dialog, optionally filled in; it works from anywhere, sidebars open or closed. */
 export function openNewMission(draft?: MissionDraft): void {
-  showView('agents')
-  // let the Missions view mount before asking it to open the form
-  setTimeout(() => window.dispatchEvent(new CustomEvent('sldev:new-mission', { detail: draft })), 50)
+  if (!workspace.get().rootFolder) return void showNotice('No folder open', 'Open a project folder to launch agent missions in it.')
+  newMission.set({ open: true, draft, n: newMission.get().n + 1 })
+}
+
+export function NewMissionHost(): React.JSX.Element | null {
+  const s = useStore(newMission, (x) => x)
+  const root = useStore(workspace, (w) => w.rootFolder)
+  if (!s.open || !root) return null
+  return <NewMissionForm key={s.n} root={root} draft={s.draft} onDone={() => newMission.set({ open: false, n: s.n })} />
 }
 
 export function MissionsView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
-  const [creating, setCreating] = useState(false)
-  const [draft, setDraft] = useState<MissionDraft | undefined>()
-  useEffect(() => {
-    const open = (e: Event): void => {
-      setDraft((e as CustomEvent<MissionDraft | undefined>).detail)
-      setCreating(true)
-    }
-    window.addEventListener('sldev:new-mission', open)
-    return () => window.removeEventListener('sldev:new-mission', open)
-  }, [])
+  const compact = useStore(workspace, (w) => w.missionCards === 'compact')
   const mine = useMemo(() => list.filter((m) => m.root === root), [list, root])
   const active = mine.filter((m) => isLive(m.status))
   const recent = mine.filter((m) => !isLive(m.status))
@@ -59,13 +59,21 @@ export function MissionsView(): React.JSX.Element {
       title="Agent Missions"
       actions={
         <>
+          <button
+            className="icon-btn"
+            title={compact ? 'Show missions as cards' : 'Show missions as compact rows'}
+            aria-label={compact ? 'Show missions as cards' : 'Show missions as compact rows'}
+            onClick={() => updateSettings({ missionCards: compact ? 'cards' : 'compact' })}
+          >
+            {compact ? <StretchHorizontal size={14} /> : <Rows3 size={14} />}
+          </button>
           <button className="icon-btn" title="Usage dashboard" aria-label="Usage dashboard" onClick={openDashboard}>
             <ChartGantt size={14} />
           </button>
-          <button className="icon-btn" title="Mission board" aria-label="Mission board" onClick={openMissionBoard}>
+          <button className="icon-btn" title="Open Mission Control" aria-label="Open Mission Control" onClick={openMissionBoard}>
             <LayoutGrid size={14} />
           </button>
-          <button className="icon-btn" title="New mission" aria-label="New mission" onClick={() => setCreating(true)}>
+          <button className="icon-btn" title="New mission" aria-label="New mission" onClick={() => openNewMission()}>
             <Plus size={14} />
           </button>
         </>
@@ -74,22 +82,20 @@ export function MissionsView(): React.JSX.Element {
       <div className="view-scroll">
         {!root ? (
           <div className="empty-state"><p>Open a folder to launch agent missions in it.</p></div>
-        ) : creating ? (
-          <NewMissionForm key={draft?.brief ?? ''} root={root} draft={draft} onDone={() => (setCreating(false), setDraft(undefined))} />
         ) : (
           <div className="view-footer">
-            <button className="btn primary full" onClick={() => (setDraft(undefined), setCreating(true))}>
+            <button className="btn primary full" onClick={() => openNewMission()}>
               <Rocket size={14} /> New mission
             </button>
           </div>
         )}
         {active.length > 0 && <div className="section-label pad">Active · {active.length}</div>}
-        <div className="mission-list">{active.map((m) => <MissionCard key={m.id} mission={m} />)}</div>
+        <div className="mission-list">{active.map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
         {elsewhere.length > 0 && <div className="section-label pad">Other folders · {elsewhere.length}</div>}
-        <div className="mission-list">{elsewhere.map((m) => <MissionCard key={m.id} mission={m} />)}</div>
+        <div className="mission-list">{elsewhere.map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
         {recent.length > 0 && <div className="section-label pad">Recent</div>}
-        <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} />)}</div>
-        {root && !mine.length && !creating && (
+        <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
+        {root && !mine.length && (
           <div className="muted-note">
             A mission runs a coding agent (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini or your own CLI) on a prompt, optionally in its own git worktree. sldev-io tracks when it's working, when it needs you, and lets you review and merge the diff when it's done.
           </div>
@@ -171,6 +177,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
     }
   }, [root, options.agent, kind.id, prompt])
 
+  const briefRef = useRef<HTMLTextAreaElement>(null)
   const launch = async (): Promise<void> => {
     if (!ready || busy) return
     if (!folderOk) return setError('Choose an existing folder for the agent to work in.')
@@ -192,25 +199,21 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   }
 
   return (
-    <form
-      className="form"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void launch()
-      }}
+    <Modal title="New mission" size="lg" onClose={onDone} busy={busy} initialFocus={briefRef} onSubmit={() => void launch()}>
+    <div
+      className="form mission-form"
       onKeyDown={(e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault()
           void launch()
         }
-        if (e.key === 'Escape') onDone()
       }}
     >
       <KindPicker kinds={kinds} value={kind} onChange={pickKind} root={projectRoot} />
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
         <span>{kind.readOnly ? `What should ${getAgent(options.agent).name} find out?` : `What should ${getAgent(options.agent).name} do?`}</span>
-        <textarea autoFocus rows={6} value={prompt} placeholder={kind.placeholder ?? 'What the agent should do'} onChange={(e) => setPrompt(e.target.value)} />
+        <textarea ref={briefRef} rows={6} value={prompt} placeholder={kind.placeholder ?? 'What the agent should do'} onChange={(e) => setPrompt(e.target.value)} />
         <span className="field-hint">Required. Sent as one argument, line breaks and quotes intact.</span>
       </label>
       <label className="field">
@@ -271,12 +274,14 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       )}
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
-        <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
+        <span className="form-note">Ctrl/Cmd+Enter launches</span>
+        <button type="button" className="btn ghost" disabled={busy} onClick={onDone}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!ready || busy || !folderOk} title="Ctrl/Cmd+Enter">
           <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>
       </div>
-    </form>
+    </div>
+    </Modal>
   )
 }
 
@@ -341,7 +346,8 @@ function KindPicker({ kinds, value, onChange, root }: { kinds: MissionKind[]; va
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.preventDefault(), void create())
-              if (e.key === 'Escape') (e.stopPropagation(), setNaming(false))
+              // preventDefault keeps Esc from cancelling the whole dialog
+              if (e.key === 'Escape') (e.preventDefault(), e.stopPropagation(), setNaming(false))
             }}
           />
           <select value={scope} aria-label="Where to keep it" onChange={(e) => setScope(e.target.value as 'project' | 'user')}>
