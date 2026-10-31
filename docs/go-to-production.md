@@ -81,7 +81,8 @@ confirmed on the provider's site when you get there.
 - Downloads: the **public GitHub repo** `ben42-01/downloads.sldev.io`. The source repo stays private.
 - `v0.1.0-beta.1` stays unpublished. The first public build is `0.1.0-beta.2`.
 - The beta window is controlled from the website, never baked into builds.
-- Beta window: **2026-10-24 to 2026-12-31**; launch `1.0.0` around 2027-01-01 (extend `endsAt` if needed).
+- Beta window: opened 2026-10-24 and was closed early on 2026-10-31 for the `1.0.0` launch; `pricing.json` has no
+  beta dates any more (`null`), so `/beta.json` is empty and beta builds never lock.
 - **Release model**: `0.1.0-beta.N` builds are the **free beta**: GitHub pre-releases, governed by
   the beta window, no license key field and no "Buy" (Settings → License just says "Free during the
   beta"). **`1.0.0` is go-live**: a normal release with the 14-day trial and license keys. Installed
@@ -373,23 +374,26 @@ At €10.99, expect roughly **€1.00–1.30 per sale in fees** (about 10–12%)
 10. When the store is approved, switch **Test mode off** and repeat steps 5–6 for live products
     (test and live products are separate).
 
-### 4C. 🧑 Put the checkout links on the website (only at launch)
+### 4C. Checkout links on the website (done on `v1`, 2026-10-31)
 
 In `website/src/content/pricing.json`, per plan:
 
 ```json
 "price": 10.99,
-"checkoutUrl": "https://…checkout-link…"
+"checkoutUrl": "https://buy.polar.sh/polar_cl_…",
+"sandboxCheckoutUrl": "https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_…/redirect"
 ```
 
-While `price` is `0` or `checkoutUrl` is empty, the button says "Download the beta". Once both
-are set, it says "Buy Personal" and opens checkout. Don't do this until Phase 7.
+Vercel **production** builds link `checkoutUrl` (Polar live); previews and local builds link
+`sandboxCheckoutUrl`, so a preview never takes real money (`__LIVE_CHECKOUT__` in `website/vite.config.ts`,
+like `VERCEL_ENV` in `api/_polar.ts`). While `price` is `0` or the link is empty, the button says
+"Download free trial"; with both, "Buy Personal" / "Buy Team".
 
 ### Phase 3 checklist
 
 - [ ] Account verified, payouts connected
 - [ ] Personal (€10.99, 3 activations) and Team (€50, 15 activations) products, **test** and **live**
-- [ ] Checkout links copied (not on the site yet)
+- [x] Checkout links on the site (live and sandbox)
 - [ ] Test purchase emailed a license key
 - [ ] Organization/store ID and product IDs written down for Claude
 - [ ] API token stored in Vercel env vars (never in the repo)

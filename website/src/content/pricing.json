@@ -3,8 +3,8 @@
   "billing": "one-time",
   "announcement": "Pay once, every future update included. Every download starts with a free 14-day trial.",
   "beta": {
-    "startsAt": "2026-10-24",
-    "endsAt": "2026-12-31",
+    "startsAt": null,
+    "endsAt": null,
     "label": "Limited time"
   },
   "plans": [
@@ -18,8 +18,8 @@
       "highlight": true,
       "ctaLabel": "Download free trial",
       "ctaLabelPaid": "Buy Personal",
-      "checkoutUrl": "",
-      "sandboxCheckoutUrl": "",
+      "checkoutUrl": "https://buy.polar.sh/polar_cl_rcckqPVuJv8HQEn5zMUj73onQJ01SRdX7WGbR1M8nmE",
+      "sandboxCheckoutUrl": "https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_eV3DN4OtqGOyiKR3VowNavcL4q7acuGTOAbei4b9uPI/redirect",
       "features": [
         "Every agent: Claude Code, Codex, Cursor Agent, Copilot, OpenCode, Gemini, custom",
         "Unlimited terminals, missions and worktrees",
@@ -42,8 +42,8 @@
       "highlight": false,
       "ctaLabel": "Download free trial",
       "ctaLabelPaid": "Buy Team",
-      "checkoutUrl": "",
-      "sandboxCheckoutUrl": "",
+      "checkoutUrl": "https://buy.polar.sh/polar_cl_kOosNrPOzIGDsN9zKPY6aUF8xmBWurk50AFnj24k7S9",
+      "sandboxCheckoutUrl": "https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_z7dRZP1VJJpbb6YRug68aYRZHsi6ipK8aHZBS0sYukY/redirect",
       "features": [
         "Everything in Personal",
         "5 seats on a single license, up to 3 machines each",
