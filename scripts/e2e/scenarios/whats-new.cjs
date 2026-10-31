@@ -18,7 +18,7 @@ module.exports = async (h) => {
   await h.reload()
   h.expect(!(await text(h, '.whats-new')).includes('since you last opened'), 'not shown again for the same version')
 
-  h.expect((await text(h, '.statusbar')).includes('feedback'), 'beta build: feedback chip in the status bar')
+  if (/-beta\b/.test(version)) h.expect((await text(h, '.statusbar')).includes('feedback'), 'beta build: feedback chip in the status bar')
 
   h.key('P', ['control', 'shift'])
   await h.wait(400)

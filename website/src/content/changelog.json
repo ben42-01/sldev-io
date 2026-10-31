@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.0.0",
+    "date": "2026-10-31",
+    "changes": [
+      "Mission kinds: Build, Research, Investigate, Plan, Review, Map project and Freeform. Each frames your brief for the job; Research and Review run in the agent's read-only mode, and Freeform sends your prompt exactly as written. Your own kinds are Markdown templates in .sldev/missions.",
+      "Build from this: a finished Research or Plan mission becomes the brief of a Build mission or the start of a factory run.",
+      "Continue on another agent: when Claude Code, Codex or another agent stops at its plan's usage limit, the next agent in your order picks up the work in the same folder (Settings → Agents). Factory stages can do it on their own.",
+      "Software Factory: run your own spec, build and review skills as stages (skill: in a recipe), swap the agent or skill of any stage for one run, and start a run from a spec you already have.",
+      "Automations: start a recipe or a mission on a schedule, when CI fails on a branch, or when an issue gets a label. They run while the app is open and never push.",
+      "Project context: what agents learn goes into .sldev/memory.md and a local index linked to your code. Missions are pointed at the notes that match their brief, and the Context tab lets you browse, search and pin them.",
+      "Mission Control: missions, factory runs and usage in one tab, as status columns, a grid or a list.",
+      "Needs you for every agent: approval prompts on screen now count, not only the terminal bell, so OpenCode, Codex and Gemini dialogs show up. Mission details say how each agent's status is known.",
+      "Agents that don't report back get their final screen as the mission's report.",
+      "Fix: a Claude Code reply written just after it finished could be lost, leaving the report empty and Build from this disabled. Missions that lost it get it back on the next start."
+    ]
+  },
+  {
     "version": "0.1.0-beta.7",
     "date": "2026-10-30",
     "changes": [

@@ -2,9 +2,26 @@
 const visible = (h, sel) => h.js(`!!document.querySelector(${JSON.stringify(sel)})`)
 const text = (h, sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? ''`)
 
+const { version } = require('../../../package.json')
+
 module.exports = async (h) => {
   await h.openFixture()
   h.expect(!(await visible(h, '.beta-banner')) && !(await visible(h, '.beta-ended')), 'no dates: no banner, no lock')
+
+  // a stable build ignores the beta window: no countdown, no banner, and an ended beta never locks it
+  if (!/-beta\b/.test(version)) {
+    h.setBeta({ endsInDays: 5 })
+    await h.js('window.api.beta.refresh()')
+    await h.reload()
+    const chips = await h.js(`[...document.querySelectorAll('.statusbar .status-item')].map(e => e.textContent).join('|')`)
+    h.expect(!(await visible(h, '.beta-banner')) && !/beta ·/.test(chips), `stable ${version}: no beta countdown or banner`)
+    h.setBeta({ endsInDays: -1 })
+    await h.js('window.api.beta.refresh()')
+    await h.reload()
+    h.expect(!(await visible(h, '.beta-ended')) && (await visible(h, '.statusbar')), `stable ${version}: an ended beta doesn't lock it`)
+    await h.shot('1-stable')
+    return
+  }
 
   h.setBeta({ endsInDays: 40 })
   await h.js('window.api.beta.refresh()')
