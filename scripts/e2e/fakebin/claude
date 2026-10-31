@@ -55,8 +55,17 @@ fire('UserPromptSubmit', { prompt: args[args.length - 1] }); sleep(400)
 fire('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(process.cwd(), 'src/app.js') } }); sleep(800)
 fs.writeFileSync('src/app.js', "console.log('hello from mission')\nconsole.log('second line')\n"); fs.writeFileSync('NOTES.md', '# Added by mission\n')
 fire('Notification', { message: 'Claude needs your permission to use Bash' }); sleep(2500)
-const tp = path.join(os.tmpdir(), 'sldev-io-fake-transcript.jsonl')
-fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Done! I updated src/app.js:1 and added NOTES.md.' }] } }) + '\n')
-fire('Stop', { transcript_path: tp })
+const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
+const reply = (text) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } }) + '\n'
+if (args[args.length - 1].includes('LATE_REPLY')) {
+  // the real CLI sometimes writes its last reply just after the Stop hook fires: the hook only sees a tool call
+  fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'ExitPlanMode', input: {} }] } }) + '\n')
+  fire('Stop', { transcript_path: tp })
+  sleep(300)
+  fs.appendFileSync(tp, reply('Findings: the parser allocates per token. Fix: reuse one buffer.'))
+} else {
+  fs.writeFileSync(tp, reply('Done! I updated src/app.js:1 and added NOTES.md.'))
+  fire('Stop', { transcript_path: tp })
+}
 console.log('Done! I updated src/app.js:1 and added NOTES.md.')
 process.stdin.resume()

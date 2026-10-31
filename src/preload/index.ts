@@ -141,6 +141,8 @@ const api = {
   missions: {
     hookInfo: (): Promise<{ port: number; token: string; settingsPath: string; mcp: { command: string; script: string } } | null> => ipcRenderer.invoke('missions:hookInfo'),
     briefFile: (id: string, text: string): Promise<string> => ipcRenderer.invoke('missions:briefFile', id, text),
+    /** Claude's last reply from a transcript a hook reported or a mission saved */
+    lastReply: (transcriptPath: string): Promise<string | undefined> => ipcRenderer.invoke('missions:lastReply', transcriptPath),
     onHook: (cb: (e: HookEvent) => void): Unsubscribe => on('mission:hook', cb),
     onMcp: (cb: (e: McpEvent) => void): Unsubscribe => on('mission:mcp', cb)
   },

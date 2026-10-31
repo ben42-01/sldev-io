@@ -19,7 +19,7 @@ import * as factory from './factory'
 import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
-import { hookInfo, startHookServer } from './hooks'
+import { hookInfo, knownTranscripts, lastAssistantText, startHookServer } from './hooks'
 import { importSshConfig, ping as pingHost, SshManager } from './ssh'
 import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
 import { JsonStore } from './store'
@@ -226,6 +226,12 @@ function registerIpc(): void {
 
   // missions (Claude Code hooks)
   ipcMain.handle('missions:hookInfo', () => hookInfo())
+  // Claude writes its last reply to the transcript about when the Stop hook fires; the renderer reads it
+  // again a moment later, so a reply written just after the hook isn't lost
+  ipcMain.handle('missions:lastReply', (_e, path: string) => {
+    const known = knownTranscripts.has(path) || stores.missions.get().missions.some((m) => m.transcriptPath === path)
+    return known ? lastAssistantText(path) : undefined
+  })
   ipcMain.handle('missions:briefFile', (_e, id: string, text: string) => {
     // a brief too long for a command line is handed over as a file the agent reads
     if (!/^[\w-]+$/.test(id)) throw new Error('Bad mission id')

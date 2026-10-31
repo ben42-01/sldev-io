@@ -114,7 +114,13 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
         ) : <span className="stats">no changes</span>)}
         <span className="spacer" />
         {m.kind?.readOnly ? (
-          <button className="icon-btn" title="Build from this" aria-label="Build from this" disabled={!buildDraft(m.id)} onClick={() => openNewMission(buildDraft(m.id))}>
+          <button
+            className="icon-btn"
+            title={buildDraft(m.id) ? 'Build from this' : 'Nothing to build from yet: the agent left no report. Add handoff notes in the details, or wait for it to finish.'}
+            aria-label="Build from this"
+            disabled={!buildDraft(m.id)}
+            onClick={() => openNewMission(buildDraft(m.id))}
+          >
             <Hammer size={13} />
           </button>
         ) : (

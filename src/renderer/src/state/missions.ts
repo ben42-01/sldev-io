@@ -35,6 +35,20 @@ export async function loadMissions(): Promise<void> {
   const now = Date.now()
   const list = (store?.missions ?? []).map((m) => (isLive(m.status) ? patchMission(m, { status: 'ended' }, m.updatedAt || now) : m))
   missions.set({ list })
+  // missions whose last reply was written after the Stop hook read the transcript (fixed since; this recovers older ones)
+  for (const m of list) if (!m.report && m.transcriptPath && !m.factory) void rereadReply(m.id)
+}
+
+/**
+ * Claude writes its last reply to the transcript about when the Stop hook fires, sometimes just after,
+ * and the hook then reads an older message or nothing. Reading again a moment later catches it.
+ */
+async function rereadReply(id: string): Promise<void> {
+  const path = getMission(id)?.transcriptPath
+  const text = path ? await window.api.missions.lastReply(path).catch(() => undefined) : undefined
+  const m = getMission(id)
+  if (!m || !text || text === m.report) return
+  update(id, { report: text, reportFrom: undefined, lastMessage: text.slice(0, 600) })
 }
 
 const save = (): Promise<unknown> => window.api.store.set('missions', { missions: missions.get().list.slice(0, 200) })
@@ -384,6 +398,7 @@ window.api.missions.onHook((e: HookEvent) => {
     }
     case 'stop': {
       const next = update(m.id, { ...base, status: 'waiting', lastMessage: e.text?.slice(0, 600) ?? m.lastMessage, report: e.text ?? m.report, ...(e.text ? { reportFrom: undefined } : {}), notification: undefined })
+      setTimeout(() => void rereadReply(m.id), 1500)
       if (next) notify(next, `${m.title} finished`, e.text ?? `${getAgent(m.options.agent).name} is waiting for your next message`)
       void refreshStats(m.id)
       checkLimit(m.id, e.text)

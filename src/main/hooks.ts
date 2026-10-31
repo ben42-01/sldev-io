@@ -135,7 +135,11 @@ function safeJson(s: unknown): Record<string, unknown> {
 
 const clip = (s: unknown, n = 240): string | undefined => (typeof s === 'string' && s ? (s.length > n ? s.slice(0, n - 1) + '…' : s) : undefined)
 
+/** Transcripts Claude's hooks named this session: the only ones the renderer may ask to read (with those saved on missions). */
+export const knownTranscripts = new Set<string>()
+
 function summarize(mission: string, event: string, p: Record<string, unknown>): HookEvent | null {
+  if (typeof p.transcript_path === 'string' && p.transcript_path.endsWith('.jsonl')) knownTranscripts.add(p.transcript_path)
   const base = { mission, sessionId: typeof p.session_id === 'string' ? p.session_id : undefined, transcriptPath: typeof p.transcript_path === 'string' ? p.transcript_path : undefined }
   switch (event) {
     case 'SessionStart':
@@ -163,7 +167,7 @@ function toolSummary(tool: string, input: Record<string, unknown>): string {
 }
 
 /** Read the tail of the session transcript (JSONL) and return the last assistant text block. */
-function lastAssistantText(path: unknown): string | undefined {
+export function lastAssistantText(path: unknown): string | undefined {
   if (typeof path !== 'string' || !path) return undefined
   let fd: number | undefined
   try {
