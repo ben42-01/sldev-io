@@ -615,3 +615,38 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
   .vs-table td > span { text-align: right; }
   .vs-table td:last-child { padding-bottom: 14px; }
 }
+
+/* Project context diagram (home spotlight and /docs/context) */
+.ctx-graph { margin: 48px 0 0; padding: 20px; border: 1px solid var(--border); background: var(--bg-panel); overflow-x: auto; }
+.ctx-graph.compact { margin: 8px 0 20px; padding: 12px; }
+.ctx-graph svg { display: block; min-width: 720px; width: 100%; height: auto; }
+.ctx-graph .cap { fill: var(--fg-subtle); font: 500 10px var(--font-mono); letter-spacing: 0.1em; }
+.ctx-graph .node { fill: var(--bg-elev); stroke: var(--border-strong); }
+.ctx-graph .node.agent { fill: var(--bg); }
+.ctx-graph .index { fill: var(--bg); stroke: url(#ctx-brand); stroke-width: 1.5; }
+.ctx-graph .file { fill: var(--fg); font: 600 12px var(--font-mono); }
+.ctx-graph .what { fill: var(--fg-muted); font: 10.5px var(--font-ui); }
+.ctx-graph .agent-name { fill: var(--fg); font: 500 12.5px var(--font-ui); }
+.ctx-graph .label { fill: var(--fg-muted); font: 10.5px var(--font-mono); }
+.ctx-graph .edge { fill: none; stroke: var(--border-strong); }
+.ctx-graph .loop { fill: none; stroke: var(--border-strong); stroke-dasharray: 4 4; }
+.ctx-graph .flow { fill: none; stroke: var(--brand-green); stroke-width: 2; stroke-dasharray: 10 600; stroke-dashoffset: 610; animation: ctx-flow 3.2s linear infinite; }
+.ctx-graph .flow.out { stroke: var(--brand-blue); }
+.ctx-graph .flow.back { stroke: var(--brand-purple); stroke-dasharray: 10 1800; stroke-dashoffset: 1810; animation-duration: 5s; animation-delay: 1.6s; }
+.ctx-graph .wire { stroke: #ffffff22; }
+.ctx-graph .wire.live { stroke: var(--brand-green); opacity: 0.55; animation: ctx-wire 2.4s ease-in-out infinite; }
+.ctx-graph .nnode { fill: var(--bg-elev); stroke: var(--fg); }
+.ctx-graph .nnode.stale { stroke: var(--amber); fill: #f5a52422; }
+.ctx-graph .fnode { fill: var(--fg-muted); }
+.ctx-graph .flabel { fill: var(--fg-muted); font: 9.5px var(--font-mono); }
+.ctx-graph .stale-label { fill: var(--amber); font: 9.5px var(--font-mono); }
+@keyframes ctx-flow { to { stroke-dashoffset: 0; } }
+@keyframes ctx-wire { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.8; } }
+@media (prefers-reduced-motion: reduce) {
+  .ctx-graph .flow { display: none; }
+  .ctx-graph .wire.live { animation: none; }
+}
+.ctx-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
+.ctx-points h3 { font-size: 16px; margin-bottom: 6px; }
+.ctx-points p { color: var(--fg-muted); font-size: 14.5px; }
+@media (max-width: 860px) { .ctx-points { grid-template-columns: 1fr; gap: 20px; } }

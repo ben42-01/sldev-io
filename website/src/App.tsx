@@ -1,3 +1,4 @@
+import { ContextSpotlight } from './components/ContextSpotlight'
 import { FailoverSpotlight } from './components/Failover'
 import { FeatureHighlights } from './components/Features'
 import { FinalCta, Footer } from './components/Footer'
@@ -16,6 +17,7 @@ export function App() {
         <AgentStrip />
         <WhySection />
         <FailoverSpotlight />
+        <ContextSpotlight />
         <FeatureHighlights />
         <WorkflowsSpotlight />
         <HomeFaq />

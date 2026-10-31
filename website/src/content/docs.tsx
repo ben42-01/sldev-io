@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ContextGraph } from '../components/ContextGraph'
 
 /**
  * Docs pages: /docs lists them, /docs/<id> shows one with its sections as the table of contents.
@@ -614,6 +615,7 @@ const missions: DocPage = {
               <tr><td><b>Investigate</b></td><td>Find the root cause with evidence. Fixes only if you ask.</td></tr>
               <tr><td><b>Plan</b></td><td>A plan, no code. Hand it to a Build mission or a factory run.</td></tr>
               <tr><td><b>Review</b></td><td>Review a branch, a diff or part of the code. Read-only.</td></tr>
+              <tr><td><b>Map project</b></td><td>The agent reads the project and writes reference docs to <code>.sldev/context/</code> for later missions. No brief needed; see <a href="/docs/context#map">project context</a>.</td></tr>
               <tr><td><b>Freeform</b></td><td>Your prompt exactly as you wrote it, nothing added.</td></tr>
             </tbody>
           </table>
@@ -672,7 +674,12 @@ defaults. Do not change any files. List findings with file and line.
           </p>
           <p>
             Add a line from a mission's details (<b>Remember</b>). Claude Code and Codex missions with the sldev tools add to it
-            themselves through <code>sldev_remember</code>. It's a plain file: edit it, prune it, commit it to share it with your team.
+            themselves through <code>sldev_remember</code>, naming the files a note is about. It's a plain file: edit it, prune it, commit it
+            to share it with your team.
+          </p>
+          <p>
+            The memory is one part of the <a href="/docs/context">project context</a>: with your reference docs, pinned files and skills, it is
+            indexed and linked to your code, and each mission gets the notes that match its task.
           </p>
         </>
       )
@@ -692,6 +699,169 @@ defaults. Do not change any files. List findings with file and line.
             Automations run while sldev-io is open. A time missed while it was closed is skipped, not caught up. An automation never starts
             a second run while its last one is still going, and nothing is pushed until you click.
           </Note>
+        </>
+      )
+    }
+  ]
+}
+
+const context: DocPage = {
+  id: 'context',
+  title: 'Project context',
+  summary:
+    "One memory for every agent: what agents learned, your reference docs, pinned files and skills, indexed on your machine and linked to the files they're about. Each mission gets the notes that match its task.",
+  sections: [
+    {
+      id: 'overview',
+      title: 'How it works',
+      body: (
+        <>
+          <p>
+            Agents forget everything between sessions, and one vendor's agent never sees what another learned. The project context fixes both.
+            The knowledge lives as Markdown in your repo. sldev-io indexes it on your machine, links each note to the files it mentions, and gives
+            every mission the notes that match its task, whichever agent runs it.
+          </p>
+          <ContextGraph compact />
+          <p>
+            Open it from the <b>Context</b> tab in the right sidebar (or <b>Show Project Context</b> in the command palette). It lists everything
+            agents are told, flags notes to check, and searches the way a mission's brief is matched, so you can see what a task would get before
+            you start it.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'sources',
+      title: 'What goes in',
+      body: (
+        <>
+          <p>Four kinds of plain files, all in the project, all safe to edit and commit:</p>
+          <table className="docs-table">
+            <tbody>
+              <tr>
+                <td><code>.sldev/memory.md</code></td>
+                <td>Learnings: one dated line each, ending with the files it is about (<code> · files: src/auth.ts</code>). Added by agents, by <b>Remember</b> in a mission's details, or by you.</td>
+              </tr>
+              <tr>
+                <td><code>.sldev/context/*.md</code></td>
+                <td>Reference docs: architecture, commands, conventions, gotchas. Each heading is its own entry, so a match points at the section that matters, not a whole file.</td>
+              </tr>
+              <tr>
+                <td><code>.sldev/pinned.md</code></td>
+                <td>Files you pinned, with an optional note. Pinned Markdown files are indexed by section too.</td>
+              </tr>
+              <tr>
+                <td>Project skills</td>
+                <td><code>SKILL.md</code> folders in <code>.claude/skills</code>, <code>.sldev/skills</code> and <code>.agents/skills</code>, by name and description.</td>
+              </tr>
+            </tbody>
+          </table>
+          <Code file=".sldev/memory.md">{`
+# Project memory
+
+- 2026-10-30: Integration tests need Postgres: docker compose up db (codex, mission "Fix flaky tests") · files: docker-compose.yml
+- 2026-10-31: Tokens are signed in src/server/auth.ts with a 1h expiry (you)
+`}</Code>
+          <p>
+            Paths in a note are picked up even without the <code>files:</code> list: anything in backticks or written like a path that exists in
+            the project.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'missions',
+      title: 'What a mission gets',
+      body: (
+        <>
+          <p>
+            When a mission starts, sldev-io searches the context with its brief and adds up to six matches to the prompt: where to read each one
+            (an absolute path and line, so a mission in a worktree can open it) and what it says. A note about a file the brief names ranks
+            first. The prompt points at notes; it doesn't paste whole docs, so it stays short.
+          </p>
+          <Code file="Added to the prompt">{`
+Project context that looks relevant to this task (read what applies; check anything marked out of date against the code):
+- /work/shop/.sldev/memory.md:4: Tokens are signed in src/server/auth.ts with a 1h expiry (2026-10-31)
+- /work/shop/.sldev/context/architecture.md:12: Authentication
+`}</Code>
+          <p>
+            Every mission kind gets this except <b>Freeform</b>, which sends your text exactly as written. Factory stages get it too. Settings →
+            Agents → <b>Project context</b> turns it off.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'tools',
+      title: 'Agents look up and add',
+      body: (
+        <>
+          <p>Agents with the sldev tools (Claude Code and Codex by default) get two more:</p>
+          <ul>
+            <li>
+              <code>sldev_recall</code>: look things up by topic (<i>"how are tests run"</i>) or by file (<code>src/server/auth.ts</code>). By file,
+              it also returns the other files those notes link to, one step through the graph.
+            </li>
+            <li>
+              <code>sldev_remember</code>: add a learning with the files it is about. The next agent working on those files is pointed at it.
+            </li>
+          </ul>
+          <p>Other agents read the same notes from their prompt; they just can't call the tools.</p>
+        </>
+      )
+    },
+    {
+      id: 'map',
+      title: 'Map a project',
+      body: (
+        <>
+          <p>
+            <b>Map this project</b> in the Context tab (or the <b>Map project</b> mission kind) asks an agent to read the code and write the docs
+            in <code>.sldev/context/</code>: an overview, architecture, commands, conventions and gotchas, one section per topic, naming the
+            files each is about. It writes nothing else and commits nothing: review the diff like any other change. A brief is optional, for
+            example "focus on the payment flow".
+          </p>
+          <p>
+            From the Context tab's menu you can also add it to the project as a skill (<code>.sldev/skills/map-project/SKILL.md</code>), so you
+            can run it from any agent's own CLI.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'stale',
+      title: 'Notes that may be out of date',
+      body: (
+        <>
+          <p>
+            A note is flagged when a file it's about changed after the note was written, or no longer exists. The Context tab marks it, and so
+            does the prompt, so the agent checks it against the code instead of trusting it. "Changed" means a newer commit, not a newer file
+            time, so a fresh clone doesn't flag everything.
+          </p>
+          <p>Fix the note, or forget it from the Context tab (it asks first, and removes only that line).</p>
+        </>
+      )
+    },
+    {
+      id: 'pin',
+      title: 'Pin files',
+      body: (
+        <p>
+          Pin the files agents should know about: a design doc, a schema, the API spec. Use <b>Pin a file</b> in the Context tab, or right-click a
+          file in the explorer and choose <b>Pin to project context</b>. Unpinning removes it from the list, never the file.
+        </p>
+      )
+    },
+    {
+      id: 'privacy',
+      title: 'Where it lives',
+      body: (
+        <>
+          <p>
+            The Markdown in <code>.sldev/</code> is the source. Commit it and your whole team, and every agent they use, shares it. The search
+            index is a SQLite file in sldev-io's data folder, rebuilt from the Markdown whenever it changes; deleting it loses nothing.
+          </p>
+          <Note>Search runs on your machine. No embeddings service, no upload: nothing about your code leaves it.</Note>
         </>
       )
     }
@@ -1004,4 +1174,4 @@ const remote: DocPage = {
   ]
 }
 
-export const docs: DocPage[] = [recipes, missions, workspace, agents, remote]
+export const docs: DocPage[] = [recipes, missions, context, workspace, agents, remote]

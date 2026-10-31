@@ -56,7 +56,7 @@ const features: Feature[] = [
   { group: 'automate', icon: Factory, title: 'Software Factory', text: 'Recipes turn an idea into a reviewed pull request: a graph of agent steps, checks and approvals. Failing tests and review comments go back to the agent, and every run can be replayed step by step.' },
   { group: 'automate', icon: Puzzle, title: 'Your own skills and specs', text: 'Run your spec, build and review skills as factory steps on any agent, swap them per run, or start from a spec you already wrote.' },
   { group: 'automate', icon: Clock, title: 'Automations', text: 'Start a recipe or a mission every weekday morning, when CI fails on main, or when an issue gets a label. Never more than one at a time, never pushed without you.' },
-  { group: 'automate', icon: Brain, title: 'Project memory', text: 'What one agent learns about your project goes into one file the next agent reads, whichever CLI it is. Commit it to share it with your team.' },
+  { group: 'automate', icon: Brain, title: 'Project context', text: 'What one agent learns, your docs and pinned files, indexed and linked to the code. Each mission gets the notes that match its task, whichever CLI runs it, and notes whose files changed are flagged. Plain Markdown you commit.' },
   { group: 'automate', icon: Workflow, title: 'GitHub issues and workflows', text: 'Start a mission or a factory run from an issue, dispatch workflows with typed inputs, follow runs and see the PR checks for your branch.' },
   { group: 'automate', icon: MessageSquareReply, title: 'Review comments back to the agent', text: 'Review comments on a factory run\'s pull request go to an agent in the run\'s worktree. The update is pushed when you click.' },
 
