@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.1",
+    "date": "2026-11-01",
+    "changes": [
+      "Fix: Codex missions and factory stages failed to start with Codex 0.16x, which dropped the --full-auto flag. Workspace-write mode now uses --sandbox workspace-write, which old and new versions accept.",
+      "Save for later: write a mission now and launch it when you're ready. Saved missions sit under \"Saved for later\" in the Agents tab and Mission Control, and you can edit them before launching.",
+      "Review changes opens in a tab of its own: side by side or unified, a file list with folders, Viewed to fold a file away, and the acceptance criteria on top. The sidebars step aside while you review (Settings → Editor).",
+      "Diff in your editor: with VS Code, Cursor, Windsurf or a JetBrains IDE, open a file's changes in the editor's own diff view from the review.",
+      "Focus mode (Ctrl+Alt+F, Cmd+Alt+F on a Mac) hides both sidebars, and split panes have a maximize button.",
+      "Factory runs open their stage terminals below the pipeline instead of beside it, so the graph keeps its width.",
+      "Fix: the usage dashboard showed an empty grey block next to its tiles."
+    ]
+  },
+  {
     "version": "1.0.0",
     "date": "2026-10-31",
     "changes": [
