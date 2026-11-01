@@ -82,6 +82,8 @@ const api = {
   editors: {
     list: (): Promise<EditorInfo[]> => ipcRenderer.invoke('editors:list'),
     open: (id: string, target: string, line?: number, col?: number): Promise<boolean> => ipcRenderer.invoke('editors:open', id, target, line, col),
+    /** the editor's own diff of a file against the mission's base; false when it has none */
+    diff: (id: string, cwd: string, base: string, path: string, oldPath?: string): Promise<boolean> => ipcRenderer.invoke('editors:diff', id, cwd, base, path, oldPath),
     terminalCommand: (id: string): Promise<string | null> => ipcRenderer.invoke('editors:terminalCommand', id),
     terminalGoto: (id: string, file: string, line: number): Promise<string | null> => ipcRenderer.invoke('editors:terminalGoto', id, file, line)
   },

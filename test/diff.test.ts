@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDiff } from '@renderer/lib/diff'
+import { splitRows, parseDiff } from '@renderer/lib/diff'
 
 const DIFF = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
@@ -61,5 +61,21 @@ describe('parseDiff', () => {
 
   it('returns nothing for empty input', () => {
     expect(parseDiff('')).toEqual([])
+  })
+})
+
+describe('splitRows', () => {
+  it('pairs removals with the additions after them and keeps context on both sides', () => {
+    const files = parseDiff(['diff --git a/x b/x', '--- a/x', '+++ b/x', '@@ -1,4 +1,4 @@', ' keep', '-old 1', '-old 2', '+new 1', ' tail', '+only new', ''].join('\n'))
+    const rows = splitRows(files[0].lines)
+    expect(rows[0].kind).toBe('hunk')
+    const pairs = rows.filter((r) => r.kind === 'pair').map((r) => (r.kind === 'pair' ? [r.left?.text ?? null, r.right?.text ?? null] : null))
+    expect(pairs).toEqual([
+      ['keep', 'keep'],
+      ['old 1', 'new 1'],
+      ['old 2', null],
+      ['tail', 'tail'],
+      [null, 'only new']
+    ])
   })
 })

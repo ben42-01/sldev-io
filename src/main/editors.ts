@@ -1,7 +1,9 @@
 import { spawn } from 'child_process'
 import { constants, existsSync, promises as fsp } from 'fs'
-import { delimiter, join } from 'path'
+import { tmpdir } from 'os'
+import { basename, delimiter, join } from 'path'
 import type { EditorInfo } from '@shared/types'
+import { baseVersion } from './git'
 
 interface EditorDef extends EditorInfo {
   bins: string[]
@@ -63,14 +65,41 @@ let detected: Array<EditorDef & { bin: string | null; app: string | null }> | nu
 export async function detectEditors(): Promise<EditorInfo[]> {
   const found = await Promise.all(EDITORS.map(async (e) => ({ ...e, bin: (await Promise.all(e.bins.map(whichAsync))).find(Boolean) ?? null, app: macAppPath(e.macApp) })))
   detected = found.filter((e) => e.bin || e.app)
-  return detected.map(({ id, name, kind }) => ({ id, name, kind }))
+  return detected.map(({ id, name, kind }) => ({ id, name, kind, canDiff: !!diffArgs(id, 'a', 'b') }))
+}
+
+const VSCODE_FAMILY = ['cursor', 'vscode', 'vscode-insiders', 'windsurf']
+const JETBRAINS = ['idea', 'webstorm', 'pycharm', 'goland', 'rustrover']
+
+function diffArgs(id: string, left: string, right: string): string[] | null {
+  if (VSCODE_FAMILY.includes(id)) return ['--diff', left, right]
+  if (JETBRAINS.includes(id)) return ['diff', left, right]
+  return null
+}
+
+/**
+ * Opens the editor's own side-by-side diff: the file as it was at `base` (written to a temp file,
+ * named after the base so the editor's tab says which side is which) against the working copy.
+ */
+export async function openDiffInEditor(id: string, cwd: string, base: string, path: string, oldPath?: string): Promise<boolean> {
+  if (!detected) await detectEditors()
+  const e = detected!.find((d) => d.id === id)
+  if (!e?.bin || !diffArgs(id, '', '')) return false
+  const dir = join(tmpdir(), 'sldev-review', `${Date.now().toString(36)}-${base.replace(/[^\w.-]+/g, '_').slice(0, 40)}`)
+  await fsp.mkdir(dir, { recursive: true })
+  const left = join(dir, basename(oldPath ?? path))
+  await fsp.writeFile(left, await baseVersion(cwd, base, oldPath ?? path))
+  const child = spawn(e.bin, diffArgs(id, left, join(cwd, path))!, { detached: true, stdio: 'ignore', shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(e.bin) })
+  child.on('error', () => {})
+  child.unref()
+  return true
 }
 
 /** Arguments that open `file` at `line:col` for each editor family. */
 function gotoArgs(id: string, file: string, line: number, col: number): string[] {
-  if (['cursor', 'vscode', 'vscode-insiders', 'windsurf'].includes(id)) return ['-g', `${file}:${line}:${col}`]
+  if (VSCODE_FAMILY.includes(id)) return ['-g', `${file}:${line}:${col}`]
   if (['zed', 'sublime'].includes(id)) return [`${file}:${line}:${col}`]
-  if (['idea', 'webstorm', 'pycharm', 'goland', 'rustrover'].includes(id)) return ['--line', String(line), '--column', String(col), file]
+  if (JETBRAINS.includes(id)) return ['--line', String(line), '--column', String(col), file]
   return [file]
 }
 

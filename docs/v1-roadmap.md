@@ -148,7 +148,7 @@ Placeholders: `{intent}`, `{issue}`, `{out}` (this stage's output file), `{<stag
   `uv sync`, `poetry install`), once per worktree. A recipe can set `setup: <command>` or `setup: none`.
   A failing setup pauses the run with the log.
 - **Unattended permissions**: print-mode stages have nobody to approve a tool call, so each agent runs
-  with a mode that lets it work alone (Claude `auto`, Codex `full-auto`, Gemini `auto_edit`), set per
+  with a mode that lets it work alone (Claude `auto`, Codex workspace-write, Gemini `auto_edit`), set per
   agent in Settings → Software Factory; a stage's profile can set its own.
 - **No output, no pass**: an agent stage that ends without writing its output file fails and says so,
   instead of handing the next stage nothing.
@@ -401,7 +401,7 @@ against the real tools (on a scratch repo, with a cheap model):
       Push update lands on the PR.
 - [ ] **Unattended stages**: Claude `-p --permission-mode auto` can edit, run `npm test` and commit
       without prompts (auto mode needs a plan that has it; otherwise pick another mode in Settings);
-      Codex `exec --full-auto` and Gemini `-p --approval-mode auto_edit` do the work too.
+      Codex `exec --sandbox workspace-write` and Gemini `-p --approval-mode auto_edit` do the work too.
 - [ ] **Model ids in the logs**: Claude Code transcripts carry `message.model` and Codex sessions a
       `turn_context` line with `model`; the dashboard prices them (unpriced otherwise).
 - [ ] Website: Factory and bake-off chapters in the tour, the features page and the pricing list

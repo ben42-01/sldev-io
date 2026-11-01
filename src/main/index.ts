@@ -5,7 +5,7 @@ import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { PtyManager, setShellOverride } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
-import { detectEditors, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
+import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
 import { recentStalls, watchMainLoop, watchWindow } from './stalls'
 import * as git from './git'
 import * as gh from './github'
@@ -160,6 +160,7 @@ function registerIpc(): void {
     return bins.filter((_b, i) => !!found[i])
   })
   ipcMain.handle('editors:open', (_e, id: string, target: string, line?: number, col?: number) => openInEditor(id, target, line, col))
+  ipcMain.handle('editors:diff', (_e, id: string, cwd: string, base: string, path: string, oldPath?: string) => openDiffInEditor(id, cwd, base, path, oldPath))
   ipcMain.handle('editors:terminalCommand', (_e, id: string) => terminalEditorCommand(id))
   ipcMain.handle('editors:terminalGoto', (_e, id: string, file: string, line: number) => terminalEditorGoto(id, file, line))
   ipcMain.handle('shell:reveal', (_e, p: string) => shell.showItemInFolder(p))
@@ -352,7 +353,8 @@ app.whenReady().then(async () => {
     missions: new JsonStore<StoreFiles['missions']>('missions', { missions: [] }),
     connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] }),
     factoryRuns: new JsonStore<StoreFiles['factoryRuns']>('factory-runs', { runs: [] }),
-    automations: new JsonStore<StoreFiles['automations']>('automations', { automations: [] })
+    automations: new JsonStore<StoreFiles['automations']>('automations', { automations: [] }),
+    savedMissions: new JsonStore<StoreFiles['savedMissions']>('saved-missions', { saved: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))

@@ -131,7 +131,8 @@ const codex: AgentDef = {
   modelPlaceholder: 'default',
   modes: [
     { value: 'read-only', label: 'Read only' },
-    { value: 'full-auto', label: 'Full auto (workspace write)' },
+    // the value stays 'full-auto' so saved settings keep working; Codex 0.16x removed the --full-auto flag
+    { value: 'full-auto', label: 'Workspace write, no prompts' },
     { value: 'yolo', label: 'No sandbox, no approvals' }
   ],
   unattendedMode: 'full-auto',
@@ -152,7 +153,9 @@ const codex: AgentDef = {
     ...(resume ? ['resume', '--last'] : flag(o.print, 'exec')),
     ...flag(o.model, '--model', o.model ?? ''),
     ...flag(o.permissionMode === 'read-only', '--sandbox', 'read-only'),
-    ...flag(o.permissionMode === 'full-auto', '--full-auto'),
+    // what --full-auto used to expand to; exec never asks, and only the TUI takes -a
+    ...flag(o.permissionMode === 'full-auto', '--sandbox', 'workspace-write'),
+    ...flag(o.permissionMode === 'full-auto' && !o.print, '--ask-for-approval', 'on-request'),
     ...flag(o.permissionMode === 'yolo', '--dangerously-bypass-approvals-and-sandbox'),
     ...flag(o.effort, '-c', `model_reasoning_effort=${o.effort}`),
     ...extraArgs(o),

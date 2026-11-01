@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DockviewDefaultTab, DockviewReact, type IDockviewPanelHeaderProps, type DockviewReadyEvent, type DockviewTheme, type IDockviewHeaderActionsProps, type SerializedDockview } from 'dockview-react'
 import 'dockview/dist/styles/dockview.css'
-import { Columns2, Plus, Rows2 } from 'lucide-react'
+import { Columns2, Maximize2, Minimize2, Plus, Rows2 } from 'lucide-react'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffPanel } from './DiffPanel'
 import { NotePanel } from './NotePanel'
@@ -68,9 +68,26 @@ function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   )
 }
 
-function GroupActions({ group }: IDockviewHeaderActionsProps): React.JSX.Element {
+function GroupActions({ group, containerApi }: IDockviewHeaderActionsProps): React.JSX.Element {
+  const [, rerender] = useState(0)
+  useEffect(() => {
+    const d = containerApi.onDidMaximizedGroupChange(() => rerender((n) => n + 1))
+    const l = containerApi.onDidLayoutChange(() => rerender((n) => n + 1))
+    return () => (d.dispose(), l.dispose())
+  }, [containerApi])
+  const max = group.api.isMaximized()
   return (
     <div className="group-actions">
+      {(max || containerApi.groups.length > 1) && (
+        <button
+          className="icon-btn"
+          title={max ? 'Restore the other splits' : 'Maximize this split (the others stay open behind it)'}
+          aria-label={max ? 'Restore the other splits' : 'Maximize this split'}
+          onClick={() => (max ? group.api.exitMaximized() : group.api.maximize())}
+        >
+          {max ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </button>
+      )}
       <button className="icon-btn" title="New terminal in this group" aria-label="New terminal in this group" onClick={() => openTerminal({ referenceGroup: group.id })}>
         <Plus size={14} />
       </button>

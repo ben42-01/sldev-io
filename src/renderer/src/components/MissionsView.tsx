@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentOptions } from '@shared/types'
-import { ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, StretchHorizontal } from 'lucide-react'
+import type { AgentOptions, SavedMission } from '@shared/types'
+import { Bookmark, ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, StretchHorizontal } from 'lucide-react'
 import { openMissionControl } from '../dock/MissionControlPanel'
-import { isLive, missionMemory, missions, startMission, type MissionDraft } from '../state/missions'
+import { isLive, missionMemory, missions, type MissionDraft } from '../state/missions'
 import { withMemory } from '@shared/memory'
 import { createStore, useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
 import { getAgent, useAgents } from '../state/agents'
-import { compareRecipe, issueText } from '@shared/factory'
+import { issueText } from '@shared/factory'
 import { renderKind, type MissionKind } from '@shared/missionKinds'
 import { getKind, createKind, loadKinds, useKinds } from '../state/missionKinds'
 import { openInEditor } from '../lib/actions'
-import { startRun } from '../state/factory'
-import { getProfile } from '../state/profiles'
+import { launchSaved, newSavedId, putSaved, removeSaved, useSaved } from '../state/savedMissions'
+import { SavedMissionRow } from './SavedMissionRow'
 import { IssuePicker } from './IssuePicker'
 import { FolderField } from './FolderField'
 import { MissionCard } from './MissionCard'
@@ -53,6 +53,7 @@ export function MissionsView(): React.JSX.Element {
   const recent = mine.filter((m) => !isLive(m.status))
   /** live missions started in another folder (picked in the form) stay visible here */
   const elsewhere = useMemo(() => list.filter((m) => m.root !== root && isLive(m.status)), [list, root])
+  const later = useSaved(root)
 
   return (
     <ViewShell
@@ -89,13 +90,15 @@ export function MissionsView(): React.JSX.Element {
             </button>
           </div>
         )}
+        {later.length > 0 && <div className="section-label pad">Saved for later · {later.length}</div>}
+        <div className="mission-list">{later.map((m) => <SavedMissionRow key={m.id} saved={m} />)}</div>
         {active.length > 0 && <div className="section-label pad">Active · {active.length}</div>}
         <div className="mission-list">{active.map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
         {elsewhere.length > 0 && <div className="section-label pad">Other folders · {elsewhere.length}</div>}
         <div className="mission-list">{elsewhere.map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
         {recent.length > 0 && <div className="section-label pad">Recent</div>}
         <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
-        {root && !mine.length && (
+        {root && !mine.length && !later.length && (
           <div className="muted-note">
             A mission runs a coding agent (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini or your own CLI) on a prompt, optionally in its own git worktree. sldev-io tracks when it's working, when it needs you, and lets you review and merge the diff when it's done.
           </div>
@@ -107,24 +110,27 @@ export function MissionsView(): React.JSX.Element {
 
 function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; draft?: MissionDraft; onDone: () => void }): React.JSX.Element {
   /** where the agent works: the open project unless another folder is picked */
-  const [root, setRoot] = useState(projectRoot)
-  const [prompt, setPrompt] = useState(draft?.brief ?? '')
-  const [title, setTitle] = useState(draft?.title ?? '')
-  const [criteria, setCriteria] = useState('')
+  const was = draft?.saved
+  const [root, setRoot] = useState(was?.root ?? projectRoot)
+  const [prompt, setPrompt] = useState(was?.brief ?? draft?.brief ?? '')
+  const [title, setTitle] = useState(was?.title ?? draft?.title ?? '')
+  const [criteria, setCriteria] = useState(was?.criteria ?? '')
   const kinds = useKinds()
   // the id, not the object: a kind file edited while the form is open applies straight away
-  const [kindId, setKindId] = useState(() => getKind(draft?.kind).id)
+  const [kindId, setKindId] = useState(() => getKind(was?.kind ?? draft?.kind).id)
   const kind = kinds.find((k) => k.id === kindId) ?? getKind(kindId)
-  const [options, setOptions] = useState<AgentOptions>(() => withAccess({ agent: workspace.get().defaultAgent }, kind))
+  const [options, setOptions] = useState<AgentOptions>(() => was?.options ?? withAccess({ agent: workspace.get().defaultAgent }, kind))
   const [isRepo, setIsRepo] = useState(false)
-  const [worktree, setWorktree] = useState(kind.worktree)
+  /** the git check for the folder has answered (until then the folder hint stays quiet) */
+  const [checked, setChecked] = useState(false)
+  const [worktree, setWorktree] = useState(was?.worktree ?? kind.worktree)
   const [branches, setBranches] = useState<string[]>([])
-  const [base, setBase] = useState('')
+  const [base, setBase] = useState(was?.base ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [issue, setIssue] = useState<number | undefined>()
+  const [issue, setIssue] = useState<number | undefined>(was?.issue)
   /** other agents to run the same prompt on (a bake-off) */
-  const [compare, setCompare] = useState<string[]>([])
+  const [compare, setCompare] = useState<string[]>(was?.compare ?? [])
   const agents = useAgents()
 
   // custom kinds are files the user edits in their editor: pick up changes when the window comes back
@@ -143,6 +149,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   }
 
   const [folderOk, setFolderOk] = useState(true)
+  const keepBase = useRef(!!was?.base)
   // a new folder means new git facts; the base branch is reset rather than kept from the old repo
   useEffect(() => {
     let live = true
@@ -151,9 +158,11 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
         if (!live) return
         setFolderOk(ok)
         if (!ok) return setIsRepo(false)
-        void window.api.git.isRepo(root).then((r) => live && setIsRepo(r))
+        void window.api.git.isRepo(root).then((r) => live && (setIsRepo(r), setChecked(true)))
         void window.api.git.branches(root).then((b) => live && setBranches(b))
-        void window.api.git.branch(root).then((b) => live && setBase(b ?? ''))
+        // a saved mission keeps its branch, as long as the folder still has it
+        void window.api.git.branch(root).then((b) => live && setBase((cur) => (keepBase.current && cur ? cur : (b ?? ''))))
+        keepBase.current = false
       })
     }, 250)
     return () => ((live = false), clearTimeout(t))
@@ -178,18 +187,35 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   }, [root, options.agent, kind.id, prompt])
 
   const briefRef = useRef<HTMLTextAreaElement>(null)
+  const asSaved = (): SavedMission => ({
+    id: was?.id ?? newSavedId(),
+    project: was?.project ?? projectRoot,
+    root,
+    title: title.trim() || undefined,
+    brief: prompt,
+    criteria: criteria.trim() || undefined,
+    kind: kind.id,
+    options,
+    worktree,
+    base: base || undefined,
+    compare: compare.length ? compare : undefined,
+    issue,
+    createdAt: was?.createdAt ?? Date.now(),
+    updatedAt: Date.now()
+  })
+  const saveForLater = (): void => {
+    if (!ready || busy) return
+    putSaved(asSaved())
+    onDone()
+  }
   const launch = async (): Promise<void> => {
     if (!ready || busy) return
     if (!folderOk) return setError('Choose an existing folder for the agent to work in.')
     setBusy(true)
     setError('')
     try {
-      if (compare.length) {
-        const profile = getProfile(options.profile)
-        const ids = [options.agent || workspace.get().defaultAgent, ...compare.filter((c) => c !== options.agent)]
-        await startRun({ recipe: compareRecipe(ids.map((id) => (profile ? `${profile.name}@${id}` : id))), intent: prompt, root, base, issue })
-      } else
-        await startMission({ prompt: sent, brief: prompt, criteria, title: shownTitle, root, options, worktree: isRepo && worktree, base, kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly } })
+      await launchSaved(asSaved(), isRepo)
+      if (was) removeSaved(was.id)
       onDone()
     } catch (e) {
       setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
@@ -199,7 +225,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   }
 
   return (
-    <Modal title="New mission" size="lg" onClose={onDone} busy={busy} initialFocus={briefRef} onSubmit={() => void launch()}>
+    <Modal title={was ? 'Saved mission' : 'New mission'} size="lg" onClose={onDone} busy={busy} initialFocus={briefRef} onSubmit={() => void launch()}>
     <div
       className="form mission-form"
       onKeyDown={(e) => {
@@ -229,7 +255,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       <FolderField
         value={root}
         onChange={setRoot}
-        hint={!folderOk ? undefined : isRepo ? (worktree ? 'A git repository: the mission gets its own worktree and branch, cut from the branch below. Uncommitted files are not copied.' : 'A git repository: the agent works in this folder and its checked-out branch directly.') : 'Not a git repository: the agent works in the folder directly, without a worktree or diff review.'}
+        hint={!folderOk || !checked ? undefined : isRepo ? (worktree ? 'A git repository: the mission gets its own worktree and branch, cut from the branch below. Uncommitted files are not copied.' : 'A git repository: the agent works in this folder and its checked-out branch directly.') : 'Not a git repository: the agent works in the folder directly, without a worktree or diff review.'}
       />
       {isRepo && (
         <>
@@ -276,6 +302,9 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       <div className="form-actions">
         <span className="form-note">Ctrl/Cmd+Enter launches</span>
         <button type="button" className="btn ghost" disabled={busy} onClick={onDone}>Cancel</button>
+        <button type="button" className="btn" disabled={!ready || busy} title="Keep it in the missions list and launch it when you're ready" onClick={saveForLater}>
+          <Bookmark size={14} /> {was ? 'Save changes' : 'Save for later'}
+        </button>
         <button type="submit" className="btn primary" disabled={!ready || busy || !folderOk} title="Ctrl/Cmd+Enter">
           <Rocket size={14} /> {busy ? 'Launching…' : compare.length ? `Launch on ${compare.length + 1} agents` : 'Launch'}
         </button>

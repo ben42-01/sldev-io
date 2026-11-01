@@ -1,6 +1,8 @@
 #!/bin/sh
 # Fake Codex for e2e: no hooks, so sldev-io tracks it from terminal output, silence and the bell.
 echo "fake codex: $*"
+# like the real CLI since 0.16x: --full-auto is gone and fails the whole command
+case " $* " in *" --full-auto "*) echo "error: unexpected argument '--full-auto' found" >&2; exit 2;; esac
 # global -c key=value options (the sldev MCP server) come before the subcommand, like the real CLI
 while [ "$1" = "-c" ]; do shift 2; done
 # print mode (codex exec), as the factory runs it: write the requested output file, edit, exit

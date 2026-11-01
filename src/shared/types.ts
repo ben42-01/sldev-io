@@ -13,6 +13,8 @@ export interface EditorInfo {
   name: string
   /** 'terminal' editors (nvim, vim, …) open inside an sldev terminal panel */
   kind: 'gui' | 'terminal'
+  /** it can show two files side by side from its command line (VS Code family, JetBrains) */
+  canDiff?: boolean
 }
 
 export interface PtyCreateOptions {
@@ -51,6 +53,10 @@ export interface AppSettings {
   missionLayout: 'columns' | 'grid' | 'list'
   /** mission cards in the right sidebar: full cards or one compact row each */
   missionCards: 'cards' | 'compact'
+  /** the review tab: old and new side by side, or one column */
+  diffLayout?: 'split' | 'unified'
+  /** the sidebars hide while a review tab is on screen (default on) */
+  reviewFocus?: boolean
   terminalFontSize: number
   terminalFontFamily: string
   /** where open tabs sit in each dock group: a strip on top, or a list down the left side */
@@ -226,6 +232,29 @@ export interface StoreFiles {
   runtimes: { custom: Record<string, CustomRuntime[]> }
   factoryRuns: { runs: FactoryRun[] }
   automations: { automations: Automation[] }
+  savedMissions: { saved: SavedMission[] }
+}
+
+/** a mission written in the New mission form and kept to launch later (Save for later) */
+export interface SavedMission {
+  id: string
+  /** the project it was saved in: it's listed there */
+  project: string
+  /** where the agent works: the project unless another folder was picked */
+  root: string
+  title?: string
+  brief: string
+  criteria?: string
+  /** mission kind id */
+  kind: string
+  options: AgentOptions
+  worktree: boolean
+  base?: string
+  /** other agents to run it on as a bake-off */
+  compare?: string[]
+  issue?: number
+  createdAt: number
+  updatedAt: number
 }
 
 export interface WorktreeInfo {

@@ -62,7 +62,8 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
                   and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
-  state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions,
+  state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
+                  to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
                   missionKinds, automations (the trigger loop, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from

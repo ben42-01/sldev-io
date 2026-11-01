@@ -1,3 +1,4 @@
+import { loadSaved } from './savedMissions'
 import type { AppSettings, EditorInfo, RightTab } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { createStore } from './store'
@@ -50,6 +51,7 @@ export async function initWorkspace(): Promise<void> {
   void loadFactory()
   void loadRecipes(settings.rootFolder)
   void loadAutomations()
+  void loadSaved()
 }
 
 export async function refreshBranch(): Promise<void> {

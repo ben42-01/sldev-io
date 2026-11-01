@@ -227,7 +227,7 @@ async function tick(runId: string): Promise<void> {
   }
 }
 
-/** A run's terminals share one group beside its pipeline, so the graph stays in view. */
+/** A run's terminals share one group below its pipeline: the graph keeps the full width, and agent output gets wide lines. */
 function placement(run: FactoryRun): Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'> {
   const panels = missions.get().panels
   for (const nr of Object.values(run.nodes)) {
@@ -235,7 +235,7 @@ function placement(run: FactoryRun): Pick<OpenTerminalOptions, 'referencePanel' 
     const group = panel ? groupOf(panel) : undefined
     if (group && group !== groupOf(`pipeline-${run.id}`)) return { referenceGroup: group }
   }
-  return groupOf(`pipeline-${run.id}`) ? { referencePanel: `pipeline-${run.id}`, direction: 'right' } : {}
+  return groupOf(`pipeline-${run.id}`) ? { referencePanel: `pipeline-${run.id}`, direction: 'below' } : {}
 }
 
 const outFile = (dir: string, runId: string, node: string): string => `${dir}/.sldev/runs/${runId}/${node}.md`

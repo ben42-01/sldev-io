@@ -17,6 +17,7 @@ import { matchShortcut, staticCommands } from './lib/commands'
 import { initWorkspace, workspace } from './state/workspace'
 import { refreshInstalledAgents } from './state/agents'
 import { useStore } from './state/store'
+import { reviewFocus } from './state/focus'
 import { beta, initBeta } from './state/beta'
 import { initUpdates } from './state/updates'
 import { initBadge } from './state/badge'
@@ -61,10 +62,11 @@ export function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
+  const focused = useStore(reviewFocus, (f) => !!f.panel)
   if (locked) return <BetaEnded />
   if (!ready) return <div className="app loading" />
   return (
-    <div className="app">
+    <div className={`app${focused ? ' focus-review' : ''}`}>
       <TitleBar />
       <BetaBanner />
       <div className="main">

@@ -2110,14 +2110,43 @@ a {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
+  row-gap: 6px;
 }
 .diff-title {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1 1 220px;
+}
+.diff-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .diff-title .muted {
   font-size: 11.5px;
+}
+.diff-toolbar .spacer {
+  display: none;
+}
+.diff-toolbar .icon-btn.on {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+.diff-criteria {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.diff-criteria summary {
+  cursor: pointer;
+}
+.diff-criteria pre {
+  margin: 6px 0 2px;
+  font: 12px/1.5 var(--font-ui);
+  white-space: pre-wrap;
+  color: var(--fg);
 }
 .diff-commit {
   display: flex;
@@ -2129,10 +2158,13 @@ a {
   flex: 1;
   background: var(--bg-input);
   color: var(--fg);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 4px 8px;
   outline: none;
+}
+.diff-commit input:focus-visible {
+  border-color: var(--accent);
 }
 .diff-notice {
   margin: 0;
@@ -2154,30 +2186,47 @@ a {
   min-height: 0;
 }
 .diff-files {
-  width: 220px;
+  width: 260px;
   flex-shrink: 0;
   overflow: auto;
   border-right: 1px solid var(--border);
-  padding: 4px;
+  padding: 6px;
+  background: var(--surface);
 }
 .diff-file-item {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 3px 6px;
-  border-radius: var(--radius);
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   text-align: left;
 }
 .diff-file-item:hover {
   background: var(--bg-hover);
 }
+.diff-file-item.viewed .diff-file-name {
+  color: var(--fg-subtle);
+}
 .diff-file-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.diff-file-name,
+.diff-file-dir {
+  text-overflow: ellipsis;
+}
+.diff-file-dir {
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+  direction: rtl;
+  text-align: left;
 }
 .diff-file-item .add,
 .diff-file-item .del {
@@ -2202,6 +2251,10 @@ a {
   overflow: auto;
   min-width: 0;
 }
+.diff-content > .empty,
+.diff-content > .loading-row {
+  margin: 24px;
+}
 .diff-section {
   border-bottom: 1px solid var(--border);
 }
@@ -2211,43 +2264,87 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 4px 10px 4px 6px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   z-index: 1;
 }
+.diff-file-head .add,
+.diff-file-head .del {
+  font: 11px var(--font-mono);
+}
+.diff-file-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff-viewed {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  margin: 0 4px;
+}
 .diff-table {
   width: 100%;
   border-collapse: collapse;
-  font: 12px/1.5 var(--font-mono);
+  font: 12px/1.55 var(--font-mono);
   user-select: text;
+}
+.diff-table.split {
+  table-layout: fixed;
+}
+.diff-table .ln-col {
+  width: 48px;
+}
+.diff-table .sign-col {
+  width: 16px;
 }
 .diff-table td.ln {
   width: 1%;
-  min-width: 38px;
+  min-width: 40px;
   padding: 0 6px;
   text-align: right;
   color: var(--fg-subtle);
   user-select: none;
   vertical-align: top;
 }
+.diff-table td.sign {
+  width: 14px;
+  padding: 0 2px;
+  user-select: none;
+  vertical-align: top;
+  color: var(--fg-subtle);
+}
 .diff-table td.code {
-  padding: 0 10px;
+  padding: 0 10px 0 2px;
   white-space: pre-wrap;
   word-break: break-all;
+  color: var(--fg);
 }
-.diff-table tr.add {
-  background: color-mix(in oklch, var(--status-working) 10%, transparent);
+.diff-table.split td.code.ctx + td.ln,
+.diff-table.split td.code + td.ln {
+  border-left: 1px solid var(--border);
 }
-.diff-table tr.add td.code {
+/* the text stays readable; colour sits in the background and the +/- sign (§2.2: colour is state) */
+.diff-table tr.add td,
+.diff-table td.add {
+  background: color-mix(in oklch, var(--status-working) 11%, transparent);
+}
+.diff-table tr.add td.sign,
+.diff-table td.sign.add {
   color: var(--status-working);
 }
-.diff-table tr.del {
-  background: color-mix(in oklch, var(--status-error) 10%, transparent);
+.diff-table tr.del td,
+.diff-table td.del {
+  background: color-mix(in oklch, var(--status-error) 11%, transparent);
 }
-.diff-table tr.del td.code {
+.diff-table tr.del td.sign,
+.diff-table td.sign.del {
   color: var(--status-error);
+}
+.diff-table td.blank {
+  background: color-mix(in oklch, var(--fg) 2.5%, transparent);
 }
 .diff-table tr.hunk td {
   background: color-mix(in oklch, var(--status-review) 7%, transparent);
@@ -2255,11 +2352,19 @@ a {
   padding-top: 2px;
   padding-bottom: 2px;
 }
+.diff-table.split tr.hunk td.code {
+  padding-left: 12px;
+}
 .diff-table tr.meta td.code {
   color: var(--fg-subtle);
 }
 .big-diff {
   margin: 10px;
+}
+
+/* review focus: the review tab gets the whole window, the activity bar stays for getting back */
+.app.focus-review .main > .sidebar {
+  display: none;
 }
 
 /* ── skills ────────────────────────────────── */
@@ -3453,6 +3558,10 @@ a {
   background: var(--border);
   border: 1px solid var(--border);
 }
+/* the last tile fills the rest of its row: the 1px gaps are the border colour, so an empty cell showed as a grey block */
+.dash-tiles > .dash-tile:last-child {
+  grid-column-end: -1;
+}
 .dash-tile {
   display: flex;
   flex-direction: column;
@@ -4399,4 +4508,28 @@ a {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+
+/* missions saved for later: a quiet row, the Launch button is the one action */
+.mission-row.saved .saved-icon {
+  flex: none;
+  color: var(--fg-subtle);
+}
+.mission-row.saved .btn.sm {
+  flex: none;
+}
+.mc-saved {
+  margin-bottom: 14px;
+}
+.mc-saved-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 6px;
+}
+.mc-saved-list .mission-row {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.field > .btn {
+  align-self: flex-start;
 }

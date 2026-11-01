@@ -57,3 +57,34 @@ export function parseDiff(text: string): DiffFile[] {
   }
   return files
 }
+
+/** One row of a side-by-side diff: the old line on the left, the new one on the right, or a hunk header across both. */
+export type SplitRow = { kind: 'hunk' | 'meta'; text: string } | { kind: 'pair'; left?: DiffLine; right?: DiffLine }
+
+/**
+ * Pairs a unified diff into side-by-side rows: context lines on both sides, and each run of removed
+ * lines against the added lines that follow it, row by row (the longer side gets blanks opposite).
+ */
+export function splitRows(lines: DiffLine[]): SplitRow[] {
+  const rows: SplitRow[] = []
+  let dels: DiffLine[] = []
+  let adds: DiffLine[] = []
+  const flush = (): void => {
+    for (let i = 0; i < Math.max(dels.length, adds.length); i++) rows.push({ kind: 'pair', left: dels[i], right: adds[i] })
+    dels = []
+    adds = []
+  }
+  for (const l of lines) {
+    if (l.kind === 'del') {
+      // a removal after additions starts a new change block
+      if (adds.length) flush()
+      dels.push(l)
+    } else if (l.kind === 'add') adds.push(l)
+    else {
+      flush()
+      rows.push(l.kind === 'ctx' ? { kind: 'pair', left: l, right: l } : { kind: l.kind, text: l.text })
+    }
+  }
+  flush()
+  return rows
+}

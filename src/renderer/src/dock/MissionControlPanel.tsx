@@ -5,6 +5,8 @@ import type { Mission } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { missionSignal } from '@shared/status'
 import { MissionCard } from '../components/MissionCard'
+import { SavedMissionRow } from '../components/SavedMissionRow'
+import { useSaved } from '../state/savedMissions'
 import { openNewMission } from '../components/MissionsView'
 import { openNewRun, RunRow } from '../components/FactoryView'
 import { StatusDot } from '../components/StatusDot'
@@ -99,6 +101,7 @@ function runActive(r: FactoryRun): boolean {
 function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Mission[]; needs: number }): React.JSX.Element {
   const layout = useStore(workspace, (w) => w.missionLayout)
   const sorted = useMemo(() => [...mine].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.updatedAt - a.updatedAt), [mine])
+  const later = useSaved(root)
   return (
     <div className="panel-page mc-page">
       <div className="board-filters">
@@ -117,9 +120,15 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
           <Rocket size={13} /> New mission
         </button>
       </div>
+      {later.length > 0 && (
+        <section className="mc-saved" aria-label="Saved for later">
+          <div className="section-label">Saved for later · {later.length}</div>
+          <div className="mc-saved-list">{later.map((m) => <SavedMissionRow key={m.id} saved={m} />)}</div>
+        </section>
+      )}
       {!root ? (
         <Empty big icon={<Rocket size={22} />} title="No folder open" hint="Open a project folder to launch agent missions in it." />
-      ) : !mine.length ? (
+      ) : !mine.length && later.length ? null : !mine.length ? (
         <Empty
           big
           icon={<Rocket size={22} />}

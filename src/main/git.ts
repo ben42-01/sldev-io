@@ -92,6 +92,13 @@ export async function diff(cwd: string, base: string): Promise<string> {
   return tracked + parts.join('')
 }
 
+/** A file as it was at the mission's base (the merge base, like diff), or '' if it didn't exist there. */
+export async function baseVersion(cwd: string, base: string, path: string): Promise<string> {
+  const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
+  const r = await git(['show', `${mergeBase}:${path}`], cwd)
+  return r.code === 0 ? r.stdout : ''
+}
+
 export async function diffStat(cwd: string, base: string): Promise<DiffStat> {
   const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
   const r = await git(['diff', '--shortstat', mergeBase], cwd)

@@ -90,6 +90,8 @@ git('-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', 'commit', '-qm', 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const daysFromNow = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
 
+// fakes that only record what they were asked (fakebin/code) write next to the fixture
+process.env.SLDEV_E2E_TMP = tmp
 betaServer.listen(0, '127.0.0.1', () => {
   process.env.SLDEV_BETA_CONFIG_URL = `http://127.0.0.1:${betaServer.address().port}/beta.json`
   licenseServer.listen(0, '127.0.0.1', () => {
@@ -108,6 +110,8 @@ app.whenReady().then(async () => {
   process.env.PATH = path.join(__dirname, 'fakebin') + path.delimiter + process.env.PATH
   const win = BrowserWindow.getAllWindows()[0]
   const wc = win.webContents
+  // a window covered by others on the desktop stops painting: screenshots go stale and rAF-driven layout waits
+  wc.setBackgroundThrottling(false)
   const logs = []
   const failures = []
   wc.on('console-message', (e) => e.level !== 'debug' && logs.push(`[${e.level}] ${e.message}`))

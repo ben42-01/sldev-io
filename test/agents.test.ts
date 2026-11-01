@@ -46,7 +46,8 @@ describe('other agents', () => {
 
   it('build interactive, non-interactive and resume commands', () => {
     const cases: Array<[string, Parameters<typeof agentCommand>[1], string | true | undefined, string]> = [
-      ['codex', { permissionMode: 'full-auto', effort: 'high' }, undefined, "codex --full-auto -c model_reasoning_effort=high 'do it'"],
+      ['codex', { permissionMode: 'full-auto', effort: 'high' }, undefined, "codex --sandbox workspace-write --ask-for-approval on-request -c model_reasoning_effort=high 'do it'"],
+      ['codex', { permissionMode: 'full-auto', print: true }, undefined, "codex exec --sandbox workspace-write 'do it'"],
       ['codex', { print: true }, undefined, "codex exec 'do it'"],
       ['codex', {}, true, 'codex resume --last'],
       ['cursor', { permissionMode: 'force', model: 'gpt-5' }, undefined, "agent --model gpt-5 --force 'do it'"],

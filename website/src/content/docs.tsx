@@ -508,7 +508,7 @@ stages:
           </p>
           <p>
             Because unattended stages have nobody to approve a file edit or a command, each agent runs with a permission mode that lets it work
-            on its own: Claude Code in auto mode, Codex in full-auto, Gemini CLI auto-accepting edits. Change this per agent in{' '}
+            on its own: Claude Code in auto mode, Codex in workspace-write, Gemini CLI auto-accepting edits. Change this per agent in{' '}
             <b>Settings → Software Factory</b>, or per stage through the profile's permission mode. Stages always run in the run's worktree, never
             in your checkout.
           </p>
@@ -620,6 +620,15 @@ const missions: DocPage = {
             <b>New mission</b> (<code>Ctrl+Shift+M</code>, <code>Cmd+Shift+M</code> on a Mac) and <b>New factory run</b> open as dialogs,
             so you can start work with both sidebars closed. The <b>Agents</b> tab of the right sidebar still lists your missions; its row
             button switches the cards to compact rows when you have many.
+          </p>
+          <p>
+            Not ready to start yet? <b>Save for later</b> in the New mission dialog keeps the brief and every setting under{' '}
+            <b>Saved for later</b>, in the Agents tab and at the top of Mission Control. Click one to edit it, or <b>Launch</b> it as saved.
+          </p>
+          <p>
+            <b>Review changes</b> opens a mission's diff in a tab of its own, side by side or unified, and hides both sidebars while it is
+            on screen (turn that off with the button in its toolbar or in Settings → Editor). Tick <b>Viewed</b> to fold a file away. With
+            VS Code, Cursor, Windsurf or a JetBrains IDE as your editor, <b>Diff in …</b> opens a file's changes in the editor's own diff view.
           </p>
         </>
       )
@@ -1007,6 +1016,7 @@ const workspace: DocPage = {
               <tr><td>Next mission that needs you</td><td><code>Cmd+Shift+J</code></td><td><code>Ctrl+Shift+J</code></td></tr>
               <tr><td>Sidebar views</td><td><code>Cmd+1</code> … <code>Cmd+9</code></td><td><code>Ctrl+Shift+1</code> … <code>Ctrl+Shift+9</code></td></tr>
               <tr><td>Toggle sidebar</td><td><code>Cmd+B</code></td><td><code>Ctrl+Shift+B</code></td></tr>
+              <tr><td>Focus mode (hide both sidebars)</td><td><code>Cmd+Alt+F</code></td><td><code>Ctrl+Alt+F</code></td></tr>
               <tr><td>Open folder</td><td><code>Cmd+O</code></td><td><code>Ctrl+Shift+O</code></td></tr>
               <tr><td>Open the project in your editor</td><td><code>Cmd+Shift+O</code></td><td><code>Ctrl+Alt+O</code></td></tr>
               <tr><td>Settings</td><td><code>Cmd+,</code></td><td><code>Ctrl+,</code></td></tr>

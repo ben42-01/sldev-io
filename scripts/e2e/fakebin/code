@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fake VS Code for e2e: records how it was opened (e.g. --diff left right), opens nothing.
+[ -n "$SLDEV_E2E_TMP" ] && echo "$*" >> "$SLDEV_E2E_TMP/code.log"
+exit 0

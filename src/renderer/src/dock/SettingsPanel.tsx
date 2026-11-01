@@ -45,8 +45,9 @@ export function SettingsPanel(): React.JSX.Element {
           </select>
         </label>
         <label className="field">
-          <span>Shell (empty = system default; applies to new terminals)</span>
+          <span>Shell</span>
           <input className="mono" value={shell} placeholder={window.api.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'} onChange={(e) => setShell(e.target.value)} onBlur={() => updateSettings({ shell: shell.trim() || null })} />
+          <span className="field-hint">Empty uses the system default. Applies to new terminals.</span>
         </label>
       </section>
       <section>
@@ -57,6 +58,11 @@ export function SettingsPanel(): React.JSX.Element {
             <option value="">Automatic (first detected)</option>
             {s.editors.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
+          <span className="field-hint">VS Code, Cursor, Windsurf and JetBrains IDEs can also show a mission's changes in their own diff view.</span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={s.reviewFocus !== false} onChange={(e) => updateSettings({ reviewFocus: e.target.checked })} />
+          <span>Hide the sidebars while a review tab is on screen</span>
         </label>
       </section>
       <section>
@@ -81,8 +87,9 @@ export function SettingsPanel(): React.JSX.Element {
           <span>Play a sound when a mission needs you</span>
         </label>
         <div className="field">
-          <span>Claude Code hooks file (passed with --settings; your own Claude settings are untouched)</span>
+          <span>Claude Code hooks file</span>
           <code className="mono small selectable">{hooks}</code>
+          <span className="field-hint">Passed with --settings. Your own Claude settings are untouched.</span>
         </div>
       </section>
       <section>
@@ -92,8 +99,9 @@ export function SettingsPanel(): React.JSX.Element {
       <section>
         <h3>Setup</h3>
         <div className="field">
-          <span>Check git, the GitHub CLI, Node.js, Docker and agent CLIs, and install what's missing.</span>
+          <span>Tools</span>
           <button type="button" className="btn sm" onClick={openSetup}>Open setup check</button>
+          <span className="field-hint">Checks git, the GitHub CLI, Node.js, Docker and agent CLIs, and installs what's missing.</span>
         </div>
       </section>
       <section>
@@ -224,7 +232,8 @@ function AgentSettings(): React.JSX.Element {
           ))}
       </div>
       <div className="field">
-        <span>Custom agents: any CLI. In commands, {'{prompt}'} {'{model}'} {'{name}'} are filled in; without {'{prompt}'} the prompt is appended.</span>
+        <span>Custom agents</span>
+        <span className="field-hint">Any CLI. In commands, {'{prompt}'} {'{model}'} {'{name}'} are filled in; without {'{prompt}'} the prompt is appended.</span>
         {custom.map((c) => (
           <div key={c.id} className="custom-agent" onBlur={() => updateSettings({ customAgents: custom })}>
             <div className="field-row">

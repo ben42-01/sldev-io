@@ -5,6 +5,7 @@ import { openMissionControl } from '../dock/MissionControlPanel'
 import { showView, shortcutLabel, staticCommands } from '../lib/commands'
 import { updateSettings, workspace, type ViewId } from '../state/workspace'
 import { useStore } from '../state/store'
+import { reviewFocus } from '../state/focus'
 import { useViewBadges, type ViewBadge } from '../state/attention'
 
 /** Left sidebar views; agents, skills and workflows are tabs of the right sidebar (RightPanel.tsx). */
@@ -19,7 +20,10 @@ export const VIEW_META: Array<{ id: ViewId; label: string; icon: React.Component
 
 export function ActivityBar(): React.JSX.Element {
   const active = useStore(workspace, (w) => w.activeView)
-  const visible = useStore(workspace, (w) => w.sidebarVisible)
+  // a review tab in focus hides the sidebar without closing it: a click then shows it rather than closing it
+  const shown = useStore(workspace, (w) => w.sidebarVisible)
+  const focused = useStore(reviewFocus, (f) => !!f.panel)
+  const visible = shown && !focused
   const cmds = staticCommands()
   const badges = useViewBadges()
   return (

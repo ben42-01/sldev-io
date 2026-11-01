@@ -1,3 +1,4 @@
+import { releaseReviewFocus, toggleFocusMode } from '../state/focus'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
 import { isRightView, pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
@@ -67,6 +68,7 @@ const VIEWS: Array<[ViewId, string]> = [
 ]
 
 export function showView(view: ViewId): void {
+  releaseReviewFocus()
   const w = workspace.get()
   if (isRightView(view)) {
     if (w.rightPanelTab !== view || !w.rightPanelVisible) updateSettings({ rightPanelTab: view, rightPanelVisible: true })
@@ -179,8 +181,9 @@ export function staticCommands(): Command[] {
     { id: 'terminal.fontDown', category: 'Terminal', title: 'Decrease font size', keys: { mac: 'Cmd+-', other: 'Ctrl+Shift+-' }, run: () => changeFontSize(-1) },
     { id: 'terminal.fontReset', category: 'Terminal', title: 'Reset font size', keys: { mac: 'Cmd+0', other: 'Ctrl+Shift+0' }, run: () => changeFontSize(null) },
     { id: 'view.tabLayout', category: 'View', title: 'Toggle tab layout (top / side list)', run: () => updateSettings({ tabLayout: workspace.get().tabLayout === 'side' ? 'top' : 'side' }) },
-    { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => updateSettings({ sidebarVisible: !workspace.get().sidebarVisible }) },
-    { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible }) },
+    { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => (releaseReviewFocus(), updateSettings({ sidebarVisible: !workspace.get().sidebarVisible })) },
+    { id: 'view.focus', category: 'View', title: 'Focus mode (hide both sidebars)', keys: { mac: 'Cmd+Alt+F', other: 'Ctrl+Alt+F' }, run: toggleFocusMode },
+    { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => (releaseReviewFocus(), updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible })) },
     { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => openNewMission() },
     { id: 'missions.board', category: 'Agents', title: 'Open Mission Control (missions, factory runs, usage)', run: () => openMissionControl('missions') },
     { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
