@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChartGantt, LayoutGrid } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChartGantt, LayoutGrid, Rocket } from 'lucide-react'
 import { activeIn, addTokens, NO_TOKENS, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
 import { showView } from '../lib/commands'
 import { getAgent } from '../state/agents'
@@ -10,7 +10,7 @@ import { useStore } from '../state/store'
 import { openAgentsDashboard } from '../dock/AgentsPanel'
 import { dollars, duration, tokens } from '../dock/DashboardPanel'
 import { MissionStatusPill } from './MissionCard'
-import { openDashboard } from './MissionsView'
+import { openDashboard, openNewMission } from './MissionsView'
 import { ViewShell } from './RuntimesView'
 import { Empty } from './States'
 import { TimeAgo } from './TimeAgo'
@@ -32,8 +32,10 @@ export function OverviewView(): React.JSX.Element {
     const t = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(t)
   }, [])
-  const start = startOfToday(now)
-  const today = useMemo(() => list.filter((m) => activeIn(m, start, now, now)), [list, start, now])
+  // the clock is read on every render too: a mission started since the last tick is newer than `now` and didn't count
+  const end = Math.max(now, Date.now())
+  const start = startOfToday(end)
+  const today = list.filter((m) => activeIn(m, start, end, end))
 
   // token counts from the agents' own logs (Claude Code, Codex); main reads only what was appended
   const [usage, setUsage] = useState<Record<string, TokenUsage | null>>({})
@@ -95,11 +97,11 @@ export function OverviewView(): React.JSX.Element {
           </div>
           <div>
             <dt>Agents working</dt>
-            <dd>{duration(timeIn(today, 'working', start, now, now))}</dd>
+            <dd>{duration(timeIn(today, 'working', start, end, end))}</dd>
           </div>
           <div>
             <dt>Waiting on you</dt>
-            <dd>{duration(timeIn(today, 'needs-input', start, now, now))}</dd>
+            <dd>{duration(timeIn(today, 'needs-input', start, end, end))}</dd>
           </div>
           <div title="What these tokens would cost at API list prices. On a subscription you pay your plan instead.">
             <dt>Tokens · est. cost</dt>
@@ -134,7 +136,15 @@ export function OverviewView(): React.JSX.Element {
             ))}
           </ul>
         ) : (
-          <Empty title="No missions yet" hint="Start one from the Agents tab." />
+          <Empty
+            title="No missions yet"
+            hint="Give an agent a task; it shows up here while it works."
+            action={
+              <button className="btn sm" onClick={() => openNewMission()}>
+                <Rocket size={13} /> New mission
+              </button>
+            }
+          />
         )}
 
         {activeRuns.length > 0 && (

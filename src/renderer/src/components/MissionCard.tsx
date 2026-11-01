@@ -109,25 +109,13 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
       <div className="mission-foot">
         {m.stats && (m.stats.files > 0 ? (
           <span className="stats">
-            <span className="add">+{m.stats.insertions}</span> <span className="del">−{m.stats.deletions}</span> · {m.stats.files} file{m.stats.files === 1 ? '' : 's'}
+            <span className="add">+{m.stats.insertions}</span> <span className="del">−{m.stats.deletions}</span>
+            {/* the Review button says the file count once the agent has stopped */}
+            {showsReview(m) ? '' : ` · ${m.stats.files} file${m.stats.files === 1 ? '' : 's'}`}
           </span>
         ) : <span className="stats">no changes</span>)}
         <span className="spacer" />
-        {m.kind?.readOnly ? (
-          <button
-            className="icon-btn"
-            title={buildDraft(m.id) ? 'Build from this' : 'Nothing to build from yet: the agent left no report. Add handoff notes in the details, or wait for it to finish.'}
-            aria-label="Build from this"
-            disabled={!buildDraft(m.id)}
-            onClick={() => openNewMission(buildDraft(m.id))}
-          >
-            <Hammer size={13} />
-          </button>
-        ) : (
-          <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
-            <FileDiff size={13} />
-          </button>
-        )}
+        <NextStep mission={m} />
         {hasPanel && live ? (
           <button className="icon-btn danger" title="Stop" aria-label="Stop" onClick={() => stopMission(m.id)}>
             <Square size={13} />
@@ -143,6 +131,50 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
     </div>
   )
 }
+
+/**
+ * The one thing to do next, spelled out: answer the agent, review its diff, or build from its findings.
+ * Everything else stays in the icons and the menu.
+ */
+function NextStep({ mission: m }: { mission: Mission }): React.JSX.Element | null {
+  if (m.status === 'needs-input') {
+    return (
+      <button className="btn sm next-step" title="Show the terminal to answer the agent" onClick={() => focusOrResume(m.id)}>
+        <SquareTerminal size={12} /> Answer
+      </button>
+    )
+  }
+  if (m.kind?.readOnly) {
+    const draft = buildDraft(m.id)
+    return (
+      <button
+        className="btn sm next-step"
+        title={draft ? 'Start a Build mission from this report' : 'Nothing to build from yet: the agent left no report. Add handoff notes in the details, or wait for it to finish.'}
+        disabled={!draft}
+        onClick={() => openNewMission(draft)}
+      >
+        <Hammer size={12} /> Build from this
+      </button>
+    )
+  }
+  // a working agent's diff is still moving: the review is there, but not pushed
+  if (!showsReview(m)) {
+    return (
+      <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
+        <FileDiff size={13} />
+      </button>
+    )
+  }
+  const files = m.stats?.files ?? 0
+  return (
+    <button className="btn sm next-step" title="Open the diff in a review tab" onClick={() => reviewMission(m.id)}>
+      <FileDiff size={12} /> Review {files} file{files === 1 ? '' : 's'}
+    </button>
+  )
+}
+
+const showsReview = (m: Mission): boolean =>
+  !m.kind?.readOnly && (m.stats?.files ?? 0) > 0 && m.status !== 'working' && m.status !== 'starting' && m.status !== 'needs-input'
 
 /** The agent stopped at its usage limit: one click hands the mission to the next agent. */
 function LimitAlert({ mission: m }: { mission: Mission }): React.JSX.Element {

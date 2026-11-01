@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CustomAgent, VaultStatus } from '@shared/types'
 import { Plus, Trash2 } from 'lucide-react'
 import { useAgents } from '../state/agents'
@@ -24,9 +24,11 @@ export function SettingsPanel(): React.JSX.Element {
     updateSettings({ terminalFontFamily: family, terminalFontSize: size })
     applyTerminalFont(family, size)
   }
+  const page = useRef<HTMLDivElement>(null)
   return (
-    <div className="panel-page settings">
+    <div className="panel-page settings" ref={page}>
       <div className="panel-page-head"><h2>Settings</h2></div>
+      <SectionNav page={page} />
       <section>
         <h3>Terminal</h3>
         <label className="field">
@@ -121,6 +123,23 @@ export function SettingsPanel(): React.JSX.Element {
       <LicenseSection />
       <AboutSection />
     </div>
+  )
+}
+
+/** Jump links to every section heading on the page, read from the DOM so sections from other components count too. */
+function SectionNav({ page }: { page: React.RefObject<HTMLDivElement | null> }): React.JSX.Element {
+  const [heads, setHeads] = useState<HTMLElement[]>([])
+  useEffect(() => {
+    setHeads([...(page.current?.querySelectorAll<HTMLElement>(':scope > section > h3') ?? [])])
+  }, [page])
+  return (
+    <nav className="settings-nav" aria-label="Settings sections">
+      {heads.map((h) => (
+        <button key={h.textContent} type="button" onClick={() => h.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          {h.textContent}
+        </button>
+      ))}
+    </nav>
   )
 }
 

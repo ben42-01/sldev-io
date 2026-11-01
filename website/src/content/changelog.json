@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.2",
+    "date": null,
+    "changes": [
+      "New mission form: the agent and profile come first, other agents to compare are one-click chips, and the folder, branch and model fold into one Options line that says what will happen. The whole form fits without scrolling.",
+      "Mission cards say the next step: Answer when the agent waits for you, Review 3 files when it's done, Build from this after a research or plan mission.",
+      "Start screen: type what an agent should do and press Enter to open the New mission form with it. With a project open, the agent card comes first.",
+      "Settings has jump links to its sections.",
+      "Factory graphs shrink to fit the panel before they scroll, and stage cards no longer squash the agent name.",
+      "Fix: a multi-line prompt echoed in the terminal drew as a staircase. Long prompts now show their first lines; the whole brief is in the mission details.",
+      "Fix: the Overview counted a mission started a moment ago only after up to 30 seconds."
+    ]
+  },
+  {
     "version": "1.0.1",
     "date": "2026-11-01",
     "changes": [

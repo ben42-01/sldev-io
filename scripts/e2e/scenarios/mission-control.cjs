@@ -37,6 +37,10 @@ module.exports = async (h) => {
   await launch(h, 'codex', 'Codex task')
   h.expect(await h.until(async () => (await status('Codex task')) === 'working', 6000), 'codex mission is working')
 
+  // each card names its next step: a finished mission with changes offers its review, a read-only one Build from this
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.mission-card')].some(c => c.textContent.includes('Add rate limiting') && c.querySelector('.next-step')?.textContent.includes('Review 4 files'))`), 2000), 'a finished card says Review 4 files')
+  h.expect(await h.js(`[...document.querySelectorAll('.mission-card')].some(c => c.textContent.includes('why is checkout slow') && c.querySelector('.next-step')?.textContent.includes('Build from this'))`), 'a research card says Build from this')
+
   // the left bar opens Mission Control as a tab in the main area
   const btn = '.activitybar:not(.right) .activity-btn[aria-label^="Mission Control"]'
   h.expect(await h.js(`!!document.querySelector('${btn}')`), 'the left activity bar has a Mission Control button')
@@ -108,6 +112,8 @@ module.exports = async (h) => {
   h.expect(await h.js(`document.activeElement?.tagName === 'TEXTAREA' && document.activeElement.closest('.field')?.textContent.includes('What should')`), 'with the brief focused')
   await h.setValue('dialog[open] .form textarea', 'Dialog task')
   await h.wait(400)
+  h.expect(await h.until(() => h.js(`/project · new worktree from main/.test(document.querySelector('dialog[open] .form-more-summary')?.textContent ?? '')`), 2000), 'folded Options say where the mission will run')
+  h.expect(await h.js(`document.querySelector('dialog[open] .form-more').getBoundingClientRect().bottom <= document.querySelector('dialog[open] .form-actions').getBoundingClientRect().top`), 'the whole form fits above its buttons, no scrolling')
   await h.shot('8-new-mission-dialog')
   await h.click('dialog[open] .form .btn.primary', 'Launch')
   h.expect(await h.until(() => h.js(`!document.querySelector('dialog[open]') && [...document.querySelectorAll('.mc .mission-title')].some(t => t.textContent === 'Dialog task')`), 6000), 'the dialog closes and the mission shows on the board')

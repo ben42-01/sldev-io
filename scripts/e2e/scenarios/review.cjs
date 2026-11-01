@@ -47,7 +47,7 @@ module.exports = async (h) => {
   fs.writeFileSync(path.join(m.cwd, 'src/app.js'), "console.log('hello there, friend')\nconsole.log('bye')\n")
 
   // review: its own tab, sidebars hidden, side by side
-  await h.js(`document.querySelector('.mission-card [aria-label="Review changes"]')?.click()`)
+  await h.js(`(document.querySelector('.mission-card .next-step') ?? document.querySelector('.mission-card [aria-label="Review changes"]'))?.click()`)
   h.expect(await h.until(() => h.js(`document.querySelectorAll('.diff-section').length >= 2`), 8000), 'the review lists the changed files')
   h.expect(await h.js(`document.querySelector('.app').classList.contains('focus-review') && !document.querySelector('.main > .sidebar:not([style*="display: none"])')?.offsetWidth`), 'the sidebars step aside while reviewing')
   h.expect(await h.js(`!!document.querySelector('.diff-table.split td.code.del') && !!document.querySelector('.diff-table.split td.code.add')`), 'old and new lines sit side by side')

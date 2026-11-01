@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Send, Square, SquareTerminal, Upload, Wrench, X } from 'lucide-react'
 import { describeEvent, layout, sendBackTargets, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
@@ -31,6 +31,7 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
   /** replay position; null follows the live run */
   const [replayAt, setReplayAt] = useState<number | null>(null)
   const pos = useMemo(() => (run ? layout(run.recipe) : new Map<string, { col: number; row: number }>()), [run])
+  const avail = useWidth()
   if (!run) return <div className="panel-page muted">This run was removed.</div>
   const H = BASE_H + ROW_H * Math.max(0, ...run.recipe.nodes.map((n) => (n.agents.length > 1 ? n.agents.length : 0)))
 
@@ -63,7 +64,9 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
       <p className="pipeline-intent">{run.intent}</p>
       {run.note && replayAt === null && <div className={`pipeline-note ${run.status}`}>{run.note}</div>}
       {history && <RunHistory run={run} at={replayAt} setAt={setReplayAt} />}
-      <div className="pipeline-canvas" style={{ width, height }}>
+      <div className="pipeline-fit" ref={avail.ref}>
+      {/* a wide graph shrinks to fit the panel (down to 65%) before it scrolls; zoom keeps clicks where they look */}
+      <div className="pipeline-canvas" style={{ width, height, zoom: avail.width ? Math.min(1, Math.max(0.65, avail.width / width)) : 1 }}>
         <svg className="pipeline-edges" width={width} height={height} aria-hidden="true">
           {run.recipe.nodes.flatMap((n) =>
             n.needs.map((from) => {
@@ -98,6 +101,7 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
             </div>
           )
         })}
+      </div>
       </div>
       {run.pr && <PrFeedback run={run} />}
     </div>
@@ -378,6 +382,19 @@ function StageActivity({ missionId }: { missionId: string }): React.JSX.Element 
       {when && <span className="pn-activity-when"> · {when}</span>}
     </div>
   )
+}
+
+/** The width of an element, kept current with a ResizeObserver. */
+function useWidth(): { ref: (el: HTMLDivElement | null) => void; width: number } {
+  const [width, setWidth] = useState(0)
+  const ro = useRef<ResizeObserver | null>(null)
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    ro.current?.disconnect()
+    if (!el) return
+    ro.current = new ResizeObserver(() => setWidth(el.clientWidth))
+    ro.current.observe(el)
+  }, [])
+  return { ref, width }
 }
 
 function duration(ms: number): string {

@@ -622,6 +622,13 @@ const missions: DocPage = {
             button switches the cards to compact rows when you have many.
           </p>
           <p>
+            The dialog asks for the agent first, then the brief. Tick other agents under <b>Also run it on</b> to run the same brief as a
+            bake-off. The working folder, worktree, branch, model and effort sit under <b>Options</b>, whose summary line says what will
+            happen (for example <i>project · new worktree from main · default model</i>). You can also type a brief on the start screen and
+            press Enter to open the dialog with it. Each mission card names its next step: <b>Answer</b>, <b>Review 3 files</b> or{' '}
+            <b>Build from this</b>.
+          </p>
+          <p>
             Not ready to start yet? <b>Save for later</b> in the New mission dialog keeps the brief and every setting under{' '}
             <b>Saved for later</b>, in the Agents tab and at the top of Mission Control. Click one to edit it, or <b>Launch</b> it as saved.
           </p>

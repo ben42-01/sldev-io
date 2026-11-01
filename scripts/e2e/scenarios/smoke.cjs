@@ -6,6 +6,14 @@ module.exports = async (h) => {
   await h.shot('1-welcome')
   h.expect(await h.js(`document.querySelector('.welcome h1')?.textContent === 'sldev-io'`), 'welcome shows the app name')
   await h.openFixture()
+  // with a project open, the start screen takes a brief: Enter opens the New mission form with it
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.welcome .launch-brief input')`), 3000), 'the start screen offers a brief box')
+  await h.setValue('.welcome .launch-brief input', 'Tidy the README')
+  await h.js(`document.querySelector('.welcome .launch-brief').requestSubmit()`)
+  h.expect(await h.until(() => h.js(`document.querySelector('dialog[open] .mission-form textarea')?.value === 'Tidy the README'`), 2000), 'Enter opens New mission with the brief filled in')
+  await h.shot('1b-welcome-brief')
+  h.key('Escape')
+  h.expect(await h.until(() => h.js(`!document.querySelector('dialog[open]')`), 2000), 'Esc closes it again')
   h.key('T', ['control', 'shift'])
   await h.wait(1500)
   // the WebGL renderer draws to a canvas, so check a side effect instead of DOM text
@@ -26,5 +34,6 @@ module.exports = async (h) => {
   h.key(',', ['control'])
   await h.wait(1000)
   h.expect(await h.js(`!!document.querySelector('.settings')`), 'settings panel opens')
+  h.expect(await h.js(`[...document.querySelectorAll('.settings-nav button')].map(b => b.textContent).join().includes('Terminal,Editor,Agents')`), 'settings lists its sections as jump links')
   await h.shot('4-settings')
 }

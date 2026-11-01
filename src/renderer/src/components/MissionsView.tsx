@@ -16,6 +16,7 @@ import { launchSaved, newSavedId, putSaved, removeSaved, useSaved } from '../sta
 import { SavedMissionRow } from './SavedMissionRow'
 import { IssuePicker } from './IssuePicker'
 import { FolderField } from './FolderField'
+import { basename } from '../lib/paths'
 import { MissionCard } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 import { Modal } from './Modal'
@@ -186,6 +187,22 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
     }
   }, [root, options.agent, kind.id, prompt])
 
+  const setAgentOptions = (p: Partial<AgentOptions>): void => setOptions((o) => (p.agent && p.agent !== o.agent ? withAccess({ ...o, ...p }, kind) : { ...o, ...p }))
+  // the folder, branch and model rarely change: folded into one line, opened when something there needs fixing
+  const [moreOpen, setMoreOpen] = useState(false)
+  useEffect(() => {
+    if (!folderOk) setMoreOpen(true)
+  }, [folderOk])
+  const agentInfo = getAgent(options.agent)
+  const optionsSummary = [
+    basename(root) || 'no folder',
+    !folderOk ? 'folder not found' : !checked ? '' : isRepo ? (worktree ? `new worktree from ${base || 'HEAD'}` : 'in place, on the current branch') : 'not a git repo',
+    options.model || (agentInfo.models.length || agentInfo.modelPlaceholder ? 'default model' : ''),
+    options.effort ? `${options.effort} effort` : '',
+    options.permissionMode ? (agentInfo.modes.find((m) => m.value === options.permissionMode)?.label ?? options.permissionMode) : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const briefRef = useRef<HTMLTextAreaElement>(null)
   const asSaved = (): SavedMission => ({
     id: was?.id ?? newSavedId(),
@@ -236,6 +253,9 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
       }}
     >
       <KindPicker kinds={kinds} value={kind} onChange={pickKind} root={projectRoot} />
+      {/* a new agent clears the mode, so a read-only kind picks that agent's read-only mode again */}
+      <AgentOptionsFields part="who" value={options} onChange={setAgentOptions} />
+      {kind.readOnly && !getAgent(options.agent).readOnlyMode && <div className="hint">{getAgent(options.agent).name} has no read-only mode: the prompt asks it not to change anything, and its normal approvals still apply.</div>}
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setPrompt(issueText(i)), setTitle(i.title), setIssue(i.number))} />}
       <label className="field">
         <span>{kind.readOnly ? `What should ${getAgent(options.agent).name} find out?` : `What should ${getAgent(options.agent).name} do?`}</span>
@@ -247,51 +267,61 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
         <textarea rows={2} value={criteria} placeholder={'e.g. GET /users?page=2 returns 20 items\nnpm test passes'} onChange={(e) => setCriteria(e.target.value)} />
         <span className="field-hint">Optional. Included in the agent's prompt and shown again when you review the work.{kind.template.includes('{criteria}') ? '' : ` The ${kind.name} kind doesn't use them.`}</span>
       </label>
-      <label className="field">
-        <span>Title</span>
-        <input value={title} maxLength={120} placeholder={shownTitle || 'e.g. Users pagination'} onChange={(e) => setTitle(e.target.value)} />
-        <span className="field-hint">Optional. Names the mission, its tab and its branch.</span>
-      </label>
-      <FolderField
-        value={root}
-        onChange={setRoot}
-        hint={!folderOk || !checked ? undefined : isRepo ? (worktree ? 'A git repository: the mission gets its own worktree and branch, cut from the branch below. Uncommitted files are not copied.' : 'A git repository: the agent works in this folder and its checked-out branch directly.') : 'Not a git repository: the agent works in the folder directly, without a worktree or diff review.'}
-      />
-      {isRepo && (
-        <>
-          <label className="check">
-            <input type="checkbox" checked={worktree} onChange={(e) => setWorktree(e.target.checked)} />
-            <span>Isolate in a new git worktree</span>
-          </label>
-          {worktree && (
-            <label className="field">
-              <span>Branch from</span>
-              <select value={base} onChange={(e) => setBase(e.target.value)}>
-                {branches.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </label>
-          )}
-        </>
-      )}
-      {/* a new agent clears the mode, so a read-only kind picks that agent's read-only mode again */}
-      <AgentOptionsFields value={options} onChange={(p) => setOptions((o) => (p.agent && p.agent !== o.agent ? withAccess({ ...o, ...p }, kind) : { ...o, ...p }))} showPrint={false} />
-      {kind.readOnly && !getAgent(options.agent).readOnlyMode && <div className="hint">{getAgent(options.agent).name} has no read-only mode: the prompt asks it not to change anything, and its normal approvals still apply.</div>}
       {isRepo && !kind.readOnly && (
         <div className="field compare-agents">
-          <span>Also run it on (compare the versions, keep one)</span>
+          <span>Also run it on</span>
           <div className="compare-list">
             {agents
               .filter((a) => a.id !== (options.agent || 'claude') && a.installed !== false)
               .map((a) => (
-                <label key={a.id} className="check">
+                <label key={a.id} className={`chip-check${compare.includes(a.id) ? ' on' : ''}`}>
                   <input type="checkbox" checked={compare.includes(a.id)} onChange={(e) => setCompare((c) => (e.target.checked ? [...c, a.id] : c.filter((x) => x !== a.id)))} />
                   <span>{a.name}</span>
                 </label>
               ))}
           </div>
-          {compare.length > 0 && <div className="hint">Runs as a factory bake-off: every agent works in its own worktree, without stopping to ask, and you keep the best diff.</div>}
+          <span className="field-hint">
+            {compare.length > 0
+              ? 'Runs as a factory bake-off: every agent works in its own worktree, without stopping to ask, and you keep the best diff.'
+              : 'Optional. Tick other agents to compare their versions side by side and keep one.'}
+          </span>
         </div>
       )}
+      <details className="form-more" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
+        <summary>
+          <span className="form-more-label">Options</span>
+          <span className="form-more-summary" title={root}>{optionsSummary}</span>
+        </summary>
+        <div className="form-more-body">
+          <label className="field">
+            <span>Title</span>
+            <input value={title} maxLength={120} placeholder={shownTitle || 'e.g. Users pagination'} onChange={(e) => setTitle(e.target.value)} />
+            <span className="field-hint">Optional. Names the mission, its tab and its branch.</span>
+          </label>
+          <FolderField
+            value={root}
+            onChange={setRoot}
+            hint={!folderOk || !checked ? undefined : isRepo ? (worktree ? 'A git repository: the mission gets its own worktree and branch, cut from the branch below. Uncommitted files are not copied.' : 'A git repository: the agent works in this folder and its checked-out branch directly.') : 'Not a git repository: the agent works in the folder directly, without a worktree or diff review.'}
+          />
+          {isRepo && (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={worktree} onChange={(e) => setWorktree(e.target.checked)} />
+                <span>Isolate in a new git worktree</span>
+              </label>
+              {worktree && (
+                <label className="field">
+                  <span>Branch from</span>
+                  <select value={base} onChange={(e) => setBase(e.target.value)}>
+                    {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </label>
+              )}
+            </>
+          )}
+          <AgentOptionsFields part="how" value={options} onChange={setAgentOptions} showPrint={false} />
+        </div>
+      </details>
       {ready && !compare.length && (
         <details className="prompt-preview">
           <summary>Prompt preview</summary>

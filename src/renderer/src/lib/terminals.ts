@@ -155,7 +155,7 @@ window.api.pty.onExit((id, code) => {
   if (!s) return
   s.exitCode = code
   setStatus(s, 'exited')
-  const what = s.command ? `${shownCommand(s)} exited with code ${code}. Press Enter to run again` : `process exited with code ${code}. Press Enter to restart`
+  const what = s.command ? `${shownCommand(s, true)} exited with code ${code}. Press Enter to run again` : `process exited with code ${code}. Press Enter to restart`
   s.term.write(`\r\n\x1b[${code === 0 ? '2' : '31'}m[${what}]\x1b[0m\r\n`)
 })
 
@@ -281,7 +281,7 @@ export function attachTerminal(id: string, container: HTMLElement): void {
     loadWebgl(s)
     fitNow(s)
     if (s.autostart) void startPty(s)
-    else s.term.write(`\x1b[2m[${s.command ? shownCommand(s) : 'shell'}] Press Enter to run\x1b[0m\r\n`)
+    else s.term.write(`\x1b[2m[${s.command ? shownCommand(s, true) : 'shell'}] Press Enter to run\x1b[0m\r\n`)
   } else {
     scheduleFit(s)
   }
@@ -443,7 +443,16 @@ async function startPty(s: Session): Promise<void> {
   }
 }
 
-const shownCommand = (s: Session): string => s.displayCommand ?? commandText(s.command)
+/**
+ * The command as echoed in the terminal. A bare \n there moves down without returning, so a multi-line prompt
+ * drew as a staircase; long prompts are cut to a few lines (the whole brief is in the mission details).
+ */
+function shownCommand(s: Session, oneLine = false): string {
+  const lines = (s.displayCommand ?? commandText(s.command)).split(/\r?\n/)
+  if (oneLine) return lines.length > 1 ? `${lines[0]} …` : lines[0]
+  const keep = 4
+  return lines.length > keep ? [...lines.slice(0, keep), `… ${lines.length - keep} more lines`].join('\r\n') : lines.join('\r\n')
+}
 
 function setStatus(s: Session, status: TerminalStatus): void {
   s.status = status

@@ -26,6 +26,32 @@ export function Welcome(): React.JSX.Element {
   }, [loaded])
   const newMission = (): void => openNewMission()
   const others = recent.filter((f) => f !== root).slice(0, 4)
+  const [brief, setBrief] = useState('')
+  const agentCard = (
+    <section className="launch-card aurora">
+      <div className="launch-head"><Bot size={15} /> Coding agent</div>
+      <p className="launch-desc">Give an agent a task; sldev tracks it and tells you when it needs you.</p>
+      {root && (
+        <form
+          className="launch-brief"
+          onSubmit={(e) => {
+            e.preventDefault()
+            openNewMission(brief.trim() ? { brief: brief.trim() } : undefined)
+            setBrief('')
+          }}
+        >
+          <input value={brief} placeholder={`What should an agent do in ${basename(root)}?`} aria-label="Mission brief" onChange={(e) => setBrief(e.target.value)} />
+          <kbd>Enter</kbd>
+        </form>
+      )}
+      <div className="launch-actions">
+        <button className="btn sm primary" onClick={newMission} disabled={!root} title={root ? undefined : 'Open a folder first'}>
+          <Rocket size={13} /> New mission
+        </button>
+        <button className="btn sm" onClick={openAgentsDashboard}><Gauge size={13} /> Agents</button>
+      </div>
+    </section>
+  )
 
   return (
     <div className="welcome">
@@ -37,11 +63,13 @@ export function Welcome(): React.JSX.Element {
         <p className="welcome-sub">Agentic coding workspace</p>
 
         <div className="launch-cards">
+          {root && agentCard}
           <section className="launch-card aurora">
             <div className="launch-head"><SquareTerminal size={15} /> Local shell</div>
             <p className="launch-desc">A terminal in your project, or anywhere on this machine.</p>
             <div className="launch-actions">
-              <button className="btn sm primary" onClick={() => openTerminal()} title={root ?? 'Home folder'}>
+              {/* one primary per screen: with a project open, that's the agent card's */}
+              <button className={`btn sm${root ? '' : ' primary'}`} onClick={() => openTerminal()} title={root ?? 'Home folder'}>
                 <Plus size={13} /> {root ? `Open in ${basename(root)}` : 'New terminal'}
               </button>
               <button className="btn sm" onClick={() => void pickRootFolder()}><FolderOpen size={13} /> Browse…</button>
@@ -73,16 +101,7 @@ export function Welcome(): React.JSX.Element {
             </div>
           </section>
 
-          <section className="launch-card aurora">
-            <div className="launch-head"><Bot size={15} /> Coding agent</div>
-            <p className="launch-desc">Give an agent a task; sldev tracks it and tells you when it needs you.</p>
-            <div className="launch-actions">
-              <button className="btn sm primary" onClick={newMission} disabled={!root} title={root ? undefined : 'Open a folder first'}>
-                <Rocket size={13} /> New mission
-              </button>
-              <button className="btn sm" onClick={openAgentsDashboard}><Gauge size={13} /> Agents</button>
-            </div>
-          </section>
+          {!root && agentCard}
         </div>
 
         <div className="welcome-keys">

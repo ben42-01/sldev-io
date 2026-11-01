@@ -5,8 +5,11 @@ import { useAgents } from '../state/agents'
 import { useProfiles } from '../state/profiles'
 import { openSettings } from '../lib/commands'
 
-/** Agent picker plus model / effort / mode / print / extra-args fields, shared by the task and mission forms. */
-export function AgentOptionsFields({ value, onChange, showPrint = true }: { value: AgentOptions; onChange: (p: Partial<AgentOptions>) => void; showPrint?: boolean }): React.JSX.Element {
+/**
+ * Agent picker plus model / effort / mode / print / extra-args fields, shared by the task and mission forms.
+ * `part` splits them: 'who' is profile and agent, 'how' the rest (the mission form folds 'how' away).
+ */
+export function AgentOptionsFields({ value, onChange, showPrint = true, part }: { value: AgentOptions; onChange: (p: Partial<AgentOptions>) => void; showPrint?: boolean; part?: 'who' | 'how' }): React.JSX.Element {
   const agents = useAgents()
   const profiles = useProfiles()
   const profile = profiles.find((p) => p.id === value.profile)
@@ -21,20 +24,9 @@ export function AgentOptionsFields({ value, onChange, showPrint = true }: { valu
     ['Starters', profiles.filter((p) => p.scope === 'builtin')]
   ]
 
-  return (
+  const who = (
     <>
-      <label className="field">
-        <span>Profile</span>
-        <select value={profile?.id ?? ''} onChange={(e) => onChange(applyProfile(value, profiles.find((p) => p.id === e.target.value)))}>
-          <option value="">None: just the agent</option>
-          {groups.filter(([, list]) => list.length).map(([label, list]) => (
-            <optgroup key={label} label={label}>
-              {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      {profile?.description && <div className="hint">{profile.description}</div>}
+      <div className="field-row">
       <label className="field">
         <span>Agent</span>
         <select value={agent.id} onChange={(e) => pick(e.target.value)}>
@@ -46,6 +38,19 @@ export function AgentOptionsFields({ value, onChange, showPrint = true }: { valu
           ))}
         </select>
       </label>
+      <label className="field">
+        <span>Profile</span>
+        <select value={profile?.id ?? ''} onChange={(e) => onChange(applyProfile(value, profiles.find((p) => p.id === e.target.value)))}>
+          <option value="">None: just the agent</option>
+          {groups.filter(([, list]) => list.length).map(([label, list]) => (
+            <optgroup key={label} label={label}>
+              {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      </div>
+      {profile?.description && <div className="hint">{profile.description}</div>}
       {agent.installed === false && (
         <div className="hint">
           <code>{agent.bin}</code> isn't on your PATH.
@@ -57,6 +62,10 @@ export function AgentOptionsFields({ value, onChange, showPrint = true }: { valu
           )}
         </div>
       )}
+    </>
+  )
+  const how = (
+    <>
       <div className="field-row">
         <label className="field">
           <span>Model</span>
@@ -109,6 +118,14 @@ export function AgentOptionsFields({ value, onChange, showPrint = true }: { valu
           Add a custom one in Settings
         </span>
       </div>
+    </>
+  )
+  if (part === 'who') return who
+  if (part === 'how') return how
+  return (
+    <>
+      {who}
+      {how}
     </>
   )
 }

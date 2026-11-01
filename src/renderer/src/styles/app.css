@@ -3407,6 +3407,21 @@ a {
 .pn-meta {
   font: 10.5px var(--font-mono);
   color: var(--fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the node has a fixed height: lines keep their size and the activity gives way, rather than the agent name being squashed */
+.pipeline-node {
+  overflow: hidden;
+}
+.pipeline-node > * {
+  flex-shrink: 0;
+}
+.pipeline-node > .pn-activity,
+.pipeline-node > .pn-note {
+  flex-shrink: 1;
+  min-height: 0;
 }
 .pn-activity {
   font: 10.5px/1.45 var(--font-mono);
@@ -3542,7 +3557,99 @@ a {
 .compare-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 6px;
+}
+/* a checkbox shown as a toggle chip: the box stays in the DOM for keyboard and screen readers */
+.chip-check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--fg-muted);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.chip-check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.chip-check:hover {
+  color: var(--fg);
+  border-color: var(--border-strong, var(--border));
+}
+.chip-check.on {
+  color: var(--fg);
+  background: var(--surface-raised);
+  border-color: var(--fg-subtle);
+}
+.chip-check.on::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--status-working);
+}
+.chip-check:has(input:focus-visible) {
+  outline: 2px solid var(--ring, var(--fg-subtle));
+  outline-offset: 1px;
+}
+/* folded form options: one summary line of what will happen, the fields on demand */
+.form-more {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.form-more > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.form-more > summary::-webkit-details-marker {
+  display: none;
+}
+.form-more > summary::before {
+  content: '▸';
+  color: var(--fg-subtle);
+  font-size: 10px;
+}
+.form-more[open] > summary::before {
+  content: '▾';
+}
+.form-more-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+.form-more-summary {
+  font-size: 12px;
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.form-more > summary:hover .form-more-summary {
+  color: var(--fg-muted);
+}
+.form-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 10px 12px;
 }
 
 /* ── usage dashboard ───────────────────────── */
@@ -3551,18 +3658,16 @@ a {
   flex-wrap: wrap;
 }
 .dash-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 1px;
   margin-bottom: 16px;
   background: var(--border);
   border: 1px solid var(--border);
 }
-/* the last tile fills the rest of its row: the 1px gaps are the border colour, so an empty cell showed as a grey block */
-.dash-tiles > .dash-tile:last-child {
-  grid-column-end: -1;
-}
+/* flex, not grid: the 1px gaps are the border colour, so an empty grid cell showed as a grey block; wrapped tiles grow to fill their row */
 .dash-tile {
+  flex: 1 1 130px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4532,4 +4637,77 @@ a {
 }
 .field > .btn {
   align-self: flex-start;
+}
+
+/* the labelled next step on a mission card sits before its icon actions */
+.mission-foot .next-step {
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.pipeline-fit {
+  width: 100%;
+  overflow-x: auto;
+}
+/* the welcome's quick brief: type the task, Enter opens the New mission form with it */
+.launch-brief {
+  position: relative;
+  display: flex;
+  margin-bottom: 10px;
+}
+.launch-brief input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 64px 0 10px;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font: 13px var(--font-ui);
+  outline: none;
+}
+.launch-brief input:focus-visible {
+  border-color: var(--fg-subtle);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.launch-brief kbd {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+/* Settings: jump links to the sections, kept in view while the page scrolls */
+.settings-nav {
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 640px;
+  margin: -6px 0 18px;
+  padding: 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.settings-nav:empty {
+  display: none;
+}
+.settings-nav button {
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--fg-muted);
+  font: 12px var(--font-ui);
+  cursor: pointer;
+}
+.settings-nav button:hover {
+  color: var(--fg);
+  background: var(--surface);
+  border-color: var(--border);
+}
+.settings section {
+  scroll-margin-top: 44px;
 }
