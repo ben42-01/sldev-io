@@ -27,7 +27,8 @@
     "gh-stats": "bash scripts/gh-stats.sh",
     "e2e": "npm run build && electron --no-sandbox scripts/e2e/run.cjs",
     "website": "npm --prefix website run dev -- --open",
-    "website:build": "npm --prefix website run build"
+    "website:build": "npm --prefix website run build",
+    "promo": "npm --prefix marketing/promo run studio"
   },
   "dependencies": {
     "electron-updater": "6.8.10",

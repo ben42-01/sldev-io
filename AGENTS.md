@@ -76,6 +76,8 @@ website/        marketing site (Vercel): api/download.ts (/download/<os>), api/s
                   pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx),
                   /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts; a new guide
                   also needs website/docs/<id>/index.html, which test/docsPages.test.ts checks)
+marketing/promo/ the 90 s advert, animated with Remotion (own package.json; prices, URL and colours read from website/,
+                  music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```

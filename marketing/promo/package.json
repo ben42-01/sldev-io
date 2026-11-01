@@ -1,0 +1,26 @@
+{
+  "name": "sldev-io-promo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The sldev-io advert: animated scenes in the website's branding, rendered to MP4 with Remotion.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Promo out/sldev-io-promo.mp4",
+    "render:music": "remotion render src/index.ts Promo out/sldev-io-promo.mp4 --props=music.json",
+    "music": "node scripts/make-music.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@remotion/cli": "4.0.536",
+    "lucide-react": "1.61.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.536"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}
