@@ -1,7 +1,7 @@
 [
   {
     "version": "1.0.2",
-    "date": null,
+    "date": "2026-11-01",
     "changes": [
       "New mission form: the agent and profile come first, other agents to compare are one-click chips, and the folder, branch and model fold into one Options line that says what will happen. The whole form fits without scrolling.",
       "Mission cards say the next step: Answer when the agent waits for you, Review 3 files when it's done, Build from this after a research or plan mission.",
