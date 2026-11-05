@@ -212,7 +212,8 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 `docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks) and
 `docs/monetization-plan.md` has the reasoning. Keep them in sync when you change releases, the
 beta window, licensing or pricing. `docs/v1-roadmap.md` is the 1.0 scope, its status and what still
-needs checking against the real agent CLIs; 1.0 work happens on the `v1` branch.
+needs checking against the real agent CLIs. Since 1.0.2, work happens on `master` (`v1` is kept equal to it);
+releases are still cut from `release/<version>` branches, and pushing `master` builds nothing but CI.
 
 ## Skills
 
