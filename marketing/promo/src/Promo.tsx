@@ -1,17 +1,16 @@
 import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion'
 import { BRAND, C, UI, bars } from './lib'
-import { Backdrop } from './ui'
+import { Backdrop, Grain } from './ui'
 import { Agents, Cta, Failover } from './scenes/Closing'
 import { FactoryScene } from './scenes/FactoryScene'
 import { Missions } from './scenes/Missions'
-import { Chaos, LogoReveal, Turn } from './scenes/Opening'
+import { INTRO_BARS, Intro } from './scenes/Intro'
 import { Review } from './scenes/Review'
 
 // The story, in bars of the track (2 s each at 120 BPM). Every cut lands on a downbeat.
 export const SCENES = [
-  { id: 'chaos', bars: 5, Scene: Chaos, backdrop: false },
-  { id: 'turn', bars: 2, Scene: Turn, backdrop: false },
-  { id: 'logo', bars: 2, Scene: LogoReveal, backdrop: true },
+  // chaos (5 bars), the turn (2) and the logo on the drop (2), as one continuous shot
+  { id: 'intro', bars: INTRO_BARS, Scene: Intro, backdrop: false },
   { id: 'missions', bars: 8, Scene: Missions, backdrop: true },
   { id: 'review', bars: 5, Scene: Review, backdrop: true },
   { id: 'factory', bars: 8, Scene: FactoryScene, backdrop: true },
@@ -52,6 +51,7 @@ export function Promo({ music }: PromoProps) {
           </Sequence>
         )
       })}
+      <Grain />
       {music && (
         <Audio
           src={staticFile(music)}

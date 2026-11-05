@@ -20,9 +20,9 @@ npm run render:music    # with public/music.mp3
 
 | Bars | Scene | Says |
 |---|---|---|
-| 5 | Chaos | Nine terminals pile up, one per beat: "Claude Code in one terminal. Codex in another…" "…and one has been waiting since lunch." |
-| 2 | Turn | "Coding agents got good. Keeping track of them didn't." |
-| 2 | Logo | The mark draws itself: sldev-io, the terminal-first workspace for agentic coding. |
+| 5 | Chaos | One terminal types its command, then twenty pile up faster and faster, each streaming real-looking output, while the camera pulls back: "One agent feels like *magic.*" … "Then you *lose count.*" The codex window that's been asking all along is lifted out: "And one has been waiting *since lunch.*" |
+| 2 | Turn | The music breaks down and the pile becomes a whirlpool around "Coding agents got good. Keeping track of them *didn't.*" |
+| 2 | Logo | On the drop everything collapses into the centre; a flash, a shockwave, and the mark is born from it: sldev-io, the terminal-first workspace for agentic coding. |
 | 8 | Missions | Mission Control: four agents in their own worktrees; Codex needs you, one click, the cards walk to Ready. |
 | 5 | Review | The diff, then Commit / Merge / Open PR. |
 | 8 | Factory | A recipe as a graph: spec approval, two agents in parallel, a failing test loops back, the PR waits for your click. |
@@ -30,8 +30,14 @@ npm run render:music    # with public/music.mp3
 | 5 | Agents | Every supported CLI, then: not an IDE, no new AI subscription, no telemetry. |
 | 4 | Call to action | Free trial, the price paid once, platforms, URL. |
 
-Scenes live in `src/scenes/`, their order and length in bars in `src/Promo.tsx`, and the brand pieces
-(window, status pills, pointer, toasts) in `src/ui.tsx`.
+Chaos, turn and logo are one continuous shot (`src/scenes/Intro.tsx`), so the terminals can survive into the
+whirlpool. Scenes live in `src/scenes/`, their order and length in bars in `src/Promo.tsx`, and the brand pieces
+(window, status pills, pointer, toasts, the word-by-word `Reveal`, film grain) in `src/ui.tsx`.
+
+**Type**: Instrument Serif carries the story (the intro's captions, the turn, the tagline) and Inter carries the
+product (headlines over the UI, the wordmark). Coloured words are always set like the wordmark and the website's
+`.brand-text`: Inter bold, upright, in the brand gradient (`ACCENT` in `src/ui.tsx`), never in the serif. In a line,
+`*starred words*` get that accent: one per line at most.
 
 ## Music
 

@@ -31,8 +31,10 @@ export const BRAND = `linear-gradient(90deg, ${C.blue}, ${C.green}, ${C.purple})
 export const BRAND_D = `linear-gradient(135deg, ${C.blue}, ${C.green}, ${C.purple})`
 export const UI = "Inter, -apple-system, 'Segoe UI', Ubuntu, sans-serif"
 export const MONO = "'JetBrains Mono', Menlo, Consolas, monospace"
+/** the display face for the story beats (intro captions, the turn, the tagline) */
+export const SERIF = "'Instrument Serif', Georgia, serif"
 
-const ease = Easing.bezier(0.2, 0.7, 0.2, 1)
+export const ease = Easing.bezier(0.2, 0.7, 0.2, 1)
 
 /** 0 → 1 between frame `from` and `from + dur`, eased */
 export function progress(frame: number, from: number, dur = 12): number {
@@ -61,4 +63,12 @@ export function onBeat(frame: number, from = 0): number {
   if (frame < from) return 0
   const t = ((frame - from) % BEAT) / BEAT
   return Math.max(0, 1 - t * 3)
+}
+
+/** deterministic noise for layout and jitter: the same input gives the same frame on every render */
+export function rand(seed: number): number {
+  let t = (seed * 0x6d2b79f5 + 0x9e3779b9) >>> 0
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 }

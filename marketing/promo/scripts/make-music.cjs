@@ -16,7 +16,7 @@ const N = Math.ceil((BARS * BAR + 2) * SR)
 const L = new Float32Array(N)
 const R = new Float32Array(N)
 
-// scene boundaries in bars (src/Promo.tsx): chaos 0, turn 5, logo 7, missions 9, review 17,
+// story beats in bars (src/Promo.tsx, src/scenes/Intro.tsx): chaos 0, whirlpool 5, the collapse and logo 7, missions 9, review 17,
 // factory 22, failover 30, agents 35, cta 40
 const DROP = 7
 const END = 43

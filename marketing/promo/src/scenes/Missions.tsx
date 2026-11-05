@@ -90,7 +90,7 @@ export function Missions() {
   const win = pop(frame, 0, 18)
   return (
     <AbsoluteFill style={{ alignItems: 'center' }}>
-      <Headline at={0} out={beats(7)}>Every agent. One window.</Headline>
+      <Headline at={0} out={beats(7)}>Every agent. *One window.*</Headline>
       <Headline at={beats(8)} out={beats(13)}>Each one in its own git worktree.</Headline>
       <Headline at={beats(14)} out={beats(21)}>It pings you when one needs you.</Headline>
       <Headline at={beats(22)}>And says when it&apos;s done.</Headline>

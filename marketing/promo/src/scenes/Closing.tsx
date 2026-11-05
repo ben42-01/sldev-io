@@ -3,8 +3,8 @@ import type { ReactNode } from 'react'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import pricing from '../../../../website/src/content/pricing.json'
 import site from '../../../../website/src/content/site.json'
-import { C, MONO, UI, beats, enter, pop, progress, typed } from '../lib'
-import { Brand, Button, Headline, Logo, Pill, Pointer, type State } from '../ui'
+import { C, MONO, SERIF, UI, beats, enter, pop, progress, typed } from '../lib'
+import { Brand, Button, Headline, Logo, Pill, Pointer, Reveal, type State } from '../ui'
 
 function Term({ agent, state, lines, from, width = 640, children }: { agent: string; state: State; lines: Array<[number, string, string?]>; from: number; width?: number; children?: ReactNode }) {
   const frame = useCurrentFrame()
@@ -105,7 +105,7 @@ export function Agents() {
   return (
     <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', fontFamily: UI }}>
       <Headline at={0} out={second - 8} top={300} size={76}>
-        Bring the agents you <Brand>already use.</Brand>
+        {'Bring the agents you *already use.*'}
       </Headline>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18, width: 1400, marginTop: 220, opacity: out }}>
         {AGENTS.map((a, i) => {
@@ -157,7 +157,7 @@ export function Cta() {
           <Brand>{site.name}</Brand>
         </div>
       </div>
-      <div style={{ fontSize: 38, color: C.muted, marginTop: 30, ...enter(frame, beats(1)) }}>{site.tagline}</div>
+      <Reveal text={site.tagline} at={beats(1)} stagger={2} style={{ marginTop: 26, font: `italic 400 50px/1.2 ${SERIF}`, color: '#a8a8a8' }} />
       <div style={{ display: 'flex', gap: 18, marginTop: 56, ...enter(frame, beats(2)) }}>
         <Button primary style={{ fontSize: 30, padding: '18px 30px', gap: 14 }}>
           <Download size={30} /> Free {trialDays}-day trial

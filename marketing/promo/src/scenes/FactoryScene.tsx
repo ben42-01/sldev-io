@@ -51,11 +51,11 @@ export function FactoryScene() {
   return (
     <AbsoluteFill style={{ alignItems: 'center' }}>
       <Headline at={0} out={beats(8)}>
-        Software Factory: <span style={{ color: C.muted }}>an idea in, a PR out.</span>
+        {'Software Factory: an idea in, *a PR out.*'}
       </Headline>
       <Headline at={beats(9)} out={beats(17)}>Agents build in parallel.</Headline>
       <Headline at={beats(18)} out={beats(24)}>Tests fail? It loops back and fixes.</Headline>
-      <Headline at={beats(25)}>Nothing ships without your click.</Headline>
+      <Headline at={beats(25)}>Nothing ships without *your click.*</Headline>
       <div style={{ position: 'absolute', top: 180, opacity: win, transform: `translateY(${(1 - win) * 60}px)` }}>
         <Window width={1560} height={880} active={3}>
           <div style={{ position: 'absolute', left: 24, right: 24, top: 20, display: 'flex', alignItems: 'center', gap: 16 }}>

@@ -61,14 +61,21 @@ export function Backdrop({ glow = 1 }: { glow?: number }) {
   )
 }
 
-/** A big headline line, centred above the content. */
+/** coloured words are set like the wordmark (the website's .brand-text): Inter, bold, tight, upright */
+export const WORDMARK: CSSProperties = { fontFamily: UI, fontStyle: 'normal', fontWeight: 700, letterSpacing: '-0.04em' }
+
+/** the accent for *starred* words: the wordmark's type in the brand gradient */
+export const ACCENT: CSSProperties = { ...WORDMARK, background: BRAND, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
+
+/** the same inside a line of the serif, whose small x-height makes Inter look a size bigger */
+export const ACCENT_IN_SERIF: CSSProperties = { ...ACCENT, fontSize: '0.8em' }
+
+/** A big headline line, centred above the content. A string resolves word by word, *starred* words in the accent. */
 export function Headline({ children, at, out, top = 70, size = 64 }: { children: ReactNode; at: number; out?: number; top?: number; size?: number }) {
   const frame = useCurrentFrame()
-  return (
-    <div style={{ position: 'absolute', left: 0, right: 0, top, textAlign: 'center', font: `700 ${size}px/1.15 ${UI}`, letterSpacing: '-0.03em', color: C.fg, ...enter(frame, at, { out }) }}>
-      {children}
-    </div>
-  )
+  const box: CSSProperties = { position: 'absolute', left: 0, right: 0, top, textAlign: 'center', font: `600 ${size}px/1.15 ${UI}`, letterSpacing: '-0.035em', color: C.fg }
+  if (typeof children === 'string') return <Reveal text={children} at={at} out={out} stagger={2} accent={ACCENT} style={{ ...box, alignItems: 'baseline' }} />
+  return <div style={{ ...box, ...enter(frame, at, { out }) }}>{children}</div>
 }
 
 const ACTIVITY = [Bot, FolderTree, Play, Factory, Server, LayoutGrid]
@@ -217,5 +224,63 @@ export function Button({ children, primary, glow = 0, style }: { children: React
     >
       {children}
     </span>
+  )
+}
+
+/**
+ * A line that resolves word by word: each word rises out of a blur. Words wrapped in *stars* get
+ * `accent`, e.g. "Keeping track of them *didn't.*".
+ */
+export function Reveal({ text, at, out, stagger = 3, accent, style }: { text: string; at: number; out?: number; stagger?: number; accent?: CSSProperties; style?: CSSProperties }) {
+  const frame = useCurrentFrame()
+  const gone = out === undefined ? 0 : progress(frame, out, 10)
+  // "*a PR out.*" accents all three words
+  let inside = false
+  const words = text.split(' ').map((w) => {
+    const em = inside || w.startsWith('*')
+    inside = em && !w.endsWith('*')
+    return { word: w.replace(/\*/g, ''), em }
+  })
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', columnGap: '0.24em', ...style }}>
+      {words.map(({ word, em }, i) => {
+        const p = progress(frame, at + i * stagger, 16)
+        const blur = 14 * (1 - p) + 10 * gone
+        return (
+          <span
+            key={i}
+            style={{
+              display: 'inline-block',
+              opacity: p * (1 - gone),
+              filter: blur > 0.2 ? `blur(${blur}px)` : undefined,
+              transform: `translateY(${(1 - p) * 0.35 - gone * 0.15}em)`,
+              // keep the glyphs' overhang inside the clip of a gradient fill
+              padding: em ? '0 0.08em' : undefined,
+              margin: em ? '0 -0.08em' : undefined,
+              ...(em ? accent : null)
+            }}
+          >
+            {word}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Fine film grain and a soft vignette over everything, so flat fills don't look like a screenshot. */
+export function Grain() {
+  const frame = useCurrentFrame()
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none', zIndex: 200 }}>
+      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, #000a 100%)' }} />
+      <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, opacity: 0.07, mixBlendMode: 'overlay' }}>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed={frame % 12} stitchTiles="stitch" />
+          <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#grain)" />
+      </svg>
+    </AbsoluteFill>
   )
 }

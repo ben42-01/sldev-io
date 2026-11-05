@@ -38,7 +38,7 @@ export function Review() {
   return (
     <AbsoluteFill style={{ alignItems: 'center' }}>
       <Headline at={0} out={beats(7)}>Review every line it changed.</Headline>
-      <Headline at={beats(8)}>Commit. Merge. Open the PR.</Headline>
+      <Headline at={beats(8)}>Commit. Merge. *Open the PR.*</Headline>
       <div style={{ position: 'absolute', top: 180, opacity: win, transform: `translateY(${(1 - win) * 60}px)` }}>
         <Window width={1560} height={880} active={1}>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
