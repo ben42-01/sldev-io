@@ -1,15 +1,13 @@
-import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
 import { join } from 'path'
 
-/** Tiny JSON file store in userData. Writes are debounced and atomic (tmp + rename). */
+/** Tiny JSON file store in a data folder (the app's userData). Writes are debounced and atomic (tmp + rename). */
 export class JsonStore<T extends object> {
   private data: T
   private timer: NodeJS.Timeout | null = null
   private readonly file: string
 
-  constructor(name: string, defaults: T) {
-    const dir = app.getPath('userData')
+  constructor(dir: string, name: string, defaults: T) {
     mkdirSync(dir, { recursive: true })
     this.file = join(dir, `${name}.json`)
     let loaded: Partial<T> = {}

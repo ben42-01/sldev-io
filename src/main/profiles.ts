@@ -1,4 +1,3 @@
-import { shell } from 'electron'
 import { existsSync, promises as fsp } from 'fs'
 import { dirname, join, resolve, sep } from 'path'
 import { claudeSubagentFile, opencodeAgentFile, parseProfileFile, profileSlug, serializeProfile } from '@shared/profiles'
@@ -30,7 +29,8 @@ export async function saveProfile(root: string, profile: AgentProfile): Promise<
   return p
 }
 
-export const removeProfile = (root: string, p: string): Promise<void> => shell.trashItem(assertInside(root, p))
+/** `trash` moves the file to the OS trash (Electron's shell.trashItem in the app), so a removal can be undone. */
+export const removeProfile = (root: string, p: string, trash: (path: string) => Promise<void>): Promise<void> => trash(assertInside(root, p))
 
 export type ExportTarget = 'claude' | 'opencode'
 

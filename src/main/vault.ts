@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { app, safeStorage } from 'electron'
 import { readFileSync } from 'fs'
 import { homedir } from 'os'
 import type { CredentialInput, CredentialMeta, VaultStatus } from '@shared/types'
@@ -22,7 +22,7 @@ interface Stored {
 let store: JsonStore<{ credentials: Stored[] }>
 
 export function initVault(): void {
-  store = new JsonStore('credentials', { credentials: [] })
+  store = new JsonStore(app.getPath('userData'), 'credentials', { credentials: [] })
 }
 
 export function flushVault(): void {

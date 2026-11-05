@@ -18,6 +18,7 @@ npm run e2e -- smoke      # build, then drive the real app (scripts/e2e), screen
 npm run e2e -- missions   # Claude + Codex missions with fake CLIs through every status
 npm run e2e -- beta       # free-beta window from /beta.json
 npm run dist:linux        # installers into dist/ (each OS builds its own; node-pty is native)
+npm run cli:build         # the free sldev CLI → cli/dist/sldev.mjs (its tests run with npm test)
 ```
 
 Before you call a change done: `npm run typecheck && npm test`, and for UI or behaviour changes an
@@ -54,7 +55,7 @@ src/main/       Electron main process (Node): everything privileged
   stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
-                  unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
+                  unit-tested logic: agents.ts (the agent registry and command builders, used by the CLI too), factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   recipeDraft.ts (the recipe builder's draft ↔ YAML, validated by parsing it back), recipeBundle.ts (share/import text),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
                   pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
@@ -62,8 +63,8 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts
 src/renderer/src/
-  lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (agent registry
-                  and command builders), commands.ts (palette + shortcuts), diff.ts, paths.ts
+  lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (re-exports the agent
+                  registry from src/shared/agents.ts, adds commandText), commands.ts (palette + shortcuts), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
@@ -82,6 +83,10 @@ website/        marketing site (Vercel): api/download.ts (/download/<os>), api/s
 marketing/promo/ the 90 s advert, animated with Remotion (own package.json; prices, URL and colours read from website/,
                   music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)
+cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
+                  ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in <userData>/cli)
+                  and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the split-pane view;
+                  repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 
@@ -114,10 +119,10 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Missions**: Claude Code gets `--settings <userData>/claude-hooks.json`, and the hooks POST
   to the loopback server. Never touch the user's `~/.claude/settings.json`. Other agents are
   tracked from terminal activity: output means working, 5 s quiet means ready, and a bell or
-  OSC 9/777 means needs you. Agent-specific behaviour belongs in `lib/agents.ts`, never `if (agent === …)`
+  OSC 9/777 means needs you. Agent-specific behaviour belongs in `src/shared/agents.ts`, never `if (agent === …)`
   scattered through the UI. The app is agent-agnostic: don't add Claude-only UI unless the
   feature is Claude-only by nature (slash commands, subagents, MCP). Skills are plain SKILL.md
-  folders, so any agent can run them (`skillPrompt` in `lib/agents.ts`).
+  folders, so any agent can run them (`skillPrompt` in `src/shared/agents.ts`).
 - **Beta window**: beta builds (`-beta` in the version) read `startsAt`/`endsAt` from the website's
   `/beta.json`, generated from `website/src/content/pricing.json`. Never bake dates into a build.
   An ended beta locks only at **launch** (`BetaEnded` screen, data untouched), never mid-session.
@@ -147,16 +152,16 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   get their terminal screen after the prompt instead (`reportFrom: 'terminal'`, `src/shared/screenReport.ts`), and the UI
   says so; a real report always replaces it, never the other way round.
 - **Needs you** for agents without hooks: a bell, OSC 9/777, or their approval prompt on screen (`asks` per agent in
-  `lib/agents.ts`, `src/shared/attention.ts`), checked as output arrives and only below where the user last typed, so an
+  `src/shared/agents.ts`, `src/shared/attention.ts`), checked as output arrives and only below where the user last typed, so an
   answered question doesn't count. Mission details say how each agent's status is known (`statusSource`).
-- **Usage limits**: what counts as "hit the limit" is per agent (`usageLimit` in `lib/agents.ts`), checked only against
+- **Usage limits**: what counts as "hit the limit" is per agent (`usageLimit` in `src/shared/agents.ts`), checked only against
   the last lines of output; the handoff to the next agent replaces the limit line, or the next agent's own echo of its
   prompt would flag it too. Factory stages continue on their own only with Settings → Agents → continue automatically.
 - **Automations** run only while the app is open, skip (never catch up) a time missed while it was closed, never start
   a second thing while their last one is live, and never push.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.
-- **Agent spawning**: agents start from an **argv array** (`agentCommand` in `lib/agents.ts` returns one
+- **Agent spawning**: agents start from an **argv array** (`agentCommand` in `src/shared/agents.ts` returns one
   element per argument, never quoted) and main spawns it without a shell (`src/main/launch.ts`: a real
   `.exe` first, npm `.cmd` shims unwrapped to `node <script>`, versioned launchers like Cursor's `agent.cmd`
   run as `versions\<newest>\node.exe index.js`, cmd.exe only as a last resort, and a `.ps1` next to the `.cmd`
@@ -164,6 +169,11 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Windows that once delivered the prompt as the single word "need". `commandText()` is for display only.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
+- **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
+  already uses (pty, launch, hooks, mcp, git, rules, memory, context, missionKinds), never the UI, licensing or
+  beta. Keep those modules free of `electron` imports (they take a data dir or a sink instead). Its runtime files go in
+  `<userData>/cli`, never over the app's. It makes no network requests; adding one means updating `/privacy` like the app.
+  No `sldev run`: the factory stays in the app.
 - **Destructive actions** ask first with `confirmAction`/`confirmDelete` (`components/Modal.tsx`,
   flows in `lib/removals.tsx`), saying what is removed and kept. Never `window.confirm`/`alert`.
   Worktrees are removed without `--force` unless the user ticked "discard", and never while something

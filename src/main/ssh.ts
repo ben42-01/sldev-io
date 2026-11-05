@@ -51,7 +51,7 @@ export class SshManager {
   private shells = new Map<string, Shell>()
   private conns = new Map<string, Conn>()
   private forwards = new Map<string, Server>()
-  private knownHosts = new JsonStore<{ hosts: Record<string, string> }>('known_hosts', { hosts: {} })
+  private knownHosts = new JsonStore<{ hosts: Record<string, string> }>(app.getPath('userData'), 'known_hosts', { hosts: {} })
 
   constructor(private connections: () => SshConnection[]) {}
 

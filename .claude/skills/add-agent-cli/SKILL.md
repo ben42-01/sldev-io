@@ -5,7 +5,7 @@ description: Add a new built-in coding-agent CLI to sldev-io (or fix an existing
 
 # Add or fix an agent CLI
 
-Every agent is defined once in `src/renderer/src/lib/agents.ts`. The UI (agent picker, model,
+Every agent is defined once in `src/shared/agents.ts` (the renderer re-exports it from `lib/agents.ts`; the sldev CLI uses it too). The UI (agent picker, model,
 effort and approval fields, Settings → Agents, mission badges) reads from that registry, so no
 other UI changes are needed.
 

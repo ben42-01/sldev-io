@@ -1,9 +1,9 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
 import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
-import { PtyManager, setShellOverride } from './pty'
+import { PtyManager, setShellOverride, type PtySink } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
 import { recentStalls, watchMainLoop, watchWindow } from './stalls'
@@ -32,6 +32,7 @@ import { checkForUpdates, installUpdate, startUpdateChecks, updateStatus } from 
 import { activateLicense, deactivateLicense, licenseStatus, refreshLicense, startLicenseChecks } from './license'
 
 const isMac = process.platform === 'darwin'
+const userData = (): string => app.getPath('userData')
 
 // The app was called "sldev" before; carry its data dir over once (connections, settings, notes…).
 function migrateLegacyUserData(): void {
@@ -54,6 +55,21 @@ const watchers = new DirWatchers(() => win?.webContents ?? null)
 let settings: JsonStore<AppSettings>
 let layout: JsonStore<{ layout: unknown }>
 let stores: { [K in keyof StoreFiles]: JsonStore<StoreFiles[K]> }
+
+// one sink per window, so killOwnedBy finds the ptys a window created
+const sinks = new WeakMap<WebContents, PtySink>()
+function windowSink(wc: WebContents): PtySink {
+  let sink = sinks.get(wc)
+  if (!sink) {
+    sink = {
+      data: (id, data) => !wc.isDestroyed() && wc.send('pty:data', id, data),
+      exit: (id, code) => !wc.isDestroyed() && wc.send('pty:exit', id, code),
+      closed: () => wc.isDestroyed()
+    }
+    sinks.set(wc, sink)
+  }
+  return sink
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -81,7 +97,7 @@ function createWindow(): void {
   watchWindow(win)
   const wc = win.webContents
   const cleanup = (): void => {
-    ptys.killOwnedBy(wc)
+    ptys.killOwnedBy(windowSink(wc))
     ssh.killOwnedBy(wc)
   }
   wc.on('destroyed', cleanup)
@@ -115,7 +131,7 @@ function buildMenu(): void {
 
 function registerIpc(): void {
   // terminals
-  ipcMain.handle('pty:create', (e, id: string, opts: PtyCreateOptions) => ptys.create(e.sender, id, opts))
+  ipcMain.handle('pty:create', (e, id: string, opts: PtyCreateOptions) => ptys.create(windowSink(e.sender), id, opts))
   // write/resize/ack/kill go to whichever backend (local pty or SSH shell) owns the id
   const backend = (id: string): PtyManager | SshManager => (ssh.has(id) ? ssh : ptys)
   ipcMain.on('pty:write', (_e, id: string, data: string) => backend(id).write(id, data))
@@ -271,7 +287,7 @@ function registerIpc(): void {
   // agent profiles (project scope; user profiles live in settings)
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
-  ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path))
+  ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path, (p) => shell.trashItem(p)))
   ipcMain.handle('memory:info', (_e, root: string) => memory.memoryInfo(root))
   ipcMain.handle('memory:ensure', (_e, root: string) => memory.ensureMemory(root))
   ipcMain.handle('memory:remember', (_e, root: string, note: string, source: string, paths?: string[]) => memory.remember(root, note, source, paths))
@@ -282,8 +298,8 @@ function registerIpc(): void {
   ipcMain.handle('context:pin', (_e, root: string, path: string, note?: string) => context.pin(root, path, note))
   ipcMain.handle('context:unpin', (_e, root: string, path: string) => context.unpin(root, path))
   ipcMain.handle('context:installMapSkill', (_e, root: string) => context.installMapSkill(root))
-  ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root))
-  ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(scope, root, name, text))
+  ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root, userData()))
+  ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(userData(), scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))
   ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
   ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))
@@ -361,16 +377,16 @@ function registerIpc(): void {
 
 app.whenReady().then(async () => {
   watchMainLoop()
-  settings = new JsonStore('settings', DEFAULT_SETTINGS)
-  layout = new JsonStore<{ layout: unknown }>('layout', { layout: null })
+  settings = new JsonStore(userData(), 'settings', DEFAULT_SETTINGS)
+  layout = new JsonStore<{ layout: unknown }>(userData(), 'layout', { layout: null })
   stores = {
-    tasks: new JsonStore<StoreFiles['tasks']>('tasks', { tasks: [] }),
-    runtimes: new JsonStore<StoreFiles['runtimes']>('runtimes', { custom: {} }),
-    missions: new JsonStore<StoreFiles['missions']>('missions', { missions: [] }),
-    connections: new JsonStore<StoreFiles['connections']>('connections', { connections: [] as SshConnection[] }),
-    factoryRuns: new JsonStore<StoreFiles['factoryRuns']>('factory-runs', { runs: [] }),
-    automations: new JsonStore<StoreFiles['automations']>('automations', { automations: [] }),
-    savedMissions: new JsonStore<StoreFiles['savedMissions']>('saved-missions', { saved: [] })
+    tasks: new JsonStore<StoreFiles['tasks']>(userData(), 'tasks', { tasks: [] }),
+    runtimes: new JsonStore<StoreFiles['runtimes']>(userData(), 'runtimes', { custom: {} }),
+    missions: new JsonStore<StoreFiles['missions']>(userData(), 'missions', { missions: [] }),
+    connections: new JsonStore<StoreFiles['connections']>(userData(), 'connections', { connections: [] as SshConnection[] }),
+    factoryRuns: new JsonStore<StoreFiles['factoryRuns']>(userData(), 'factory-runs', { runs: [] }),
+    automations: new JsonStore<StoreFiles['automations']>(userData(), 'automations', { automations: [] }),
+    savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))
@@ -379,7 +395,16 @@ app.whenReady().then(async () => {
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   startUpdateChecks((s) => win?.webContents.send('update:changed', s))
   startLicenseChecks((s) => win?.webContents.send('license:changed', s))
-  await startHookServer(() => win?.webContents ?? null, { missions: () => stores.missions.get().missions })
+  const toWindow = (channel: string) => (e: unknown): void => {
+    const wc = win?.webContents
+    if (wc && !wc.isDestroyed()) wc.send(channel, e)
+  }
+  await startHookServer({
+    dir: userData(),
+    node: process.execPath,
+    onHook: toWindow('mission:hook'),
+    mcp: { missions: () => stores.missions.get().missions, send: toWindow('mission:mcp') }
+  })
   await loadShellEnv()
   buildMenu()
   registerIpc()

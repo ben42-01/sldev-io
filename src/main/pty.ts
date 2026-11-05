@@ -1,20 +1,27 @@
 import * as pty from 'node-pty'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
-import type { WebContents } from 'electron'
 import type { PtyCreateOptions, PtyInfo } from '@shared/types'
 import { resolveLaunch, windowsShellLaunch } from './launch'
 
-// Output is coalesced and sent to the renderer in frames instead of per chunk.
+// Output is coalesced and sent to the sink (a window, or the CLI's screen buffers) in frames instead of per chunk.
 const FLUSH_MS = 8
 const MAX_FRAME = 256 * 1024
-// Flow control: pause the pty when the renderer falls this far behind, resume when it catches up.
+// Flow control: pause the pty when the sink falls this far behind (unacked bytes), resume when it catches up.
 const HIGH_WATER = 1024 * 1024
 const LOW_WATER = 256 * 1024
 
+/** Where a pty's output goes. The sink acks each chunk (PtyManager.ack) once it has consumed it, or the pty stays paused. */
+export interface PtySink {
+  data: (id: string, data: string) => void
+  exit: (id: string, exitCode: number) => void
+  /** the receiver went away (a closed window); nothing more is sent */
+  closed: () => boolean
+}
+
 interface Session {
   proc: pty.IPty
-  owner: WebContents
+  owner: PtySink
   buffer: string
   timer: NodeJS.Timeout | null
   unacked: number
@@ -44,7 +51,7 @@ export class PtyManager {
     return this.sessions.has(id)
   }
 
-  create(owner: WebContents, id: string, opts: PtyCreateOptions): PtyInfo {
+  create(owner: PtySink, id: string, opts: PtyCreateOptions): PtyInfo {
     this.kill(id)
     const def = defaultShell()
     let shell = opts.shell ?? def.shell
@@ -90,7 +97,7 @@ export class PtyManager {
       if (this.sessions.get(id) !== s) return
       this.flush(id, s)
       this.sessions.delete(id)
-      if (!owner.isDestroyed()) owner.send('pty:exit', id, exitCode)
+      if (!owner.closed()) owner.exit(id, exitCode)
     })
     return { pid: proc.pid, shell, cwd }
   }
@@ -133,7 +140,7 @@ export class PtyManager {
     }
   }
 
-  killOwnedBy(owner: WebContents): void {
+  killOwnedBy(owner: PtySink): void {
     for (const [id, s] of this.sessions) if (s.owner === owner) this.kill(id)
   }
 
@@ -147,7 +154,7 @@ export class PtyManager {
     if (!s.buffer) return
     const data = s.buffer
     s.buffer = ''
-    if (!s.owner.isDestroyed()) s.owner.send('pty:data', id, data)
+    if (!s.owner.closed()) s.owner.data(id, data)
   }
 }
 

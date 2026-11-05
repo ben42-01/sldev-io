@@ -1,5 +1,4 @@
-import { app, type WebContents } from 'electron'
-import { createServer } from 'http'
+import { createServer, type Server } from 'http'
 import { randomBytes } from 'crypto'
 import { openSync, readSync, closeSync, fstatSync, writeFileSync } from 'fs'
 import { MCP_SERVER } from './mcpServer'
@@ -12,7 +11,8 @@ import { clipReport } from '@shared/missionPrompt'
  * Claude Code hooks → sldev. Missions launch `claude --settings <file>` where the settings register
  * hooks that run a tiny relay script (with Electron as node). The relay POSTs the hook payload to
  * this loopback server, so the app knows when an agent is working, waiting, or needs permission,
- * without touching the user's own Claude settings.
+ * without touching the user's own Claude settings. The sldev CLI daemon runs the same server with
+ * plain node and its own folder, so the app and the CLI never answer each other's agents.
  */
 
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd'] as const
@@ -44,11 +44,21 @@ export interface HookInfo {
   mcp: { command: string; script: string }
 }
 
-let info: HookInfo | null = null
+export interface HookServerOptions {
+  /** where the relay, the Claude settings file, the MCP script and its endpoint are written (the app's userData) */
+  dir: string
+  /** the program agents run the relay and the MCP script with: Electron (as node) in the app, node in the CLI */
+  node: string
+  onHook: (e: HookEvent) => void
+  mcp: McpDeps
+}
 
-export async function startHookServer(target: () => WebContents | null, mcp: Omit<McpDeps, 'send'>): Promise<HookInfo> {
+let info: HookInfo | null = null
+let server: Server | null = null
+
+export async function startHookServer(o: HookServerOptions): Promise<HookInfo> {
   const token = randomBytes(16).toString('hex')
-  const server = createServer((req, res) => {
+  const srv = createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/mcp' && req.headers['x-sldev-token'] === token) return void serveMcp(req, res)
     if (req.method !== 'POST' || req.url !== '/hook' || req.headers['x-sldev-token'] !== token) {
       res.writeHead(403).end()
@@ -64,8 +74,7 @@ export async function startHookServer(target: () => WebContents | null, mcp: Omi
       try {
         const { mission, event, input } = JSON.parse(body)
         const evt = summarize(String(mission), String(event), safeJson(input))
-        const wc = target()
-        if (evt && wc && !wc.isDestroyed()) wc.send('mission:hook', evt)
+        if (evt) o.onHook(evt)
       } catch {
         // malformed relay payload
       }
@@ -78,32 +87,27 @@ export async function startHookServer(target: () => WebContents | null, mcp: Omi
       if (body.length > 1_000_000) req.destroy()
     })
     req.on('end', () => {
-      const send = (e: Parameters<McpDeps['send']>[0]): void => {
-        const wc = target()
-        if (wc && !wc.isDestroyed()) wc.send('mission:mcp', e)
-      }
       Promise.resolve()
-        .then(() => handleMcp(JSON.parse(body), { ...mcp, send }))
+        .then(() => handleMcp(JSON.parse(body), o.mcp))
         .catch(() => ({ error: 'Bad request' }))
         .then((r) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r)))
     })
   }
 
-  const port = await new Promise<number>((resolve) =>
-    server.listen(0, '127.0.0.1', () => resolve((server.address() as { port: number }).port))
-  )
-  server.unref()
+  const port = await new Promise<number>((resolve) => srv.listen(0, '127.0.0.1', () => resolve((srv.address() as { port: number }).port)))
+  srv.unref()
+  server = srv
 
-  const dir = app.getPath('userData')
+  const dir = o.dir
   const relay = join(dir, 'hook-relay.cjs').replace(/\\/g, '/')
   writeFileSync(relay, RELAY)
-  const exec = process.execPath.replace(/\\/g, '/')
+  const exec = o.node.replace(/\\/g, '/')
   // `VAR=1 program` is POSIX shell syntax; on Windows Claude Code may run hooks through cmd.exe or
   // PowerShell, so a wrapper script sets the variable and the hook command is just a quoted path.
   let relayCommand = `ELECTRON_RUN_AS_NODE=1 "${exec}" "${relay}"`
   if (process.platform === 'win32') {
     const wrapper = join(dir, 'hook-relay.cmd')
-    writeFileSync(wrapper, `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${relay.replace(/\//g, '\\')}" %1\r\n`)
+    writeFileSync(wrapper, `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${o.node}" "${relay.replace(/\//g, '\\')}" %1\r\n`)
     relayCommand = `"${wrapper.replace(/\\/g, '/')}"`
   }
   const hooks: Record<string, unknown> = {}
@@ -123,6 +127,12 @@ export async function startHookServer(target: () => WebContents | null, mcp: Omi
 
 export function hookInfo(): HookInfo | null {
   return info
+}
+
+export function stopHookServer(): void {
+  server?.close()
+  server = null
+  info = null
 }
 
 function safeJson(s: unknown): Record<string, unknown> {

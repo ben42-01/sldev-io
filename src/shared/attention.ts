@@ -1,7 +1,7 @@
 /**
  * "Needs you" for agents without hooks: the approval prompt on their screen. Full-screen agents
  * (OpenCode, Codex, Gemini) draw a dialog and wait without a bell, so the bell alone misses them.
- * What a prompt looks like is per agent (`asks` in lib/agents.ts); this is the agent-neutral part.
+ * What a prompt looks like is per agent (`asks` in src/shared/agents.ts); this is the agent-neutral part.
  */
 
 import { afterPrompt } from './screenReport'

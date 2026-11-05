@@ -1,7 +1,7 @@
 /**
  * Failover: when an agent stops at its plan's usage limit, the work continues on another agent with a
  * handoff instead of waiting hours for the limit to reset. Which text means "limit" is per agent
- * (`usageLimit` in lib/agents.ts); this file is the agent-neutral part.
+ * (`usageLimit` in src/shared/agents.ts); this file is the agent-neutral part.
  */
 
 /** Only the end of the output counts: a limit message is the last thing an agent prints. */
