@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyOverrides,
+  compareRecipe,
+  recipeTextWithOverrides,
   approveNode,
   describeEvent,
   recordEvents,
@@ -355,5 +358,54 @@ describe('worktree setup', () => {
     expect(recipe(`${base}setup: make deps\n`).setup).toBe('make deps')
     expect(recipe(`${base}setup: false\n`).setup).toBe(false)
     expect(recipe(`${base}setup: none\n`).setup).toBe(false)
+  })
+})
+
+describe('stage options from the run form', () => {
+  const text = `name: Opts
+stages:
+  - id: plan
+    agent: claude
+    model: opus
+    prompt: Plan {intent}
+  - id: build
+    agent: codex
+    prompt: Build it
+`
+  it('parses model, effort and mode from a recipe', () => {
+    const r = parseRecipe(`name: X\nstages:\n  - id: a\n    agent: claude\n    model: sonnet\n    effort: high\n    mode: plan\n    prompt: hi\n`).recipe!
+    expect(r.nodes[0]).toMatchObject({ model: 'sonnet', effort: 'high', mode: 'plan' })
+  })
+  it('applies model, interactive, and drops the recipe model when the agent changes', () => {
+    const r = parseRecipe(text).recipe!
+    const out = applyOverrides(r, { plan: { interactive: true }, build: { model: 'gpt-5' } }, 'claude')
+    expect(out.nodes[0]).toMatchObject({ model: 'opus', interactive: true })
+    expect(out.nodes[1]).toMatchObject({ model: 'gpt-5', interactive: false })
+    expect(applyOverrides(r, { plan: { agent: 'codex' } }, 'claude').nodes[0].model).toBeUndefined()
+    expect(applyOverrides(r, { plan: { model: '' } }, 'claude').nodes[0].model).toBeUndefined()
+  })
+  it('writes them into a saved copy', () => {
+    const saved = recipeTextWithOverrides(text, { build: { model: 'gpt-5', interactive: true } }, '(custom)')
+    const r = parseRecipe(saved).recipe!
+    expect(r.nodes[1]).toMatchObject({ model: 'gpt-5', interactive: true })
+  })
+  it('tells an interactive stage the user is there', () => {
+    const r = parseRecipe(text).recipe!
+    const live = applyOverrides(r, { plan: { interactive: true } }, 'claude').nodes[0]
+    expect(nodePrompt(live, newNodeRun(), { intent: 'x', outs: {} })).toContain('The user is watching')
+    expect(nodePrompt(r.nodes[0], newNodeRun(), { intent: 'x', outs: {} })).not.toContain('The user is watching')
+  })
+})
+
+describe('bake-off choices per agent', () => {
+  it('compareRecipe carries the mission form model for its own agent', () => {
+    const r = compareRecipe(['claude', 'codex'], { claude: { model: 'opus', effort: 'high' } })
+    expect(r.nodes[0].perAgent).toEqual({ claude: { model: 'opus', effort: 'high' } })
+  })
+  it('the run form adds per-agent choices to a bake-off stage', () => {
+    const r = compareRecipe(['claude', 'codex'], { claude: { model: 'opus' } })
+    const out = applyOverrides(r, { compare: { perAgent: { codex: { model: 'gpt-5', effort: 'high' } } } }, 'claude')
+    expect(out.nodes[0].agents).toEqual(['claude', 'codex'])
+    expect(out.nodes[0].perAgent).toEqual({ claude: { model: 'opus' }, codex: { model: 'gpt-5', effort: 'high' } })
   })
 })

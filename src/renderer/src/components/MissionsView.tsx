@@ -193,13 +193,12 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   useEffect(() => {
     if (!folderOk) setMoreOpen(true)
   }, [folderOk])
-  const agentInfo = getAgent(options.agent)
   const optionsSummary = [
     basename(root) || 'no folder',
     !folderOk ? 'folder not found' : !checked ? '' : isRepo ? (worktree ? `new worktree from ${base || 'HEAD'}` : 'in place, on the current branch') : 'not a git repo',
-    options.model || (agentInfo.models.length || agentInfo.modelPlaceholder ? 'default model' : ''),
-    options.effort ? `${options.effort} effort` : '',
-    options.permissionMode ? (agentInfo.modes.find((m) => m.value === options.permissionMode)?.label ?? options.permissionMode) : ''
+    // model, effort and approval mode sit next to the agent, in view
+    options.print ? 'print mode' : '',
+    options.extraArgs ? 'extra arguments' : ''
   ]
     .filter(Boolean)
     .join(' · ')

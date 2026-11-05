@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { NoteMeta } from '@shared/types'
-import { FolderOpen, Plus, Rocket, SendHorizontal, Trash2 } from 'lucide-react'
+import { Factory, FolderOpen, Plus, Rocket, SendHorizontal, Trash2 } from 'lucide-react'
 import { activeTerminalId, openPanel } from '../dock/dockApi'
 import { focusTerminal, writeToTerminal } from '../lib/terminals'
 import { basename } from '../lib/paths'
-import { startMission } from '../state/missions'
+import { showNotice } from '../lib/removals'
+import { openNewMission } from './MissionsView'
+import { openNewRun } from './FactoryView'
 import { bumpNotes, notesVersion } from '../state/notes'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
@@ -16,21 +18,37 @@ export function openNote(n: { path: string; title: string }): void {
   openPanel('note', `note:${n.path}`, n.title, { path: n.path })
 }
 
+/** A note's text without its title heading. */
+async function noteBody(path: string): Promise<string> {
+  return (await window.api.notes.read(path)).replace(/^#.*\n+/, '').trim()
+}
+
 export async function sendNoteToTerminal(path: string): Promise<boolean> {
   const id = activeTerminalId()
-  if (!id) return false
-  const text = (await window.api.notes.read(path)).replace(/^#.*\n+/, '').trim()
+  if (!id) {
+    showNotice('No terminal selected', 'Click into a terminal first, then paste the note into it. To hand it to an agent with its own settings, use Mission or Factory.')
+    return false
+  }
+  const text = await noteBody(path)
   // bracketed paste so multi-line text lands as one input in shells and agent CLIs
   writeToTerminal(id, `\x1b[200~${text}\x1b[201~`)
   focusTerminal(id)
   return true
 }
 
+/** The New mission form with the note as its brief: pick the agent, model, effort, mode and kind there. */
 export async function missionFromNote(path: string, title: string): Promise<void> {
-  const root = workspace.get().rootFolder
-  if (!root) return
-  const prompt = (await window.api.notes.read(path)).replace(/^#.*\n+/, '').trim()
-  if (prompt) await startMission({ prompt, title, root, options: { agent: workspace.get().defaultAgent }, worktree: false })
+  const brief = await noteBody(path)
+  if (!brief) return void showNotice('The note is empty', 'Write what the agent should do, then start a mission from it.')
+  openNewMission({ brief, title })
+}
+
+/** The New factory run form with the note as what to build: recipe, agents and models per stage are chosen there. */
+export async function factoryFromNote(path: string, title: string): Promise<void> {
+  const body = await noteBody(path)
+  if (!body && !title.trim()) return void showNotice('The note is empty', 'Write what the factory should build, then run a recipe from it.')
+  // the title leads, so the branch and the run's name come from it
+  openNewRun({ intent: body.toLowerCase().startsWith(title.trim().toLowerCase()) ? body : [title.trim(), body].filter(Boolean).join('\n\n') })
 }
 
 export function NotesView(): React.JSX.Element {
@@ -79,7 +97,8 @@ export function NotesView(): React.JSX.Element {
             showContextMenu(e, [
               { label: 'Open', run: () => openNote(n) },
               { label: 'Paste into active terminal', icon: <SendHorizontal size={13} />, run: () => void sendNoteToTerminal(n.path) },
-              { label: 'Start mission from note', icon: <Rocket size={13} />, disabled: !root, run: () => void missionFromNote(n.path, n.title) },
+              { label: 'Start a mission from it…', icon: <Rocket size={13} />, disabled: !root, run: () => void missionFromNote(n.path, n.title) },
+              { label: 'Run a factory recipe from it…', icon: <Factory size={13} />, disabled: !root, run: () => void factoryFromNote(n.path, n.title) },
               { type: 'separator' },
               { label: 'Delete (to trash)', icon: <Trash2 size={13} />, run: () => void window.api.notes.remove(n.path).then(bumpNotes) }
             ])

@@ -49,15 +49,21 @@ export async function switchBranch(cwd: string, branch: string): Promise<void> {
 }
 
 /** Create an isolated worktree for a mission next to the repo: ../.sldev-worktrees/<repo>/<slug> */
-export async function addWorktree(root: string, slug: string, base: string): Promise<WorktreeInfo> {
+/**
+ * `name` is the branch: "feature/dark-mode" as it is, or a bare slug, which goes under sldev/ as before.
+ * The folder is the name with its slashes turned into dashes; both get -2, -3… when taken.
+ */
+export async function addWorktree(root: string, name: string, base: string): Promise<WorktreeInfo> {
   const top = (await ok(['rev-parse', '--show-toplevel'], root)).trim()
   const dir = join(dirname(top), '.sldev-worktrees', basename(top))
   mkdirSync(dir, { recursive: true })
-  let path = join(dir, slug)
-  let branch = `sldev/${slug}`
-  for (let i = 2; existsSync(path) || (await git(['rev-parse', '--verify', '--quiet', branch], top)).code === 0; i++) {
-    path = join(dir, `${slug}-${i}`)
-    branch = `sldev/${slug}-${i}`
+  const wanted = name.includes('/') ? name : `sldev/${name}`
+  const folder = name.replace(/\//g, '-')
+  let path = join(dir, folder)
+  let branch = wanted
+  for (let i = 2; existsSync(path) || (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], top)).code === 0; i++) {
+    path = join(dir, `${folder}-${i}`)
+    branch = `${wanted}-${i}`
   }
   await ok(['worktree', 'add', '-b', branch, path, base], top)
   return { path, branch, base, repo: top }

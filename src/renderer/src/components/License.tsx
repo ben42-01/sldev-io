@@ -1,11 +1,12 @@
-import { ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
+import { KeyRound, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { formatBetaDate } from '@shared/beta'
-import { beta, pricingUrl } from '../state/beta'
+import { beta } from '../state/beta'
 import { activateLicense, checkLicense, deactivateLicense, license } from '../state/license'
 import { useStore } from '../state/store'
 import { openSettings } from '../lib/commands'
 import { confirmAction } from './Modal'
+import { Plans } from './Plans'
 
 const planName = { personal: 'Personal', team: 'Team' } as const
 
@@ -70,7 +71,13 @@ export function LicenseSection(): React.JSX.Element {
   return (
     <section id="settings-license">
       <h3>License</h3>
-      {status?.licensed ? (
+      {status?.devBuild ? (
+        <div className="field">
+          <span>
+            <span className="ok">Development build</span> · running from source, so no license or trial is checked. Installed builds check as usual.
+          </span>
+        </div>
+      ) : status?.licensed ? (
         <>
           <div className="field">
             <span>
@@ -103,12 +110,8 @@ export function LicenseSection(): React.JSX.Element {
                 : 'Enter your license key from the receipt email.'}
             </span>
           </div>
+          <Plans />
           <LicenseForm />
-          <div className="about-links">
-            <button className="link" onClick={() => void window.api.shell.openExternal(pricingUrl())}>
-              Buy a license <ExternalLink size={11} />
-            </button>
-          </div>
         </>
       )}
       {status?.message && <div className="warn-text">{status.message}</div>}

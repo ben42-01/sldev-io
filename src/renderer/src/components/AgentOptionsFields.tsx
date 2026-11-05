@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useState } from 'react'
 import type { AgentOptions } from '@shared/types'
 import { applyProfile } from '@shared/profiles'
 import { useAgents } from '../state/agents'
@@ -7,16 +7,19 @@ import { openSettings } from '../lib/commands'
 
 /**
  * Agent picker plus model / effort / mode / print / extra-args fields, shared by the task and mission forms.
- * `part` splits them: 'who' is profile and agent, 'how' the rest (the mission form folds 'how' away).
+ * `part` splits them: 'who' is agent, profile, model and effort (always in view), 'how' the rest (the mission form folds 'how' away).
  */
+const OTHER = '\u0000other'
+
 export function AgentOptionsFields({ value, onChange, showPrint = true, part }: { value: AgentOptions; onChange: (p: Partial<AgentOptions>) => void; showPrint?: boolean; part?: 'who' | 'how' }): React.JSX.Element {
   const agents = useAgents()
   const profiles = useProfiles()
   const profile = profiles.find((p) => p.id === value.profile)
-  const listId = useId()
+  /** typing a model the list doesn't have */
+  const [custom, setCustom] = useState(false)
   const agent = agents.find((a) => a.id === (value.agent || 'claude')) ?? agents[0]
   // options that only make sense for the previous agent are dropped on switch
-  const pick = (id: string): void => onChange({ agent: id, model: undefined, permissionMode: undefined, effort: undefined })
+  const pick = (id: string): void => (setCustom(false), onChange({ agent: id, model: undefined, permissionMode: undefined, effort: undefined }))
 
   const groups: [string, typeof profiles][] = [
     ['This project', profiles.filter((p) => p.scope === 'project')],
@@ -50,6 +53,47 @@ export function AgentOptionsFields({ value, onChange, showPrint = true, part }: 
         </select>
       </label>
       </div>
+      <div className="field-row">
+        <label className="field">
+          <span>Model</span>
+          {agent.models.length > 0 && !custom && (!value.model || agent.models.includes(value.model)) ? (
+            <select value={value.model ?? ''} onChange={(e) => (e.target.value === OTHER ? setCustom(true) : onChange({ model: e.target.value || undefined }))}>
+              <option value="">Default</option>
+              {agent.models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+              <option value={OTHER}>Other…</option>
+            </select>
+          ) : (
+            <input value={value.model ?? ''} placeholder={agent.modelPlaceholder ?? 'default'} autoFocus={custom} onChange={(e) => onChange({ model: e.target.value || undefined })} />
+          )}
+        </label>
+        {agent.efforts.length > 0 && (
+          <label className="field">
+            <span>Effort</span>
+            <select value={value.effort ?? ''} onChange={(e) => onChange({ effort: e.target.value || undefined })}>
+              {['', ...agent.efforts].map((m) => (
+                <option key={m} value={m}>
+                  {m || 'default'}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {agent.modes.length > 0 && (
+          <label className="field">
+            <span>Approval mode</span>
+            <select value={value.permissionMode ?? ''} onChange={(e) => onChange({ permissionMode: e.target.value || undefined })}>
+              <option value="">default</option>
+              {agent.modes.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
       {profile?.description && <div className="hint">{profile.description}</div>}
       {agent.installed === false && (
         <div className="hint">
@@ -66,42 +110,6 @@ export function AgentOptionsFields({ value, onChange, showPrint = true, part }: 
   )
   const how = (
     <>
-      <div className="field-row">
-        <label className="field">
-          <span>Model</span>
-          <input list={listId} value={value.model ?? ''} placeholder={agent.modelPlaceholder ?? 'default'} onChange={(e) => onChange({ model: e.target.value || undefined })} />
-          <datalist id={listId}>
-            {agent.models.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        </label>
-        {agent.efforts.length > 0 && (
-          <label className="field">
-            <span>Effort</span>
-            <select value={value.effort ?? ''} onChange={(e) => onChange({ effort: e.target.value || undefined })}>
-              {['', ...agent.efforts].map((m) => (
-                <option key={m} value={m}>
-                  {m || 'default'}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-      {agent.modes.length > 0 && (
-        <label className="field">
-          <span>Approval mode</span>
-          <select value={value.permissionMode ?? ''} onChange={(e) => onChange({ permissionMode: e.target.value || undefined })}>
-            <option value="">default</option>
-            {agent.modes.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       {showPrint && agent.canPrint && (
         <label className="check">
           <input type="checkbox" checked={!!value.print} onChange={(e) => onChange({ print: e.target.checked || undefined })} />

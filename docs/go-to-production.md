@@ -389,6 +389,11 @@ Vercel **production** builds link `checkoutUrl` (Polar live); previews and local
 like `VERCEL_ENV` in `api/_polar.ts`). While `price` is `0` or the link is empty, the button says
 "Download free trial"; with both, "Buy Personal" / "Buy Team".
 
+The app shows the same plans in Settings → License and on the trial-ended screen (`src/shared/pricing.ts`,
+baked in from `pricing.json` at build time), with buy buttons that open the **live** checkout in the browser.
+Build with `SLDEV_CHECKOUT=sandbox` to link the sandbox instead. After paying, Polar emails the key and the
+buyer pastes it into the app, so the checkout links' success URL (`/thanks`) only needs the website to be up.
+
 ### Phase 3 checklist
 
 - [ ] Account verified, payouts connected

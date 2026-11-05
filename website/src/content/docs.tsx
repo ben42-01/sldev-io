@@ -584,7 +584,8 @@ stages:
               <tr><td><code>gate: approve</code></td><td>Wait for Approve or Reject after the stage</td></tr>
               <tr><td><code>maxDiff</code></td><td>Ask for approval when the run's changed lines pass this number</td></tr>
               <tr><td><code>onFail</code></td><td><code>{'{ retry: <stage or list>, max: 1–10 }'}</code> on a run stage; default <code>max</code> is 2</td></tr>
-              <tr><td><code>interactive: true</code></td><td>A normal session you type into; finishes with Done</td></tr>
+              <tr><td><code>interactive: true</code></td><td>A normal session you type into; finishes with Done. The run form can switch it per stage, or for every stage</td></tr>
+              <tr><td><code>model</code>, <code>effort</code>, <code>mode</code></td><td>The agent's model, reasoning effort and approval mode, in that CLI's own values (as in the mission form). Without <code>mode</code>, print-mode stages use the unattended mode from Settings</td></tr>
             </tbody>
           </table>
           <p>A stage is exactly one of agent (or skill), run or pr.</p>

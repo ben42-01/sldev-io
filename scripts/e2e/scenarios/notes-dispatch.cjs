@@ -1,0 +1,40 @@
+// A note goes to a mission or a factory run through their forms (agent, model, effort, mode chosen there),
+// never straight to the default agent; the factory form sets every stage's agent and model at once.
+module.exports = async (h) => {
+  await h.openFixture()
+  const path = await h.js(`window.api.notes.create(${JSON.stringify(h.fixture)}, 'Health endpoint')`)
+  await h.js(`window.api.notes.write(${JSON.stringify(path)}, '# Health endpoint\\n\\nAdd GET /health that returns the git sha.')`)
+  await h.click('.activitybar button[title^="Notes"]')
+  await h.wait(600)
+  await h.click('.note-row', 'Health endpoint')
+  await h.wait(800)
+
+  await h.click('.note-toolbar .btn', 'Mission')
+  await h.wait(600)
+  h.expect(await h.js(`document.querySelector('.mission-form textarea')?.value === 'Add GET /health that returns the git sha.'`), 'Mission opens the mission form with the note as the brief')
+  h.expect(((await h.js(`window.api.store.get('missions')`))?.missions?.length ?? 0) === 0, 'and starts nothing by itself')
+  const inView = await h.js(`[...document.querySelectorAll('.mission-form > .field-row .field > span, .mission-form .field-row .field > span')].filter(e => !e.closest('details:not([open])')).map(e => e.textContent)`)
+  h.expect(['Agent', 'Model', 'Effort', 'Approval mode'].every((l) => inView.includes(l)), `the mission form shows agent, model, effort and mode without opening Options (${inView.join(', ')})`)
+  h.expect(await h.js(`[...document.querySelectorAll('.mission-form .field')].find(f => f.firstElementChild?.textContent === 'Model')?.querySelector('select')?.options[1]?.value === 'opus'`), "the model is a list of the agent's models")
+  await h.shot('0-mission-form')
+  await h.click('.modal-footer .btn, .mission-form .btn', 'Cancel')
+  await h.wait(300)
+
+  await h.click('.note-toolbar .btn', 'Factory')
+  await h.wait(800)
+  h.expect(await h.js(`document.querySelector('.factory-form textarea')?.value.startsWith('Health endpoint\\n\\nAdd GET /health')`), 'Factory opens the run form with the note as what to build')
+  const branch = await h.js(`[...document.querySelectorAll('.factory-form .field')].find(f => f.textContent.startsWith('New branch'))?.querySelector('input')?.value`)
+  h.expect(branch === 'feature/health-endpoint', `the branch comes from the note title (${branch})`)
+  // the built-in Feature recipe: three agent stages on different profiles
+  await h.setValue('.factory-form select[aria-label="Agent for all stages"]', 'claude')
+  await h.wait(200)
+  await h.setValue('.factory-form [aria-label="Model for all stages"]', 'sonnet')
+  await h.setValue('.factory-form [aria-label="Effort for all stages"]', 'high')
+  await h.wait(300)
+  const stages = await h.js(`[...document.querySelectorAll('.factory-form select[aria-label^="Agent for "]')].filter(s => s.getAttribute('aria-label') !== 'Agent for all stages').map(s => [s.value, document.querySelector('.factory-form [aria-label="Model for ' + s.getAttribute('aria-label').slice(10) + '"]').value, document.querySelector('.factory-form [aria-label="Effort for ' + s.getAttribute('aria-label').slice(10) + '"]').value])`)
+  h.expect(stages.length === 3 && stages.every(([a, m, e]) => a === 'claude' && m === 'sonnet' && e === 'high'), `"All stages" sets every stage (${JSON.stringify(stages)})`)
+  await h.setValue('.factory-form [aria-label="Model for build"]', 'opus')
+  await h.wait(200)
+  h.expect(await h.js(`document.querySelector('.factory-form [aria-label="Model for all stages"]').value === ''`), 'one stage can still differ (All stages then shows Default/mixed)')
+  await h.shot('1-factory-form')
+}

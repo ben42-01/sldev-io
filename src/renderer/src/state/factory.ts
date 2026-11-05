@@ -20,6 +20,7 @@ import {
   seedNode,
   sendBack as sendBackNode,
   totalLines,
+  type StageAgentChoice,
   type FactoryRun,
   type FillContext,
   type Finish,
@@ -29,6 +30,7 @@ import {
   type StageOverride
 } from '@shared/factory'
 import { applyProfile } from '@shared/profiles'
+import { branchName, cleanBranchName } from '@shared/branch'
 import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
 import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
@@ -164,6 +166,8 @@ export interface StartRunInput {
   root: string
   base?: string
   issue?: number
+  /** the run's branch; default: feature/…, fix/… from the intent */
+  branch?: string
   /** the run form's agent and skill choices per stage */
   overrides?: Record<string, StageOverride>
   /** start past this stage: its output is this text (a spec file, a mission's plan) */
@@ -178,7 +182,7 @@ export async function startRun(input: StartRunInput): Promise<FactoryRun> {
   if (!(await window.api.git.isRepo(input.root))) throw new Error('The factory needs a git repository')
   const base = input.base || (await window.api.git.branch(input.root)) || 'HEAD'
   const id = `f-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-  const worktree = await window.api.git.addWorktree(input.root, `factory-${slugify(input.intent).slice(0, 30)}`, base)
+  const worktree = await window.api.git.addWorktree(input.root, input.branch?.trim() ? cleanBranchName(input.branch) : branchName(input.intent), base)
   const outDir = `${worktree.path}/.sldev/runs/${id}`
   await window.api.factory.prepare(outDir)
   if (input.seed) await window.api.factory.write(outFile(worktree.path, id, input.seed.node), input.seed.text)
@@ -277,9 +281,27 @@ function nodeOptions(spec: string): AgentOptions {
   return { ...o, agent: r.agent ?? o.agent }
 }
 
-/** Print-mode stages have nobody to approve a tool call, so they get the unattended mode unless the profile sets one. */
-function stageOptions(spec: string, interactive: boolean): AgentOptions {
-  const o = { ...nodeOptions(spec), print: !interactive }
+/** The CLI a recipe agent spec runs on (a profile's agent, or the CLI itself); the default agent when it doesn't resolve. */
+export function specAgent(spec: string | undefined): string {
+  if (!spec) return workspace.get().defaultAgent
+  try {
+    return nodeOptions(spec).agent ?? workspace.get().defaultAgent
+  } catch {
+    return workspace.get().defaultAgent
+  }
+}
+
+/**
+ * The stage's agent options: its profile, then the recipe's (or run form's) model, effort and mode. Print-mode
+ * stages have nobody to approve a tool call, so they get the unattended mode unless something sets one.
+ */
+function stageOptions(spec: string, node: Pick<RecipeNode, 'interactive' | 'model' | 'effort' | 'mode' | 'perAgent'>): AgentOptions {
+  const interactive = node.interactive
+  const p = nodeOptions(spec)
+  // a bake-off's own choice for this agent ('' = its default), else the stage's, else the profile's
+  const own = node.perAgent?.[spec] ?? {}
+  const pick = (k: keyof StageAgentChoice, stage: string | undefined, profile: string | undefined): string | undefined => (own[k] !== undefined ? own[k] || undefined : (stage ?? profile))
+  const o: AgentOptions = { ...p, model: pick('model', node.model, p.model), effort: pick('effort', node.effort, p.effort), permissionMode: pick('mode', node.mode, p.permissionMode), print: !interactive }
   if (interactive || o.permissionMode) return o
   const { customAgents, factoryModes } = workspace.get()
   return { ...o, permissionMode: stageMode(findAgent(o.agent, customAgents), factoryModes) }
@@ -350,7 +372,7 @@ async function startNode(runId: string, nodeId: string, together: string[]): Pro
   if (isBakeoff(node)) return startBakeoff(runId, nodeId, outs)
 
   try {
-    const options = stageOptions(node.agents[0], node.interactive)
+    const options = stageOptions(node.agents[0], node)
     const prompt = await stagePrompt(run, node, nr, { intent: run.intent, base: run.worktree.base, out: outFile(cwd, run.id, nodeId), outs, log: nr.feedback }, options.agent)
     const m = await startMission({ prompt, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })
     const cur = getRun(runId)!
@@ -368,7 +390,7 @@ async function startBakeoff(runId: string, nodeId: string, outs: Record<string, 
   const candidates: NonNullable<NodeRun['candidates']> = []
   try {
     for (const spec of node.agents) {
-      const options = stageOptions(spec, node.interactive)
+      const options = stageOptions(spec, node)
       const slug = `${run.worktree.branch.replace(/^sldev\//, '')}-${nodeId}-${slugify(spec)}`
       const worktree = await window.api.git.addWorktree(run.worktree.repo, slug, run.worktree.branch)
       await window.api.factory.prepare(`${worktree.path}/.sldev/runs/${run.id}`)
@@ -551,7 +573,7 @@ async function openPr(run: FactoryRun, nodeId: string): Promise<void> {
   try {
     await commit(run.worktree.path, `factory: ${run.intent}`.slice(0, 100))
     const body = [fillText(node.pr?.body ?? '').trim(), run.issue ? `Closes #${run.issue}` : ''].filter(Boolean).join('\n\n')
-    const url = await window.api.git.pushAndPr(run.worktree.path, run.worktree.branch, run.worktree.base, fillText(node.pr?.title ?? '{intent}'), body || undefined)
+    const url = await window.api.git.pushAndPr(run.worktree.path, run.worktree.branch, run.worktree.base, fillText(node.pr?.title ?? '{intent}').split('\n')[0].trim(), body || undefined)
     const cur = getRun(run.id)!
     const nodes = { ...cur.nodes, [nodeId]: { ...cur.nodes[nodeId], status: 'done' as const, endedAt: Date.now(), note: url || 'Pull request opened' } }
     const done = Object.values(nodes).every((n) => n.status === 'done')
@@ -621,7 +643,8 @@ export async function continueStage(runId: string, nodeId: string, agentId: stri
   if (nr.status !== 'running') run = put({ ...nodeStarted(run, nodeId, Date.now()), status: 'running', note: undefined })
   try {
     const spec = respec(node.agents[0], agentId, allAgents(workspace.get().customAgents).map((a) => a.id))
-    const options = stageOptions(spec, node.interactive)
+    // the stage's model and mode were for the agent that stopped
+    const options = stageOptions(spec, { interactive: node.interactive })
     const outs = Object.fromEntries(run.recipe.nodes.map((n) => [n.id, outFile(run!.worktree.path, run!.id, n.id)]))
     const body = await stagePrompt(run, node, run.nodes[nodeId], { intent: run.intent, base: run.worktree.base, out: outFile(last.cwd, run.id, nodeId), outs, log: nr.feedback }, options.agent)
     const nm = await startMission({ prompt: `${note}\n\n---\n\n${body}`, title: `${nodeId}: ${run.intent}`.slice(0, 60), root: run.root, cwd: last.cwd, options, worktree: false, factory: { run: run.id, node: nodeId }, placement: placement(run) })

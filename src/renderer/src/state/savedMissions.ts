@@ -56,7 +56,10 @@ export async function launchSaved(m: SavedMission, isRepo: boolean): Promise<voi
     const profile = getProfile(m.options.profile)
     const first = m.options.agent || workspace.get().defaultAgent
     const ids = [first, ...compare.filter((c) => c !== first)]
-    await startRun({ recipe: compareRecipe(ids.map((id) => (profile ? `${profile.name}@${id}` : id))), intent: m.brief, root: m.root, base: m.base ?? '', issue: m.issue })
+    const specs = ids.map((id) => (profile ? `${profile.name}@${id}` : id))
+    // the form's model, effort and mode are for its own agent; the others run on their defaults
+    const mine = { model: m.options.model, effort: m.options.effort, mode: m.options.permissionMode }
+    await startRun({ recipe: compareRecipe(specs, { [specs[0]]: mine }), intent: m.brief, root: m.root, base: m.base ?? '', issue: m.issue })
     return
   }
   const sent = renderKind(kind, { title, brief: m.brief, criteria: m.criteria ?? '' })

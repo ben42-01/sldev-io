@@ -1,13 +1,14 @@
 import type { AgentOptions, HookEvent, Mission, MissionStatus, SavedMission } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
+import { branchName, cleanBranchName } from '@shared/branch'
 import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
-import { agentCommand, commandText, installedBin, sldevMcp, slugify, type McpServerCommand } from '../lib/agents'
+import { agentCommand, commandText, installedBin, sldevMcp, type McpServerCommand } from '../lib/agents'
 import { failoverBrief, limitLine, TAIL_ROWS, nextAgent } from '@shared/failover'
 import { screenReport } from '@shared/screenReport'
 import { ASK_GENERIC, askLine } from '@shared/attention'
 import { playChime } from '../lib/sound'
-import { onTerminalEvent, stopTerminal, terminalCursor, terminalTail } from '../lib/terminals'
+import { onTerminalEvent, restartTerminal, stopTerminal, terminalCursor, terminalStatus, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, roleFor } from './profiles'
 import { getKind } from './missionKinds'
@@ -86,8 +87,10 @@ export function missionResumeCommand(id: string): string[] | undefined {
   const m = getMission(id)
   if (!m) return undefined
   const agent = getAgent(m.options.agent)
-  if (agent.hooks && m.sessionId) return agentCommand(agent, m.options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId, mcp: mcpFor(id) })
-  if (!agent.hooks && agent.canResume && m.status !== 'starting') return agentCommand(agent, m.options, undefined, m.title, { resume: true, mcp: mcpFor(id) })
+  // a resumed session is one you talk to, even when the mission ran in print mode (a factory stage)
+  const options = { ...m.options, print: undefined }
+  if (agent.hooks && m.sessionId) return agentCommand(agent, options, undefined, m.title, { settingsPath: hook?.settingsPath, resume: m.sessionId, mcp: mcpFor(id) })
+  if (!agent.hooks && agent.canResume && m.status !== 'starting') return agentCommand(agent, options, undefined, m.title, { resume: true, mcp: mcpFor(id) })
   return undefined
 }
 
@@ -109,6 +112,8 @@ export interface StartMissionInput {
   criteria?: string
   parent?: Mission['parent']
   kind?: Mission['kind']
+  /** its worktree's branch; default: feature/…, fix/… from the brief (src/shared/branch.ts) */
+  branch?: string
   /** where its terminal opens; default: a tab in the active group */
   placement?: Pick<OpenTerminalOptions, 'referencePanel' | 'referenceGroup' | 'direction'>
 }
@@ -141,7 +146,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
   const repo = await window.api.git.isRepo(input.root)
   if (input.worktree && repo) {
     const base = input.base || (await window.api.git.branch(input.root)) || 'HEAD'
-    worktree = await window.api.git.addWorktree(input.root, slugify(title), base)
+    worktree = await window.api.git.addWorktree(input.root, input.branch ? cleanBranchName(input.branch) : branchName(input.brief || title), base)
     cwd = worktree.path
   }
   const mission: Mission = {
@@ -198,6 +203,16 @@ export async function focusOrResume(id: string): Promise<void> {
   const m = getMission(id)
   if (!m) return
   const panel = missions.get().panels[id]
+  // its terminal is still open but the agent exited (a print-mode stage): continue the session right there,
+  // instead of showing the old output, where Enter would run the whole prompt again
+  if (panel && !isLive(m.status) && terminalStatus(panel) === 'exited') {
+    const again = missionResumeCommand(id)
+    if (again && focusPanel(panel)) {
+      restartTerminal(panel, again)
+      update(id, { status: 'starting' })
+      return
+    }
+  }
   if (panel && focusPanel(panel)) return
   const resume = missionResumeCommand(id)
   const agent = getAgent(m.options.agent)

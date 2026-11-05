@@ -6,6 +6,7 @@ import { license } from '../state/license'
 import { downloadUpdate, updates } from '../state/updates'
 import { useStore } from '../state/store'
 import { LicenseForm } from './License'
+import { Plans } from './Plans'
 import { Logo } from './Logo'
 
 /** Full-screen page shown instead of the workspace when the free beta (or a trial) has ended. Data is untouched. */
@@ -29,11 +30,16 @@ export function BetaEnded(): React.JSX.Element {
         <p>
           {trialEnded ? 'Thanks for trying sldev-io.' : `Thanks for testing${status?.config.endsAt ? ` until ${formatBetaDate(status.config.endsAt)}` : ''}.`}{' '}
           {licensing
-            ? 'Enter your license key to keep going.'
+            ? 'Pick a plan, or enter your license key to keep going.'
             : 'The next version is on its way, and sldev-io updates itself to it. You can also download it from the website.'}{' '}
           Your terminals, missions, notes, connections and settings are all still here and come back exactly as you left them.
         </p>
-        {licensing && <LicenseForm autoFocus />}
+        {licensing && (
+          <>
+            <Plans />
+            <LicenseForm autoFocus />
+          </>
+        )}
         <div className="beta-ended-actions">
           {update?.state === 'ready' ? (
             <button className="btn primary" onClick={() => void window.api.update.install()}>
@@ -43,11 +49,7 @@ export function BetaEnded(): React.JSX.Element {
             <button className="btn primary" onClick={downloadUpdate}>
               <Download size={14} /> Download {update.version}
             </button>
-          ) : licensing ? (
-            <button className="btn primary" onClick={() => void window.api.shell.openExternal(pricingUrl())}>
-              <ExternalLink size={14} /> Buy a license
-            </button>
-          ) : (
+          ) : licensing ? null : (
             <button className="btn primary" onClick={() => void window.api.shell.openExternal(`${__SITE_URL__}/download`)}>
               <ExternalLink size={14} /> Download the latest version
             </button>

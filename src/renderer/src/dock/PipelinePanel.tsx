@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { Bot, Check, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, Send, Square, SquareTerminal, Upload, Wrench, X } from 'lucide-react'
+import { Bot, Check, Copy, ExternalLink, History, FileText, GitPullRequest, MessageSquare, Pause, Play, RefreshCw, RotateCcw, ScrollText, Send, Square, SquareTerminal, Upload, Wrench, X } from 'lucide-react'
+import { Modal } from '../components/Modal'
 import { describeEvent, layout, sendBackTargets, statusesAt, type FactoryRun, type NodeRun, type RecipeNode } from '@shared/factory'
 import { focusPanel, openTerminal } from './dockApi'
 import { getAgent } from '../state/agents'
@@ -17,8 +18,8 @@ import { ago } from '../components/MissionCard'
 import { StatusPill } from '../components/StatusDot'
 import { nodeSignal, runSignal } from '@shared/status'
 
-const W = 196
-const BASE_H = 128
+const W = 280
+const BASE_H = 150
 /** each bake-off version gets a row */
 const ROW_H = 26
 const GX = 44
@@ -31,7 +32,6 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
   /** replay position; null follows the live run */
   const [replayAt, setReplayAt] = useState<number | null>(null)
   const pos = useMemo(() => (run ? layout(run.recipe) : new Map<string, { col: number; row: number }>()), [run])
-  const avail = useWidth()
   if (!run) return <div className="panel-page muted">This run was removed.</div>
   const H = BASE_H + ROW_H * Math.max(0, ...run.recipe.nodes.map((n) => (n.agents.length > 1 ? n.agents.length : 0)))
 
@@ -64,9 +64,9 @@ export function PipelinePanel({ params }: IDockviewPanelProps<{ runId: string }>
       <p className="pipeline-intent">{run.intent}</p>
       {run.note && replayAt === null && <div className={`pipeline-note ${run.status}`}>{run.note}</div>}
       {history && <RunHistory run={run} at={replayAt} setAt={setReplayAt} />}
-      <div className="pipeline-fit" ref={avail.ref}>
-      {/* a wide graph shrinks to fit the panel (down to 65%) before it scrolls; zoom keeps clicks where they look */}
-      <div className="pipeline-canvas" style={{ width, height, zoom: avail.width ? Math.min(1, Math.max(0.65, avail.width / width)) : 1 }}>
+      <div className="pipeline-fit">
+      {/* full-size cards; a graph wider than the panel scrolls sideways (Shift+wheel, or the scrollbar) */}
+      <div className="pipeline-canvas" style={{ width, height }}>
         <svg className="pipeline-edges" width={width} height={height} aria-hidden="true">
           {run.recipe.nodes.flatMap((n) =>
             n.needs.map((from) => {
@@ -231,6 +231,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
   /** the note box: rejecting an approval, or sending a failed stage back */
   const [asking, setAsking] = useState<'reject' | 'send' | null>(null)
   const [note, setNote] = useState('')
+  const [details, setDetails] = useState(false)
   const setRejecting = (on: boolean): void => setAsking(on ? 'reject' : null)
   const targets = nr.status === 'failed' ? sendBackTargets(run, node.id) : []
   const cwd = nr.worktree?.path ?? run.worktree.path
@@ -248,9 +249,8 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
       </div>
       <div className="pn-who" title={who}>{who}</div>
       <div className="pn-meta">
-        {time}
-        {nr.attempts > 1 ? ` · try ${nr.attempts}` : ''}
-        {nr.worktree ? ' · own worktree' : ''}
+        {node.kind === 'agent' && <span className="pn-mode" title={node.interactive ? 'A session you can type into; finish it with Done' : 'Runs unattended and prints its answer when it ends; Talk to it afterwards continues the session'}>{node.interactive ? 'interactive' : 'print'}{node.model ? ` · ${node.model}` : ''}</span>}
+        {[time, nr.attempts > 1 ? `try ${nr.attempts}` : '', nr.worktree ? 'own worktree' : ''].filter(Boolean).join(' · ')}
       </div>
       {nr.note && <div className="pn-note" title={nr.note}>{nr.note}</div>}
       {nr.status === 'running' && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && <StageActivity missionId={nr.missionIds[0]} />}
@@ -273,6 +273,7 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           ))}
         </div>
       )}
+      {details && <StageDetails run={run} node={node} nr={nr} out={out} onClose={() => setDetails(false)} />}
       {readOnly ? null : asking ? (
         <form
           className="pn-reject"
@@ -312,11 +313,11 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
           {nr.status === 'running' && node.kind === 'run' && nr.panelId && (
             <button className="icon-btn" title="Open its terminal" aria-label="Open its terminal" onClick={() => focusPanel(nr.panelId!)}><SquareTerminal size={13} /></button>
           )}
+          {node.kind === 'agent' && !readOnly && (
+            <button className="icon-btn" title="Prompt and output" aria-label="Prompt and output" onClick={() => setDetails(true)}><ScrollText size={13} /></button>
+          )}
           {nr.status === 'running' && node.interactive && (
             <button className="btn sm" onClick={() => markDone(run.id, node.id)}><Square size={11} /> Done</button>
-          )}
-          {node.kind === 'agent' && (nr.status === 'done' || nr.status === 'approval') && (
-            <button className="icon-btn" title="Open its output" aria-label="Open its output" onClick={() => void openInEditor(out)}><FileText size={13} /></button>
           )}
           {nr.status === 'failed' && node.kind === 'agent' && nr.missionIds[0] && getMission(nr.missionIds[0])?.limited && (
             <button
@@ -336,8 +337,8 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
             </button>
           )}
           {(nr.status === 'failed' || nr.status === 'done' || nr.status === 'approval') && node.kind === 'agent' && !nr.candidates && nr.missionIds[0] && (
-            <button className="icon-btn" title="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." aria-label="Talk to it: continues its session in a terminal. What it changes is committed before the next stage." onClick={() => focusOrResume(nr.missionIds[0])}>
-              <MessageSquare size={13} />
+            <button className="btn sm" title="Continues its session in a terminal you type into. What it changes is committed before the next stage." onClick={() => void focusOrResume(nr.missionIds[0])}>
+              <MessageSquare size={12} /> Talk to it
             </button>
           )}
           {nr.status === 'failed' && (
@@ -351,6 +352,77 @@ function PipelineNode({ run, node, nr, readOnly }: { run: FactoryRun; node: Reci
         </div>
       )}
     </div>
+  )
+}
+
+/** The exact prompt a stage's agent got and the output file it wrote, with the ways to get to the agent. */
+function StageDetails({ run, node, nr, out, onClose }: { run: FactoryRun; node: RecipeNode; nr: NodeRun; out: string; onClose: () => void }): React.JSX.Element {
+  const missionId = nr.missionIds[0]
+  const m = useMission(missionId ?? '')
+  const [tab, setTab] = useState<'prompt' | 'output'>(nr.status === 'done' || nr.status === 'approval' ? 'output' : 'prompt')
+  const [output, setOutput] = useState<string | null | undefined>(undefined)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.api.factory.read(out).then((t) => live && setOutput(t), () => live && setOutput(null))
+    return () => void (live = false)
+  }, [out, nr.status, nr.endedAt])
+  const prompt = m?.prompt ?? node.prompt
+  const text = tab === 'prompt' ? prompt : (output ?? '')
+  const copy = (): void => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  const live = m && isLive(m.status)
+  return (
+    <Modal
+      title={`${node.id} · ${run.recipe.name}`}
+      size="lg"
+      onClose={onClose}
+      footerNote={<span className="mono small" title={out}>{m ? `${getAgent(m.options.agent).name}${m.options.model ? ` · ${m.options.model}` : ''} · ${node.interactive ? 'interactive' : 'print mode'}` : 'Not started yet'}</span>}
+      footer={
+        <>
+          {tab === 'output' && output !== null && output !== undefined && (
+            <button className="btn" onClick={() => void openInEditor(out)}><ExternalLink size={13} /> Open in editor</button>
+          )}
+          {missionId && (
+            <button className="btn primary" onClick={() => (onClose(), void focusOrResume(missionId))}>
+              <SquareTerminal size={13} /> {live ? 'Open its terminal' : 'Talk to it'}
+            </button>
+          )}
+        </>
+      }
+    >
+      <div className="stage-details">
+        <div className="seg sm" role="tablist" aria-label="Show">
+          <button type="button" role="tab" aria-selected={tab === 'prompt'} className={tab === 'prompt' ? 'on' : ''} onClick={() => setTab('prompt')}>Prompt</button>
+          <button type="button" role="tab" aria-selected={tab === 'output'} className={tab === 'output' ? 'on' : ''} onClick={() => setTab('output')}>Output</button>
+          <span className="grow" />
+          {text && (
+            <button type="button" className="icon-btn" title="Copy" aria-label="Copy" onClick={copy}>{copied ? <Check size={13} /> : <Copy size={13} />}</button>
+          )}
+        </div>
+        {tab === 'prompt' ? (
+          <>
+            {!m && <div className="field-hint">The recipe's prompt; placeholders are filled in when the stage starts.</div>}
+            <pre className="cmd-preview selectable stage-text">{prompt}</pre>
+          </>
+        ) : output === undefined ? (
+          <div className="muted small">Reading…</div>
+        ) : output === null ? (
+          <div className="muted small">No output yet. The agent writes it to {out} when it finishes.</div>
+        ) : (
+          <pre className="cmd-preview selectable stage-text">{output}</pre>
+        )}
+        {!node.interactive && live && (
+          <div className="field-hint">
+            Print mode: the agent works unattended and its terminal stays quiet until it ends. To talk it through while it works, start the run with this stage set to interactive (New factory run → stage options).
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -382,19 +454,6 @@ function StageActivity({ missionId }: { missionId: string }): React.JSX.Element 
       {when && <span className="pn-activity-when"> · {when}</span>}
     </div>
   )
-}
-
-/** The width of an element, kept current with a ResizeObserver. */
-function useWidth(): { ref: (el: HTMLDivElement | null) => void; width: number } {
-  const [width, setWidth] = useState(0)
-  const ro = useRef<ResizeObserver | null>(null)
-  const ref = useCallback((el: HTMLDivElement | null) => {
-    ro.current?.disconnect()
-    if (!el) return
-    ro.current = new ResizeObserver(() => setWidth(el.clientWidth))
-    ro.current.observe(el)
-  }, [])
-  return { ref, width }
 }
 
 function duration(ms: number): string {

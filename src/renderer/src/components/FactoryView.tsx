@@ -5,11 +5,13 @@ import { useProfiles } from '../state/profiles'
 import { useAgents } from '../state/agents'
 import { slugify } from '../lib/agents'
 import { Check, Factory, FilePlus2, Import, Plus, Share2 } from 'lucide-react'
-import { isBakeoff, issueText, recipeTextWithOverrides, runtimeNames, seedableNodes, type FactoryRun, type Recipe, type StageOverride } from '@shared/factory'
+import { isBakeoff, issueText, recipeTextWithOverrides, runtimeNames, seedableNodes, type FactoryRun, type Recipe, type RecipeNode, type StageAgentChoice, type StageOverride } from '@shared/factory'
+import type { AgentDef } from '../lib/agents'
+import { branchName } from '@shared/branch'
 import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
-import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, startRun } from '../state/factory'
+import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, specAgent, startRun } from '../state/factory'
 import { createStore, useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
@@ -137,6 +139,9 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
   const [seed, setSeed] = useState<{ node: string; source: 'file' | 'mission'; file: string; mission: string }>(() => ({ node: '', source: draft?.seedMission ? 'mission' : 'file', file: '', mission: draft?.seedMission ?? '' }))
   const [branches, setBranches] = useState<string[]>([])
   const [base, setBase] = useState('')
+  /** null: follows the intent (feature/…, fix/…) until you type your own */
+  const [branch, setBranch] = useState<string | null>(null)
+  const suggested = branchName(intent)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [scripts, setScripts] = useState<string[] | null>(null)
@@ -178,7 +183,7 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     setBusy(true)
     setError('')
     try {
-      await startRun({ recipe: entry.recipe, intent, root, base, issue, overrides, seed: seed.node ? await seedInput(root, seed) : undefined })
+      await startRun({ recipe: entry.recipe, intent, root, base, branch: branch ?? suggested, issue, overrides, seed: seed.node ? await seedInput(root, seed) : undefined })
       onDone()
     } catch (err) {
       setError((err as Error).message)
@@ -261,12 +266,21 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
         <span>{seed.node ? 'What should the factory build? (a short title is enough)' : 'What should the factory build?'}</span>
         <textarea ref={intentRef} rows={4} value={intent} placeholder="Add a dark mode toggle to the settings page" onChange={(e) => setIntent(e.target.value)} />
       </label>
-      <label className="field">
-        <span>Branch from</span>
-        <select value={base} onChange={(e) => setBase(e.target.value)}>
-          {branches.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
-      </label>
+      <div className="field-row">
+        <label className="field">
+          <span>New branch</span>
+          <input className="mono" value={branch ?? suggested} spellCheck={false} onChange={(e) => setBranch(e.target.value)} />
+          <span className="field-hint">
+            {branch === null ? 'From what you wrote: feature/, fix/, docs/… and a few key words.' : <span className="link" onClick={() => setBranch(null)}>Use the suggestion</span>}
+          </span>
+        </label>
+        <label className="field">
+          <span>Branch from</span>
+          <select value={base} onChange={(e) => setBase(e.target.value)}>
+            {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
+      </div>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <span className="form-note">Ctrl/Cmd+Enter starts</span>
@@ -356,39 +370,176 @@ function StageChoices({ recipe, root, value, onChange, onSave }: { recipe: Recip
   const [skills, setSkills] = useState<ClaudeAsset[]>([])
   useEffect(() => void window.api.claude.assets(root).then((a) => setSkills(a.filter((x) => x.kind !== 'agent')), () => setSkills([])), [root])
   const stages = recipe.nodes.filter((n) => n.kind === 'agent' && !isBakeoff(n))
-  if (!stages.length) return null
+  const bakeoffs = recipe.nodes.filter((n) => n.kind === 'agent' && isBakeoff(n))
+  if (!stages.length && !bakeoffs.length) return null
   const set = (id: string, patch: StageOverride): void => onChange({ ...value, [id]: { ...value[id], ...patch } })
-  const changed = Object.values(value).some((o) => o.agent || o.skill !== undefined)
+  const changed = Object.values(value).some((o) => o.agent || o.skill !== undefined || o.model !== undefined || o.effort !== undefined || o.mode !== undefined || o.interactive !== undefined || !!o.perAgent)
+  const isInteractive = (n: RecipeNode): boolean => value[n.id]?.interactive ?? n.interactive
+  const allLive = stages.every(isInteractive)
+  const setAllLive = (on: boolean): void => onChange(Object.fromEntries(stages.map((n) => [n.id, { ...value[n.id], interactive: on }])))
   return (
-    <details className="stage-choices" open={changed || undefined}>
-      <summary>Agents and skills per stage{changed ? ' · changed' : ''}</summary>
+    <details className="stage-choices" open>
+      <summary>Stages: agent, model, skill and how each one runs{changed ? ' · changed' : ''}</summary>
+      {stages.length > 0 && <label className="check stage-all">
+        <input type="checkbox" checked={allLive} onChange={(e) => setAllLive(e.target.checked)} />
+        <span>Run every agent stage interactively: you see the session, can answer and steer it, and click Done to move on</span>
+      </label>}
+      {stages.length > 1 && <AllStages stages={stages} value={value} onChange={onChange} />}
       {stages.map((n) => {
         const o = value[n.id] ?? {}
+        // model, effort and mode are the CLI's own values: they follow the stage's agent
+        const agent = agents.find((a) => a.id === specAgent(o.agent ?? n.agents[0])) ?? agents[0]
+        const recipeOwn = !o.agent
+        const model = o.model ?? (recipeOwn ? (n.model ?? '') : '')
+        const effort = o.effort ?? (recipeOwn ? (n.effort ?? '') : '')
+        const mode = o.mode ?? (recipeOwn ? (n.mode ?? '') : '')
         return (
-          <div key={n.id} className="stage-choice">
-            <span className="stage-id">{n.id}</span>
-            <select aria-label={`Agent for ${n.id}`} value={o.agent ?? ''} onChange={(e) => set(n.id, { agent: e.target.value || undefined })}>
-              <option value="">{n.agents[0] ? `Recipe: ${n.agents[0]}` : 'Default agent'}</option>
-              <optgroup label="Profiles">{profiles.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</optgroup>
-              <optgroup label="Agents">{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</optgroup>
-            </select>
-            <select aria-label={`Skill for ${n.id}`} value={o.skill ?? n.skill ?? ''} onChange={(e) => set(n.id, { skill: e.target.value })}>
-              <option value="">Recipe prompt</option>
-              {n.skill && !skills.some((s) => s.name === n.skill) && <option value={n.skill}>{n.skill} (not found)</option>}
-              {skills.map((s) => (
-                <option key={s.path} value={s.plugin ? `${s.plugin}:${s.name}` : s.name}>
-                  {s.invocation} ({s.source})
-                </option>
-              ))}
-            </select>
+          <div key={n.id} className="stage-card">
+            <div className="stage-card-head">
+              <b className="mono">{n.id}</b>
+              <span className="grow" />
+              <label className="check" title="A session you can type into; finishes with Done">
+                <input type="checkbox" aria-label={`Interactive ${n.id}`} checked={isInteractive(n)} onChange={(e) => set(n.id, { interactive: e.target.checked })} />
+                <span>Interactive</span>
+              </label>
+            </div>
+            <div className="stage-card-grid">
+              <label className="field">
+                <span>Agent</span>
+                <select aria-label={`Agent for ${n.id}`} value={o.agent ?? ''} onChange={(e) => set(n.id, { agent: e.target.value || undefined, model: undefined, effort: undefined, mode: undefined })}>
+                  <option value="">{n.agents[0] ? `${n.agents[0]} (recipe)` : 'Default agent'}</option>
+                  <optgroup label="Agents">{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</optgroup>
+                  <optgroup label="Profiles">{profiles.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</optgroup>
+                </select>
+              </label>
+              <AgentFields key={agent?.id} agent={agent} label={n.id} value={{ model, effort, mode }} interactive={isInteractive(n)} onChange={(p) => set(n.id, p)} />
+              <label className="field">
+                <span>Skill</span>
+                <select aria-label={`Skill for ${n.id}`} value={o.skill ?? n.skill ?? ''} onChange={(e) => set(n.id, { skill: e.target.value })}>
+                  <option value="">None: the recipe prompt</option>
+                  {n.skill && !skills.some((s) => s.name === n.skill) && <option value={n.skill}>{n.skill} (not found)</option>}
+                  {skills.map((s) => (
+                    <option key={s.path} value={s.plugin ? `${s.plugin}:${s.name}` : s.name}>
+                      {s.invocation} ({s.source})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         )
       })}
+      {bakeoffs.map((n) => (
+        <div key={n.id} className="stage-card">
+          <div className="stage-card-head">
+            <b className="mono">{n.id}</b>
+            <span className="field-hint">Bake-off: every agent gets the same prompt in its own worktree; you keep the best version.</span>
+          </div>
+          {n.agents.map((spec) => {
+            const agent = agents.find((a) => a.id === specAgent(spec)) ?? agents[0]
+            const own = value[n.id]?.perAgent?.[spec] ?? n.perAgent?.[spec] ?? {}
+            const v = { model: own.model ?? n.model ?? '', effort: own.effort ?? n.effort ?? '', mode: own.mode ?? n.mode ?? '' }
+            return (
+              <div key={spec} className="stage-card-grid">
+                <label className="field">
+                  <span>Agent</span>
+                  <input value={spec} disabled aria-label={`Agent ${spec}`} />
+                </label>
+                <AgentFields key={agent?.id} agent={agent} label={`${n.id} ${spec}`} value={v} interactive={false} onChange={(p) => set(n.id, { perAgent: { ...value[n.id]?.perAgent, [spec]: { ...v, ...value[n.id]?.perAgent?.[spec], ...p } } })} />
+              </div>
+            )
+          })}
+        </div>
+      ))}
       <div className="field-hint">
-        A skill replaces the stage prompt; the prompt becomes its arguments. Any agent can run a skill: Claude Code by name, the others read its SKILL.md.{' '}
+        Print-mode stages run unattended and show their answer when they end; interactive ones are a normal session you talk to. A skill replaces the stage prompt; the prompt becomes its arguments. Any agent can run a skill: Claude Code by name, the others read its SKILL.md.{' '}
         {changed && <span className="link" onClick={onSave}>Save as a project recipe</span>}
       </div>
     </details>
+  )
+}
+
+/** One agent, model, effort and mode for every (non bake-off) stage at once; each stage can still differ below. */
+function AllStages({ stages, value, onChange }: { stages: RecipeNode[]; value: Record<string, StageOverride>; onChange: (v: Record<string, StageOverride>) => void }): React.JSX.Element {
+  const agents = useAgents()
+  const profiles = useProfiles()
+  // what every stage has in common; '' where they differ
+  const same = <T,>(f: (n: RecipeNode) => T): T | '' => {
+    const vals = stages.map(f)
+    return vals.every((v) => v === vals[0]) ? vals[0] : ''
+  }
+  const chosen = same((n) => value[n.id]?.agent ?? '')
+  const cli = same((n) => specAgent(value[n.id]?.agent ?? n.agents[0]))
+  const agent = cli ? agents.find((a) => a.id === cli) : undefined
+  const eff = (n: RecipeNode, k: 'model' | 'effort' | 'mode'): string => value[n.id]?.[k] ?? (value[n.id]?.agent ? '' : (n[k] ?? ''))
+  const apply = (patch: StageOverride): void => onChange(Object.fromEntries(stages.map((n) => [n.id, { ...value[n.id], ...patch }])))
+  return (
+    <div className="stage-card all-stages">
+      <div className="stage-card-head">
+        <b>All stages</b>
+        <span className="field-hint">Sets every stage below at once; change a single stage after that if it should differ.</span>
+      </div>
+      <div className="stage-card-grid">
+        <label className="field">
+          <span>Agent</span>
+          <select aria-label="Agent for all stages" value={chosen} onChange={(e) => apply({ agent: e.target.value || undefined, model: undefined, effort: undefined, mode: undefined })}>
+            <option value="">{chosen === '' && stages.some((n) => value[n.id]?.agent) ? 'Mixed' : "Each stage's recipe agent"}</option>
+            <optgroup label="Agents">{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</optgroup>
+            <optgroup label="Profiles">{profiles.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</optgroup>
+          </select>
+        </label>
+        {agent ? (
+          <AgentFields key={agent.id} agent={agent} label="all stages" value={{ model: same((n) => eff(n, 'model')), effort: same((n) => eff(n, 'effort')), mode: same((n) => eff(n, 'mode')) }} interactive={false} onChange={apply} />
+        ) : (
+          <span className="field-hint all-stages-hint">The stages use different agents. Pick one agent here to set the model and effort for all of them.</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Model, effort and approval mode for one agent, in that CLI's own values (what the mission form offers). */
+function AgentFields({ agent, label, value, interactive, onChange }: { agent: AgentDef | undefined; label: string; value: StageAgentChoice; interactive: boolean; onChange: (p: StageAgentChoice) => void }): React.JSX.Element {
+  const models = agent?.models ?? []
+  const typed = !!value.model && !models.includes(value.model)
+  const [custom, setCustom] = useState(typed)
+  return (
+    <>
+      <label className="field">
+        <span>Model</span>
+        {models.length && !custom ? (
+          <select aria-label={`Model for ${label}`} value={value.model ?? ''} onChange={(e) => (e.target.value === '\u0000' ? setCustom(true) : onChange({ model: e.target.value }))}>
+            <option value="">Default</option>
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+            <option value={'\u0000'}>Other…</option>
+          </select>
+        ) : (
+          <input aria-label={`Model for ${label}`} value={value.model ?? ''} placeholder={agent?.modelPlaceholder ?? 'default'} autoFocus={custom && !typed} onChange={(e) => onChange({ model: e.target.value })} />
+        )}
+      </label>
+      <label className="field">
+        <span>Effort</span>
+        {agent && agent.efforts.length > 0 ? (
+          <select aria-label={`Effort for ${label}`} value={value.effort ?? ''} onChange={(e) => onChange({ effort: e.target.value })}>
+            <option value="">Default</option>
+            {agent.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        ) : (
+          <select disabled aria-label={`Effort for ${label}`} title={`${agent?.name ?? 'This agent'} has no effort setting`}><option>Not available</option></select>
+        )}
+      </label>
+      <label className="field">
+        <span>Approval mode</span>
+        {agent && agent.modes.length > 0 ? (
+          <select aria-label={`Approval mode for ${label}`} value={value.mode ?? ''} onChange={(e) => onChange({ mode: e.target.value })}>
+            <option value="">{interactive ? 'Default' : 'Unattended (Settings)'}</option>
+            {agent.modes.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+          </select>
+        ) : (
+          <select disabled aria-label={`Approval mode for ${label}`}><option>Not available</option></select>
+        )}
+      </label>
+    </>
   )
 }
 

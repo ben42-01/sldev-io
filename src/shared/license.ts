@@ -21,6 +21,8 @@ export interface LicenseStatus {
   message: string | null
   /** licenses can be entered: stable builds with a license public key (beta builds are free) */
   available: boolean
+  /** an unpackaged (npm run dev) build on the owner's machine: always licensed, nothing is checked */
+  devBuild?: boolean
 }
 
 export function trialState(startedAt: number, now: number): { daysLeft: number; ended: boolean } {

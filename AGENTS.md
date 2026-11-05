@@ -56,6 +56,7 @@ src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-expor
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
+                  pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts
@@ -125,6 +126,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   beta. A license overrides an ended beta or trial. Beta builds are free: no key field, and main
   refuses to activate (`available: false`); licenses and the trial start with the first stable release. Only main verifies tokens; env overrides
   (`SLDEV_LICENSE_API`, `SLDEV_LICENSE_PUBLIC_KEY`, `SLDEV_TRIAL_DAYS_AGO`) work in unpackaged builds only.
+  Unpackaged builds (`npm run dev`, the owner's own copy) are always licensed and skip the trial (`devBuild` in
+  `src/main/license.ts`), unless `SLDEV_LICENSE_API` is set (the e2e harness sets it) or `SLDEV_DEV_LICENSE=0`.
+  Packaged builds never take that path.
   Tests never call Polar: unit tests stub `fetch`, e2e uses the fake license server in `scripts/e2e/run.cjs`.
 - **Privacy**: no telemetry. A new network request from the app means updating `website/src/content/legal.tsx`
   (`/privacy`) and `legal.updatedAt` in `site.json` in the same change.

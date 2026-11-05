@@ -6,8 +6,8 @@ import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { Columns2, Eye, Pencil, Rocket, SendHorizontal } from 'lucide-react'
-import { missionFromNote, sendNoteToTerminal } from '../components/NotesView'
+import { Columns2, Eye, Factory, Pencil, Rocket, SendHorizontal } from 'lucide-react'
+import { factoryFromNote, missionFromNote, sendNoteToTerminal } from '../components/NotesView'
 import { bumpNotes } from '../state/notes'
 
 const editorTheme = EditorView.theme(
@@ -88,16 +88,26 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
   return (
     <div className="note-panel">
       <div className="note-toolbar">
-        <span className={`save-dot${saved ? '' : ' dirty'}`} title={saved ? 'Saved' : 'Saving…'} />
-        <span className="muted small">{saved ? 'Saved' : 'Editing'}</span>
-        <span className="spacer" />
-        <div className="seg sm">
-          <button className={mode === 'edit' ? 'on' : ''} aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} title="Edit"><Pencil size={12} /></button>
-          <button className={mode === 'split' ? 'on' : ''} aria-pressed={mode === 'split'} onClick={() => setMode('split')} title="Split"><Columns2 size={12} /></button>
-          <button className={mode === 'preview' ? 'on' : ''} aria-pressed={mode === 'preview'} onClick={() => setMode('preview')} title="Preview"><Eye size={12} /></button>
+        <div className="note-send" role="group" aria-label="Send this note to">
+          <span className="note-send-label">Send to</span>
+          <button className="btn sm" title="Paste this note into the active terminal" aria-label="Send to the active terminal" onClick={() => void sendNoteToTerminal(path)}>
+            <SendHorizontal size={12} /> <span className="btn-text">Terminal</span>
+          </button>
+          <button className="btn sm" title="Open the New mission form with this note as the brief: choose agent, model, effort and mode there" aria-label="Send to a new mission" onClick={() => void missionFromNote(path, props.api.title ?? 'Note')}>
+            <Rocket size={12} /> <span className="btn-text">Mission…</span>
+          </button>
+          <button className="btn sm" title="Open the New factory run form with this note as what to build: choose the recipe and each stage's agent and model there" aria-label="Send to a new factory run" onClick={() => void factoryFromNote(path, props.api.title ?? 'Note')}>
+            <Factory size={12} /> <span className="btn-text">Factory…</span>
+          </button>
         </div>
-        <button className="btn sm" title="Paste this note into the active terminal" onClick={() => void sendNoteToTerminal(path)}><SendHorizontal size={12} /> To terminal</button>
-        <button className="btn sm" title="Start an agent mission with this note as the prompt" onClick={() => void missionFromNote(path, props.api.title ?? 'Note')}><Rocket size={12} /> Mission</button>
+        <span className="spacer" />
+        <span className={`save-dot${saved ? '' : ' dirty'}`} title={saved ? 'Saved' : 'Saving…'} />
+        <span className="muted small note-saved">{saved ? 'Saved' : 'Editing'}</span>
+        <div className="seg sm">
+          <button className={mode === 'edit' ? 'on' : ''} aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} title="Edit" aria-label="Edit"><Pencil size={12} /></button>
+          <button className={mode === 'split' ? 'on' : ''} aria-pressed={mode === 'split'} onClick={() => setMode('split')} title="Split" aria-label="Split"><Columns2 size={12} /></button>
+          <button className={mode === 'preview' ? 'on' : ''} aria-pressed={mode === 'preview'} onClick={() => setMode('preview')} title="Preview" aria-label="Preview"><Eye size={12} /></button>
+        </div>
       </div>
       {error && <div className="form-error pad">{error}</div>}
       <div className={`note-body ${mode}`}>

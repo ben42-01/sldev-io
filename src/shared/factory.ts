@@ -19,6 +19,12 @@ export interface RecipeNode {
   prompt: string
   /** normal session instead of print mode; finishes with a Done click */
   interactive: boolean
+  /** agent nodes: the CLI's model, reasoning effort and approval mode (its own values, as in the mission form) */
+  model?: string
+  effort?: string
+  mode?: string
+  /** bake-offs: model, effort and mode per agent spec, set in the run form (wins over the three above) */
+  perAgent?: Record<string, StageAgentChoice>
   /** run nodes: shell commands, run in order */
   run: string[]
   onFail?: { retry: string[]; max: number }
@@ -43,6 +49,8 @@ export interface Recipe {
 export type ParseResult = { recipe: Recipe; error?: undefined } | { recipe?: undefined; error: string }
 
 const list = (v: unknown): string[] => (v === undefined || v === null ? [] : (Array.isArray(v) ? v : [v]).map((x) => String(x).trim()).filter(Boolean))
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
 
 export function parseRecipe(text: string, path?: string): ParseResult {
   let doc: Record<string, unknown>
@@ -91,6 +99,9 @@ export function parseRecipe(text: string, path?: string): ParseResult {
       // a skill stage without a prompt gets the run's intent as its arguments
       prompt: typeof s.prompt === 'string' && s.prompt.trim() ? s.prompt.trim() : skill ? '{intent}' : '',
       interactive: s.interactive === true,
+      model: str(s.model),
+      effort: str(s.effort),
+      mode: str(s.mode),
       run,
       onFail,
       approve: s.gate === 'approve',
@@ -113,11 +124,28 @@ export function parseRecipe(text: string, path?: string): ParseResult {
 // ── choosing agents and skills per run ───────────────────────────
 
 /** What the run form changes on one agent stage: another agent or profile, a skill instead of the prompt, or neither. */
+/** A model, effort and approval mode for one agent; '' = that agent's default. */
+export interface StageAgentChoice {
+  model?: string
+  effort?: string
+  mode?: string
+}
+
 export interface StageOverride {
   agent?: string
   /** a skill name; '' = the recipe's own prompt even if it names a skill */
   skill?: string
+  /** '' = the agent's default, even if the recipe names one */
+  model?: string
+  effort?: string
+  mode?: string
+  /** a session you can watch and type into (finishes with Done), instead of print mode */
+  interactive?: boolean
+  /** bake-offs: choices per agent spec */
+  perAgent?: Record<string, StageAgentChoice>
 }
+
+const pickOpt = (o: string | undefined, recipe: string | undefined): string | undefined => (o === undefined ? recipe : o || undefined)
 
 /** The recipe with the run form's choices applied. Skill stages without an agent get the default one. */
 export function applyOverrides(r: Recipe, overrides: Record<string, StageOverride>, defaultAgent: string): Recipe {
@@ -128,7 +156,18 @@ export function applyOverrides(r: Recipe, overrides: Record<string, StageOverrid
       const o = overrides[n.id] ?? {}
       const agents = o.agent ? [o.agent] : n.agents.length ? n.agents : [defaultAgent]
       const skill = o.skill === undefined ? n.skill : o.skill || undefined
-      return { ...n, agents, skill }
+      // a model or mode belongs to one CLI: picking another agent drops the recipe's
+      const theirs = !o.agent
+      return {
+        ...n,
+        agents,
+        skill,
+        model: pickOpt(o.model, theirs ? n.model : undefined),
+        effort: pickOpt(o.effort, theirs ? n.effort : undefined),
+        mode: pickOpt(o.mode, theirs ? n.mode : undefined),
+        interactive: o.interactive ?? n.interactive,
+        perAgent: o.perAgent ? { ...n.perAgent, ...o.perAgent } : n.perAgent
+      }
     })
   }
 }
@@ -151,6 +190,14 @@ export function recipeTextWithOverrides(text: string, overrides: Record<string, 
       item.delete('skill')
       // a skill stage may have had no prompt of its own: keep what it ran with
       if (!item.get('prompt')) item.set('prompt', '{intent}')
+    }
+    for (const k of ['model', 'effort', 'mode'] as const) {
+      if (o[k]) item.set(k, o[k])
+      else if (o[k] === '' || (o.agent && o[k] === undefined)) item.delete(k)
+    }
+    if (o.interactive !== undefined) {
+      if (o.interactive) item.set('interactive', true)
+      else item.delete('interactive')
     }
   })
   doc.set('name', `${String(doc.get('name') ?? 'Recipe')} ${suffix}`.trim())
@@ -478,7 +525,9 @@ export function nodePrompt(node: RecipeNode, nr: NodeRun, c: FillContext, skill?
   const base = skill ? skill(args) : args
   const out = c.out && !node.prompt.includes('{out}') ? `\n\nWrite a short summary of what you did to ${c.out}.` : ''
   const fb = nr.feedback ? `\n\n---\n\n${fill(nr.feedback, c)}` : ''
-  return `${base}${out}${fb}`
+  // print mode has nobody to ask; an interactive stage has the user right there
+  const live = node.interactive ? `\n\nThe user is watching this session. If anything in the task is unclear, ask before you start. When you are done, say so: they finish the stage.` : ''
+  return `${base}${out}${live}${fb}`
 }
 
 export function totalLines(stat: { insertions: number; deletions: number }): number {
@@ -526,13 +575,13 @@ export function issueText(i: { number: number; title: string; body: string }): s
 }
 
 /** A one-stage bake-off for "run this prompt on several agents". */
-export function compareRecipe(specs: string[]): Recipe {
+export function compareRecipe(specs: string[], perAgent?: Record<string, StageAgentChoice>): Recipe {
   return {
     name: 'Compare agents',
     description: 'One prompt on several agents; keep the best version.',
     intake: 'prompt',
     nodes: [
-      { id: 'compare', kind: 'agent', needs: [], agents: specs, prompt: '{intent}\n\nCommit your work when done.', interactive: false, run: [], approve: false }
+      { id: 'compare', kind: 'agent', needs: [], agents: specs, prompt: '{intent}\n\nCommit your work when done.', interactive: false, run: [], approve: false, perAgent }
     ]
   }
 }

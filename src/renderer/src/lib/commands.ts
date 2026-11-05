@@ -197,6 +197,7 @@ export function staticCommands(): Command[] {
     { id: 'app.whatsNew', category: 'Help', title: "What's new", run: () => openWhatsNew() },
     { id: 'app.feedback', category: 'Help', title: 'Report a bug or send feedback', run: reportBug },
     { id: 'app.license', category: 'Help', title: 'Enter license key', run: openLicense },
+    { id: 'app.buy', category: 'Help', title: 'Buy a license', run: openLicense },
     { id: 'app.checkUpdates', category: 'Help', title: 'Check for updates', run: () => {
       showAbout()
       void checkForUpdates()

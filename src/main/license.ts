@@ -31,6 +31,12 @@ const stateFile = (): string => join(app.getPath('userData'), 'license.bin')
 const dev = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name])
 const apiBase = (): string => dev('SLDEV_LICENSE_API') || `${__SITE_URL__}/api/license`
 const publicKeyB64 = (): string => dev('SLDEV_LICENSE_PUBLIC_KEY') || LICENSE_PUBLIC_KEY
+/**
+ * Running from source (npm run dev) is the owner's own build: no trial, no license server. Never true in
+ * a packaged build. The e2e harness sets SLDEV_LICENSE_API (its fake server), so the trial and license
+ * scenarios still run the real checks; SLDEV_DEV_LICENSE=0 does the same by hand.
+ */
+const devBuild = (): boolean => !app.isPackaged && !process.env.SLDEV_LICENSE_API && process.env.SLDEV_DEV_LICENSE !== '0'
 
 async function load(): Promise<State> {
   if (state) return state
@@ -70,6 +76,8 @@ async function claims(): Promise<LicenseClaims | null> {
 }
 
 export async function licenseStatus(): Promise<LicenseStatus> {
+  if (devBuild())
+    return { licensed: true, plan: null, email: null, maskedKey: null, validUntil: null, trial: null, message: null, available: false, devBuild: true }
   const s = await load()
   const c = await claims()
   const licensed = !!c && c.exp > now()
@@ -135,6 +143,7 @@ export async function deactivateLicense(): Promise<LicenseStatus> {
 
 /** Renew the token every couple of weeks; a revoked or refunded key loses it here. */
 export async function refreshLicense(force = false): Promise<LicenseStatus> {
+  if (devBuild()) return licenseStatus()
   const s = await load()
   const c = await claims()
   if (!c || !s.key || (!force && now() - c.iat < REFRESH_AFTER_MS)) return licenseStatus()

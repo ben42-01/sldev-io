@@ -65,7 +65,7 @@ module.exports = async (h) => {
   h.expect(ms.length === 2 && ms.every((m) => m.options.permissionMode === 'auto'), 'print-mode stages run Claude in auto mode')
   h.expect(run.nodes.verify.feedback?.includes('feature missing'), 'the failed check keeps its log')
   h.expect(await h.js(`!!document.querySelector('.pipeline-node[data-node="verify"] button[title^="Open a terminal in the worktree"]')`), 'a failed stage offers a terminal in the worktree')
-  h.expect(await h.js(`!!document.querySelector('.pipeline-node[data-node="build"] button[title^="Talk to it"]')`), 'a finished agent stage can be talked to')
+  h.expect(await h.js(`[...document.querySelectorAll('.pipeline-node[data-node="build"] button')].some(b => b.textContent.includes('Talk to it'))`), 'a finished agent stage can be talked to')
   await h.shot('1-failed')
 
   await h.click('.pipeline-node[data-node="verify"] .btn', 'Send to build')

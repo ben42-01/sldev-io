@@ -5,6 +5,7 @@ module.exports = async (h) => {
   await h.openFixture()
   h.expect(await visible(h, '.beta-ended'), 'trial over: ended screen at start')
   h.expect((await h.js(`document.querySelector('.beta-ended h1')?.textContent`)).includes('trial'), 'ended screen talks about the trial')
+  h.expect((await h.js(`document.querySelectorAll('.beta-ended .plan-card').length`)) === 2, 'ended screen offers both plans')
   await h.shot('1-trial-ended')
   await h.setValue('.beta-ended .license-form input', 'SLDEV-TEST-GOOD')
   await h.click('.beta-ended .license-form button[type=submit]')
