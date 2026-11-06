@@ -40,6 +40,7 @@ export class Tracker {
   private idle: NodeJS.Timeout | undefined
   private limitTimer: NodeJS.Timeout | undefined
   private askTimer: NodeJS.Timeout | undefined
+  private bellTimer: NodeJS.Timeout | undefined
   private askChecked = 0
   private asking = false
   private askNotified: string | undefined
@@ -54,6 +55,7 @@ export class Tracker {
     clearTimeout(this.idle)
     clearTimeout(this.limitTimer)
     clearTimeout(this.askTimer)
+    clearTimeout(this.bellTimer)
   }
 
   output(): void {
@@ -75,6 +77,19 @@ export class Tracker {
     if (this.d.agent.hooks || !live(m) || this.reporting) return
     // a bell often rings with the question on screen: that line says more than "needs your attention"
     if (!text && this.checkAsk()) return
+    if (!text) {
+      // Windows' ConPTY passes the bell on before it paints the question next to it: look again once it settles
+      clearTimeout(this.bellTimer)
+      this.bellTimer = setTimeout(() => {
+        if (live(this.d.get()) && !this.checkAsk()) this.flag()
+      }, ASK_SETTLE_MS)
+      return
+    }
+    this.flag(text)
+  }
+
+  private flag(text?: string): void {
+    const m = this.d.get()
     clearTimeout(this.idle)
     const message = text || `${this.d.agent.name} needs your attention`
     this.d.update({ status: 'needs-input', notification: message })

@@ -65,7 +65,21 @@ describe('Tracker', () => {
     const s = setup('codex')
     s.t.output()
     s.t.attention()
+    // it waits a moment for a question to show up next to the bell
+    vi.advanceTimersByTime(500)
     expect(s.get().status).toBe('needs-input')
+    expect(s.get().notification).toBe('Codex needs your attention')
+    expect(s.notes).toEqual(['Fix it needs you'])
+  })
+
+  it('names the question a bell rang for, even when the screen shows it a moment later (Windows ConPTY)', () => {
+    const s = setup('codex')
+    s.t.output()
+    s.t.attention()
+    s.screen.text = 'done editing\nAllow command `rm -rf build`? [y/N] '
+    vi.advanceTimersByTime(500)
+    expect(s.get().status).toBe('needs-input')
+    expect(s.get().notification).toContain('rm -rf build')
     expect(s.notes).toEqual(['Fix it needs you'])
   })
 

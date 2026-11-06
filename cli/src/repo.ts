@@ -1,3 +1,4 @@
+import { resolve } from 'path'
 import { recallText } from '@shared/context'
 import { createRules, rulesState, syncRules } from '../../src/main/rules'
 import { memoryInfo, remember } from '../../src/main/memory'
@@ -12,7 +13,8 @@ import { run } from '../../src/main/git'
 /** The project a folder belongs to: its git top level, else the folder itself. */
 export async function projectRoot(cwd: string): Promise<string> {
   const r = await run('git', ['rev-parse', '--show-toplevel'], cwd)
-  return r.code === 0 && r.stdout.trim() ? r.stdout.trim() : cwd
+  // git prints C:/forward/slashes on Windows: resolve() gives the platform's own form
+  return r.code === 0 && r.stdout.trim() ? resolve(r.stdout.trim()) : cwd
 }
 
 const STATUS: Record<string, string> = {

@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, promises as fsp, readFileSync, unlinkSync } from 'fs'
 import { createConnection, createServer, type Server, type Socket } from 'net'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { agentCommand, allAgents, findAgent, installedBin, setInstalledBins, sldevMcp, stageMode, type AgentDef } from '@shared/agents'
 import { branchName, cleanBranchName } from '@shared/branch'
 import { contextPointer } from '@shared/context'
@@ -261,7 +261,9 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     const agent = agentFor(a.agent)
     if (!a.brief.trim() && a.kind) throw new Error('A mission kind needs a brief')
     const repo = await isRepo(a.cwd)
-    const root = repo ? (await run('git', ['rev-parse', '--show-toplevel'], a.cwd)).stdout.trim() || a.cwd : a.cwd
+    // git prints C:/forward/slashes on Windows: resolve() gives the platform's own form
+    const top = repo ? (await run('git', ['rev-parse', '--show-toplevel'], a.cwd)).stdout.trim() : ''
+    const root = top ? resolve(top) : a.cwd
     const kinds: MissionKind[] = [...BUILTIN_KINDS, ...(await listKinds(root, o.dataDir))]
     const kind = a.kind ? kinds.find((k) => k.id === a.kind || k.name.toLowerCase() === a.kind!.toLowerCase()) : undefined
     if (a.kind && !kind) throw new Error(`Unknown mission kind "${a.kind}". Known: ${kinds.map((k) => k.id).join(', ')}`)

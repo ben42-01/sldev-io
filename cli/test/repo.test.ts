@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -19,7 +19,8 @@ describe('repo commands', () => {
   execFileSync('git', ['init', '-q'], { cwd: repo })
 
   it('finds the project from a subfolder', async () => {
-    expect(await projectRoot(join(repo, 'src'))).toBe(repo)
+    // the long path: on Windows the temp folder can come as an 8.3 short name (RUNNER~1), git gives the long one
+    expect(await projectRoot(join(repo, 'src'))).toBe(realpathSync.native(repo))
     expect(await projectRoot(tmp)).toBe(tmp)
   })
 
