@@ -1,8 +1,28 @@
+import * as childProcess from 'child_process'
 import * as pty from 'node-pty'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
 import type { PtyCreateOptions, PtyInfo } from '@shared/types'
 import { resolveLaunch, windowsShellLaunch } from './launch'
+
+/**
+ * On Windows, node-pty's kill() forks a helper (conpty_console_list_agent) to list the console's
+ * processes, without windowsHide: from the CLI daemon or the app, which have no console, each kill
+ * flashed a console window. Forks then default to hidden. Patched on the module object, which node-pty
+ * reads at call time; an explicit windowsHide still wins.
+ */
+export function hideForkedWindows(cp: { fork: typeof childProcess.fork }): void {
+  const fork = cp.fork as (...a: unknown[]) => childProcess.ChildProcess
+  if ((fork as { hidden?: boolean }).hidden) return
+  const hidden = ((modulePath: unknown, args?: unknown, options?: unknown) => {
+    if (Array.isArray(args) || args === undefined) return fork(modulePath, args ?? [], { windowsHide: true, ...(options as object) })
+    return fork(modulePath, { windowsHide: true, ...(args as object) })
+  }) as typeof childProcess.fork
+  ;(hidden as { hidden?: boolean }).hidden = true
+  cp.fork = hidden
+}
+
+if (process.platform === 'win32') hideForkedWindows((childProcess as { default?: typeof childProcess }).default ?? childProcess)
 
 // Output is coalesced and sent to the sink (a window, or the CLI's screen buffers) in frames instead of per chunk.
 const FLUSH_MS = 8

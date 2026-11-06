@@ -18,7 +18,7 @@ async function osMachineId(): Promise<string | null> {
       const { stdout } = await run('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'])
       return /"IOPlatformUUID" = "([^"]+)"/.exec(stdout)?.[1] ?? null
     } else if (process.platform === 'win32') {
-      const { stdout } = await run('reg', ['query', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'])
+      const { stdout } = await run('reg', ['query', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], { windowsHide: true })
       return /MachineGuid\s+REG_SZ\s+(\S+)/.exec(stdout)?.[1] ?? null
     }
   } catch {

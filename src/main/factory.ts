@@ -70,7 +70,7 @@ export async function setupPlan(dir: string, command: string | false | undefined
 
 export async function runSetup(dir: string, command: string): Promise<SetupResult> {
   const r = await new Promise<SetupResult>((done) =>
-    exec(command, { cwd: dir, timeout: 15 * 60_000, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) =>
+    exec(command, { cwd: dir, timeout: 15 * 60_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) =>
       done({ ok: !err, log: `${stdout}${stderr}${err && !stderr ? err.message : ''}` })
     )
   )

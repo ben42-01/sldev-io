@@ -106,7 +106,7 @@ async function just(ctx: Ctx): Promise<RuntimeDef[]> {
   const file = firstExisting(ctx.dir, ['justfile', 'Justfile', '.justfile'])
   if (!file) return []
   const summary = await new Promise<string | null>((resolve) =>
-    execFile('just', ['--summary'], { cwd: ctx.dir, timeout: 3000 }, (err, out) => resolve(err ? null : out))
+    execFile('just', ['--summary'], { cwd: ctx.dir, timeout: 3000, windowsHide: true }, (err, out) => resolve(err ? null : out))
   )
   let recipes = summary?.trim().split(/\s+/).filter(Boolean)
   if (!recipes) {
