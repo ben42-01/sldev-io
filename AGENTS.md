@@ -41,6 +41,7 @@ src/main/       Electron main process (Node): everything privileged
                   (format in website/api/_licenseToken.ts, shared with the server); machineId.ts hashes the OS id
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
+  diagram.ts      code map (TS/JS imports between folders) and schema ERD (Prisma, SQL DDL) for the Diagrams panel; parsing in src/shared/diagram.ts
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
@@ -60,7 +61,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
                   pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
-                  Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
+                  Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI)
 src/renderer/src/
@@ -72,7 +73,7 @@ src/renderer/src/
                   missionKinds, automations (the trigger loop and repeat passes, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
-                  Dashboard, Agents, Preview, Settings
+                  Dashboard, Agents, Diagram (code map + schema, local parsing, opened from the Explorer header), Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root

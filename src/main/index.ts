@@ -14,6 +14,7 @@ import * as profiles from './profiles'
 import * as missionKinds from './missionKinds'
 import * as memory from './memory'
 import * as context from './context'
+import * as diagram from './diagram'
 import * as rules from './rules'
 import * as factory from './factory'
 import { missionTokens, type UsageRequest } from './usage'
@@ -298,6 +299,8 @@ function registerIpc(): void {
   ipcMain.handle('context:pin', (_e, root: string, path: string, note?: string) => context.pin(root, path, note))
   ipcMain.handle('context:unpin', (_e, root: string, path: string) => context.unpin(root, path))
   ipcMain.handle('context:installMapSkill', (_e, root: string) => context.installMapSkill(root))
+  ipcMain.handle('diagram:code', (_e, root: string, depth: number) => diagram.codeGraph(root, Number(depth) || 2))
+  ipcMain.handle('diagram:schema', (_e, root: string) => diagram.schemaGraph(root))
   ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root, userData()))
   ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(userData(), scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))

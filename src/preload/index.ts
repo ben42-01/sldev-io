@@ -4,6 +4,7 @@ import type { LicenseStatus } from '@shared/license'
 import type { TokenUsage } from '@shared/usage'
 import type { MissionKind } from '@shared/missionKinds'
 import type { ContextHit, ContextStats } from '@shared/context'
+import type { CodeGraph, SchemaGraph } from '@shared/diagram'
 import type {
   AgentProfile,
   RulesState,
@@ -223,6 +224,12 @@ const api = {
     unpin: (root: string, path: string): Promise<void> => ipcRenderer.invoke('context:unpin', root, path),
     /** writes .sldev/skills/map-project/SKILL.md (kept if it exists); returns its path */
     installMapSkill: (root: string): Promise<string> => ipcRenderer.invoke('context:installMapSkill', root)
+  },
+  diagram: {
+    /** TS/JS imports between folders `depth` levels deep, parsed locally */
+    code: (root: string, depth: number): Promise<CodeGraph> => ipcRenderer.invoke('diagram:code', root, depth),
+    /** tables and foreign keys from Prisma schemas and SQL DDL */
+    schema: (root: string): Promise<SchemaGraph> => ipcRenderer.invoke('diagram:schema', root)
   },
   kinds: {
     list: (root: string | null): Promise<MissionKind[]> => ipcRenderer.invoke('kinds:list', root),

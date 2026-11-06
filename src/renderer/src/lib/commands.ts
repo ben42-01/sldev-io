@@ -17,6 +17,7 @@ import { openMissionControl } from '../dock/MissionControlPanel'
 import { openNewMission } from '../components/MissionsView'
 import { openNewRun } from '../components/FactoryView'
 import { openRecipes } from '../dock/RecipesPanel'
+import { openDiagrams } from '../dock/DiagramPanel'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -196,6 +197,8 @@ export function staticCommands(): Command[] {
     { id: 'missions.next', category: 'Agents', title: 'Next mission that needs you', keys: { mac: 'Cmd+Shift+J', other: 'Ctrl+Shift+J' }, run: () => void (nextNeedsYou() || showNotice('Nothing needs you', 'No mission or factory run is waiting for you right now.')) },
     { id: 'agents.dashboard', category: 'Agents', title: 'Open agents dashboard (every running agent)', run: openAgentsDashboard },
     { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openMissionControl('usage') },
+    { id: 'diagram.code', category: 'View', title: 'Open code map (imports between folders)', run: () => openDiagrams('code') },
+    { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },

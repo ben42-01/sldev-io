@@ -1,6 +1,7 @@
 import { useRef } from 'react'
-import { ChevronsDownUp, ExternalLink, FolderOpen, RefreshCw, SquareTerminal } from 'lucide-react'
+import { ChevronsDownUp, ExternalLink, FolderOpen, Network, RefreshCw, SquareTerminal } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
+import { openDiagrams } from '../dock/DiagramPanel'
 import { openInEditor } from '../lib/actions'
 import { basename, tildify } from '../lib/paths'
 import { pickRootFolder, preferredEditor, setRootFolder, updateSettings, workspace } from '../state/workspace'
@@ -72,6 +73,9 @@ function Explorer({ home }: { home: string }): React.JSX.Element {
           </button>
           <button className="icon-btn" title={`Open in ${preferredEditor()?.name ?? 'default app'}`} onClick={() => void openInEditor(root, preferredEditor(), true)}>
             <ExternalLink size={14} />
+          </button>
+          <button className="icon-btn" title="Diagrams: code map and database schema" aria-label="Diagrams" onClick={() => openDiagrams()}>
+            <Network size={14} />
           </button>
           <button className="icon-btn" title="Refresh" aria-label="Refresh" onClick={() => tree.current?.refresh()}>
             <RefreshCw size={14} />

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Factory, Files, ListChecks, NotebookPen, Play, Satellite, Server } from 'lucide-react'
+import { Factory, Files, ListChecks, Network, NotebookPen, Play, Satellite, Server } from 'lucide-react'
 import { whenDockReady } from '../dock/dockApi'
 import { openMissionControl } from '../dock/MissionControlPanel'
+import { openDiagrams } from '../dock/DiagramPanel'
 import { showView, shortcutLabel, staticCommands } from '../lib/commands'
 import { updateSettings, workspace, type ViewId } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -53,23 +54,41 @@ export function ActivityBar(): React.JSX.Element {
           </button>
         )
       })}
+      <div className="activity-sep" role="separator" />
+      <PanelButton panelId="diagrams" label="Diagrams" title="Diagrams (code map and database schema)" icon={Network} onClick={() => openDiagrams()} />
     </nav>
   )
 }
 
-/** Mission Control lives in the main area, not the sidebar: the button opens or focuses its tab. */
-function MissionControlButton({ badges }: { badges: Partial<Record<string, ViewBadge>> }): React.JSX.Element {
+/** Lit while its panel is the active tab. */
+function useActivePanel(id: string): boolean {
   const [on, setOn] = useState(false)
   useEffect(() => {
     let sub: { dispose: () => void } | undefined
     const stop = whenDockReady((api) => {
       sub?.dispose()
-      const check = (): void => setOn(api.activePanel?.id === 'mission-board')
+      const check = (): void => setOn(api.activePanel?.id === id)
       check()
       sub = api.onDidActivePanelChange(check)
     })
     return () => (stop(), sub?.dispose())
-  }, [])
+  }, [id])
+  return on
+}
+
+/** A main-area panel opened from the bar (not a sidebar view). */
+function PanelButton({ panelId, label, title, icon: Icon, onClick }: { panelId: string; label: string; title: string; icon: React.ComponentType<{ size?: number }>; onClick: () => void }): React.JSX.Element {
+  const on = useActivePanel(panelId)
+  return (
+    <button className={`activity-btn${on ? ' active' : ''}`} title={title} aria-label={label} aria-current={on ? 'page' : undefined} onClick={onClick}>
+      <Icon size={20} />
+    </button>
+  )
+}
+
+/** Mission Control lives in the main area, not the sidebar: the button opens or focuses its tab. */
+function MissionControlButton({ badges }: { badges: Partial<Record<string, ViewBadge>> }): React.JSX.Element {
+  const on = useActivePanel('mission-board')
   // what needs you comes first: a mission waiting, then a factory run waiting for approval
   const b = badges.agents?.count ? badges.agents : badges.factory?.count ? badges.factory : (badges.agents ?? badges.factory)
   const name = b?.label ? `Mission Control: ${b.label}` : 'Mission Control'

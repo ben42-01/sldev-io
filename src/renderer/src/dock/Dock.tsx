@@ -14,6 +14,7 @@ import { RecipesPanel } from './RecipesPanel'
 import { DashboardPanel } from './DashboardPanel'
 import { WhatsNewPanel } from './WhatsNewPanel'
 import { AgentsPanel } from './AgentsPanel'
+import { DiagramPanel } from './DiagramPanel'
 import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
 import { applyTabLayout, onPanelRemoved, openTerminal, setDockApi } from './dockApi'
@@ -26,7 +27,7 @@ import { startupSetupCheck } from '../state/setup'
 import { startupWhatsNew } from '../state/whatsNew'
 
 const theme: DockviewTheme = { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 }
-const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {

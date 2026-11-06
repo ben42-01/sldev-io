@@ -3,6 +3,7 @@
     "version": "1.0.3",
     "date": null,
     "changes": [
+      "Diagrams: a code map of the imports between your folders (TypeScript and JavaScript, tsconfig paths included) and a database diagram of the tables and foreign keys in Prisma schemas and SQL migrations. Parsed on your machine; open it from the Explorer header or the command palette, double-click a box to open it in your editor, and copy either one as Mermaid.",
       "Recipes: a new section to see, build and share factory recipes. Open it from the Factory sidebar, the start screen or the command palette.",
       "Recipe builder: name it, start from a template or an existing recipe, add agent, check and pull request stages, and save. No YAML to write; placeholders like {spec.out} are one click, and it tells you what's missing before you save.",
       "Share recipes: copy one as text, export it to a file, and import from a paste, the clipboard or a file. The import shows what it adds first, keeps your own agents, and never adds the same recipe twice.",

@@ -5590,3 +5590,167 @@ a {
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* ── diagrams (code map, schema ERD) ─ */
+.diagram-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.diagram-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+}
+.diagram-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0 / 18px 18px, var(--background);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.diagram-canvas:active {
+  cursor: grabbing;
+}
+.diagram-canvas svg {
+  display: block;
+  user-select: none;
+}
+.diagram-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-variant-numeric: tabular-nums;
+}
+.dg-edge {
+  fill: none;
+  stroke: var(--fg-subtle);
+  stroke-width: 1.2;
+  transition: opacity 0.12s;
+}
+.dg-edge.on {
+  stroke: var(--fg);
+  stroke-width: 2;
+}
+.dg-edge.off {
+  opacity: 0.15;
+}
+.dg-arrowhead {
+  fill: var(--fg-subtle);
+}
+.dg-node {
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.dg-node rect {
+  fill: var(--surface);
+  stroke: var(--border);
+}
+.dg-node:hover rect {
+  fill: var(--surface-raised);
+  stroke: var(--border-strong);
+}
+.dg-node.selected rect,
+.dg-node.hit rect {
+  stroke: var(--fg-muted);
+}
+.dg-node:focus-visible {
+  outline: none;
+}
+.dg-node:focus-visible rect {
+  stroke: var(--accent);
+}
+.dg-node.off {
+  opacity: 0.3;
+}
+.dg-label {
+  fill: var(--fg);
+  font: 600 12px var(--font-ui);
+}
+.dg-sub {
+  fill: var(--fg-subtle);
+  font: 10px var(--font-mono);
+}
+.dg-rule {
+  stroke: var(--border);
+}
+.dg-table rect {
+  fill: var(--surface);
+}
+.dg-col-name {
+  fill: var(--fg-muted);
+  font: 11px var(--font-mono);
+}
+.dg-col.hit .dg-col-name {
+  fill: var(--fg);
+  font-weight: 600;
+}
+.dg-pk {
+  color: var(--fg-muted);
+}
+.diagram-side {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: auto;
+}
+.dg-side-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dg-side-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 12px var(--font-mono);
+}
+.diagram-side section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dg-dep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: 11px var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+}
+.dg-dep span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-dep:hover {
+  background: var(--surface-raised);
+  color: var(--fg);
+}
