@@ -1,8 +1,9 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, shell, type MenuItemConstructorOptions, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'fs'
 import { arch, homedir, release, type as osType } from 'os'
 import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
+import { clampZoom, resolveTheme, THEME_ARG, titleBarHeight, WINDOW_COLORS, type ResolvedTheme } from '@shared/theme'
 import { PtyManager, setShellOverride, type PtySink } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
@@ -47,7 +48,6 @@ function migrateLegacyUserData(): void {
   }
 }
 migrateLegacyUserData()
-const BG = '#0a0a0a'
 
 let win: BrowserWindow | null = null
 const ptys = new PtyManager()
@@ -73,22 +73,28 @@ function windowSink(wc: WebContents): PtySink {
 }
 
 function createWindow(): void {
+  const theme = resolveTheme(settings.get().theme, nativeTheme.shouldUseDarkColors)
+  const colors = WINDOW_COLORS[theme]
+  const zoom = clampZoom(settings.get().uiZoom)
   win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 760,
     minHeight: 480,
     show: false,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     title: 'sldev-io',
     // macOS and Windows take the icon from the app bundle / exe
     ...(process.platform === 'linux' ? { icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../build/icons/512x512.png') } : {}),
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 12, y: 12 } }
-      : { titleBarOverlay: { color: BG, symbolColor: '#9a9a9a', height: 36 } }),
+      : { titleBarOverlay: { color: colors.background, symbolColor: colors.symbol, height: titleBarHeight(zoom) } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      // read by the preload, so the page paints in the right theme before settings load
+      additionalArguments: [THEME_ARG + theme],
+      zoomFactor: zoom,
       sandbox: true,
       contextIsolation: true
     }
@@ -362,6 +368,16 @@ function registerIpc(): void {
     if ('shell' in patch) setShellOverride(next.shell)
     if ('globalHotkey' in patch) registerHotkey(next.globalHotkey)
     return next
+  })
+  // Settings → Appearance changed, or the OS did under "Match system": the renderer sends the theme it now shows
+  ipcMain.on('window:appearance', (e, theme: ResolvedTheme, rawZoom: number) => {
+    const w = BrowserWindow.fromWebContents(e.sender)
+    if (!w || w.isDestroyed()) return
+    const colors = WINDOW_COLORS[theme === 'light' ? 'light' : 'dark']
+    const zoom = clampZoom(rawZoom)
+    e.sender.setZoomFactor(zoom)
+    w.setBackgroundColor(colors.background)
+    if (!isMac) w.setTitleBarOverlay({ color: colors.background, symbolColor: colors.symbol, height: titleBarHeight(zoom) })
   })
   ipcMain.handle('layout:load', () => layout.get().layout)
   ipcMain.handle('layout:save', (_e, data: unknown) => void layout.set({ layout: data }))

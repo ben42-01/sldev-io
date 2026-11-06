@@ -39,7 +39,14 @@ export interface PtyInfo {
 
 export type RightTab = 'overview' | 'agents' | 'skills' | 'context' | 'workflows'
 
+/** Settings → Appearance: a fixed theme, or whatever the OS uses */
+export type ThemePref = 'dark' | 'light' | 'system'
+
 export interface AppSettings {
+  /** colour theme (default dark) */
+  theme?: ThemePref
+  /** interface size, a zoom factor for the whole window (default 1) */
+  uiZoom?: number
   rootFolder: string | null
   recentFolders: string[]
   preferredEditor: string | null

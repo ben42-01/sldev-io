@@ -1,4 +1,5 @@
 import { releaseReviewFocus, toggleFocusMode } from '../state/focus'
+import { appearance } from './theme'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
 import { isRightView, pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
@@ -183,6 +184,8 @@ export function staticCommands(): Command[] {
     { id: 'terminal.fontUp', category: 'Terminal', title: 'Increase font size', keys: { mac: 'Cmd+=', other: 'Ctrl+Shift+=' }, run: () => changeFontSize(1) },
     { id: 'terminal.fontDown', category: 'Terminal', title: 'Decrease font size', keys: { mac: 'Cmd+-', other: 'Ctrl+Shift+-' }, run: () => changeFontSize(-1) },
     { id: 'terminal.fontReset', category: 'Terminal', title: 'Reset font size', keys: { mac: 'Cmd+0', other: 'Ctrl+Shift+0' }, run: () => changeFontSize(null) },
+    { id: 'view.theme', category: 'View', title: 'Toggle light / dark theme', run: () => updateSettings({ theme: appearance.get().theme === 'dark' ? 'light' : 'dark' }) },
+    { id: 'view.theme.system', category: 'View', title: 'Theme: match system', run: () => updateSettings({ theme: 'system' }) },
     { id: 'view.tabLayout', category: 'View', title: 'Toggle tab layout (top / side list)', run: () => updateSettings({ tabLayout: workspace.get().tabLayout === 'side' ? 'top' : 'side' }) },
     { id: 'sidebar.toggle', category: 'View', title: 'Toggle sidebar', keys: { mac: 'Cmd+B', other: 'Ctrl+Shift+B' }, run: () => (releaseReviewFocus(), updateSettings({ sidebarVisible: !workspace.get().sidebarVisible })) },
     { id: 'view.focus', category: 'View', title: 'Focus mode (hide both sidebars)', keys: { mac: 'Cmd+Alt+F', other: 'Ctrl+Alt+F' }, run: toggleFocusMode },
@@ -270,21 +273,4 @@ export function matchShortcut(e: KeyboardEvent, commands: Command[]): Command | 
   return undefined
 }
 
-/** Subsequence fuzzy match. Returns a score (higher is better) or -1. */
-export function fuzzyScore(query: string, text: string): number {
-  if (!query) return 0
-  const q = query.toLowerCase()
-  const t = text.toLowerCase()
-  let ti = 0
-  let score = 0
-  let streak = 0
-  for (const ch of q) {
-    if (ch === ' ') continue
-    const found = t.indexOf(ch, ti)
-    if (found < 0) return -1
-    streak = found === ti ? streak + 1 : 0
-    score += 1 + streak * 2 + (found === 0 || /[\s/:._-]/.test(t[found - 1]) ? 3 : 0)
-    ti = found + 1
-  }
-  return score - t.length * 0.01
-}
+export { fuzzyMatches, fuzzyScore } from './fuzzy'

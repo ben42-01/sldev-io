@@ -21,12 +21,16 @@ import { applyTabLayout, onPanelRemoved, openTerminal, setDockApi } from './dock
 import { runs } from '../state/runs'
 import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
+import { appearance } from '../lib/theme'
 import { RunDot, StatusDot } from '../components/StatusDot'
 import { missionSignal } from '@shared/status'
 import { startupSetupCheck } from '../state/setup'
 import { startupWhatsNew } from '../state/whatsNew'
 
-const theme: DockviewTheme = { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 }
+const DOCK_THEMES: Record<'dark' | 'light', DockviewTheme> = {
+  dark: { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 },
+  light: { name: 'sldev-light', className: 'dockview-theme-sldev', colorScheme: 'light', gap: 0 }
+}
 const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
@@ -137,10 +141,11 @@ async function onReady(e: DockviewReadyEvent): Promise<void> {
 }
 
 export function Dock(): React.JSX.Element {
+  const theme = useStore(appearance, (a) => a.theme)
   return (
     <DockviewReact
       className="dock"
-      theme={theme}
+      theme={DOCK_THEMES[theme]}
       components={components}
       defaultRenderer="always"
       watermarkComponent={Welcome}

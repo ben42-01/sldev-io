@@ -17,6 +17,7 @@ npm test                  # vitest unit tests in test/
 npm run e2e -- smoke      # build, then drive the real app (scripts/e2e), screenshots in .e2e-out/
 npm run e2e -- missions   # Claude + Codex missions with fake CLIs through every status
 npm run e2e -- beta       # free-beta window from /beta.json
+npm run e2e -- tour       # every main surface in dark and light, for judging a styling change
 npm run dist:linux        # installers into dist/ (each OS builds its own; node-pty is native)
 npm run cli:build         # the free sldev CLI → cli/dist/sldev.mjs (its tests run with npm test)
 ```
@@ -63,10 +64,12 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
-                  repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI)
+                  repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
+                  theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (re-exports the agent
-                  registry from src/shared/agents.ts, adds commandText), commands.ts (palette + shortcuts), diff.ts, paths.ts
+                  registry from src/shared/agents.ts, adds commandText), commands.ts (palette + shortcuts), fuzzy.ts (palette
+                  matching, highlights, recent picks), theme.ts (applies the theme and zoom), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
@@ -199,6 +202,13 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Field labels are uppercase 10px; hints under fields explain the effect. Every async region has
   empty/loading/error states (`components/States.tsx`). Icons come from lucide-react (1.5px, square caps)
   and icon-only buttons get `title` and `aria-label`.
+- **Themes**: dark (default), light and "match system" (Settings → Appearance). Light mode only redefines tokens
+  (`:root[data-theme='light']` in app.css), so never hard-code a colour in a rule or a component: use the ladder, `--tint`
+  for faint washes, `--overlay` behind dialogs, `--shadow`/`--shadow-strong`, `--code-bg`. Things drawn outside CSS follow
+  `appearance` in `lib/theme.ts` (xterm palette in `lib/terminals.ts`, CodeMirror in `NotePanel.tsx`, dockview in `Dock.tsx`).
+  The theme is resolved in the renderer (main's `nativeTheme` stays on "system", so a previewed dev site keeps the OS
+  scheme); main gets the resolved one for the window background and title-bar buttons, and passes it to the preload as
+  `--sldev-theme=` so the first paint matches. Check a UI change in both: `SLDEV_E2E_THEME=light npm run e2e -- <scenario>`.
 
 ## Gotchas
 

@@ -44,6 +44,8 @@ import type {
   WorktreeStatus
 } from '../shared/types'
 
+import { themeFromArgv, type ResolvedTheme } from '../shared/theme'
+
 type Unsubscribe = () => void
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): Unsubscribe {
@@ -54,6 +56,12 @@ function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): Uns
 
 const api = {
   platform: process.platform,
+  /** the theme main opened the window with, known before settings load so the first paint matches */
+  initialTheme: themeFromArgv(process.argv),
+  window: {
+    /** recolour the native window (background, title-bar buttons) for the theme the page shows, and zoom it */
+    setAppearance: (theme: ResolvedTheme, zoom: number): void => ipcRenderer.send('window:appearance', theme, zoom)
+  },
   pty: {
     create: (id: string, opts: PtyCreateOptions): Promise<PtyInfo> => ipcRenderer.invoke('pty:create', id, opts),
     write: (id: string, data: string): void => ipcRenderer.send('pty:write', id, data),

@@ -100,6 +100,9 @@ betaServer.listen(0, '127.0.0.1', () => {
       process.env.SLDEV_LICENSE_API = `http://127.0.0.1:${licenseServer.address().port}/api/license`
       process.env.SLDEV_LICENSE_PUBLIC_KEY = licenseKeys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64')
     }
+    // always the built renderer: a harness started from a terminal inside `npm run dev` inherits the dev server's
+    // URL, and would otherwise test whatever that server serves instead of out/
+    delete process.env.ELECTRON_RENDERER_URL
     require(path.join(repoRoot, 'out/main/index.js'))
   })
 })
@@ -171,7 +174,9 @@ app.whenReady().then(async () => {
     },
     /** open the fixture project with notifications off, then reload */
     openFixture: async (extra = {}) => {
-      await js(`window.api.settings.set(${JSON.stringify({ rootFolder: fixture, notifications: false, sidebarVisible: true, ...extra })})`)
+      // SLDEV_E2E_THEME=light runs any scenario in the light theme (a scenario's own `theme` wins)
+      const theme = process.env.SLDEV_E2E_THEME ? { theme: process.env.SLDEV_E2E_THEME } : {}
+      await js(`window.api.settings.set(${JSON.stringify({ rootFolder: fixture, notifications: false, sidebarVisible: true, ...theme, ...extra })})`)
       wc.reload()
       await wait(3000)
     }

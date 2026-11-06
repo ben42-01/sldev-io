@@ -40,6 +40,39 @@ export const TERMINAL_THEME: ITheme = {
   brightWhite: '#ffffff'
 }
 
+/** The same palette for the light theme: ANSI colours dark enough to read on near-white. */
+export const TERMINAL_THEME_LIGHT: ITheme = {
+  background: '#fcfcfc',
+  foreground: '#2b2b2b',
+  cursor: '#2b2b2b',
+  cursorAccent: '#fcfcfc',
+  selectionBackground: '#3b82f633',
+  black: '#2b2b2b',
+  red: '#c8312f',
+  green: '#1f7a35',
+  yellow: '#8a6200',
+  blue: '#1f5fd1',
+  magenta: '#8b3fb0',
+  cyan: '#137a86',
+  white: '#8a8a8a',
+  brightBlack: '#6e6e6e',
+  brightRed: '#e0443e',
+  brightGreen: '#2a9447',
+  brightYellow: '#a87a00',
+  brightBlue: '#3a76e8',
+  brightMagenta: '#a356c9',
+  brightCyan: '#1b93a1',
+  brightWhite: '#b5b5b5'
+}
+
+let currentTheme: ITheme = TERMINAL_THEME
+
+/** Recolour every terminal (and the ones opened later) for the app theme. */
+export function setTerminalTheme(kind: 'dark' | 'light'): void {
+  currentTheme = kind === 'light' ? TERMINAL_THEME_LIGHT : TERMINAL_THEME
+  for (const s of sessions.values()) s.term.options.theme = currentTheme
+}
+
 export interface TerminalOptions {
   cwd?: string
   /** Text typed into the shell once it starts, e.g. `nvim file\r` */
@@ -173,7 +206,7 @@ export function ensureTerminal(id: string, opts: TerminalOptions = {}): void {
     macOptionIsMeta: true,
     // agent TUIs capture the mouse; Option-drag (Shift-drag elsewhere) still selects text to copy
     macOptionClickForcesSelection: true,
-    theme: TERMINAL_THEME
+    theme: currentTheme
   })
   const fit = new FitAddon()
   const search = new SearchAddon()

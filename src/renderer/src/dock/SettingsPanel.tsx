@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CustomAgent, VaultStatus } from '@shared/types'
+import type { CustomAgent, ThemePref, VaultStatus } from '@shared/types'
+import { clampZoom, UI_ZOOMS } from '@shared/theme'
 import { Plus, Trash2 } from 'lucide-react'
 import { useAgents } from '../state/agents'
 import { applyTerminalFont } from '../lib/terminals'
@@ -29,6 +30,17 @@ export function SettingsPanel(): React.JSX.Element {
     <div className="panel-page settings" ref={page}>
       <div className="panel-page-head"><h2>Settings</h2></div>
       <SectionNav page={page} />
+      <section>
+        <h3>Appearance</h3>
+        <ThemePicker />
+        <label className="field narrow-select">
+          <span>Interface size</span>
+          <select value={String(clampZoom(s.uiZoom))} onChange={(e) => updateSettings({ uiZoom: Number(e.target.value) })}>
+            {UI_ZOOMS.map((z) => <option key={z.value} value={String(z.value)}>{z.label}</option>)}
+          </select>
+          <span className="field-hint">Scales the whole window: sidebars, cards and text. Terminal text keeps its own font size on top.</span>
+        </label>
+      </section>
       <section>
         <h3>Terminal</h3>
         <label className="field">
@@ -122,6 +134,47 @@ export function SettingsPanel(): React.JSX.Element {
       </section>
       <LicenseSection />
       <AboutSection />
+    </div>
+  )
+}
+
+const THEMES: Array<{ id: ThemePref; label: string; hint: string }> = [
+  { id: 'dark', label: 'Dark', hint: 'The default' },
+  { id: 'light', label: 'Light', hint: 'For bright rooms' },
+  { id: 'system', label: 'Match system', hint: 'Follows your OS' }
+]
+
+/** Three tiles, each a tiny window drawn in that theme, so the choice is visible before it's made. */
+function ThemePicker(): React.JSX.Element {
+  const pref = useStore(workspace, (w) => w.theme ?? 'dark')
+  return (
+    <div className="field">
+      <span>Theme</span>
+      <div className="theme-picker" role="radiogroup" aria-label="Theme">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={pref === t.id}
+            className={`theme-tile${pref === t.id ? ' on' : ''}`}
+            onClick={() => updateSettings({ theme: t.id })}
+          >
+            <span className={`theme-swatch swatch-${t.id}`} aria-hidden>
+              <span className="sw-bar" />
+              <span className="sw-side" />
+              <span className="sw-main">
+                <i />
+                <i />
+                <i className="short" />
+              </span>
+            </span>
+            <span className="theme-tile-label">{t.label}</span>
+            <span className="theme-tile-hint">{t.hint}</span>
+          </button>
+        ))}
+      </div>
+      <span className="field-hint">Terminals, notes and the window frame change with it. Status colours keep their meaning in both.</span>
     </div>
   )
 }

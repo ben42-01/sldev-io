@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { EditorView, basicSetup } from 'codemirror'
+import { Compartment } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -9,18 +10,20 @@ import DOMPurify from 'dompurify'
 import { Columns2, Eye, Factory, Pencil, Rocket, SendHorizontal } from 'lucide-react'
 import { factoryFromNote, missionFromNote, sendNoteToTerminal } from '../components/NotesView'
 import { bumpNotes } from '../state/notes'
+import { appearance } from '../lib/theme'
 
-const editorTheme = EditorView.theme(
-  {
-    '&': { height: '100%', backgroundColor: 'var(--bg)', fontSize: '13.5px' },
-    '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
-    '.cm-content': { padding: '16px 0', maxWidth: '860px' },
-    '.cm-gutters': { backgroundColor: 'var(--bg)', border: 'none', color: '#4a4a4a' },
-    '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#ffffff06' },
-    '&.cm-focused': { outline: 'none' }
-  },
-  { dark: true }
-)
+const base = {
+  '&': { height: '100%', backgroundColor: 'var(--bg)', fontSize: '13.5px' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
+  '.cm-content': { padding: '16px 0', maxWidth: '860px' },
+  '.cm-gutters': { backgroundColor: 'var(--bg)', border: 'none', color: 'var(--fg-subtle)' },
+  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--tint)' },
+  '&.cm-focused': { outline: 'none' }
+}
+// oneDark brings the dark syntax colours; the light theme keeps CodeMirror's default (light) highlighting
+const darkTheme = [EditorView.theme(base, { dark: true }), oneDark]
+const lightTheme = [EditorView.theme(base, { dark: false })]
+const themeFor = (t: 'dark' | 'light'): typeof darkTheme | typeof lightTheme => (t === 'light' ? lightTheme : darkTheme)
 
 type Mode = 'edit' | 'split' | 'preview'
 
@@ -47,6 +50,8 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
         bumpNotes()
       }, (e) => setError(String(e)))
     }
+    const themeSlot = new Compartment()
+    const stopTheme = appearance.subscribe(() => view.current?.dispatch({ effects: themeSlot.reconfigure(themeFor(appearance.get().theme)) }))
     void window.api.notes.read(path).then(
       (doc) => {
         setText(doc)
@@ -56,8 +61,7 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
           extensions: [
             basicSetup,
             markdown({ codeLanguages: languages }),
-            editorTheme,
-            oneDark,
+            themeSlot.of(themeFor(appearance.get().theme)),
             EditorView.lineWrapping,
             EditorView.updateListener.of((u) => {
               if (!u.docChanged) return
@@ -78,6 +82,7 @@ export function NotePanel(props: IDockviewPanelProps<{ path: string }>): React.J
       clearTimeout(timer)
       flush()
       active.dispose()
+      stopTheme()
       view.current?.destroy()
       view.current = null
     }
