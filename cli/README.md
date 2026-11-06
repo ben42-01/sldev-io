@@ -16,14 +16,19 @@ What it does that a plain multiplexer doesn't:
 - **Repeat.** `sldev new --repeat 4 --gap 30m --check "npm test" "Polish the settings page"` runs the
   brief pass after pass in one worktree, a commit per pass; each pass ends when the agent exits (print mode),
   and the next gets the last report and any check failure. `--accept` makes passes interactive (`sldev accept <pane>`).
+- **Workflows, editor, clean.** Attached, Ctrl-b w shows the repo's GitHub Actions runs (rerun the failed
+  jobs, open one in the browser; needs the GitHub CLI, signed in), Ctrl-b e opens the pane's folder in your
+  editor and Ctrl-b v its changed files side by side. `sldev open <pane> [--diff]` and `sldev workflows` do the
+  same from a script. `sldev clean` drops finished panes and removes their worktrees, asking first.
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
 - **Project memory** in `.sldev/memory.md`, searchable with `sldev recall`, and the sldev MCP tools in
   every agent it starts.
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
 
-Nothing in the CLI talks to the network. The daemon listens on a Unix socket and a loopback port
-(for Claude's hooks and the MCP tools), both protected.
+Nothing in the CLI talks to the network itself; the workflows view asks GitHub through your own `gh`, only
+while it's open. The daemon listens on a Unix socket (a named pipe on Windows) and a loopback port (for
+Claude's hooks and the MCP tools), both protected.
 
 ## Install
 

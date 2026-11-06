@@ -32,6 +32,9 @@ sldev ls --json                              # every pane: status, report, branc
 sldev send "$id" "yes, use Postgres"           # types it, then Enter
 sldev review "$id" --agent claude              # a second agent reviews that pane's diff, read-only
 sldev kill "$id"                               # stops the agent; its files and worktree stay
+sldev open "$id" --diff                        # its changed files in the human's editor, side by side
+sldev workflows --json                         # the repo's latest GitHub Actions runs (needs gh, signed in)
+sldev clean --dry-run                          # what finished panes and worktrees clean would remove
 ```
 
 A pane is `needs-you` when its agent asks for approval or rings the bell; `ls` shows the question in

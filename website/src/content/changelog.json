@@ -12,7 +12,9 @@
       "Start screen: a Software Factory card with New run and Recipes.",
       "Overview: \"need you\" now counts factory runs waiting for your approval, and factory runs show their status and recipe.",
       "Repeat: run the same mission pass after pass, each building on the last. Set how many passes, the minutes between them and an optional check command (Factory → Automations → Repeat, or Repeat… on a mission or agent task). Unattended passes run in print mode and end when the agent exits; interactive ones end when you click Accept pass. Every pass is committed in the loop's worktree, the next one gets the last report and a failed check's output, and the loop stops when a pass changes nothing or the check fails twice.",
-      "CLI: sldev new --repeat 5 --gap 30m --check \"npm test\" runs the same loop from the terminal; --print runs a single agent that exits when done; sldev accept and sldev loops."
+      "CLI: sldev new --repeat 5 --gap 30m --check \"npm test\" runs the same loop from the terminal; --print runs a single agent that exits when done; sldev accept and sldev loops.",
+      "CLI on Windows: install it with npm like on Linux and macOS. The background daemon, git and helper processes no longer flash console windows, and notifications are Windows toasts.",
+      "CLI: Ctrl-b w shows the repository's GitHub Actions runs (rerun failed jobs, open one in the browser), Ctrl-b e opens the pane's folder in your editor and Ctrl-b v its changed files side by side. sldev open, sldev workflows and sldev clean (finished panes and their worktrees, asked first) do the same from the command line."
     ]
   },
   {

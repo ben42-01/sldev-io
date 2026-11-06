@@ -6,18 +6,23 @@ import { describeRepeat, parseGap, type RepeatPlan } from '@shared/repeat'
 import { missionSignal, passSignal } from '@shared/status'
 import { findOnPath } from '../../src/main/launch'
 import { listKinds } from '../../src/main/missionKinds'
+import { createInterface } from 'readline/promises'
+import { describeClean, planClean, runClean } from './clean'
 import { connect } from './client'
+import { openPane, preferredEditor, runTerminalEditor } from './editor'
+import { loadRuns, runColumns } from './workflows'
 import { startDaemon } from './daemon'
 import { dataDir } from './paths'
 import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync } from './repo'
-import { runTui } from './tui'
+import { defaultServices, runTui } from './tui'
 import { claudeUsage, codexUsage, periodStart, usageTable } from './usage'
 import { VERSION } from './version'
 
 const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
   sldev                         attach: every agent, its status, and its screen
+                                (Ctrl-b w workflows, e editor, v changed files in the editor)
   sldev new [options] "brief"   start an agent in a new pane (prints its id)
       --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)
       --kind <kind>             frame the brief as a mission kind (build, research, plan, review…)
@@ -39,6 +44,15 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
   sldev accept <pane>           a pass that waits for you is good: stop it, the loop goes on
   sldev loops [--json]          repeat loops: their passes and what's next
   sldev loops stop <loop>       no pass after the running one
+  sldev open <pane> [--diff]    the pane's folder in your editor; --diff: its changed files side by side
+      --editor <id>             cursor, vscode, windsurf, zed, sublime, idea, nvim… (default: the app's
+                                preferred editor, else the first one found)
+  sldev workflows [--json]      the repo's latest GitHub Actions runs (needs the GitHub CLI, signed in)
+  sldev clean                   finished panes leave the list and their worktrees are removed (asks first)
+      --orphans                 also sldev worktrees no pane knows about (never ones the app uses)
+      --discard                 remove worktrees with uncommitted files too
+      --branches                delete their branches when every commit is on the base
+      --dry-run, --yes          only show the plan / don't ask
   sldev kill <pane>             stop a pane's agent (its files stay)
   sldev stop                    stop the daemon and every agent in it
 
@@ -50,7 +64,7 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
   sldev agents | sldev kinds                           what's installed, what kinds exist
 
 Panes run in a background daemon (sldev serve), so they keep going when you detach.
-Nothing here talks to the network.`
+Nothing here talks to the network, except the workflows view, which asks GitHub through your gh.`
 
 const script = (): string => resolve(process.argv[1] ?? '')
 
@@ -99,7 +113,7 @@ async function main(argv: string[]): Promise<void> {
   switch (cmd) {
     case undefined: {
       if (!process.stdout.isTTY || !process.stdin.isTTY) return fail('attaching needs a terminal; see sldev help')
-      return runTui(await client(), process.cwd())
+      return runTui(await client(), process.cwd(), undefined, defaultServices(() => preferredEditor(data)))
     }
     case 'help':
     case '-h':
@@ -158,6 +172,59 @@ async function main(argv: string[]): Promise<void> {
       c.close()
       if (repeat) process.stderr.write(`loop ${p.repeat?.loop}: ${describeRepeat(repeat)}; pass 1 is pane ${p.id}\n`)
       return void console.log(p.id)
+    }
+    case 'open': {
+      const { values, positionals } = opts({ diff: { type: 'boolean' }, editor: { type: 'string' } })
+      if (!positionals[0]) return fail('sldev open <pane> [--diff] [--editor <id>]')
+      const c = await client()
+      const p = (await c.request('ls', {})).find((x) => x.id === positionals[0] || x.title === positionals[0])
+      c.close()
+      if (!p) return fail(`No pane "${positionals[0]}". See sldev ls.`)
+      const r = await openPane(p, { diff: values.diff, editor: values.editor, preferred: preferredEditor(data) })
+      console.log(r.note)
+      if (r.terminal) runTerminalEditor(r.terminal, p.cwd)
+      return
+    }
+    case 'workflows': {
+      const { values } = opts({ json: { type: 'boolean' } })
+      const runs = await loadRuns(process.cwd())
+      if (values.json) return void console.log(JSON.stringify(runs, null, 2))
+      if (!runs.length) return void console.log('No workflow runs yet in this repository.')
+      return void console.log(runs.slice(0, 20).map((r) => {
+        const col = runColumns(r)
+        return `${String(r.databaseId).padStart(12)}  ${col.label.padEnd(9)} ${col.text}`
+      }).join('\n'))
+    }
+    case 'clean': {
+      const { values } = opts({ orphans: { type: 'boolean' }, discard: { type: 'boolean' }, branches: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, yes: { type: 'boolean' } })
+      const c = await connect({ dataDir: data, script: script(), start: false }).catch(() => null)
+      const [panes, loopList] = c ? await Promise.all([c.request('ls', {}), c.request('loops', {})]) : [[], []]
+      const o = { orphans: values.orphans, discard: values.discard, branches: values.branches, repo: await projectRoot(process.cwd()), dataDir: data }
+      const items = await planClean(panes, loopList, o)
+      if (!items.length) {
+        c?.close()
+        return void console.log(values.orphans ? 'Nothing to clean: no finished panes, and no sldev worktrees nobody uses.' : 'Nothing to clean: no finished panes. --orphans also looks for sldev worktrees no pane knows about.')
+      }
+      console.log(describeClean(items).join('\n'))
+      const doing = items.filter((i) => !i.keep)
+      if (!doing.length || values['dry-run']) return void c?.close()
+      if (!values.yes) {
+        if (!process.stdin.isTTY) {
+          c?.close()
+          return fail('nothing removed: pass --yes to clean without asking')
+        }
+        const rl = createInterface({ input: process.stdin, output: process.stdout })
+        const answer = await rl.question(`Remove ${doing.filter((i) => i.worktree).length} worktree(s) and ${doing.filter((i) => i.pane).length} pane(s) from the list? (y/N) `)
+        rl.close()
+        if (!/^y/i.test(answer.trim())) {
+          c?.close()
+          return void console.log('Nothing removed.')
+        }
+      }
+      const problems = await runClean(items, o, async (id) => void (await c?.request('kill', { pane: id })))
+      c?.close()
+      if (problems.length) return fail(`some things stayed:\n${problems.map((p) => `  ${p}`).join('\n')}`)
+      return void console.log('Cleaned.')
     }
     case 'accept': {
       if (!rest[0]) return fail('sldev accept <pane>')

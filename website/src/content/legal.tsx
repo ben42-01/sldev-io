@@ -165,6 +165,11 @@ const privacy: LegalPage = {
         they are switched on and the app is open. That goes from your computer to GitHub, signed in as you; nothing goes to us.
       </p>
       <p>
+        The free sldev CLI makes no network requests of its own. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
+        attached) asks GitHub for your repository's recent workflow runs through your GitHub CLI when you open it, and every 15 seconds
+        while it stays open; rerunning a run or opening it in the browser goes the same way. Nothing goes to us.
+      </p>
+      <p>
         Remote connections you open (SSH sessions, and Ping, which only checks that a saved host's SSH port answers) go straight from
         your computer to that host and nowhere else.
       </p>

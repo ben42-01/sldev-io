@@ -87,7 +87,7 @@ test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in <userData>/cli)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the split-pane view;
-                  loops.ts the repeat loops (`sldev new --repeat`); repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
+                  loops.ts the repeat loops (`sldev new --repeat`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 
@@ -176,10 +176,12 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
-  already uses (pty, launch, hooks, mcp, git, rules, memory, context, missionKinds), never the UI, licensing or
+  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds), never the UI, licensing or
   beta. Keep those modules free of `electron` imports (they take a data dir or a sink instead). Its runtime files go in
-  `<userData>/cli`, never over the app's. It makes no network requests; adding one means updating `/privacy` like the app.
-  No `sldev run`: the factory stays in the app.
+  `<userData>/cli`, never over the app's. It makes no network requests of its own; the one exception is the workflows view
+  (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating
+  `/privacy` like the app. `sldev clean` never removes a worktree a live pane, an unfinished loop or the app (its missions,
+  runs, automations) uses. No `sldev run`: the factory stays in the app.
 - **Destructive actions** ask first with `confirmAction`/`confirmDelete` (`components/Modal.tsx`,
   flows in `lib/removals.tsx`), saying what is removed and kept. Never `window.confirm`/`alert`.
   Worktrees are removed without `--force` unless the user ticked "discard", and never while something

@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { dataDir, socketPath } from '../src/paths'
 import { notifyCommand } from '../src/notify'
 import { checkLaunch } from '../src/loops'
+import { pickEditor } from '../src/editor'
+import { ago, ghProblem, runColumns } from '../src/workflows'
+import { ghRunSignal } from '@shared/status'
 import { lineReader } from '../src/protocol'
 import { drawTerm, fit, layout } from '../src/render'
 import { createTerm, screenText } from '../src/screen'
@@ -54,6 +57,39 @@ describe('cli units', () => {
       expect(l.args.at(-1)).toBe(c)
     }
     expect(checkLaunch('check.ps1', 'linux').shell).toBe(true)
+  })
+
+  it('says what to do when gh is missing, signed out, or the folder has no GitHub remote', () => {
+    expect(ghProblem('spawn gh ENOENT')).toMatch(/isn't installed: https:\/\/cli.github.com/)
+    expect(ghProblem("'gh' is not recognized as an internal or external command")).toMatch(/isn't installed/)
+    expect(ghProblem('To get started with GitHub CLI, please run:  gh auth login')).toBe('Not signed in to GitHub: run gh auth login')
+    expect(ghProblem('no git remotes found')).toMatch(/isn't a GitHub repository/)
+    expect(ghProblem('HTTP 502: bad gateway\nmore')).toBe('HTTP 502: bad gateway')
+  })
+
+  it('shows a workflow run with its status, branch, title and age', () => {
+    const run = { databaseId: 9, number: 3, displayTitle: 'Fix it', workflowName: 'CI', status: 'completed', conclusion: 'failure', headBranch: 'main', event: 'push', createdAt: new Date(10_000).toISOString(), url: '' }
+    expect(runColumns(run, 10_000 + 5 * 60_000)).toEqual({ label: 'Failed', tone: 'error', text: 'CI · main · Fix it · 5m ago' })
+    expect(ghRunSignal({ status: 'in_progress', conclusion: '' })).toMatchObject({ tone: 'working', pulse: true })
+    expect(ghRunSignal({ status: 'queued', conclusion: '' }).label).toBe('Queued')
+    expect(ghRunSignal({ status: 'completed', conclusion: 'success' }).tone).toBe('done')
+    expect(ghRunSignal({ status: 'completed', conclusion: 'cancelled' }).tone).toBe('neutral')
+    expect(ago(new Date(0).toISOString(), 3 * 86_400_000)).toBe('3d')
+  })
+
+  it('picks the editor asked for, else the app’s preferred one, else the first GUI editor', () => {
+    const found = [
+      { id: 'nvim', name: 'Neovim', kind: 'terminal' as const },
+      { id: 'cursor', name: 'Cursor', kind: 'gui' as const, canDiff: true },
+      { id: 'zed', name: 'Zed', kind: 'gui' as const }
+    ]
+    expect(pickEditor(found)?.id).toBe('cursor')
+    expect(pickEditor(found, null, 'zed')?.id).toBe('zed')
+    // a preferred editor that isn't installed here is passed over
+    expect(pickEditor(found, null, 'vscode')?.id).toBe('cursor')
+    expect(pickEditor(found, 'Neovim')?.id).toBe('nvim')
+    expect(pickEditor(found, 'sublime')).toBeUndefined()
+    expect(pickEditor([found[0]])?.id).toBe('nvim')
   })
 
   it('reads JSON lines across chunks and drops junk', () => {

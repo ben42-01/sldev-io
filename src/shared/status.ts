@@ -53,6 +53,14 @@ export const runSignal = (s: RunStatus, waitingForApproval = false): Signal => (
 // Ctrl+C (SIGINT) exits: 130 on POSIX shells, STATUS_CONTROL_C_EXIT on Windows. Shown as "stopped", not failed.
 const INTERRUPTED = new Set([130, 0xc000013a, -1073741510])
 
+/** A GitHub Actions run, as `gh run list` reports it. */
+export function ghRunSignal(r: { status: string; conclusion: string }): Signal {
+  if (r.status !== 'completed') return r.status === 'in_progress' ? sig('working', 'Running', true) : sig('neutral', 'Queued', true)
+  if (r.conclusion === 'success') return sig('done', 'Passed')
+  if (r.conclusion === 'cancelled' || r.conclusion === 'skipped' || r.conclusion === 'neutral') return sig('neutral', r.conclusion === 'skipped' ? 'Skipped' : 'Cancelled')
+  return sig('error', 'Failed')
+}
+
 /** Ctrl+C, not a crash: the user stopped it. */
 export const wasInterrupted = (code: number | undefined): boolean => code !== undefined && INTERRUPTED.has(code)
 

@@ -89,7 +89,9 @@ export async function openDiffInEditor(id: string, cwd: string, base: string, pa
   await fsp.mkdir(dir, { recursive: true })
   const left = join(dir, basename(oldPath ?? path))
   await fsp.writeFile(left, await baseVersion(cwd, base, oldPath ?? path))
-  const child = spawn(e.bin, diffArgs(id, left, join(cwd, path))!, { detached: true, stdio: 'ignore', shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(e.bin) })
+  const viaShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(e.bin)
+  // windowsHide only hides the cmd.exe running the .cmd shim, not the editor it starts
+  const child = spawn(e.bin, diffArgs(id, left, join(cwd, path))!, { detached: true, stdio: 'ignore', shell: viaShell, windowsHide: viaShell })
   child.on('error', () => {})
   child.unref()
   return true
@@ -123,11 +125,9 @@ export function openInEditor(id: string, target: string, line?: number, col = 1)
   if (!e || e.kind === 'terminal') return false
   const fileArgs = line ? gotoArgs(id, target, line, col) : [target]
   const [cmd, args] = e.bin ? [e.bin, fileArgs] : ['open', ['-a', e.app!, target]]
-  const child = spawn(cmd, args, {
-    detached: true,
-    stdio: 'ignore',
-    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd)
-  })
+  const viaShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd)
+  // windowsHide only hides the cmd.exe running the .cmd shim, not the editor it starts
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore', shell: viaShell, windowsHide: viaShell })
   child.on('error', () => {})
   child.unref()
   return true
