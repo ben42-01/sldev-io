@@ -56,23 +56,32 @@ describe('sldev TUI', () => {
       return screenText(screen, 30)
     }
 
-    let s = await text()
+    // the fake codex needs a moment to start and print, longer when the whole suite runs at once
+    const textWith = async (want: string | RegExp, timeout = 10_000): Promise<string> => {
+      const end = Date.now() + timeout
+      const has = (t: string): boolean => (typeof want === 'string' ? t.includes(want) : want.test(t))
+      let t = await text()
+      while (!has(t) && Date.now() < end) t = await text()
+      return t
+    }
+
+    let s = await textWith(/thinking \d/)
     expect(s).toContain('sldev')
     expect(s).toContain('1 tidy up the tests')
     expect(s).toMatch(/Codex · (Working|Starting|Ready for you)/)
-    // the pane's screen: the fake codex echoes its argv, then thinks
-    expect(s).toContain('thinking 1')
+    // the pane's screen: the fake codex echoes its argv, then thinks (on a slow run the first lines have scrolled by)
+    expect(s).toMatch(/thinking \d/)
     expect(s).toContain('Ctrl-b then')
 
     input.write('\x02c')
-    expect(await text()).toContain('New pane (agent, then the brief):')
+    expect(await textWith('New pane (agent, then the brief):')).toContain('New pane (agent, then the brief):')
     input.write('codex second job')
     input.write('\r')
-    s = await text()
+    s = await textWith('2 second job')
     expect(s).toContain('2 second job')
 
     input.write('\x02s')
-    s = await text()
+    s = await textWith('│● 2 second job')
     // both pane headers side by side on one row
     expect(s).toMatch(/● 1 tidy up the tests .*● 2 second job/)
 
@@ -85,7 +94,7 @@ describe('sldev TUI', () => {
 
     input.write('\x02d')
     await tui
-    expect(await text()).toContain('Detached. The agents keep running')
+    expect(await textWith('Detached.')).toContain('Detached. The agents keep running')
     // detaching leaves the agents running
     expect((await c.request('ls', {})).map((p) => p.status)).not.toContain('ended')
   }, 30_000)
