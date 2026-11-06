@@ -696,3 +696,10 @@ git switch -c release/0.1.0-beta.3 && git push -u origin release/0.1.0-beta.3 &&
 - Windows signing: [Microsoft code signing options](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options),
   [DevClass on Artifact Signing](https://devclass.com/2026/01/14/code-signing-windows-apps-may-be-easier-and-more-secure-with-new-azure-artifact-service/)
 - macOS notarization with electron-builder: [electron.build/docs/notarization](https://www.electron.build/docs/notarization)
+
+## The free CLI
+
+`.github/workflows/cli-publish.yml` (manual: Actions → Publish CLI → Run workflow) builds `cli/` and force-pushes it as a
+standalone package to the `cli` branch of `ben42-01/downloads.sldev.io`, tagged `cli-v<version>`, using `RELEASES_TOKEN`.
+Users install it with `npm i -g github:ben42-01/downloads.sldev.io#cli`. Bump `cli/package.json` first. It makes no GitHub
+release there, so the app updater and `/download` don't see it. Moving to npm later: `npm publish` from `cli/` once the name is free.
