@@ -1,10 +1,11 @@
 import { execFileSync, spawn } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
+import { useFakeAgents } from './fakePath'
 import type { PaneInfo } from '../src/protocol'
 
 /**
@@ -12,17 +13,16 @@ import type { PaneInfo } from '../src/protocol'
  * The fake claude fires the hooks from --settings; the fake codex prints, goes quiet, then asks with a bell.
  */
 
-const FAKEBIN = resolve(__dirname, '../../scripts/e2e/fakebin')
 const tmp = mkdtempSync(join(tmpdir(), 'sldev-cli-'))
 const data = join(tmp, 'data')
 const repo = join(tmp, 'repo')
 let daemon: Daemon
 let c: Client
 const notes: string[] = []
-const savedPath = process.env.PATH
+let restorePath: () => void
 
 beforeAll(async () => {
-  process.env.PATH = `${FAKEBIN}:${process.env.PATH}`
+  restorePath = useFakeAgents()
   mkdirSync(join(repo, 'src'), { recursive: true })
   writeFileSync(join(repo, 'src/app.js'), "console.log('hi')\n")
   const git = (...a: string[]): string => execFileSync('git', a, { cwd: repo, encoding: 'utf8' })
@@ -36,7 +36,7 @@ beforeAll(async () => {
 afterAll(async () => {
   c?.close()
   await daemon?.close()
-  process.env.PATH = savedPath
+  restorePath()
   rmSync(tmp, { recursive: true, force: true })
 })
 

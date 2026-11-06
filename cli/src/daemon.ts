@@ -518,14 +518,18 @@ function readSettings(dataDir: string): Partial<AppSettings> {
   }
 }
 
-/** A socket file left by a daemon that died is removed; a live daemon means this one doesn't start. */
+/**
+ * A live daemon means this one doesn't start; a socket file left by one that died is removed. Windows named
+ * pipes leave no file behind, so there it's only the "already running" check.
+ */
 async function claimSocket(socket: string): Promise<void> {
-  if (process.platform === 'win32' || !existsSync(socket)) return
+  const win = process.platform === 'win32'
+  if (!win && !existsSync(socket)) return
   const alive = await new Promise<boolean>((resolve) => {
     const c = createConnection(socket)
     c.once('connect', () => (c.destroy(), resolve(true)))
     c.once('error', () => resolve(false))
   })
   if (alive) throw new Error(`sldev is already running (${socket})`)
-  unlinkSync(socket)
+  if (!win) unlinkSync(socket)
 }

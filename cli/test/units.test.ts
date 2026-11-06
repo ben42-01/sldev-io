@@ -3,6 +3,7 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { dataDir, socketPath } from '../src/paths'
 import { notifyCommand } from '../src/notify'
+import { checkLaunch } from '../src/loops'
 import { lineReader } from '../src/protocol'
 import { drawTerm, fit, layout } from '../src/render'
 import { createTerm, screenText } from '../src/screen'
@@ -32,11 +33,27 @@ describe('cli units', () => {
   })
 
   it('notifies from argv, never a shell string', () => {
-    const mac = notifyCommand('Fix "it"', "it's done; rm -rf /", 'darwin', {})!
+    const mac = notifyCommand('Fix "it"', "it's done; rm -rf /", 'darwin', {})!.argv
     expect(mac[0]).toBe('osascript')
     expect(mac.slice(-2)).toEqual(['Fix "it"', "it's done; rm -rf /"])
     expect(notifyCommand('a', 'b', 'darwin', { SLDEV_NOTIFY: '0' })).toBeNull()
-    expect(notifyCommand('a', 'b', 'win32', {})).toBeNull()
+    // Windows: a toast whose texts come through the environment, never into the PowerShell script
+    const win = notifyCommand('Fix "it"', "'; Remove-Item C:\\ -Recurse; '", 'win32', {})!
+    expect(win.argv[0]).toBe('powershell.exe')
+    expect(win.argv.join(' ')).not.toContain('Remove-Item')
+    expect(win.env).toEqual({ SLDEV_NOTE_TITLE: 'Fix "it"', SLDEV_NOTE_BODY: "'; Remove-Item C:\\ -Recurse; '" })
+    expect(notifyCommand('a', 'b', 'win32', { SLDEV_NOTIFY: '0' })).toBeNull()
+  })
+
+  it('runs a repeat check through the shell, and a .ps1 one through PowerShell on Windows', () => {
+    expect(checkLaunch('npm test', 'linux')).toEqual({ file: 'npm test', args: [], shell: true })
+    expect(checkLaunch('npm test', 'win32').shell).toBe(true)
+    for (const c of ['scripts\\check.ps1', '.\\check.ps1 -Fast', '"C:\\My Scripts\\check.ps1"', '& .\\check.ps1']) {
+      const l = checkLaunch(c, 'win32')
+      expect(l.file).toBe('powershell.exe')
+      expect(l.args.at(-1)).toBe(c)
+    }
+    expect(checkLaunch('check.ps1', 'linux').shell).toBe(true)
   })
 
   it('reads JSON lines across chunks and drops junk', () => {

@@ -1,31 +1,35 @@
 import { execFileSync } from 'child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
 import type { LoopInfo, PaneInfo } from '../src/protocol'
+import { useFakeAgents } from './fakePath'
 
 /**
  * `sldev new --repeat` end to end against the fake claude (scripts/e2e/fakebin): print-mode passes that
  * exit when done, a check after each, a commit per pass in the loop's worktree, and passes you accept.
  */
 
-const FAKEBIN = resolve(__dirname, '../../scripts/e2e/fakebin')
 const tmp = mkdtempSync(join(tmpdir(), 'sldev-loops-'))
 const data = join(tmp, 'data')
 const repo = join(tmp, 'repo')
 let daemon: Daemon
 let c: Client
 const notes: string[] = []
-const saved = { ...process.env }
+const GIT_ID = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }
+let restorePath: () => void
+// checks that run the same in sh and cmd.exe
+const HAS_CHANGES = `node -e "process.exit(require('fs').existsSync('CHANGES.md') ? 0 : 1)"`
+const BROKEN = `node -e "console.log('BROKEN-BUILD'); process.exit(3)"`
 const git = (cwd: string, ...a: string[]): string => execFileSync('git', a, { cwd, encoding: 'utf8' })
 
 beforeAll(async () => {
-  process.env.PATH = `${FAKEBIN}:${process.env.PATH}`
+  restorePath = useFakeAgents()
   // the loop commits each pass; CI has no git identity
-  Object.assign(process.env, { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' })
+  Object.assign(process.env, GIT_ID)
   mkdirSync(join(repo, 'src'), { recursive: true })
   writeFileSync(join(repo, 'src/app.js'), "console.log('hi')\n")
   git(repo, 'init', '-q', '-b', 'main')
@@ -38,7 +42,8 @@ beforeAll(async () => {
 afterAll(async () => {
   c?.close()
   await daemon?.close()
-  process.env = saved
+  restorePath()
+  for (const k of Object.keys(GIT_ID)) delete process.env[k]
   rmSync(tmp, { recursive: true, force: true })
 })
 
@@ -58,7 +63,7 @@ const pane = async (id: string): Promise<PaneInfo> => (await c.request('ls', {})
 
 describe('sldev repeat loops', () => {
   it('runs the passes in print mode in one worktree, checks and commits each, and hands the next pass its place', async () => {
-    const first = await c.request('new', { agent: 'claude', brief: 'Polish the greeting', kind: 'build', worktree: 'feature/polish', cwd: repo, repeat: { times: 2, gapMinutes: 0, doneWhen: 'exit', check: 'test -f CHANGES.md' } })
+    const first = await c.request('new', { agent: 'claude', brief: 'Polish the greeting', kind: 'build', worktree: 'feature/polish', cwd: repo, repeat: { times: 2, gapMinutes: 0, doneWhen: 'exit', check: HAS_CHANGES } })
     expect(first.repeat).toMatchObject({ pass: 1, of: 2 })
     expect(first.options.print).toBe(true)
     // nobody approves in print mode: the unattended mode, as for factory stages
@@ -88,12 +93,12 @@ describe('sldev repeat loops', () => {
   }, 40_000)
 
   it('gives the next pass a failed check’s output, and stops after two failures in a row', async () => {
-    const first = await c.request('new', { agent: 'claude', brief: 'Make the check pass', worktree: 'feature/check', cwd: repo, repeat: { times: 5, gapMinutes: 0, doneWhen: 'exit', check: 'echo BROKEN-BUILD; exit 3' } })
+    const first = await c.request('new', { agent: 'claude', brief: 'Make the check pass', worktree: 'feature/check', cwd: repo, repeat: { times: 5, gapMinutes: 0, doneWhen: 'exit', check: BROKEN } })
     const l = await finished(first.repeat!.loop)
     expect(l.progress.passes.map((p) => p.outcome)).toEqual(['check-failed', 'check-failed'])
     expect(l.progress.reason).toBe('The check failed twice in a row (passes 1 and 2)')
     const second = await pane(l.progress.passes[1].mission)
-    expect(second.prompt).toContain('the check `echo BROKEN-BUILD; exit 3` failed')
+    expect(second.prompt).toContain(`the check \`${BROKEN}\` failed`)
     expect(second.prompt).toContain('BROKEN-BUILD')
   }, 60_000)
 

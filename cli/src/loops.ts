@@ -197,12 +197,24 @@ export class Loops {
   }
 }
 
-/** The check is a shell command line, the way tasks and factory run steps are typed; its last lines go to the next pass. */
+/**
+ * How a check runs: a shell command line, the way tasks are typed. On Windows that's cmd.exe, except a
+ * command starting with a .ps1 script, which goes to PowerShell (cmd.exe would open it in Notepad).
+ */
+export function checkLaunch(command: string, platform: NodeJS.Platform = process.platform): { file: string; args: string[]; shell: boolean } {
+  if (platform === 'win32' && /^\s*(?:&\s*)?(?:"[^"]+\.ps1"|'[^']+\.ps1'|\S+\.ps1)(\s|$)/i.test(command)) {
+    return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], shell: false }
+  }
+  return { file: command, args: [], shell: true }
+}
+
+/** Runs a check; its last lines go to the next pass. */
 export function runCheck(cwd: string, command: string): Promise<{ ok: boolean; log: string }> {
   return new Promise((resolve) => {
     let out = ''
     const add = (d: Buffer): void => void (out = (out + d.toString()).slice(-20_000))
-    const child = spawn(command, { cwd, shell: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const l = checkLaunch(command)
+    const child = spawn(l.file, l.args, { cwd, shell: l.shell, windowsHide: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
     child.stdout?.on('data', add)
     child.stderr?.on('data', add)
     child.on('error', (e) => resolve({ ok: false, log: e.message }))

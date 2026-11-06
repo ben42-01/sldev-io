@@ -75,7 +75,8 @@ export async function connect(o: { dataDir: string; script: string; start?: bool
   }
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   const log = openSync(join(dir, 'daemon.log'), 'a')
-  spawn(process.execPath, [o.script, 'serve'], { detached: true, stdio: ['ignore', log, log], env: { ...process.env, SLDEV_DATA_DIR: o.dataDir } }).unref()
+  // windowsHide: a detached process on Windows otherwise gets a console window of its own
+  spawn(process.execPath, [o.script, 'serve'], { detached: true, windowsHide: true, stdio: ['ignore', log, log], env: { ...process.env, SLDEV_DATA_DIR: o.dataDir } }).unref()
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 100))
     const c2 = await tryConnect(socket)

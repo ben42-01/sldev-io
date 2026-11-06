@@ -25,6 +25,21 @@ jobs:
       - run: npm run build
       - run: npm run cli:build
 
+  # the CLI on Windows: named pipe, ConPTY, .cmd shims and cmd.exe, against Windows twins of the fake agents
+  cli-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit -p cli/tsconfig.json
+      - run: npx vitest run cli/test
+      - run: npm run cli:build
+      - run: node cli/dist/sldev.mjs help
+
   website:
     runs-on: ubuntu-latest
     defaults:

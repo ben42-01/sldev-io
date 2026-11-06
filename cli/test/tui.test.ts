@@ -1,25 +1,25 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { join } from 'path'
 import { PassThrough, Writable } from 'stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
+import { useFakeAgents } from './fakePath'
 import { createTerm, screenText } from '../src/screen'
 import { runTui } from '../src/tui'
 
 /** The TUI against a real daemon and the fake codex; its output is read back through a headless screen. */
 
-const FAKEBIN = resolve(__dirname, '../../scripts/e2e/fakebin')
 const tmp = mkdtempSync(join(tmpdir(), 'sldev-tui-'))
 const data = join(tmp, 'data')
 const work = join(tmp, 'work')
 let daemon: Daemon
 let c: Client
-const savedPath = process.env.PATH
+let restorePath: () => void
 
 beforeAll(async () => {
-  process.env.PATH = `${FAKEBIN}:${process.env.PATH}`
+  restorePath = useFakeAgents()
   mkdirSync(work, { recursive: true })
   daemon = await startDaemon({ dataDir: data, notify: () => undefined })
   c = await connect({ dataDir: data, script: '', start: false })
@@ -28,7 +28,7 @@ beforeAll(async () => {
 afterAll(async () => {
   c?.close()
   await daemon?.close()
-  process.env.PATH = savedPath
+  restorePath()
   rmSync(tmp, { recursive: true, force: true })
 })
 
