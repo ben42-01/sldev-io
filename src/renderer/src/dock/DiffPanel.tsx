@@ -3,6 +3,7 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { ChevronDown, ChevronRight, Columns2, ExternalLink, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, RefreshCw, Rows2, Trash2 } from 'lucide-react'
 import { parseDiff, splitRows, type DiffFile, type DiffLine } from '../lib/diff'
 import { openFileAt, openInEditor } from '../lib/actions'
+import { scrollToTop } from '../lib/scroll'
 import { getMission, missionBase, refreshStats, useMission } from '../state/missions'
 import { removeMissionFlow } from '../lib/removals'
 import { preferredEditor, updateSettings, workspace } from '../state/workspace'
@@ -108,7 +109,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
   }
   const jump = (path: string): void => {
     setCollapsed((s) => (s.has(path) ? (s.delete(path), new Set(s)) : s))
-    requestAnimationFrame(() => scroller.current?.querySelector(`[data-file="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'start' }))
+    requestAnimationFrame(() => scrollToTop(scroller.current?.querySelector(`[data-file="${CSS.escape(path)}"]`)))
   }
   const editorDiff = (f: DiffFile): void => {
     if (!editor?.canDiff) return void openFileAt(`${mission.cwd}/${f.path}`)

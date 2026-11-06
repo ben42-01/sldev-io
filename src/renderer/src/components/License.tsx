@@ -5,6 +5,7 @@ import { beta } from '../state/beta'
 import { activateLicense, checkLicense, deactivateLicense, license } from '../state/license'
 import { useStore } from '../state/store'
 import { openSettings } from '../lib/commands'
+import { scrollToTop } from '../lib/scroll'
 import { confirmAction } from './Modal'
 import { Plans } from './Plans'
 
@@ -133,5 +134,5 @@ export function TrialChip(): React.JSX.Element | null {
 
 export function openLicense(): void {
   openSettings()
-  requestAnimationFrame(() => document.getElementById('settings-license')?.scrollIntoView({ block: 'start' }))
+  requestAnimationFrame(() => scrollToTop(document.getElementById('settings-license')))
 }

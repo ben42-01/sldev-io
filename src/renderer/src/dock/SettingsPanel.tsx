@@ -4,6 +4,7 @@ import { clampZoom, UI_ZOOMS } from '@shared/theme'
 import { Plus, Trash2 } from 'lucide-react'
 import { useAgents } from '../state/agents'
 import { applyTerminalFont } from '../lib/terminals'
+import { scrollToTop } from '../lib/scroll'
 import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { openSetup } from '../state/setup'
@@ -188,7 +189,7 @@ function SectionNav({ page }: { page: React.RefObject<HTMLDivElement | null> }):
   return (
     <nav className="settings-nav" aria-label="Settings sections">
       {heads.map((h) => (
-        <button key={h.textContent} type="button" onClick={() => h.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+        <button key={h.textContent} type="button" onClick={() => scrollToTop(h.parentElement, 'smooth')}>
           {h.textContent}
         </button>
       ))}

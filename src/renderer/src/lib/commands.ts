@@ -11,6 +11,7 @@ import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, shellKind, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
+import { scrollToTop } from './scroll'
 import { errText, showNotice } from './removals'
 import { nextNeedsYou } from '../state/attention'
 import { openAgentsDashboard } from '../dock/AgentsPanel'
@@ -151,7 +152,7 @@ export function openSettings(): void {
 
 export function showAbout(): void {
   openSettings()
-  requestAnimationFrame(() => document.getElementById('settings-about')?.scrollIntoView({ block: 'start' }))
+  requestAnimationFrame(() => scrollToTop(document.getElementById('settings-about')))
 }
 
 export function staticCommands(): Command[] {
