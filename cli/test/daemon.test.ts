@@ -66,8 +66,13 @@ describe('sldev daemon', () => {
     // the fake claude edited the worktree, not the main checkout
     expect(readFileSync(join(p.cwd, 'src/app.js'), 'utf8')).toContain('hello from mission')
     expect(readFileSync(join(repo, 'src/app.js'), 'utf8')).toBe("console.log('hi')\n")
-    await new Promise((r) => setTimeout(r, 300))
-    expect((await ls(p.id)).stats?.files).toBeGreaterThan(0)
+    // the diff stat comes from git a moment after the agent stops (slower on Windows, under a full run)
+    let stats = (await ls(p.id)).stats
+    for (let i = 0; !stats?.files && i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 200))
+      stats = (await ls(p.id)).stats
+    }
+    expect(stats?.files).toBeGreaterThan(0)
     expect(notes).toContain('Change the greeting needs you')
   }, 40_000)
 
