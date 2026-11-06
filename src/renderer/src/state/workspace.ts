@@ -68,8 +68,9 @@ export function setRootFolder(folder: string): void {
   void loadRecipes(folder)
 }
 
+/** Open a project: the picker starts in the current project, or in the home folder when none is open. */
 export async function pickRootFolder(): Promise<void> {
-  const folder = await window.api.fs.pickFolder()
+  const folder = await window.api.fs.pickFolder(workspace.get().rootFolder ?? undefined)
   if (folder) setRootFolder(folder)
 }
 

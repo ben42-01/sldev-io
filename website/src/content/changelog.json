@@ -7,6 +7,7 @@
       "Interface size: make the whole window 90%, 110% or 125% in Settings → Appearance. Terminal text keeps its own font size on top.",
       "Command palette: the letters you typed are marked in each result, the commands you ran last come first, and a footer shows the keys.",
       "Smoother: menus and the palette open with a short fade, buttons respond when pressed, and the window cross-fades when the theme changes. Turn on reduced motion in your OS and all of that stays still.",
+      "Open folder and Browse… start in the project you have open, or in your home folder when none is, instead of wherever the system dialog was last (often Downloads).",
       "Diagrams: a code map of the imports between your folders (TypeScript and JavaScript, tsconfig paths included) and a database diagram of the tables and foreign keys in Prisma schemas and SQL migrations. Parsed on your machine; open it from the Explorer header or the command palette, double-click a box to open it in your editor, and copy either one as Mermaid.",
       "Recipes: a new section to see, build and share factory recipes. Open it from the Factory sidebar, the start screen or the command palette.",
       "Recipe builder: name it, start from a template or an existing recipe, add agent, check and pull request stages, and save. No YAML to write; placeholders like {spec.out} are one click, and it tells you what's missing before you save.",

@@ -161,7 +161,9 @@ function registerIpc(): void {
   ipcMain.handle('fs:readDir', (_e, dir: string) => readDir(dir))
   ipcMain.handle('fs:home', () => homedir())
   ipcMain.handle('fs:pickFolder', async (_e, start?: string) => {
-    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'], defaultPath: start && existsSync(start) ? start : undefined })
+    // without a start the OS dialog opens wherever it likes (often Downloads, or the last folder used): use home instead
+    const defaultPath = start && existsSync(start) ? start : homedir()
+    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'], defaultPath })
     return r.canceled ? null : r.filePaths[0]
   })
   ipcMain.handle('fs:isDir', (_e, p: string) => {
