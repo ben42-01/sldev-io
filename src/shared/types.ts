@@ -347,6 +347,8 @@ export interface Mission {
   history?: StatusChange[]
   /** the factory run and node this mission works for */
   factory?: { run: string; node: string }
+  /** a pass of a repeated mission (src/shared/repeat.ts): its automation (app) or loop (CLI), its number, the total (0 = open-ended) */
+  repeat?: { loop: string; pass: number; of: number; accept?: boolean }
   /** Claude Code transcript (from its hooks), for token usage */
   transcriptPath?: string
 }

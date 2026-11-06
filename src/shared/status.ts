@@ -1,6 +1,7 @@
 import type { MissionStatus } from './types'
 import type { NodeStatus, RunStatus } from './factory'
 import type { ContextStale } from './context'
+import type { PassOutcome } from './repeat'
 
 /**
  * Every state in the app maps through here to one of six tones, so a colour always means the same
@@ -51,6 +52,21 @@ export const runSignal = (s: RunStatus, waitingForApproval = false): Signal => (
 
 // Ctrl+C (SIGINT) exits: 130 on POSIX shells, STATUS_CONTROL_C_EXIT on Windows. Shown as "stopped", not failed.
 const INTERRUPTED = new Set([130, 0xc000013a, -1073741510])
+
+/** Ctrl+C, not a crash: the user stopped it. */
+export const wasInterrupted = (code: number | undefined): boolean => code !== undefined && INTERRUPTED.has(code)
+
+const PASS: Record<PassOutcome, Signal> = {
+  done: sig('done', 'Done'),
+  unchanged: sig('neutral', 'Changed nothing'),
+  'check-failed': sig('attention', 'Check failed'),
+  failed: sig('error', 'Failed'),
+  limited: sig('attention', 'Usage limit'),
+  stopped: sig('neutral', 'Stopped')
+}
+
+/** One pass of a repeated mission (src/shared/repeat.ts); a pass without an outcome is still going. */
+export const passSignal = (o: PassOutcome | undefined): Signal => (o ? PASS[o] : sig('working', 'Running', true))
 
 /** A terminal process (runtimes, tasks). */
 export function processSignal(status: 'idle' | 'starting' | 'running' | 'exited' | undefined, exitCode?: number): Signal {
