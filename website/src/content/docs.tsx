@@ -576,7 +576,7 @@ stages:
           <table className="docs-table">
             <tbody>
               <tr><td><code>id</code></td><td>Letters, digits, <code>-</code> and <code>_</code>; unique. Default: <code>stage-1</code>, <code>stage-2</code>…</td></tr>
-              <tr><td><code>agent</code> + <code>prompt</code></td><td>An agent stage. <code>agent</code>: a profile, a CLI id, <code>Profile@cli</code>, or a list for a bake-off</td></tr>
+              <tr><td><code>agent</code> + <code>prompt</code></td><td>An agent stage. <code>agent</code>: a profile, a CLI id, <code>Profile@cli</code>, or a list for a bake-off. Leave it out and the stage runs on your default agent</td></tr>
               <tr><td><code>skill</code></td><td>Run this skill in an agent stage; the prompt becomes its arguments (default <code>{'{intent}'}</code>), <code>agent</code> defaults to your default agent</td></tr>
               <tr><td><code>run</code></td><td>A run stage: a command, a script name (<code>test</code>, <code>test?</code> = optional) or a list of them</td></tr>
               <tr><td><code>pr</code></td><td>A PR stage: <code>{'{ title, body }'}</code>, both optional (title defaults to <code>{'{intent}'}</code>)</td></tr>
@@ -588,7 +588,7 @@ stages:
               <tr><td><code>model</code>, <code>effort</code>, <code>mode</code></td><td>The agent's model, reasoning effort and approval mode, in that CLI's own values (as in the mission form). Without <code>mode</code>, print-mode stages use the unattended mode from Settings</td></tr>
             </tbody>
           </table>
-          <p>A stage is exactly one of agent (or skill), run or pr.</p>
+          <p>A stage is exactly one of agent (or skill, or just a prompt), run or pr. You don't have to write the YAML by hand: Recipes → New recipe builds it step by step, and Import takes a shared recipe or a file.</p>
         </>
       )
     }

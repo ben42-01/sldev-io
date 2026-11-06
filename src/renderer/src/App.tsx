@@ -7,6 +7,7 @@ import { ConfirmHost } from './components/Modal'
 import { MissionDetailsHost } from './components/MissionDetails'
 import { NewMissionHost } from './components/MissionsView'
 import { NewRunHost } from './components/FactoryView'
+import { ImportRecipeHost } from './dock/RecipesPanel'
 import './lib/actions'
 import { Sidebar } from './components/Sidebar'
 import { RightPanel } from './components/RightPanel'
@@ -84,6 +85,7 @@ export function App(): React.JSX.Element {
       <MissionDetailsHost />
       <NewMissionHost />
       <NewRunHost />
+      <ImportRecipeHost />
       <ConfirmHost />
     </div>
   )

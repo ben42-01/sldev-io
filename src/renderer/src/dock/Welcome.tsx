@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Bot, Command as CommandIcon, FolderOpen, Gauge, Home, Plus, Rocket, Server, SquareTerminal } from 'lucide-react'
+import { BookOpen, Bot, Command as CommandIcon, Factory, FolderOpen, Gauge, Home, Plus, Rocket, Server, SquareTerminal } from 'lucide-react'
 import { openTerminal } from './dockApi'
 import { openAgentsDashboard } from './AgentsPanel'
 import { shortcutLabel, showCommandPalette, showView, staticCommands } from '../lib/commands'
 import { openNewMission } from '../components/MissionsView'
+import { openNewRun } from '../components/FactoryView'
+import { openRecipes } from './RecipesPanel'
 import { basename, tildify } from '../lib/paths'
 import { pickRootFolder, setRootFolder, workspace } from '../state/workspace'
 import { loadRemote, openSshTerminal, remote } from '../state/remote'
@@ -64,6 +66,17 @@ export function Welcome(): React.JSX.Element {
 
         <div className="launch-cards">
           {root && agentCard}
+          {root && (
+            <section className="launch-card aurora">
+              <div className="launch-head"><Factory size={15} /> Software Factory</div>
+              <p className="launch-desc">Agents plan, build and review in their own branch, your checks run in between, and you approve before a pull request opens.</p>
+              <div className="launch-actions">
+                <button className="btn sm" onClick={() => openNewRun()}><Factory size={13} /> New run</button>
+                <button className="btn sm" onClick={() => openRecipes()}><BookOpen size={13} /> Recipes</button>
+                <button className="btn sm ghost" onClick={() => openRecipes({ mode: 'new' })}><Plus size={13} /> Build a recipe</button>
+              </div>
+            </section>
+          )}
           <section className="launch-card aurora">
             <div className="launch-head"><SquareTerminal size={15} /> Local shell</div>
             <p className="launch-desc">A terminal in your project, or anywhere on this machine.</p>

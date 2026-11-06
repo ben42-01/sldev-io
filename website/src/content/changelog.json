@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.3",
+    "date": null,
+    "changes": [
+      "Recipes: a new section to see, build and share factory recipes. Open it from the Factory sidebar, the start screen or the command palette.",
+      "Recipe builder: name it, start from a template or an existing recipe, add agent, check and pull request stages, and save. No YAML to write; placeholders like {spec.out} are one click, and it tells you what's missing before you save.",
+      "Share recipes: copy one as text, export it to a file, and import from a paste, the clipboard or a file. The import shows what it adds first, keeps your own agents, and never adds the same recipe twice.",
+      "A recipe stage with just a prompt runs on your default agent.",
+      "New factory run: what to build comes right after the recipe; per-stage agents and the start point fold away until you need them.",
+      "The Factory sidebar lists your recipes, with a run button on each.",
+      "Start screen: a Software Factory card with New run and Recipes.",
+      "Overview: \"need you\" now counts factory runs waiting for your approval, and factory runs show their status and recipe."
+    ]
+  },
+  {
     "version": "1.0.2",
     "date": "2026-11-01",
     "changes": [

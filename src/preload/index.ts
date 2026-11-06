@@ -188,7 +188,15 @@ const api = {
     setupPlan: (dir: string, command: string | false | undefined): Promise<string | null> => ipcRenderer.invoke('factory:setupPlan', dir, command),
     setup: (dir: string, command: string): Promise<{ ok: boolean; log: string }> => ipcRenderer.invoke('factory:setup', dir, command),
     /** a spec or plan inside the repository to start a run from */
-    readSeed: (root: string, path: string): Promise<string> => ipcRenderer.invoke('factory:readSeed', root, path)
+    readSeed: (root: string, path: string): Promise<string> => ipcRenderer.invoke('factory:readSeed', root, path),
+    /** saves over a recipe in some project's .sldev/factory */
+    writeRecipe: (path: string, text: string): Promise<void> => ipcRenderer.invoke('factory:writeRecipe', path, text),
+    /** moves a project recipe to the trash */
+    deleteRecipe: (path: string): Promise<void> => ipcRenderer.invoke('factory:deleteRecipe', path),
+    /** save dialog; the path written, or null when cancelled */
+    exportRecipe: (fileName: string, text: string): Promise<string | null> => ipcRenderer.invoke('factory:exportRecipe', fileName, text),
+    /** open dialog; the file's text, or null when cancelled */
+    importRecipeFile: (): Promise<string | null> => ipcRenderer.invoke('factory:importRecipeFile')
   },
   rules: {
     state: (root: string): Promise<RulesState> => ipcRenderer.invoke('rules:state', root),

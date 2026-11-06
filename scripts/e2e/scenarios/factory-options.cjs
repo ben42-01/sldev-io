@@ -28,7 +28,7 @@ module.exports = async (h) => {
   await h.click('.btn', 'New factory run')
   await h.wait(400)
   // a bake-off stage gets a model (and effort, where the CLI has one) per agent
-  await h.setValue('.factory-form select', '0', `e.querySelector('option')?.textContent === 'E2E options (project)'`)
+  await h.setValue('.factory-form select', 'E2E options', `e.querySelector('option')?.textContent === 'E2E options (project)'`)
   const pickRecipe = (name) => h.js(`(() => { const s = document.querySelector('.factory-form select'); const o = [...s.options].find(o => o.textContent === '${name} (project)'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); return true })()`)
   await pickRecipe('E2E race')
   await h.wait(300)

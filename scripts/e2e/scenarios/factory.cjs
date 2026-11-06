@@ -42,7 +42,7 @@ module.exports = async (h) => {
   await h.wait(400)
   const opts = await h.js(`[...document.querySelectorAll('.factory-form select option')].map(o => o.textContent)`)
   h.expect(opts.includes('E2E graph (project)') && opts.includes('Feature') && opts.includes('Parallel feature'), 'project and built-in recipes are offered')
-  await h.setValue('.factory-form select', '0', `e.querySelector('option')?.textContent === 'E2E graph (project)'`)
+  await h.setValue('.factory-form select', 'E2E graph', `e.querySelector('option')?.textContent === 'E2E graph (project)'`)
   await h.setValue('.factory-form textarea', 'Add dark mode')
   await h.wait(200)
   h.expect(await h.js(`[...document.querySelectorAll('.recipe-step')].map(s => s.textContent).join(',') === 'spec ✓,part-a,part-b,verify,pr'`), 'the form previews the steps')

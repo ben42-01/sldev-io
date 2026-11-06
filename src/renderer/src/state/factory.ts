@@ -34,6 +34,7 @@ import { branchName, cleanBranchName } from '@shared/branch'
 import { feedbackPrompt, prNumber, unaddressed } from '@shared/prFeedback'
 import { makeBundle, readBundle } from '@shared/recipeBundle'
 import { BUILTIN_RECIPES } from '@shared/recipes'
+import { freeName, recipeSlug, renameRecipeText } from '@shared/recipeDraft'
 import type { AgentOptions, GhPrComment, WorktreeInfo } from '@shared/types'
 import { groupOf, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { allAgents, findAgent, skillPrompt, slugify, stageMode } from '../lib/agents'
@@ -123,13 +124,49 @@ export function recipeBundle(entry: RecipeEntry): string {
   return makeBundle(entry.text, entry.recipe, allProfiles(), allAgents(workspace.get().customAgents).map((a) => a.id))
 }
 
+export interface ImportPreview {
+  recipe: Recipe
+  /** the name it is saved under: its own, or "Name 2" when a project recipe already has that name */
+  name: string
+  /** the project already has this exact recipe */
+  duplicate: boolean
+  /** a built-in of the same name, which the import replaces in this project */
+  replacesBuiltin: boolean
+  newAgents: string[]
+  keptAgents: string[]
+  /** agents the recipe names that neither the bundle nor this install has */
+  missing: string[]
+}
+
+/** What importing a pasted bundle (or plain recipe) would do, without writing anything. */
+export function previewImport(text: string): ImportPreview | { error: string } {
+  const b = readBundle(text)
+  if ('error' in b) return b
+  const have = allProfiles()
+  const own = factory.get().recipes.filter((r) => !r.builtin)
+  const duplicate = own.some((r) => r.text.trim() === b.recipeText.trim())
+  const ids = allAgents(workspace.get().customAgents).map((a) => a.id)
+  const missing = [...new Set(b.recipe.nodes.flatMap((n) => n.agents))].filter((spec) => 'error' in resolveAgentSpec(spec, [...have, ...b.profiles], ids))
+  return {
+    recipe: b.recipe,
+    name: duplicate ? b.recipe.name : freeName(b.recipe.name, own.map((r) => r.recipe.name)),
+    duplicate,
+    replacesBuiltin: factory.get().recipes.some((r) => r.builtin && r.recipe.name === b.recipe.name),
+    newAgents: b.profiles.filter((p) => !have.some((x) => x.name.toLowerCase() === p.name.toLowerCase())).map((p) => p.name),
+    keptAgents: b.profiles.filter((p) => have.some((x) => x.name.toLowerCase() === p.name.toLowerCase())).map((p) => p.name),
+    missing
+  }
+}
+
 /**
  * Adds a pasted bundle (or plain recipe) to the project: the recipe goes to .sldev/factory, its
- * agents to .sldev/agents. An agent you already have by that name is kept as it is.
+ * agents to .sldev/agents. An agent you already have by that name is kept as it is; a recipe name
+ * that is taken gets a number, and the exact same recipe isn't added twice.
  */
-export async function importRecipe(root: string, text: string): Promise<{ name: string; added: string[]; kept: string[] }> {
+export async function importRecipe(root: string, text: string): Promise<{ name: string; added: string[]; kept: string[]; path?: string; duplicate: boolean }> {
   const b = readBundle(text)
   if ('error' in b) throw new Error(b.error)
+  const preview = previewImport(text) as ImportPreview
   const added: string[] = []
   const kept: string[] = []
   for (const p of b.profiles) {
@@ -139,9 +176,13 @@ export async function importRecipe(root: string, text: string): Promise<{ name: 
       added.push(p.name)
     }
   }
-  await window.api.factory.saveRecipe(root, slugify(b.recipe.name), b.recipeText)
+  let path: string | undefined
+  if (!preview.duplicate) {
+    const recipeText = preview.name === b.recipe.name ? b.recipeText : renameRecipeText(b.recipeText, preview.name)
+    path = await window.api.factory.saveRecipe(root, recipeSlug(preview.name), recipeText)
+  }
   await Promise.all([loadProjectProfiles(root), loadRecipes(root)])
-  return { name: b.recipe.name, added, kept }
+  return { name: preview.name, added, kept, path, duplicate: preview.duplicate }
 }
 
 export function openPipeline(runId: string): void {

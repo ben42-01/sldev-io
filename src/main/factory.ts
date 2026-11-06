@@ -1,6 +1,6 @@
 import { exec } from 'child_process'
 import { promises as fsp } from 'fs'
-import { dirname, join, resolve, sep } from 'path'
+import { basename, dirname, join, resolve, sep } from 'path'
 import { setupCommand } from '@shared/factory'
 
 /** Recipes: `.sldev/factory/*.yml` in the project. Run outputs: `<worktree>/.sldev/runs/<run>/`, git-ignored. */
@@ -86,4 +86,28 @@ export async function readSeedFile(root: string, p: string): Promise<string> {
   if (!st?.isFile()) throw new Error(`No file at ${p}`)
   if (st.size > 200_000) throw new Error(`${p} is over 200 KB`)
   return fsp.readFile(abs, 'utf8')
+}
+
+/** A recipe file the app may change: a .yml directly inside some project's .sldev/factory folder. */
+function recipePath(p: string): string {
+  const abs = resolve(p)
+  if (!/\.ya?ml$/.test(abs) || basename(dirname(abs)) !== 'factory' || basename(dirname(dirname(abs))) !== '.sldev') throw new Error('Not a recipe file')
+  return abs
+}
+
+/** Saves the recipe builder's changes over the file it opened. */
+export async function writeRecipe(p: string, text: string): Promise<void> {
+  await fsp.writeFile(recipePath(p), text)
+}
+
+/** Deleted recipes go to the trash, so a slip can be undone from there. */
+export async function deleteRecipe(p: string, trash: (p: string) => Promise<void>): Promise<void> {
+  await trash(recipePath(p))
+}
+
+/** A recipe file picked to import: text up to 200 KB. */
+export async function readImportFile(p: string): Promise<string> {
+  const st = await fsp.stat(p)
+  if (st.size > 200_000) throw new Error('That file is over 200 KB; a recipe is much smaller')
+  return fsp.readFile(p, 'utf8')
 }

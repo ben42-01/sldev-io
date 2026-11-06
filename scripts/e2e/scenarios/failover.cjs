@@ -47,7 +47,7 @@ module.exports = async (h) => {
   await h.wait(600)
   await h.click('.btn', 'New factory run')
   await h.wait(400)
-  await h.setValue('.factory-form select', '0', `e.querySelector('option')?.textContent === 'Limits (project)'`)
+  await h.setValue('.factory-form select', 'Limits', `e.querySelector('option')?.textContent === 'Limits (project)'`)
   await h.setValue('.factory-form textarea', 'Parser')
   await h.wait(200)
   await h.click('.factory-form .btn.primary', 'Start')

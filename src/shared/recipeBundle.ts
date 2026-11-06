@@ -16,7 +16,7 @@ export function makeBundle(recipeText: string, recipe: Recipe, profiles: AgentPr
     if (!('error' in r) && r.profile && r.profile.scope !== 'builtin') used.set(r.profile.name, r.profile)
   }
   const doc = { sldev: BUNDLE_VERSION, recipe: recipeText.trimEnd() + '\n', agents: [...used.values()].map(serializeProfile) }
-  return `# sldev-io recipe "${recipe.name}": paste it into Factory → Import recipe\n${stringify(doc, { lineWidth: 0, blockQuote: 'literal' })}`
+  return `# sldev-io recipe "${recipe.name}": in sldev-io, Recipes → Import\n${stringify(doc, { lineWidth: 0, blockQuote: 'literal' })}`
 }
 
 export interface ImportedBundle {

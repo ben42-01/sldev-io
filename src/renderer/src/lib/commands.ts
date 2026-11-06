@@ -15,6 +15,8 @@ import { nextNeedsYou } from '../state/attention'
 import { openAgentsDashboard } from '../dock/AgentsPanel'
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { openNewMission } from '../components/MissionsView'
+import { openNewRun } from '../components/FactoryView'
+import { openRecipes } from '../dock/RecipesPanel'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -187,6 +189,10 @@ export function staticCommands(): Command[] {
     { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => openNewMission() },
     { id: 'missions.board', category: 'Agents', title: 'Open Mission Control (missions, factory runs, usage)', run: () => openMissionControl('missions') },
     { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
+    { id: 'factory.run', category: 'Factory', title: 'New factory run…', run: () => openNewRun() },
+    { id: 'factory.recipes', category: 'Factory', title: 'Open recipes (library and builder)', run: () => openRecipes() },
+    { id: 'factory.newRecipe', category: 'Factory', title: 'Build a new recipe', run: () => openRecipes({ mode: 'new' }) },
+    { id: 'factory.importRecipe', category: 'Factory', title: 'Import a recipe (paste or file)', run: () => openRecipes({ mode: 'import' }) },
     { id: 'missions.next', category: 'Agents', title: 'Next mission that needs you', keys: { mac: 'Cmd+Shift+J', other: 'Ctrl+Shift+J' }, run: () => void (nextNeedsYou() || showNotice('Nothing needs you', 'No mission or factory run is waiting for you right now.')) },
     { id: 'agents.dashboard', category: 'Agents', title: 'Open agents dashboard (every running agent)', run: openAgentsDashboard },
     { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openMissionControl('usage') },

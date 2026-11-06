@@ -294,6 +294,22 @@ function registerIpc(): void {
   ipcMain.handle('factory:setupPlan', (_e, dir: string, command: string | false | undefined) => factory.setupPlan(dir, command))
   ipcMain.handle('factory:readSeed', (_e, root: string, p: string) => factory.readSeedFile(root, p))
   ipcMain.handle('factory:setup', (_e, dir: string, command: string) => factory.runSetup(dir, command))
+  ipcMain.handle('factory:writeRecipe', (_e, p: string, text: string) => factory.writeRecipe(p, text))
+  ipcMain.handle('factory:deleteRecipe', (_e, p: string) => factory.deleteRecipe(p, (x) => shell.trashItem(x)))
+  ipcMain.handle('factory:exportRecipe', async (_e, fileName: string, text: string) => {
+    const r = await dialog.showSaveDialog(win!, {
+      title: 'Export recipe',
+      defaultPath: join(app.getPath('downloads'), basename(fileName)),
+      filters: [{ name: 'sldev-io recipe', extensions: ['yml', 'yaml'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    writeFileSync(r.filePath, text)
+    return r.filePath
+  })
+  ipcMain.handle('factory:importRecipeFile', async () => {
+    const r = await dialog.showOpenDialog(win!, { title: 'Import recipe', properties: ['openFile'], filters: [{ name: 'Recipe', extensions: ['yml', 'yaml', 'txt'] }, { name: 'All files', extensions: ['*'] }] })
+    return r.canceled || !r.filePaths[0] ? null : factory.readImportFile(r.filePaths[0])
+  })
   ipcMain.handle('rules:state', (_e, root: string) => rules.rulesState(root))
   ipcMain.handle('rules:create', (_e, root: string) => rules.createRules(root))
   ipcMain.handle('rules:target', (_e, root: string, id: string, on: boolean) => rules.setRuleTarget(root, id, on))

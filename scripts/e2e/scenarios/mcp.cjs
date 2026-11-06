@@ -21,7 +21,7 @@ module.exports = async (h) => {
   await h.wait(500)
   await h.click('.btn', 'New factory run')
   await h.wait(400)
-  await h.setValue('.factory-form select', '0', `e.querySelector('option')?.textContent === 'E2E MCP (project)'`)
+  await h.setValue('.factory-form select', 'E2E MCP', `e.querySelector('option')?.textContent === 'E2E MCP (project)'`)
   await h.setValue('.factory-form textarea', 'Store orders')
   await h.click('.factory-form .btn.primary', 'Start')
 

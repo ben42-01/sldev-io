@@ -55,6 +55,7 @@ src/main/       Electron main process (Node): everything privileged
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
+                  recipeDraft.ts (the recipe builder's draft ↔ YAML, validated by parsing it back), recipeBundle.ts (share/import text),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
                   pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
@@ -68,7 +69,8 @@ src/renderer/src/
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
                   missionKinds, automations (the trigger loop, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
-                  the top of the left ActivityBar), Pipeline, Dashboard, Agents, Preview, Settings
+                  the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
+                  Dashboard, Agents, Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root

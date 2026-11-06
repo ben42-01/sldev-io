@@ -31,7 +31,7 @@ module.exports = async (h) => {
   const open = async () => {
     await h.click('.btn', 'New factory run')
     await h.wait(400)
-    await h.setValue('.factory-form select', '0', `e.querySelector('option')?.textContent === 'House flow (project)'`)
+    await h.setValue('.factory-form select', 'House flow', `e.querySelector('option')?.textContent === 'House flow (project)'`)
     await h.wait(300)
   }
 

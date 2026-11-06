@@ -10,7 +10,7 @@ import { useStore } from './store'
  */
 
 const needsMission = (status: string): boolean => status === 'needs-input'
-const runWaits = (r: { status: string; nodes: Record<string, { status: string }> }): boolean =>
+export const runWaits = (r: { status: string; nodes: Record<string, { status: string }> }): boolean =>
   r.status === 'running' && Object.values(r.nodes).some((n) => n.status === 'approval')
 
 export interface ViewBadge {

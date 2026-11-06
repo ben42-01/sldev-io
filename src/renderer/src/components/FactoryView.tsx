@@ -4,14 +4,15 @@ import { missions } from '../state/missions'
 import { useProfiles } from '../state/profiles'
 import { useAgents } from '../state/agents'
 import { slugify } from '../lib/agents'
-import { Check, Factory, FilePlus2, Import, Plus, Share2 } from 'lucide-react'
+import { BookOpen, Check, Factory, FilePlus2, Import, Play, Plus, Share2 } from 'lucide-react'
 import { isBakeoff, issueText, recipeTextWithOverrides, runtimeNames, seedableNodes, type FactoryRun, type Recipe, type RecipeNode, type StageAgentChoice, type StageOverride } from '@shared/factory'
 import type { AgentDef } from '../lib/agents'
 import { branchName } from '@shared/branch'
 import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
-import { factory, importRecipe, loadRecipes, openPipeline, recipeBundle, specAgent, startRun } from '../state/factory'
+import { factory, loadRecipes, openPipeline, recipeBundle, specAgent, startRun } from '../state/factory'
+import { openImport, openRecipes } from '../dock/RecipesPanel'
 import { createStore, useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { showContextMenu } from './ContextMenu'
@@ -27,6 +28,8 @@ import { AutomationsSection } from './AutomationsSection'
 export interface RunDraft {
   intent?: string
   seedMission?: string
+  /** the recipe to preselect, by name */
+  recipe?: string
 }
 
 const newRun = createStore<{ open: boolean; draft?: RunDraft; n: number }>({ open: false, n: 0 })
@@ -47,8 +50,8 @@ export function NewRunHost(): React.JSX.Element | null {
 export function FactoryView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const runs = useStore(factory, (s) => s.runs)
+  const recipes = useStore(factory, (s) => s.recipes)
   const errors = useStore(factory, (s) => s.recipeErrors)
-  const [importing, setImporting] = useState(false)
   useEffect(() => void loadRecipes(root), [root])
   const mine = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
   /** unfinished runs in another repository (picked in the run form) stay visible */
@@ -66,27 +69,63 @@ export function FactoryView(): React.JSX.Element {
       <div className="view-scroll">
         {!root ? (
           <div className="empty-state"><p>Open a git project to run factory recipes in it.</p></div>
-        ) : importing ? (
-          <ImportForm root={root} onDone={() => setImporting(false)} />
         ) : (
           <div className="view-footer">
             <button className="btn primary full" onClick={() => openNewRun()}>
               <Factory size={14} /> New factory run
             </button>
-            <button className="btn full" onClick={() => setImporting(true)}>
-              <Import size={14} /> Import recipe
-            </button>
           </div>
         )}
-        {Object.entries(errors).map(([path, error]) => (
-          <div key={path} className="muted-note bad" title={path}>
-            {path.split('/').pop()}: {error}
-          </div>
-        ))}
         {mine.length > 0 && <div className="section-label pad">Runs</div>}
         {mine.map((r) => <RunRow key={r.id} run={r} />)}
         {elsewhere.length > 0 && <div className="section-label pad">Other repositories · {elsewhere.length}</div>}
         {elsewhere.map((r) => <RunRow key={r.id} run={r} />)}
+        {root && (
+          <>
+            <div className="section-label pad side-head">
+              <span>Recipes · {recipes.length}</span>
+              <span className="grow" />
+              <button className="icon-btn" title="Import a recipe" aria-label="Import a recipe" onClick={() => openImport()}>
+                <Import size={13} />
+              </button>
+              <button className="icon-btn" title="Build a new recipe" aria-label="Build a new recipe" onClick={() => openRecipes({ mode: 'new' })}>
+                <Plus size={13} />
+              </button>
+            </div>
+            {Object.entries(errors).map(([path, error]) => (
+              <div key={path} className="muted-note bad" title={path}>
+                {path.split(/[\\/]/).pop()}: {error}
+              </div>
+            ))}
+            <ul className="side-recipes">
+              {recipes.map((r) => (
+                <li key={r.recipe.path ?? r.builtin}>
+                  <button
+                    className="side-recipe"
+                    title={r.recipe.description || r.recipe.name}
+                    onClick={() => openRecipes({ select: r.recipe.name })}
+                    onContextMenu={(e) =>
+                      showContextMenu(e, [
+                        { label: 'Run…', run: () => openNewRun({ recipe: r.recipe.name }) },
+                        { label: 'Show in Recipes', run: () => openRecipes({ select: r.recipe.name }) },
+                        ...(r.recipe.path ? [{ label: 'Open YAML', run: () => void openInEditor(r.recipe.path!) }] : [])
+                      ])
+                    }
+                  >
+                    <span className="side-recipe-name">{r.recipe.name}</span>
+                    <span className="side-recipe-meta">{r.builtin ? 'built-in' : 'project'} · {r.recipe.nodes.length}</span>
+                  </button>
+                  <button className="icon-btn side-recipe-run" title={`Run ${r.recipe.name}`} aria-label={`Run ${r.recipe.name}`} onClick={() => openNewRun({ recipe: r.recipe.name })}>
+                    <Play size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button className="btn ghost sm side-recipes-open" onClick={() => openRecipes()}>
+              <BookOpen size={13} /> Open recipes: build, import, share
+            </button>
+          </>
+        )}
         {root && <AutomationsSection root={root} />}
         {root && !mine.length && (
           <div className="muted-note">
@@ -131,7 +170,8 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
   const [root, setRoot] = useState(projectRoot)
   const [isRepo, setIsRepo] = useState(true)
   const recipes = useStore(factory, (s) => s.recipes)
-  const [pick, setPick] = useState(0)
+  /** by name: the list reloads (another repository, an import) and positions move */
+  const [pick, setPick] = useState(draft?.recipe ?? '')
   const [intent, setIntent] = useState(draft?.intent ?? '')
   /** per agent stage: another agent or profile, or a skill instead of the recipe prompt */
   const [overrides, setOverrides] = useState<Record<string, StageOverride>>({})
@@ -169,7 +209,7 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     return () => void loadRecipes(projectRoot)
   }, [projectRoot])
   const intentRef = useRef<HTMLTextAreaElement>(null)
-  const entry = recipes[pick]
+  const entry = recipes.find((r) => r.recipe.name === pick) ?? recipes[0]
   // choices belong to one recipe's stages
   useEffect(() => {
     setOverrides({})
@@ -215,9 +255,9 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     >
       <label className="field">
         <span>Recipe</span>
-        <select value={pick} onChange={(e) => setPick(Number(e.target.value))}>
+        <select value={entry?.recipe.name ?? ''} onChange={(e) => setPick(e.target.value)}>
           {recipes.map((r, i) => (
-            <option key={`${r.recipe.name}-${i}`} value={i}>
+            <option key={`${r.recipe.name}-${i}`} value={r.recipe.name}>
               {r.recipe.name}
               {r.builtin ? '' : ' (project)'}
             </option>
@@ -245,8 +285,6 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
               ))}
             </div>
           )}
-          <StageChoices recipe={entry.recipe} root={root} value={overrides} onChange={setOverrides} onSave={() => void saveCustom()} />
-          <SeedChoice recipe={entry.recipe} root={root} value={seed} onChange={setSeed} />
           <div className="hint recipe-links">
             <ShareLink text={() => recipeBundle(entry)} />
             {entry.builtin ? (
@@ -256,11 +294,13 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
             ) : (
               <span className="link" onClick={() => entry.recipe.path && void openInEditor(entry.recipe.path)}>Edit recipe</span>
             )}
+            <span className="link" onClick={() => (onDone(), openRecipes({ select: entry.recipe.name }))}>
+              <BookOpen size={11} /> Open in Recipes
+            </span>
           </div>
         </>
       )}
-      <FolderField label="Repository" value={root} onChange={setRoot} hint={isRepo ? 'The run gets its own worktree and branch here; your checkout is not touched.' : undefined} />
-      {!isRepo && <div className="field-hint tone-error">The factory needs a git repository. Pick a folder inside one.</div>}
+      {!isRepo && <div className="field-hint tone-error">The factory needs a git repository. Pick a folder inside one under "Start point and repository" below.</div>}
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />}
       <label className="field">
         <span>{seed.node ? 'What should the factory build? (a short title is enough)' : 'What should the factory build?'}</span>
@@ -281,6 +321,16 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
           </select>
         </label>
       </div>
+      {entry && <StageChoices recipe={entry.recipe} root={root} value={overrides} onChange={setOverrides} onSave={() => void saveCustom()} />}
+      <details className="stage-choices run-more" open={!isRepo || !!draft?.seedMission || root !== projectRoot}>
+        <summary>
+          Start point and repository
+          {seed.node ? ` · from an existing ${seed.node}` : ''}
+          {root !== projectRoot ? ` · ${root.split(/[\\/]/).pop()}` : ''}
+        </summary>
+        {entry && <SeedChoice recipe={entry.recipe} root={root} value={seed} onChange={setSeed} />}
+        <FolderField label="Repository" value={root} onChange={setRoot} hint={isRepo ? 'The run gets its own worktree and branch here; your checkout is not touched.' : undefined} />
+      </details>
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="form-actions">
         <span className="form-note">Ctrl/Cmd+Enter starts</span>
@@ -307,47 +357,6 @@ function ShareLink({ text }: { text: () => string }): React.JSX.Element {
     <span className="link" title="Copy the recipe and its agents to paste anywhere" onClick={copy}>
       {copied ? <Check size={11} /> : <Share2 size={11} />} {copied ? 'Copied' : 'Share'}
     </span>
-  )
-}
-
-function ImportForm({ root, onDone }: { root: string; onDone: () => void }): React.JSX.Element {
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [result, setResult] = useState('')
-  const submit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      const r = await importRecipe(root, text)
-      setResult(
-        [`Added "${r.name}" to .sldev/factory.`, r.added.length ? `New agents: ${r.added.join(', ')}.` : '', r.kept.length ? `Kept your own ${r.kept.join(', ')}.` : '']
-          .filter(Boolean)
-          .join(' ')
-      )
-      setText('')
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <form className="form inline-form import-form" onSubmit={(e) => void submit(e)}>
-      <label className="field">
-        <span>Paste a shared recipe (or any recipe YAML)</span>
-        <textarea rows={8} value={text} autoFocus className="mono" placeholder="# sldev-io recipe …" onChange={(e) => setText(e.target.value)} />
-      </label>
-      {error && <div className="bad">{error}</div>}
-      {result && <div className="ok">{result}</div>}
-      <div className="form-actions">
-        <button type="button" className="btn" onClick={onDone}>{result ? 'Done' : 'Cancel'}</button>
-        <button type="submit" className="btn primary" disabled={busy || !text.trim()}>
-          <Import size={14} /> {busy ? 'Importing…' : 'Import'}
-        </button>
-      </div>
-    </form>
   )
 }
 
@@ -378,7 +387,7 @@ function StageChoices({ recipe, root, value, onChange, onSave }: { recipe: Recip
   const allLive = stages.every(isInteractive)
   const setAllLive = (on: boolean): void => onChange(Object.fromEntries(stages.map((n) => [n.id, { ...value[n.id], interactive: on }])))
   return (
-    <details className="stage-choices" open>
+    <details className="stage-choices">
       <summary>Stages: agent, model, skill and how each one runs{changed ? ' · changed' : ''}</summary>
       {stages.length > 0 && <label className="check stage-all">
         <input type="checkbox" checked={allLive} onChange={(e) => setAllLive(e.target.checked)} />
@@ -499,7 +508,7 @@ function AllStages({ stages, value, onChange }: { stages: RecipeNode[]; value: R
 }
 
 /** Model, effort and approval mode for one agent, in that CLI's own values (what the mission form offers). */
-function AgentFields({ agent, label, value, interactive, onChange }: { agent: AgentDef | undefined; label: string; value: StageAgentChoice; interactive: boolean; onChange: (p: StageAgentChoice) => void }): React.JSX.Element {
+export function AgentFields({ agent, label, value, interactive, onChange }: { agent: AgentDef | undefined; label: string; value: StageAgentChoice; interactive: boolean; onChange: (p: StageAgentChoice) => void }): React.JSX.Element {
   const models = agent?.models ?? []
   const typed = !!value.model && !models.includes(value.model)
   const [custom, setCustom] = useState(typed)

@@ -74,10 +74,12 @@ export function parseRecipe(text: string, path?: string): ParseResult {
     const agents = list(s.agent)
     const run = list(s.run)
     const skill = typeof s.skill === 'string' && s.skill.trim() ? s.skill.trim().replace(/^\//, '') : undefined
-    // a skill stage without an agent runs on the default agent (filled in when the run starts)
-    const kinds = [agents.length > 0 || !!skill, run.length > 0, s.pr !== undefined && s.pr !== false].filter(Boolean).length
+    const isPr = s.pr !== undefined && s.pr !== false
+    // a stage with only a prompt, or a skill without an agent, runs on the default agent (filled in when the run starts)
+    const promptOnly = !agents.length && !skill && !run.length && !isPr && typeof s.prompt === 'string' && !!s.prompt.trim()
+    const kinds = [agents.length > 0 || !!skill || promptOnly, run.length > 0, isPr].filter(Boolean).length
     if (kinds !== 1) return { error: `Stage "${id}": give exactly one of agent (or skill), run or pr` }
-    const kind: RecipeNode['kind'] = agents.length || skill ? 'agent' : run.length ? 'run' : 'pr'
+    const kind: RecipeNode['kind'] = agents.length || skill || promptOnly ? 'agent' : run.length ? 'run' : 'pr'
     if (kind === 'agent' && !skill && (typeof s.prompt !== 'string' || !s.prompt.trim())) return { error: `Stage "${id}": an agent stage needs a prompt or a skill` }
     const needs = s.needs === undefined ? (nodes.length ? [nodes[nodes.length - 1].id] : []) : list(s.needs)
     for (const n of needs) if (!nodes.some((x) => x.id === n)) return { error: `Stage "${id}" needs "${n}", which isn't defined above it` }

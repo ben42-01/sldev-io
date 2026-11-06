@@ -3,13 +3,15 @@ import { ChartGantt, LayoutGrid, Rocket } from 'lucide-react'
 import { activeIn, addTokens, NO_TOKENS, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
 import { showView } from '../lib/commands'
 import { getAgent } from '../state/agents'
-import { useMissionCounts } from '../state/attention'
+import { nextNeedsYou, runWaits, useMissionCounts } from '../state/attention'
 import { factory, openPipeline } from '../state/factory'
 import { focusOrResume, isLive, missions } from '../state/missions'
 import { useStore } from '../state/store'
 import { openAgentsDashboard } from '../dock/AgentsPanel'
 import { dollars, duration, tokens } from '../dock/DashboardPanel'
 import { MissionStatusPill } from './MissionCard'
+import { StatusPill } from './StatusDot'
+import { runSignal } from '@shared/status'
 import { openDashboard, openNewMission } from './MissionsView'
 import { ViewShell } from './RuntimesView'
 import { Empty } from './States'
@@ -25,7 +27,10 @@ const startOfToday = (now: number): number => {
 export function OverviewView(): React.JSX.Element {
   const list = useStore(missions, (s) => s.list)
   const runs = useStore(factory, (s) => s.runs)
-  const { needsYou, working } = useMissionCounts()
+  const { needsYou: missionsNeed, working } = useMissionCounts()
+  // a factory run waiting for an approval needs you just as much as a mission does
+  const approvals = runs.filter(runWaits).length
+  const needsYou = missionsNeed + approvals
   const ready = list.filter((m) => m.status === 'waiting').length
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -75,7 +80,7 @@ export function OverviewView(): React.JSX.Element {
     >
       <div className="overview">
         <div className="ov-now">
-          <button className={`ov-stat${needsYou ? ' tone-attention' : ''}`} onClick={() => showView('agents')}>
+          <button className={`ov-stat${needsYou ? ' tone-attention' : ''}`} title={approvals ? `${missionsNeed} mission${missionsNeed === 1 ? '' : 's'}, ${approvals} factory approval${approvals === 1 ? '' : 's'}` : undefined} onClick={() => (needsYou ? nextNeedsYou() : showView('agents'))}>
             <b>{needsYou}</b>
             <span>need you</span>
           </button>
@@ -155,8 +160,9 @@ export function OverviewView(): React.JSX.Element {
                 <li key={r.id}>
                   <button className="ov-row" title={r.intent} onClick={() => openPipeline(r.id)}>
                     <span className="ov-row-title">{r.intent}</span>
+                    <StatusPill signal={runSignal(r.status, runWaits(r))} />
                     <span className="ov-row-meta">
-                      {r.status} · <TimeAgo t={r.updatedAt} className="" />
+                      {r.recipe.name} · <TimeAgo t={r.updatedAt} className="" />
                     </span>
                   </button>
                 </li>
