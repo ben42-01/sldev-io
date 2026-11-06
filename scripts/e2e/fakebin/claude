@@ -44,7 +44,8 @@ if (args.includes('-p')) {
   } else if (out && !prompt.includes('NO_OUTPUT')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
   const note = /From the user: (.*)/.exec(prompt)
   if (note) fs.appendFileSync('USER-NOTES.md', `${note[1]}\n`)
-  fs.appendFileSync(out ? `changes-${path.basename(out[1], '.md')}.md` : 'CHANGES.md', `claude: ${prompt.split('\n')[0]}\n`)
+  // NO_CHANGES: a repeat pass with nothing left to improve
+  if (!prompt.includes('NO_CHANGES')) fs.appendFileSync(out ? `changes-${path.basename(out[1], '.md')}.md` : 'CHANGES.md', `claude: ${prompt.split('\n')[0]}\n`)
   sleep(800)
   fire('Stop', {})
   console.log('done (print mode)')

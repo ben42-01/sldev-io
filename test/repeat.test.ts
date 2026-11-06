@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { describeTrigger } from '@shared/automations'
 import { beginPass, describeRepeat, endPass, freshProgress, nextPassNumber, parseGap, passBrief, passChanged, progressLabel, repeatDue, REPEAT_GRACE_MS, type RepeatPlan, type RepeatProgress } from '@shared/repeat'
 import { passSignal } from '@shared/status'
 
@@ -100,7 +101,7 @@ describe('repeat loop', () => {
   it('describes the plan and where the loop is', () => {
     expect(describeRepeat(plan({ times: 5, gapMinutes: 30, check: 'npm test' }))).toBe('5 passes, 30 min apart, unattended, checked with `npm test`')
     expect(describeRepeat(plan({ times: 0, doneWhen: 'accept' }))).toBe('Until nothing changes, back to back, you accept each')
-    expect(describeRepeat(plan({ times: 1, gapMinutes: 120 }))).toBe('1 pass, 2 h apart, unattended')
+    expect(describeTrigger({ type: 'repeat', ...plan({ times: 1, gapMinutes: 120 }) })).toBe('Repeat: 1 pass, 2 h apart, unattended')
     const pl = plan({ times: 3, gapMinutes: 10 })
     expect(progressLabel(pl, undefined, T0, clock)).toBe('Not started')
     const running = beginPass(freshProgress(T0), { mission: 'm1', startedAt: T0 }, { cwd: '/r' })

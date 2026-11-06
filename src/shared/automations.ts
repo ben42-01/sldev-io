@@ -1,3 +1,4 @@
+import { describeRepeat, type RepeatPlan, type RepeatProgress } from './repeat'
 import type { GhIssue, GhRun } from './types'
 
 /**
@@ -10,6 +11,8 @@ export type Trigger =
   | { type: 'schedule'; every: 'hour' | 'day' | 'weekdays' | 'week'; /** HH:MM, local time */ at: string; /** 0 = Sunday, for every: week */ day?: number }
   | { type: 'ci-failed'; branch: string }
   | { type: 'issue-label'; label: string }
+  /** the same mission again and again, each pass building on the last (src/shared/repeat.ts) */
+  | ({ type: 'repeat' } & RepeatPlan)
 
 export type Action =
   | { type: 'recipe'; recipe: string; /** what to build; for triggers the failure or the issue is added */ intent: string }
@@ -34,6 +37,8 @@ export interface Automation {
   lastStarted?: { type: 'run' | 'mission'; id: string }
   /** one line about the last thing that happened, shown in the list */
   lastNote?: string
+  /** a repeat trigger's passes so far */
+  repeat?: RepeatProgress
 }
 
 /** How long after its time a schedule still runs (the app was busy or just woke up); later than this it's skipped, not caught up. */
@@ -82,7 +87,7 @@ export function scheduleState(a: Automation, now: number): 'due' | 'missed' | 'w
   return now - at <= SCHEDULE_GRACE_MS ? 'due' : 'missed'
 }
 
-export const shouldPoll = (a: Automation, now: number): boolean => a.trigger.type !== 'schedule' && now - (a.lastCheckAt ?? 0) >= POLL_MS
+export const shouldPoll = (a: Automation, now: number): boolean => (a.trigger.type === 'ci-failed' || a.trigger.type === 'issue-label') && now - (a.lastCheckAt ?? 0) >= POLL_MS
 
 /** Failed CI runs on the branch, newest first, that started after the automation was made and weren't handled yet. */
 export function newFailures(runs: GhRun[], a: Automation): GhRun[] {
@@ -109,6 +114,7 @@ export function ciIntent(text: string, r: GhRun): string {
 export function describeTrigger(t: Trigger): string {
   if (t.type === 'ci-failed') return `When CI fails on ${t.branch}`
   if (t.type === 'issue-label') return `When an issue is labelled "${t.label}"`
+  if (t.type === 'repeat') return `Repeat: ${describeRepeat(t)}`
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   if (t.every === 'hour') return `Every hour at :${parseAt(t.at)[1].toString().padStart(2, '0')}`
   const at = parseAt(t.at).map((n) => n.toString().padStart(2, '0')).join(':')

@@ -1,8 +1,10 @@
 import type { Mission } from '@shared/types'
-import { Bot, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { Bot, Check, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Repeat, Square, SquareTerminal, Trash2 } from 'lucide-react'
 import { buildDraft, continueOnAgent, failoverAgent, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { openNewMission } from './MissionsView'
 import { openNewRun } from './FactoryView'
+import { openRepeatDraft } from './AutomationsSection'
+import { acceptPass } from '../state/automations'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
@@ -37,6 +39,13 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
           { label: 'Run a factory recipe from this…', icon: <Factory size={13} />, disabled: !buildDraft(m.id), run: () => openNewRun({ intent: m.title, seedMission: m.id }) }
         ]
       : []),
+    ...(m.repeat?.accept && live ? [{ label: 'Accept this pass', icon: <Check size={13} />, run: () => acceptPass(m.id) }] : []),
+    {
+      label: m.repeat ? 'Repeat this brief again…' : 'Repeat…',
+      icon: <Repeat size={13} />,
+      disabled: !(m.brief ?? m.prompt).trim(),
+      run: () => openRepeatDraft({ root: m.root, name: m.title.replace(/ · pass \d+(\/\d+)?$/, ''), brief: repeatBrief(m), kind: m.kind?.id, agent: m.options.agent })
+    },
     { label: 'Stop', icon: <Square size={13} />, disabled: !hasPanel || !live, run: () => stopMission(m.id) },
     ...(m.limited && !m.continuedBy
       ? [
@@ -144,6 +153,19 @@ function NextStep({ mission: m }: { mission: Mission }): React.JSX.Element | nul
       </button>
     )
   }
+  // a pass of a repeat that waits for you: accepting it stops the agent and the loop moves on
+  if (m.repeat?.accept && isLive(m.status) && m.status !== 'working' && m.status !== 'starting') {
+    return (
+      <>
+        <button className="icon-btn" title="Review changes" aria-label="Review changes" onClick={() => reviewMission(m.id)}>
+          <FileDiff size={13} />
+        </button>
+        <button className="btn sm next-step" title={`Pass ${m.repeat.pass} is good: stop the agent and go on to the next pass`} onClick={() => acceptPass(m.id)}>
+          <Check size={12} /> Accept pass
+        </button>
+      </>
+    )
+  }
   if (m.kind?.readOnly) {
     const draft = buildDraft(m.id)
     return (
@@ -195,6 +217,12 @@ function LimitAlert({ mission: m }: { mission: Mission }): React.JSX.Element {
       )}
     </div>
   )
+}
+
+/** A pass's brief carries the loop's own lines ("This is pass 2…"); repeating it again starts from the user's brief. */
+function repeatBrief(m: Mission): string {
+  const brief = m.brief ?? m.prompt
+  return m.repeat ? brief.split(/\n\nThis is pass \d+/)[0] : brief
 }
 
 export function ago(t: number): string {

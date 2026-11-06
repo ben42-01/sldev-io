@@ -1,0 +1,66 @@
+// Repeat: one brief run pass after pass. Unattended passes run in print mode and end when the fake claude
+// exits; a check runs after each and every pass is committed in the loop's worktree. A loop that waits
+// for you shows "Accept pass" on the mission card, and the next pass starts only after the click.
+const { execFileSync } = require('child_process')
+
+module.exports = async (h) => {
+  await h.openFixture()
+  const store = () => h.js(`window.api.store.get('automations').then(s => s?.automations ?? [])`)
+  const missionList = () => h.js(`window.api.store.get('missions').then(s => s?.missions ?? [])`)
+  const loop = async (name) => (await store()).find((a) => a.name === name)
+
+  // made in the form: 2 unattended passes with a check
+  await h.click('.activitybar button[title^="Factory"]')
+  await h.wait(600)
+  await h.click('.icon-btn[aria-label="New automation"]')
+  await h.wait(300)
+  await h.setValue('.automation-form input', 'Polish UI')
+  await h.click('.automation-form .seg button', 'Repeat')
+  await h.wait(200)
+  h.expect(await h.js(`[...document.querySelectorAll('.automation-form .seg button')].find(b => b.textContent === 'Run a recipe').disabled`), 'a repeat runs a mission, not a recipe')
+  await h.setValue('.automation-form input[type=number]', '2')
+  await h.setValue('.automation-form input', 'test -f CHANGES.md', `e.placeholder.startsWith('Optional, e.g. npm')`)
+  await h.setValue('.automation-form textarea', 'Polish the sidebar spacing')
+  await h.wait(200)
+  await h.shot('1-form')
+  await h.click('.automation-form .btn.primary', 'Create')
+
+  const polished = await h.until(async () => (await loop('Polish UI'))?.repeat?.state === 'finished', 60000, 500)
+  h.expect(polished, 'the loop runs its passes and finishes')
+  const a = await loop('Polish UI')
+  h.expect(a.repeat.reason === 'All 2 passes done', `it stops after the planned passes (${a.repeat.reason})`)
+  h.expect(a.repeat.passes.map((p) => p.outcome).join() === 'done,done', 'both passes passed their check')
+  const ms = await missionList()
+  const passes = a.repeat.passes.map((p) => ms.find((m) => m.id === p.mission))
+  h.expect(passes.every((m) => m.options.print && m.repeat?.loop === a.id), 'each pass is a print-mode mission of the loop')
+  h.expect(passes[0].prompt.includes('This is pass 1 of 2') && passes[1].prompt.includes('This is pass 2 of 2'), 'each pass is told where it is in the loop')
+  h.expect(passes[1].cwd === passes[0].cwd && !!passes[0].worktree, 'pass 2 works in the worktree pass 1 made')
+  const log = execFileSync('git', ['log', '--format=%s', '-2'], { cwd: passes[0].cwd, encoding: 'utf8' })
+  h.expect(log === 'Polish UI: pass 2\nPolish UI: pass 1\n', `each pass is its own commit (${JSON.stringify(log)})`)
+  h.expect(await h.js(`document.querySelectorAll('.automation-row .repeat-pass').length === 2`), 'the row shows a dot per pass')
+  h.expect(await h.js(`[...document.querySelectorAll('.repeat-label')].some(e => e.textContent === 'All 2 passes done')`), 'and where the loop is')
+  await h.wait(300)
+  await h.shot('2-finished')
+
+  // a loop that waits for you: Accept pass on the card ends the pass
+  await h.click('.icon-btn[aria-label="New automation"]')
+  await h.wait(300)
+  await h.setValue('.automation-form input', 'Steer it')
+  await h.click('.automation-form .seg button', 'Repeat')
+  await h.wait(200)
+  await h.setValue('.automation-form input[type=number]', '1')
+  await h.click('.automation-form .seg button', 'I accept it')
+  await h.setValue('.automation-form textarea', 'Tidy the header')
+  await h.wait(200)
+  await h.click('.automation-form .btn.primary', 'Create')
+  h.key('3', ['control', 'shift'])
+  const acceptBtn = `[...document.querySelectorAll('.mission-card')].find(c => c.textContent.includes('Steer it · pass 1/1'))?.querySelector('.next-step')`
+  h.expect(await h.until(() => h.js(`${acceptBtn}?.textContent.includes('Accept pass') ?? false`), 25000), 'the waiting pass offers Accept pass')
+  h.expect((await loop('Steer it')).repeat.state === 'running', "the agent's turn ending doesn't end the pass")
+  await h.wait(300)
+  await h.shot('3-accept-pass')
+  await h.js(`${acceptBtn}.click()`)
+  h.expect(await h.until(async () => (await loop('Steer it'))?.repeat?.state === 'finished', 15000), 'accepting ends the pass and the loop')
+  const steer = await loop('Steer it')
+  h.expect(steer.repeat.passes[0].outcome === 'done' && steer.repeat.reason === 'The pass is done', `the accepted pass counts as done (${steer.repeat.reason})`)
+}

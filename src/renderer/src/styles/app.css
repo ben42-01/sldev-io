@@ -4499,6 +4499,44 @@ a {
 .automation-form {
   margin: 0 8px 8px;
 }
+/* a repeat's passes: one status dot each (click shows its mission), then where the loop is */
+.repeat-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.repeat-passes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.repeat-pass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  cursor: pointer;
+}
+.repeat-pass:hover {
+  background: var(--muted);
+}
+.repeat-pass:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.repeat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* project memory, in mission details */
 .remember-row {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Task } from '@shared/types'
-import { Bot, Copy, Pencil, Play, Plus, Square, SquareTerminal, Terminal, Trash2 } from 'lucide-react'
+import { Bot, Copy, Pencil, Play, Plus, Repeat, Square, SquareTerminal, Terminal, Trash2 } from 'lucide-react'
 import { focusPanel } from '../dock/dockApi'
 import { stopTerminal } from '../lib/terminals'
 import { basename } from '../lib/paths'
@@ -15,6 +15,7 @@ import { RunDot } from './StatusDot'
 import { ViewShell } from './RuntimesView'
 import { TaskEditor } from './TaskEditor'
 import { confirmDelete } from '../lib/removals'
+import { openRepeatDraft } from './AutomationsSection'
 
 export function TasksView(): React.JSX.Element {
   const list = useStore(tasks, (t) => t.list)
@@ -89,6 +90,16 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: () => void }): React.JS
     { label: 'Edit', icon: <Pencil size={13} />, run: onEdit },
     { label: 'Duplicate', icon: <Copy size={13} />, run: () => saveTask({ ...task, id: newTaskId(), name: `${task.name} (copy)`, createdAt: Date.now(), lastRunAt: undefined }) },
     { label: 'Copy command', run: () => void navigator.clipboard.writeText(commandText(buildTaskCommand(task))) },
+    ...(task.kind === 'agent'
+      ? [
+          {
+            label: 'Repeat…',
+            icon: <Repeat size={13} />,
+            disabled: !task.prompt?.trim() || !(task.scope ?? workspace.get().rootFolder),
+            run: () => openRepeatDraft({ root: task.scope ?? workspace.get().rootFolder ?? '', name: task.name, brief: task.prompt ?? '', agent: task.agent?.agent })
+          }
+        ]
+      : []),
     { type: 'separator' },
     { label: 'Delete…', icon: <Trash2 size={13} />, run: () => void confirmDelete('task', task.name).then((ok) => ok && deleteTask(task.id)) }
   ]

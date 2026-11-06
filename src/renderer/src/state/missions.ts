@@ -112,6 +112,7 @@ export interface StartMissionInput {
   criteria?: string
   parent?: Mission['parent']
   kind?: Mission['kind']
+  repeat?: Mission['repeat']
   /** its worktree's branch; default: feature/…, fix/… from the brief (src/shared/branch.ts) */
   branch?: string
   /** where its terminal opens; default: a tab in the active group */
@@ -166,6 +167,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     criteria: input.criteria?.trim() || undefined,
     parent: input.parent,
     kind: input.kind,
+    repeat: input.repeat,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     history: pushStatus(undefined, 'starting', Date.now())
