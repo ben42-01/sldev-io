@@ -7,7 +7,7 @@
   "bin": { "sldev": "dist/sldev.mjs" },
   "files": ["dist", "SKILL.md", "README.md", "LICENSE"],
   "engines": { "node": ">=22.5" },
-  "os": ["linux", "darwin"],
+  "os": ["linux", "darwin", "win32"],
   "homepage": "https://github.com/ben42-01/sldev-io/tree/master/cli",
   "repository": { "type": "git", "url": "git+https://github.com/ben42-01/sldev-io.git", "directory": "cli" },
   "dependencies": {

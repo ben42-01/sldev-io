@@ -27,7 +27,7 @@ Nothing in the CLI talks to the network. The daemon listens on a Unix socket and
 
 ## Install
 
-Needs Node.js 22.5 or newer, on Linux or macOS (Windows comes later).
+Needs Node.js 22.5 or newer, on Linux, macOS or Windows 10/11 (Windows is new: tested in CI, tell us what breaks).
 
 ```bash
 npm i -g sldev        # once it is published to npm
@@ -43,7 +43,10 @@ npm i -g github:ben42-01/downloads.sldev.io#cli-v0.1.0   # a specific version
 From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-<version>.tgz`, which installs with `npm i -g ./dist/sldev-<version>.tgz`.
 
 The CLI is standalone: it does not need the sldev-io desktop app, Electron or a license. It needs Node.js
-22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS gets a prebuilt binary.
+22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS and Windows get a prebuilt binary.
+
+On Windows the daemon listens on a named pipe instead of a Unix socket, notifications are Windows toasts,
+and repeat checks run in cmd.exe (a check that starts with a `.ps1` runs in PowerShell).
 
 ## Use
 
