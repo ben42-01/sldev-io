@@ -27,8 +27,16 @@ Nothing in the CLI talks to the network. The daemon listens on a Unix socket and
 Needs Node.js 22.5 or newer, on Linux or macOS (Windows comes later).
 
 ```bash
-npm i -g sldev
+npm i -g sldev        # once it is published to npm
 ```
+
+Until then, install the packed tarball. In a checkout of the repo, `npm run cli:pack` builds it into
+`dist/sldev-<version>.tgz`; install that with `npm i -g ./dist/sldev-0.1.0.tgz`, or from a release asset with
+`npm i -g <url-of-the-tgz>`. (`npm i -g github:ben42-01/sldev-io` would install the desktop app's package,
+not this one, because the CLI lives in `cli/` and npm can't install a subfolder.)
+
+The CLI is standalone: it does not need the sldev-io desktop app, Electron or a license. It needs Node.js
+22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS gets a prebuilt binary.
 
 ## Use
 
