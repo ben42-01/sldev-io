@@ -37,7 +37,8 @@ afterAll(async () => {
   c?.close()
   await daemon?.close()
   restorePath()
-  rmSync(tmp, { recursive: true, force: true })
+  // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
+  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
 })
 
 const ls = async (id: string): Promise<PaneInfo> => (await c.request('ls', {})).find((p) => p.id === id)!

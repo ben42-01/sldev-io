@@ -28,7 +28,8 @@ beforeAll(() => {
 
 afterAll(() => {
   for (const k of Object.keys(GIT_ID)) delete process.env[k]
-  rmSync(tmp, { recursive: true, force: true })
+  // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
+  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
 })
 
 const pane = (id: string, status: PaneInfo['status'], worktree?: WorktreeInfo, extra: Partial<PaneInfo> = {}): PaneInfo =>

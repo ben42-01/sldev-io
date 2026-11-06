@@ -30,7 +30,8 @@ afterAll(async () => {
   c?.close()
   await daemon?.close()
   restorePath()
-  rmSync(tmp, { recursive: true, force: true })
+  // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
+  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
 })
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
