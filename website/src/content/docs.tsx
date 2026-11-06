@@ -735,7 +735,16 @@ defaults. Do not change any files. List findings with file and line.
             <li><b>On a schedule</b>: every hour, day, weekday or week. "Every weekday at 9: review yesterday's commits."</li>
             <li><b>When CI fails</b> on a branch: the newest failure gets one run, with the failing run's id and log command.</li>
             <li><b>When an issue gets a label</b>: one run per issue, one at a time; a recipe's pull request closes the issue.</li>
+            <li><b>Repeat</b>: the same mission pass after pass, each building on the last. "Polish the settings page, 4 passes, run the tests after each."</li>
           </ul>
+          <p>
+            A repeat needs a clear signal that a pass is over, so it doesn't guess from a quiet terminal. With <b>The agent exits</b>, each pass runs
+            in print mode, where the agent can't stop to ask, so its exit means it's finished; nobody has to be there. With <b>I accept it</b>,
+            you steer each pass and click <b>Accept pass</b> on its mission card. Every pass works in the same worktree and is committed on its own,
+            and the next pass gets the last one's report. An optional check (<code>npm test</code>) runs after each pass: a failure goes to the next
+            pass to fix first, and two in a row stop the loop. A pass that changes nothing ends it too. The CLI runs the same loop with{' '}
+            <code>sldev new --repeat 4 --check "npm test" "…"</code>.
+          </p>
           <Note>
             Automations run while sldev-io is open. A time missed while it was closed is skipped, not caught up. An automation never starts
             a second run while its last one is still going, and nothing is pushed until you click.

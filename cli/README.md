@@ -13,6 +13,9 @@ What it does that a plain multiplexer doesn't:
 - **A worktree per agent** (`--worktree`), with the branch and diff stat on each pane.
 - **Failover.** When an agent hits its plan's usage limit, the same task continues on the next one,
   with a note about where the work stands (`--failover codex,gemini`).
+- **Repeat.** `sldev new --repeat 4 --gap 30m --check "npm test" "Polish the settings page"` runs the
+  brief pass after pass in one worktree, a commit per pass; each pass ends when the agent exits (print mode),
+  and the next gets the last report and any check failure. `--accept` makes passes interactive (`sldev accept <pane>`).
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
 - **Project memory** in `.sldev/memory.md`, searchable with `sldev recall`, and the sldev MCP tools in

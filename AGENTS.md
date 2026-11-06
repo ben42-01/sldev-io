@@ -61,14 +61,15 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
-                  issue triggers), memory.ts
+                  issue triggers), memory.ts,
+                  repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI)
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (re-exports the agent
                   registry from src/shared/agents.ts, adds commandText), commands.ts (palette + shortcuts), diff.ts, paths.ts
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
-                  missionKinds, automations (the trigger loop, while the app is open)
+                  missionKinds, automations (the trigger loop and repeat passes, while the app is open)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
                   Dashboard, Agents, Preview, Settings
@@ -86,7 +87,7 @@ test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in <userData>/cli)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the split-pane view;
-                  repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
+                  loops.ts the repeat loops (`sldev new --repeat`); repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 
@@ -159,6 +160,11 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   prompt would flag it too. Factory stages continue on their own only with Settings → Agents → continue automatically.
 - **Automations** run only while the app is open, skip (never catch up) a time missed while it was closed, never start
   a second thing while their last one is live, and never push.
+- **Repeat** (`src/shared/repeat.ts`): a pass ends only on a signal that can't be mistaken: the agent's process exits
+  (print mode, the default) or the user accepts it. Never end a pass on a Stop hook or a quiet terminal: a turn can end
+  with a question. Passes share the first pass's worktree and each is committed there; in place, nothing is committed.
+  A restart pauses a loop mid-pass (Run now continues), a pass that hits the usage limit ends the loop (no failover),
+  and nothing is pushed. A repeat is one brief run again, not a recipe: the CLI's loops don't make it a `sldev run`.
 - **Layout restore** must not re-run commands: restored runtime/task panels wait for Enter, and
   restored missions resume their session instead of re-sending the prompt.
 - **Agent spawning**: agents start from an **argv array** (`agentCommand` in `src/shared/agents.ts` returns one

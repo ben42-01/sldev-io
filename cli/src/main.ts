@@ -2,13 +2,14 @@ import { resolve } from 'path'
 import { parseArgs } from 'util'
 import { allAgents, installedBin, setInstalledBins } from '@shared/agents'
 import { BUILTIN_KINDS } from '@shared/missionKinds'
-import { missionSignal } from '@shared/status'
+import { describeRepeat, parseGap, type RepeatPlan } from '@shared/repeat'
+import { missionSignal, passSignal } from '@shared/status'
 import { findOnPath } from '../../src/main/launch'
 import { listKinds } from '../../src/main/missionKinds'
 import { connect } from './client'
 import { startDaemon } from './daemon'
 import { dataDir } from './paths'
-import type { PaneInfo, WaitFor } from './protocol'
+import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync } from './repo'
 import { runTui } from './tui'
 import { claudeUsage, codexUsage, periodStart, usageTable } from './usage'
@@ -23,11 +24,21 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --worktree <branch>       run in a new git worktree; --here keeps it in this folder
       --title, --model, --mode, --effort
       --failover <a,b>          continue on these agents when this one hits its usage limit
+      --print                   the agent does the task and exits, no questions (its exit means done)
+      --repeat <n>              run the brief n times, each pass building on the last (0: until a pass
+                                changes nothing); every pass is committed in the loop's worktree
+        --gap <30m>             wait this long after a pass is over before the next (s, m, h)
+        --check "<cmd>"         run after each pass; a failure goes to the next pass, two stop the loop
+        --accept                passes are interactive and end on sldev accept, not on the agent's exit
+        --keep-going            don't stop when a pass changes nothing
   sldev ls [--json]             panes with agent, status and branch
   sldev send <pane> "text"      type into a pane (Enter included; --no-enter to leave it out)
   sldev read <pane> [--lines n] the pane's screen as text
   sldev wait [<pane>] --for ready|needs-you|done|idle [--timeout s]
   sldev review <pane> --agent <id>   a second agent reviews that pane's changes, read-only
+  sldev accept <pane>           a pass that waits for you is good: stop it, the loop goes on
+  sldev loops [--json]          repeat loops: their passes and what's next
+  sldev loops stop <loop>       no pass after the running one
   sldev kill <pane>             stop a pane's agent (its files stay)
   sldev stop                    stop the daemon and every agent in it
 
@@ -53,6 +64,24 @@ function paneLine(p: PaneInfo): string {
   const where = p.worktree ? p.worktree.branch : 'in place'
   const stats = p.stats ? `  ${p.stats.files} files +${p.stats.insertions} -${p.stats.deletions}` : ''
   return `${p.id.padStart(3)}  ${p.agentName.padEnd(14)} ${sig.label.padEnd(13)} ${where.padEnd(24)} ${p.title}${stats}${p.notification ? `\n     ${p.notification}` : ''}`
+}
+
+function loopLine(l: LoopInfo): string {
+  const passes = l.progress.passes.map((p) => `${p.n}:${passSignal(p.outcome).label.toLowerCase()} (pane ${p.mission})`).join(', ')
+  return `${l.id.padStart(3)}  ${l.name}\n     ${describeRepeat(l.plan)}\n     ${l.label}${l.stopping && l.progress.state !== 'finished' ? ' (stops after this pass)' : ''}${passes ? `\n     passes: ${passes}` : ''}`
+}
+
+/** --repeat and its options as a plan; undefined without --repeat. */
+function repeatPlan(v: { repeat?: string; gap?: string; check?: string; accept?: boolean; 'keep-going'?: boolean }): RepeatPlan | undefined {
+  if (v.repeat === undefined) {
+    if (v.gap !== undefined || v.check !== undefined || v.accept || v['keep-going']) fail('--gap, --check, --accept and --keep-going go with --repeat <n>')
+    return undefined
+  }
+  const times = Number(v.repeat)
+  if (!Number.isInteger(times) || times < 0 || times > 50) fail('--repeat takes a number of passes from 0 (until nothing changes) to 50')
+  const gapMinutes = v.gap === undefined ? 0 : parseGap(v.gap)
+  if (gapMinutes === undefined) fail(`--gap "${v.gap}" isn't a duration; try 30s, 10m or 1h`)
+  return { times, gapMinutes, check: v.check?.trim() || undefined, doneWhen: v.accept ? 'accept' : 'exit', keepGoingUnchanged: v['keep-going'] || undefined }
 }
 
 const list = (v: string | undefined): string[] =>
@@ -99,9 +128,16 @@ async function main(argv: string[]): Promise<void> {
         mode: { type: 'string' },
         effort: { type: 'string' },
         failover: { type: 'string' },
-        cwd: { type: 'string' }
+        cwd: { type: 'string' },
+        print: { type: 'boolean' },
+        repeat: { type: 'string' },
+        gap: { type: 'string' },
+        check: { type: 'string' },
+        accept: { type: 'boolean' },
+        'keep-going': { type: 'boolean' }
       })
       const brief = positionals.join(' ')
+      const repeat = repeatPlan(values)
       const c = await client()
       const p = await c.request('new', {
         agent: values.agent,
@@ -114,11 +150,34 @@ async function main(argv: string[]): Promise<void> {
         mode: values.mode,
         effort: values.effort,
         failover: values.failover !== undefined ? list(values.failover) : undefined,
+        print: values.print,
+        repeat,
         cols: process.stdout.columns,
         rows: process.stdout.rows
       })
       c.close()
+      if (repeat) process.stderr.write(`loop ${p.repeat?.loop}: ${describeRepeat(repeat)}; pass 1 is pane ${p.id}\n`)
       return void console.log(p.id)
+    }
+    case 'accept': {
+      if (!rest[0]) return fail('sldev accept <pane>')
+      const c = await client()
+      await c.request('accept', { pane: rest[0] })
+      return c.close()
+    }
+    case 'loops': {
+      const { values, positionals } = opts({ json: { type: 'boolean' } })
+      const c = await client()
+      if (positionals[0] === 'stop') {
+        if (!positionals[1]) return fail('sldev loops stop <loop>')
+        const l = await c.request('loop-stop', { loop: positionals[1] })
+        c.close()
+        return void console.log(loopLine(l))
+      }
+      const all = await c.request('loops', {})
+      c.close()
+      if (values.json) return void console.log(JSON.stringify(all, null, 2))
+      return void console.log(all.length ? all.map(loopLine).join('\n') : 'No loops. Start one with sldev new --repeat 3 "…"')
     }
     case 'ls': {
       const { values } = opts({ json: { type: 'boolean' } })

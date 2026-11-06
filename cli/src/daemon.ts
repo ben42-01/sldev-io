@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, promises as fsp, readFileSync, unlinkSync } from 'fs'
 import { createConnection, createServer, type Server, type Socket } from 'net'
 import { join } from 'path'
-import { agentCommand, allAgents, findAgent, installedBin, setInstalledBins, sldevMcp, type AgentDef } from '@shared/agents'
+import { agentCommand, allAgents, findAgent, installedBin, setInstalledBins, sldevMcp, stageMode, type AgentDef } from '@shared/agents'
 import { branchName, cleanBranchName } from '@shared/branch'
 import { contextPointer } from '@shared/context'
 import { failoverBrief, nextAgent, TAIL_ROWS } from '@shared/failover'
@@ -9,6 +9,8 @@ import { patchMission, pushStatus } from '@shared/missionHistory'
 import { BUILTIN_KINDS, type MissionKind } from '@shared/missionKinds'
 import { missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
 import { withMemory } from '@shared/memory'
+import type { PassOutcome } from '@shared/repeat'
+import { wasInterrupted } from '@shared/status'
 import type { AppSettings, CustomAgent, Mission } from '@shared/types'
 import { PtyManager, type PtySink } from '../../src/main/pty'
 import { startHookServer, stopHookServer, type HookInfo } from '../../src/main/hooks'
@@ -20,6 +22,7 @@ import { closeContext, initContext, search } from '../../src/main/context'
 import { lineReader, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Request, type Requests, type Response } from './protocol'
 import { createTerm, screenText, termScreen, type Term } from './screen'
 import { Tracker } from './tracker'
+import { Loops, type PassStart } from './loops'
 import { desktopNotify } from './notify'
 import { cliDir, socketPath } from './paths'
 import { VERSION } from './version'
@@ -56,6 +59,7 @@ interface PaneSpec {
   options: Mission['options']
   kind?: Mission['kind']
   parent?: Mission['parent']
+  repeat?: Mission['repeat']
   failover?: string[]
   cols: number
   rows: number
@@ -121,11 +125,16 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     closed: () => false
   }
 
+  /** panes whose pass of a repeat the user accepted (sldev accept) */
+  const accepted = new Set<string>()
+
   function update(p: Pane, patch: Partial<PaneInfo>): void {
     const before = p.info.status
     p.info = patchMission(p.info, patch, Date.now()) as PaneInfo
     broadcast({ event: 'pane', pane: p.info })
     if (p.info.status !== before && (p.info.status === 'waiting' || p.info.status === 'ended')) void refreshStats(p)
+    // a pass of a repeat is over when its pane is: the agent exited (print mode), or you accepted it
+    if (p.info.repeat && isLive(before) && !isLive(p.info.status)) loops.ended(p.info.id, passOutcome(p.info), p.info.report?.trim() || p.info.lastMessage?.trim())
     const done: Waiter[] = []
     for (const w of waiters) if ((!w.pane || w.pane === p.info.id) && w.states.includes(p.info.status)) done.push(w)
     if (done.length) {
@@ -140,6 +149,23 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     const stats = await diffStat(p.info.cwd, base).catch(() => undefined)
     if (stats && panes.has(p.info.id)) update(p, { stats })
   }
+
+  function passOutcome(info: PaneInfo): PassOutcome {
+    if (accepted.delete(info.id)) return 'done'
+    if (info.limited) return 'limited'
+    if (info.repeat?.accept || wasInterrupted(info.exitCode)) return 'stopped'
+    return info.status === 'failed' ? 'failed' : 'done'
+  }
+
+  const loops = new Loops({
+    // every pass prints and exits unless the loop waits for sldev accept
+    start: (args, pass) => newPane({ ...args, brief: pass.brief, title: pass.title, print: !pass.repeat.accept }, pass),
+    notify: (title, body) => {
+      broadcast({ event: 'notify', pane: '', title, body })
+      notify(title, body)
+    },
+    changed: (loop) => broadcast({ event: 'loop', loop })
+  })
 
   const hook: HookInfo = await startHookServer({
     dir,
@@ -162,6 +188,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       options: { ...s.options, agent: s.agent.id },
       kind: s.kind,
       parent: s.parent,
+      repeat: s.repeat,
       status: 'starting',
       createdAt: now,
       updatedAt: now,
@@ -220,7 +247,17 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     return a
   }
 
-  async function newPane(a: NewPaneArgs): Promise<PaneInfo> {
+  /** A repeat: the loop starts its first pass (and the rest) through newPane, with the pass's brief and folder. */
+  async function newLoop(a: NewPaneArgs): Promise<PaneInfo> {
+    const plan = a.repeat!
+    if (!a.brief.trim()) throw new Error('A repeat needs a brief')
+    agentFor(a.agent)
+    const name = a.title?.trim() || a.brief.trim().split('\n')[0].slice(0, 50)
+    return loops.create({ name, brief: a.brief, plan, args: { ...a, repeat: undefined } })
+  }
+
+  async function newPane(a: NewPaneArgs, pass?: PassStart): Promise<PaneInfo> {
+    if (a.repeat && !pass) return newLoop(a)
     const agent = agentFor(a.agent)
     if (!a.brief.trim() && a.kind) throw new Error('A mission kind needs a brief')
     const repo = await isRepo(a.cwd)
@@ -235,9 +272,9 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       prompt = missionPrompt({ title, brief: a.brief }, kind)
       prompt = withMemory(prompt, await contextLines(root, agent, a.brief))
     }
-    let cwd = a.cwd
-    let worktree: Mission['worktree']
-    const wantsTree = typeof a.worktree === 'string' || (a.worktree === undefined && (kind?.worktree ?? false))
+    let cwd = pass?.cwd ?? a.cwd
+    let worktree: Mission['worktree'] = pass?.cwd ? pass.worktree : undefined
+    const wantsTree = !pass?.cwd && (typeof a.worktree === 'string' || (a.worktree === undefined && (kind?.worktree ?? false)))
     if (wantsTree && repo) {
       const base = (await gitBranch(root)) || 'HEAD'
       worktree = await addWorktree(root, a.worktree ? cleanBranchName(a.worktree) : branchName(a.brief || title), base)
@@ -253,12 +290,15 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       cwd,
       worktree,
       kind: kind && { id: kind.id, name: kind.name, readOnly: kind.readOnly },
-      options: { model: a.model, effort: a.effort, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : undefined) },
-      failover: order?.filter((x) => x !== agent.id),
+      // print mode has nobody to approve a tool call: the unattended mode, as for the app's factory stages
+      options: { model: a.model, effort: a.effort, print: a.print || undefined, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : a.print ? stageMode(agent, settings.factoryModes) : undefined) },
+      repeat: pass?.repeat,
+      // a pass that hits the limit ends its loop; handing it to another agent would run outside the loop
+      failover: pass ? undefined : order?.filter((x) => x !== agent.id),
       cols: a.cols ?? 120,
       rows: a.rows ?? 40
     })
-    if (!worktree && repo) {
+    if (!worktree && repo && !pass?.cwd) {
       const base = await head(cwd)
       const p = panes.get(info.id)
       if (p && base) update(p, { baseCommit: base })
@@ -366,9 +406,23 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       p.tracker.dispose()
       panes.delete(p.info.id)
       broadcast({ event: 'closed', pane: p.info.id })
+      if (p.info.repeat && isLive(p.info.status)) loops.ended(p.info.id, 'stopped')
       return null
     },
     review: (a) => review(a.pane, a.agent),
+    accept: (a) => {
+      const p = paneFor(a.pane)
+      if (!p.info.repeat?.accept) throw new Error(`Pane ${p.info.id} isn't a pass that waits for you (sldev new --repeat … --accept)`)
+      if (!isLive(p.info.status)) throw new Error(`Pane ${p.info.id} is already over`)
+      accepted.add(p.info.id)
+      // a killed pty reports no exit: the pane ends here, and with it the pass
+      ptys.kill(p.info.id)
+      p.tracker.dispose()
+      update(p, { pid: undefined, status: 'ended' })
+      return null
+    },
+    loops: () => loops.list(),
+    'loop-stop': (a) => loops.stop(a.loop),
     attach: (_a, c) => {
       clients.add(c)
       focused.set(c, null)
@@ -439,6 +493,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     if (closed) return
     closed = true
     for (const p of panes.values()) p.tracker.dispose()
+    loops.dispose()
     ptys.killAll()
     panes.clear()
     for (const w of waiters) w.resolve(null)
@@ -452,6 +507,8 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
 
   return { socket, close }
 }
+
+const isLive = (s: Mission['status']): boolean => s === 'starting' || s === 'working' || s === 'waiting' || s === 'needs-input'
 
 function readSettings(dataDir: string): Partial<AppSettings> {
   try {

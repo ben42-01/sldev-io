@@ -1,3 +1,4 @@
+import type { RepeatPlan, RepeatProgress } from '@shared/repeat'
 import type { Mission, MissionStatus } from '@shared/types'
 
 /**
@@ -26,8 +27,23 @@ export interface NewPaneArgs {
   mode?: string
   effort?: string
   failover?: string[]
+  /** print mode: the agent does the task and exits (no questions), so its exit means it's done */
+  print?: boolean
+  /** run the brief pass after pass (src/shared/repeat.ts); implies print unless the plan waits for `sldev accept` */
+  repeat?: RepeatPlan
   cols?: number
   rows?: number
+}
+
+/** A repeat loop: its plan, its passes so far and one line saying where it is. */
+export interface LoopInfo {
+  id: string
+  name: string
+  brief: string
+  plan: RepeatPlan
+  progress: RepeatProgress
+  label: string
+  stopping?: boolean
 }
 
 /** What `sldev wait` waits for: the states a human cares about, not the internal mission statuses. */
@@ -49,6 +65,11 @@ export interface Requests {
   wait: [{ pane?: string; for: WaitFor; timeout?: number }, PaneInfo | null]
   kill: [{ pane: string }, null]
   review: [{ pane: string; agent: string }, PaneInfo]
+  /** a pass that waits for you is good: its agent stops and the loop moves on */
+  accept: [{ pane: string }, null]
+  loops: [Record<string, never>, LoopInfo[]]
+  /** no pass after the running one */
+  'loop-stop': [{ loop: string }, LoopInfo]
   attach: [{ cols: number; rows: number }, PaneInfo[]]
   input: [{ pane: string; data: string }, null]
   resize: [{ pane: string; cols: number; rows: number }, null]
@@ -73,6 +94,7 @@ export type DaemonEvent =
   | { event: 'pane'; pane: PaneInfo }
   | { event: 'closed'; pane: string }
   | { event: 'notify'; pane: string; title: string; body: string }
+  | { event: 'loop'; loop: LoopInfo }
 
 /** Splits a byte stream into JSON lines; malformed lines are dropped. */
 export function lineReader(onMessage: (m: unknown) => void): (chunk: Buffer | string) => void {

@@ -22,6 +22,9 @@ sldev ls --json                              # every pane: status, report, branc
   Read-only kinds start the agent in its read-only mode. Without `--kind` the brief goes as written.
 - `--worktree <branch>` isolates the work in a new git worktree; `--here` keeps it in this folder.
 - `--failover claude,gemini` continues the same task on the next agent if this one hits its usage limit.
+- `--print` runs the agent non-interactively: it does the task and exits, so `wait --for done` is exact.
+- `--repeat 3 [--gap 10m] [--check "npm test"]` runs the brief 3 times in one worktree, each pass building on the
+  last (0: until a pass changes nothing). `sldev loops` shows where each loop is; `sldev loops stop L1` ends one after its pass.
 
 ## Answer, review, stop
 
