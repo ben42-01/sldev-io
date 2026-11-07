@@ -37,7 +37,7 @@ export async function loadMissions(): Promise<void> {
   const list = (store?.missions ?? []).map((m) => (isLive(m.status) ? patchMission(m, { status: 'ended' }, m.updatedAt || now) : m))
   missions.set({ list })
   // missions whose last reply was written after the Stop hook read the transcript (fixed since; this recovers older ones)
-  for (const m of list) if (!m.report && m.transcriptPath && !m.factory) void rereadReply(m.id)
+  for (const m of list) if (!m.report && m.transcriptPath && !m.factory && !m.eval) void rereadReply(m.id)
 }
 
 /**
@@ -108,6 +108,7 @@ export interface StartMissionInput {
   base?: string
   taskId?: string
   factory?: Mission['factory']
+  eval?: Mission['eval']
   brief?: string
   criteria?: string
   parent?: Mission['parent']
@@ -163,6 +164,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     status: 'starting',
     taskId: input.taskId,
     factory: input.factory,
+    eval: input.eval,
     brief: input.brief,
     criteria: input.criteria?.trim() || undefined,
     parent: input.parent,
@@ -349,9 +351,9 @@ function checkLimit(id: string, extra?: string): void {
   const panel = missions.get().panels[id]
   const hit = limitLine(`${panel ? terminalTail(panel, TAIL_ROWS) : ''}\n${extra ?? ''}`, agent.usageLimit)
   if (!hit) return
-  const live = isLive(m.status) && !m.factory
+  const live = isLive(m.status) && !m.factory && !m.eval
   const next = update(id, { limited: { at: Date.now(), text: hit }, notification: `${agent.name} hit its usage limit`, ...(live ? { status: 'needs-input' as const } : {}) })
-  if (!next || m.factory) return
+  if (!next || m.factory || m.eval) return
   const to = failoverAgent(m.options.agent)
   if (to && workspace.get().failoverAuto) void continueOnAgent(id, to)
   else notify(next, `${m.title}: ${agent.name} hit its usage limit`, to ? `Continue it on ${getAgent(to).name} from the mission card.` : hit)
@@ -382,7 +384,7 @@ function watchLimit(id: string): void {
 
 function notify(m: Mission, title: string, body: string): void {
   const { notifications, notificationSound } = workspace.get()
-  if (m.factory && m.status !== 'needs-input') return
+  if ((m.factory || m.eval) && m.status !== 'needs-input') return
   const panel = missions.get().panels[m.id]
   if (document.hasFocus() && panel && getDockApi()?.activePanel?.id === panel) return
   if (notificationSound && m.status === 'needs-input') playChime()

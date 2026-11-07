@@ -1,6 +1,7 @@
 import type { FactoryRun } from './factory'
 import type { Automation } from './automations'
 import type { BoardItem, BoardSettings, StoryJob } from './board'
+import type { EvalRun } from './evals'
 
 export interface DirEntry {
   name: string
@@ -243,6 +244,8 @@ export interface StoreFiles {
   savedMissions: { saved: SavedMission[] }
   /** the work board (src/shared/board.ts): items of every project, and each project's pick-up setting */
   board: { items: BoardItem[]; settings: BoardSettings[]; jobs?: StoryJob[] }
+  /** eval suites run against agents (src/shared/evals.ts); the eval files themselves live in .sldev/evals */
+  evals: { runs: EvalRun[] }
 }
 
 /** a mission written in the New mission form and kept to launch later (Save for later) */
@@ -361,6 +364,8 @@ export interface Mission {
   history?: StatusChange[]
   /** the factory run and node this mission works for */
   factory?: { run: string; node: string }
+  /** an eval attempt's agent or judge: like a factory stage, it reports to its run, not to you */
+  eval?: { run: string; attempt: string; judge?: boolean }
   /** a pass of a repeated mission (src/shared/repeat.ts): its automation (app) or loop (CLI), its number, the total (0 = open-ended) */
   repeat?: { loop: string; pass: number; of: number; accept?: boolean }
   /** Claude Code transcript (from its hooks), for token usage */

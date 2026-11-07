@@ -1,5 +1,5 @@
 import type { Mission } from '@shared/types'
-import { Bot, Check, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Repeat, Square, SquareTerminal, Trash2 } from 'lucide-react'
+import { Bot, Check, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Repeat, Square, SquareTerminal, Trash2, FlaskConical } from 'lucide-react'
 import { buildDraft, continueOnAgent, failoverAgent, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { openNewMission } from './MissionsView'
 import { openNewRun } from './FactoryView'
@@ -10,6 +10,7 @@ import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
 import { workspace } from '../state/workspace'
 import { useProfiles } from '../state/profiles'
+import { saveAsEval } from '../state/evals'
 import { openInEditor } from '../lib/actions'
 import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
@@ -62,6 +63,7 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
     { type: 'separator' },
     { label: 'Open folder in editor', run: () => void openInEditor(m.cwd, undefined, true) },
     { label: 'New terminal in mission folder', run: () => openTerminal({ cwd: m.cwd }) },
+    { label: 'Save as eval…', icon: <FlaskConical size={13} />, disabled: !m.brief?.trim(), run: () => void saveAsEval(m) },
     { label: 'Copy prompt', run: () => void navigator.clipboard.writeText(m.prompt) },
     { label: 'Copy session id', disabled: !m.sessionId, run: () => void navigator.clipboard.writeText(m.sessionId ?? '') },
     { type: 'separator' },

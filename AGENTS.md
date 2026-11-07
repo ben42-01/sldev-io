@@ -46,6 +46,7 @@ src/main/       Electron main process (Node): everything privileged
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
+  evals.ts        eval files (.sldev/evals/*.yml) and the check commands of an eval attempt (exit code + output, killed on timeout)
   profiles.ts     project agent profiles (.sldev/agents/*.md) and export to Claude/OpenCode agent files
   rules.ts        rules sync: .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
   usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions); reads only the
@@ -65,7 +66,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order, how a card follows its run, story prompts and parsing), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
-                  repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
+                  evals.ts (eval files, checks, judge verdicts, the scoreboard), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (re-exports the agent
@@ -74,7 +75,7 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
-                  missionKinds, automations (the trigger loop and repeat passes, while the app is open), board (work board cards
+                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
                   and the pick-up loop that starts Agent ready cards as runs or missions)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
@@ -174,6 +175,12 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   always land in Proposed, and only a person approves them into Agent ready, so agents can't feed pick-up themselves.
   Story missions are read-only; agents without the sldev tools write their stories to a JSON file under `.sldev/runs/`. A merged PR
   (asked through gh every 5 minutes for cards in Review) moves its card to Done; imported issues are closed by their run's PR.
+- **Evals** (`src/shared/evals.ts`, Mission Control → Evals): every attempt gets its own worktree from the eval's `base`
+  (default: HEAD when the run started), setup is committed before the agent starts so the diff is the agent's alone, and the
+  agent runs in print mode with the factory's unattended mode. Checks run after it exits; a judge is a second print-mode
+  mission that writes `VERDICT: PASS|FAIL` to a file under `.sldev/runs`. Eval missions carry `eval` (like `factory`): no
+  notifications, no failover, kept out of the missions board and Recap. Only while the app is open; a restart stops running
+  attempts (Continue starts the queue again), and nothing is pushed. Deleting a run removes its worktrees and branches.
 - **Repeat** (`src/shared/repeat.ts`): a pass ends only on a signal that can't be mistaken: the agent's process exits
   (print mode, the default) or the user accepts it. Never end a pass on a Stop hook or a quiet terminal: a turn can end
   with a question. Passes share the first pass's worktree and each is committed there; in place, nothing is committed.

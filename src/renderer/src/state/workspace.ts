@@ -9,6 +9,7 @@ import { loadProjectProfiles } from './profiles'
 import { loadFactory, loadRecipes } from './factory'
 import { loadAutomations } from './automations'
 import { loadBoard } from './board'
+import { loadEvals } from './evals'
 
 export type ViewId = 'explorer' | 'runtimes' | 'factory' | 'tasks' | 'notes' | 'remote' | RightTab
 
@@ -53,6 +54,7 @@ export async function initWorkspace(): Promise<void> {
   void loadRecipes(settings.rootFolder)
   void loadAutomations()
   void loadBoard()
+  void loadEvals()
   void loadSaved()
 }
 

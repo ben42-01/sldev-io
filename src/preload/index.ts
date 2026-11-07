@@ -188,6 +188,12 @@ const api = {
     tokens: (reqs: Array<{ id: string; agent: string; cwd: string; from: number; to: number; transcriptPath?: string }>): Promise<Record<string, TokenUsage | null>> =>
       ipcRenderer.invoke('usage:tokens', reqs)
   },
+  evals: {
+    list: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('evals:list', root),
+    save: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('evals:save', root, slug, text),
+    write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('evals:write', path, text),
+    check: (cwd: string, command: string, timeoutMs: number): Promise<{ code: number | null; output: string; timedOut?: boolean }> => ipcRenderer.invoke('evals:check', cwd, command, timeoutMs)
+  },
   factory: {
     recipes: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('factory:recipes', root),
     saveRecipe: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('factory:saveRecipe', root, slug, text),

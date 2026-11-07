@@ -18,6 +18,7 @@ import * as context from './context'
 import * as diagram from './diagram'
 import * as rules from './rules'
 import * as factory from './factory'
+import * as evals from './evals'
 import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
@@ -313,6 +314,10 @@ function registerIpc(): void {
   ipcMain.handle('kinds:list', (_e, root: string | null) => missionKinds.listKinds(root, userData()))
   ipcMain.handle('kinds:create', (_e, scope: 'project' | 'user', root: string | null, name: string, text: string) => missionKinds.createKind(userData(), scope, root, name, text))
   ipcMain.handle('usage:tokens', (_e, reqs: UsageRequest[]) => missionTokens(reqs))
+  ipcMain.handle('evals:list', (_e, root: string) => evals.listEvals(root))
+  ipcMain.handle('evals:save', (_e, root: string, slug: string, text: string) => evals.saveEval(root, slug, text))
+  ipcMain.handle('evals:write', (_e, p: string, text: string) => evals.writeEval(p, text))
+  ipcMain.handle('evals:check', (_e, cwd: string, command: string, timeoutMs: number) => evals.runCheck(cwd, command, timeoutMs))
   ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
   ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))
   ipcMain.handle('factory:prepare', (_e, dir: string) => factory.prepareRunDir(dir))
@@ -409,7 +414,8 @@ app.whenReady().then(async () => {
     factoryRuns: new JsonStore<StoreFiles['factoryRuns']>(userData(), 'factory-runs', { runs: [] }),
     automations: new JsonStore<StoreFiles['automations']>(userData(), 'automations', { automations: [] }),
     savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] }),
-    board: new JsonStore<StoreFiles['board']>(userData(), 'board', { items: [], settings: [] })
+    board: new JsonStore<StoreFiles['board']>(userData(), 'board', { items: [], settings: [] }),
+    evals: new JsonStore<StoreFiles['evals']>(userData(), 'evals', { runs: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))

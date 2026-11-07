@@ -50,6 +50,8 @@ if (args.includes('-p')) {
       rpc(2, 'tools/call', { name: 'sldev_board_add', arguments: { title: 'Add tests for the health check', details: 'src/health.js has no tests.', labels: ['tests'], priority: 'high' } })].join('\n') + '\n'
     spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
   }
+  // an eval's judge: a verdict in the file it was given (JUDGE_FAIL in the rubric fails it)
+  if (out && prompt.startsWith('Judge:')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], prompt.includes('JUDGE_FAIL') ? 'VERDICT: FAIL\nNo test for it.\n' : 'VERDICT: PASS\nThe change does what the rubric asks.\n'); fire('Stop', {}); process.exit(0) }
   if (out && !prompt.includes('NO_OUTPUT') && !prompt.includes('USE_MCP')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
   const note = /From the user: (.*)/.exec(prompt)
   if (note) fs.appendFileSync('USER-NOTES.md', `${note[1]}\n`)

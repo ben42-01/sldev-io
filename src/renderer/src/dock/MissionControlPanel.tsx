@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
+import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, FlaskConical, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
 import type { Mission } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { missionSignal } from '@shared/status'
@@ -12,6 +12,8 @@ import { openNewRun, RunRow } from '../components/FactoryView'
 import { StatusDot } from '../components/StatusDot'
 import { Empty } from '../components/States'
 import { showRecapMenu } from '../components/RecapDialog'
+import { EvalsView } from '../components/EvalsView'
+import { useEvalRuns } from '../state/evals'
 import { nextNeedsYou } from '../state/attention'
 import { factory } from '../state/factory'
 import { isLive, missions } from '../state/missions'
@@ -21,9 +23,9 @@ import { basename } from '../lib/paths'
 import { DashboardPanel } from './DashboardPanel'
 import { openPanel } from './dockApi'
 
-export type ControlTab = 'missions' | 'runs' | 'usage'
+export type ControlTab = 'missions' | 'runs' | 'evals' | 'usage'
 
-/** The one place for agent work: missions, factory runs and usage, in the main area so the sidebars can stay closed. */
+/** The one place for agent work: missions, factory runs, evals and usage, in the main area so the sidebars can stay closed. */
 export function openMissionControl(tab: ControlTab = 'missions'): void {
   // `at` makes a repeat call with the same tab still switch to it after the user moved to another
   openPanel('missions', 'mission-board', 'Mission Control', { tab, at: Date.now() })
@@ -32,6 +34,7 @@ export function openMissionControl(tab: ControlTab = 'missions'): void {
 const TABS: Array<{ id: ControlTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: 'missions', label: 'Missions', icon: Rocket },
   { id: 'runs', label: 'Factory runs', icon: Factory },
+  { id: 'evals', label: 'Evals', icon: FlaskConical },
   { id: 'usage', label: 'Usage', icon: ChartGantt }
 ]
 
@@ -61,11 +64,13 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
   const runs = useStore(factory, (s) => s.runs)
-  const mine = useMemo(() => list.filter((m) => m.root === root), [list, root])
+  // eval attempts report to their eval run (Mission Control → Evals), not here
+  const mine = useMemo(() => list.filter((m) => m.root === root && !m.eval), [list, root])
   const live = mine.filter((m) => isLive(m.status))
   const needs = live.filter((m) => m.status === 'needs-input').length
   const myRuns = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
   const activeRuns = myRuns.filter(runActive)
+  const liveEvals = useEvalRuns(root).filter((r) => !r.finishedAt && !r.stopped).length
   const subtitle = [root ? basename(root) : 'No folder open', `${live.length} live mission${live.length === 1 ? '' : 's'}`, needs && `${needs} need${needs === 1 ? 's' : ''} you`, activeRuns.length && `${activeRuns.length} factory run${activeRuns.length === 1 ? '' : 's'} going`]
     .filter(Boolean)
     .join(' · ')
@@ -84,6 +89,7 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
               <t.icon size={13} /> {t.label}
               {t.id === 'missions' && live.length > 0 && <span className="seg-count">{live.length}</span>}
               {t.id === 'runs' && activeRuns.length > 0 && <span className="seg-count">{activeRuns.length}</span>}
+              {t.id === 'evals' && liveEvals > 0 && <span className="seg-count">{liveEvals}</span>}
             </button>
           ))}
         </div>
@@ -91,6 +97,7 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
       <div className="mc-body" role="tabpanel">
         {tab === 'missions' && <MissionsBoard root={root} mine={mine} needs={needs} />}
         {tab === 'runs' && <RunsBoard root={root} runs={myRuns} />}
+        {tab === 'evals' && <EvalsView root={root} />}
         {tab === 'usage' && <DashboardPanel />}
       </div>
     </div>
