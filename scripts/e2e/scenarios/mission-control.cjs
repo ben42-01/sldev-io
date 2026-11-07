@@ -52,6 +52,7 @@ module.exports = async (h) => {
   h.log(JSON.stringify(cols))
   h.expect(cols.working === 1 && cols.ready === 1 && cols.finished === 3 && cols.needs === 0, 'missions sit in the column of their status')
   h.expect(await h.js(`document.querySelector('[data-column="needs"] .mc-column-empty')?.textContent.includes('Nothing is waiting')`), 'an empty column says so')
+  h.expect(await h.js(`document.querySelector('[data-column="needs"] .mc-column-empty')?.textContent.includes('asks a question')`), 'and what lands there')
   await h.wait(400)
   await h.shot('1-columns')
 
@@ -103,6 +104,8 @@ module.exports = async (h) => {
   await h.click('.mc-tab', 'Missions')
   await h.click('.mc .seg button', 'Columns')
   h.expect(await h.until(() => h.js(`(() => { const c = [...document.querySelectorAll('.mc-column')]; return c.length === 4 && new Set(c.map(e => Math.round(e.getBoundingClientRect().top))).size === 1 })()`), 2000), 'wide dock: the four columns sit in one row')
+  h.expect(await h.js(`[...document.querySelectorAll('.mc-column .mission-card')].every(c => { const r = c.getBoundingClientRect(); return [...c.querySelectorAll('.mission-foot > *, .mission-head > *')].every(e => e.getBoundingClientRect().right <= r.right + 0.5) })`), 'narrow cards keep their actions inside the card')
+  h.expect(await h.js(`[...document.querySelectorAll('.mc-column .mission-card')].every(c => !!c.querySelector('.spill')?.checkVisibility() === c.classList.contains('failed'))`), 'cards in a column show a status pill only when it differs (failed)')
   await h.wait(400)
   await h.shot('7-wide-columns')
 

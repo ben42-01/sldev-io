@@ -41,11 +41,11 @@ const LAYOUTS: Array<{ id: 'columns' | 'grid' | 'list'; label: string; icon: Rea
 ]
 
 /** Board columns, left to right in the order work moves; the finished column only keeps the latest. */
-const COLUMNS: Array<{ id: string; title: string; status: Mission['status']; has: (m: Mission) => boolean; empty: string }> = [
-  { id: 'needs', title: 'Needs you', status: 'needs-input', has: (m) => m.status === 'needs-input', empty: 'Nothing is waiting for you.' },
-  { id: 'working', title: 'Working', status: 'working', has: (m) => m.status === 'working' || m.status === 'starting', empty: 'No agent is working.' },
-  { id: 'ready', title: 'Ready', status: 'waiting', has: (m) => m.status === 'waiting', empty: 'Agents that finished a turn wait here for review or a follow-up.' },
-  { id: 'finished', title: 'Finished', status: 'ended', has: (m) => m.status === 'ended' || m.status === 'failed', empty: 'Ended missions land here.' }
+const COLUMNS: Array<{ id: string; title: string; status: Mission['status']; has: (m: Mission) => boolean; empty: string; hint: string }> = [
+  { id: 'needs', title: 'Needs you', status: 'needs-input', has: (m) => m.status === 'needs-input', empty: 'Nothing is waiting for you.', hint: 'An agent that asks a question or wants approval moves here.' },
+  { id: 'working', title: 'Working', status: 'working', has: (m) => m.status === 'working' || m.status === 'starting', empty: 'No agent is working.', hint: 'Give one a brief and it works here while you do something else.' },
+  { id: 'ready', title: 'Ready', status: 'waiting', has: (m) => m.status === 'waiting', empty: 'Nothing to review yet.', hint: 'Agents that finished a turn wait here for your review or a follow-up.' },
+  { id: 'finished', title: 'Finished', status: 'ended', has: (m) => m.status === 'ended' || m.status === 'failed', empty: 'No finished missions.', hint: 'Ended missions land here with their report and diff.' }
 ]
 const FINISHED_SHOWN = 20
 const ORDER: Record<Mission['status'], number> = { 'needs-input': 0, waiting: 1, working: 2, starting: 3, failed: 4, ended: 5 }
@@ -150,8 +150,14 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
                 </h3>
                 <div className="mc-column-body">
                   {shown.map((m) => <MissionCard key={m.id} mission={m} />)}
-                  {!all.length && <div className="mc-column-empty">{c.empty}</div>}
-                  {all.length > shown.length && <div className="mc-column-empty">and {all.length - shown.length} older</div>}
+                  {!all.length && (
+                    <div className="mc-column-empty">
+                      <span>{c.empty}</span>
+                      <span className="muted small">{c.hint}</span>
+                      {c.id === 'working' && <button className="btn sm" onClick={() => openNewMission()}><Rocket size={12} /> New mission</button>}
+                    </div>
+                  )}
+                  {all.length > shown.length && <div className="mc-column-more">and {all.length - shown.length} older</div>}
                 </div>
               </section>
             )

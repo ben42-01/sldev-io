@@ -112,10 +112,11 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
       )}
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}
-      <div className="mission-branch" title={m.worktree?.path ?? m.cwd}>
-        {m.worktree ? <><GitBranch size={11} /> {m.worktree.branch}</> : <><FolderGit2 size={11} /> in place</>}
-      </div>
-      <div className="mission-foot">
+      {/* where it runs and what it changed share a line, so the footer has room for the actions in a narrow column */}
+      <div className="mission-where">
+        <span className="mission-branch" title={m.worktree?.path ?? m.cwd}>
+          {m.worktree ? <><GitBranch size={11} /> {m.worktree.branch}</> : <><FolderGit2 size={11} /> in place</>}
+        </span>
         {m.stats && (m.stats.files > 0 ? (
           <span className="stats">
             <span className="add">+{m.stats.insertions}</span> <span className="del">−{m.stats.deletions}</span>
@@ -123,6 +124,8 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
             {showsReview(m) ? '' : ` · ${m.stats.files} file${m.stats.files === 1 ? '' : 's'}`}
           </span>
         ) : <span className="stats">no changes</span>)}
+      </div>
+      <div className="mission-foot">
         <span className="spacer" />
         <NextStep mission={m} />
         {hasPanel && live ? (
