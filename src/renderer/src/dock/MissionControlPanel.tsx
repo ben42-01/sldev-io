@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { ArrowRight, ChartGantt, Columns3, Factory, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
+import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
 import type { Mission } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { missionSignal } from '@shared/status'
@@ -11,6 +11,7 @@ import { openNewMission } from '../components/MissionsView'
 import { openNewRun, RunRow } from '../components/FactoryView'
 import { StatusDot } from '../components/StatusDot'
 import { Empty } from '../components/States'
+import { showRecapMenu } from '../components/RecapDialog'
 import { nextNeedsYou } from '../state/attention'
 import { factory } from '../state/factory'
 import { isLive, missions } from '../state/missions'
@@ -113,6 +114,9 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
           ))}
         </div>
         <span className="grow" />
+        <button className="btn sm" disabled={!mine.length} onClick={showRecapMenu} title="A standup or status update from what your agents did, ready to paste" aria-haspopup="menu">
+          <ClipboardList size={13} /> Recap <ChevronDown size={12} />
+        </button>
         <button className="btn sm" disabled={!needs} onClick={() => nextNeedsYou()} title="Go to the next mission that needs you (Ctrl+Shift+J)">
           Next <ArrowRight size={13} />
         </button>

@@ -4,6 +4,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { ContextMenuHost } from './components/ContextMenu'
 import { PromptHost } from './components/PromptHost'
 import { ConfirmHost } from './components/Modal'
+import { RecapHost } from './components/RecapDialog'
 import { MissionDetailsHost } from './components/MissionDetails'
 import { NewMissionHost } from './components/MissionsView'
 import { NewRunHost } from './components/FactoryView'
@@ -87,6 +88,7 @@ export function App(): React.JSX.Element {
       <NewRunHost />
       <ImportRecipeHost />
       <ConfirmHost />
+      <RecapHost />
     </div>
   )
 }

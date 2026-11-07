@@ -20,6 +20,7 @@ import { openNewMission } from '../components/MissionsView'
 import { openNewRun } from '../components/FactoryView'
 import { openRecipes } from '../dock/RecipesPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
+import { openRecap } from '../components/RecapDialog'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -200,6 +201,8 @@ export function staticCommands(): Command[] {
     { id: 'factory.importRecipe', category: 'Factory', title: 'Import a recipe (paste or file)', run: () => openRecipes({ mode: 'import' }) },
     { id: 'missions.next', category: 'Agents', title: 'Next mission that needs you', keys: { mac: 'Cmd+Shift+J', other: 'Ctrl+Shift+J' }, run: () => void (nextNeedsYou() || showNotice('Nothing needs you', 'No mission or factory run is waiting for you right now.')) },
     { id: 'agents.dashboard', category: 'Agents', title: 'Open agents dashboard (every running agent)', run: openAgentsDashboard },
+    { id: 'recap.standup', category: 'Agents', title: 'Recap: standup (what agents did since your last working day)', run: () => openRecap('standup') },
+    { id: 'recap.week', category: 'Agents', title: 'Recap: this week (agent work as Markdown)', run: () => openRecap('week') },
     { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openMissionControl('usage') },
     { id: 'diagram.code', category: 'View', title: 'Open code map (imports between folders)', run: () => openDiagrams('code') },
     { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },

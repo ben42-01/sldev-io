@@ -6288,3 +6288,76 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* the recap dialog: counts per group, then the Markdown exactly as it will be copied */
+.recap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.recap-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.recap-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.recap-bar .seg button {
+  white-space: nowrap;
+}
+.recap-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.recap-tile.none {
+  opacity: 0.55;
+}
+.recap-num {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.recap-tile[data-group='done']:not(.none) .recap-num {
+  color: var(--status-done);
+}
+.recap-tile[data-group='review']:not(.none) .recap-num {
+  color: var(--status-review);
+}
+.recap-tile[data-group='working']:not(.none) .recap-num {
+  color: var(--status-working);
+}
+.recap-tile[data-group='blocked']:not(.none) .recap-num {
+  color: var(--status-attention);
+}
+.recap-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recap-md {
+  margin: 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  font: 12px/1.6 var(--font-mono);
+  color: var(--fg);
+  white-space: pre-wrap;
+  user-select: text;
+}

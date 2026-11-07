@@ -3,6 +3,8 @@
     "version": "1.0.3",
     "date": null,
     "changes": [
+      "Recap: Mission Control → Recap writes a standup (since your last working day), today or this week from your missions, as Markdown grouped into done, ready for review, in progress and blocked, with branches, diffs, agent time and a line from each report. Copy it or save it as a note; it is made on your machine and nothing is sent.",
+      "Mission Control: cards fit the four narrow columns (the diff sits next to the branch), cards no longer repeat their column's status, and empty columns say what lands there.",
       "Light theme: Settings → Appearance now offers Dark, Light and Match system. Terminals, notes, reviews and the window frame change with it, and status colours keep their meaning in both. Switch from the command palette too (Toggle light / dark theme).",
       "Interface size: make the whole window 90%, 110% or 125% in Settings → Appearance. Terminal text keeps its own font size on top.",
       "Command palette: the letters you typed are marked in each result, the commands you ran last come first, and a footer shows the keys.",
