@@ -67,6 +67,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
+                  review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
@@ -76,7 +77,7 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
-                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), lead (answers a Lead's sldev_delegate/wait/followup/integrate: workers, merges), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
+                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), lead (answers a Lead's sldev_delegate/wait/followup/integrate: workers, merges), review (the review cockpit's walkthrough and Ask why helpers, verdicts per part, Send back), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
                   and the pick-up loop that starts Agent ready cards as runs or missions)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
@@ -192,6 +193,12 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   attempts (Continue starts the queue again), and nothing is pushed. Deleting a run removes its worktrees and branches.
   Prompt variants (`.sldev/evals/prompts/*.md`) are part of the contestant (`agent/model+prompt`) and go before the brief;
   `routeAgent` ignores attempts with a variant, since they measure instructions, not agents.
+- **Review cockpit** (`src/shared/review.ts`, `components/ReviewCockpit.tsx`, the Review tab's Walkthrough view): parts can only
+  claim hunks that exist in the real diff, and every hunk no part claims is still shown ("Not in the walkthrough"), so an agent can
+  never hide a change; noise is folded, never dropped. Walkthrough and Ask why agents are helpers (`explains` on the mission, like
+  `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
+  kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
+  is committed or pushed.
 - **Lead missions** (kind `lead`, `src/shared/lead.ts`, `state/lead.ts`): only a Lead may call sldev_delegate, wait, followup and
   integrate (main checks the caller's kind; the CLI has none). Main can't start missions, so it forwards those calls to the
   window (`lead:request`/`lead:reply`) and waits. Workers run in print mode with the unattended mode, each in a worktree

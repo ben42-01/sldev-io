@@ -49,7 +49,7 @@ export function MissionsView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
   const compact = useStore(workspace, (w) => w.missionCards === 'compact')
-  const mine = useMemo(() => list.filter((m) => m.root === root), [list, root])
+  const mine = useMemo(() => list.filter((m) => m.root === root && !m.explains), [list, root])
   const active = mine.filter((m) => isLive(m.status))
   const recent = mine.filter((m) => !isLive(m.status))
   /** live missions started in another folder (picked in the form) stay visible here */

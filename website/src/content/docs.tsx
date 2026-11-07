@@ -634,9 +634,51 @@ const missions: DocPage = {
             <b>Saved for later</b>, in the Agents tab and at the top of Mission Control. Click one to edit it, or <b>Launch</b> it as saved.
           </p>
           <p>
-            <b>Review changes</b> opens a mission's diff in a tab of its own, side by side or unified, and hides both sidebars while it is
-            on screen (turn that off with the button in its toolbar or in Settings → Editor). Tick <b>Viewed</b> to fold a file away. With
+            <b>Review changes</b> opens a mission's change in a tab of its own, on the walkthrough (below), and hides both sidebars while it is
+            on screen (turn that off with the button in its toolbar or in Settings → Editor). <b>All files</b> shows every file in path order,
+            side by side or unified; tick <b>Viewed</b> to fold a file away. With
             VS Code, Cursor, Windsurf or a JetBrains IDE as your editor, <b>Diff in …</b> opens a file's changes in the editor's own diff view.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'review',
+      title: 'Reviewing a change: the walkthrough',
+      body: (
+        <>
+          <p>
+            Agents write more code than anyone can read line by line, so the Review tab doesn't start with files in path order. It starts
+            with <b>what was asked</b> (the brief and its acceptance criteria) and the change split into <b>parts</b>, in reading order. The
+            question for each part is why it is there and whether it is needed, before how it is written.
+          </p>
+          <ul>
+            <li>
+              <b>Noise is folded</b>: lockfiles, generated files, snapshots and hunks that only reformat or reorder lines. The bar on top
+              shows how much of the diff that was.
+            </li>
+            <li>
+              <b>Risky spots are flagged</b>: sign-in and permissions, billing, migrations, new dependencies, removed or skipped tests,
+              something that looks like a key, CI and deploy files, silenced checks (<code>@ts-ignore</code>, <code>eslint-disable</code>).
+            </li>
+            <li>
+              <b>New code nothing uses</b> is flagged too: an export that nothing else in the change calls is dead, or there for later.
+            </li>
+          </ul>
+          <p>
+            Without an agent, parts are grouped by folder. Click <b>Explain the change</b> and an agent (the one that did the work, or any
+            other) reads the diff and writes a walkthrough: a summary, and for each part why it exists, whether it was <b>asked for</b>,{' '}
+            <b>supports</b> what was asked or was <b>not asked for</b>, which criteria it meets, a <b>simpler way</b> if there clearly is one,
+            and what could break. The bar shows how much of the change is asked for and how much isn't, so overengineering is visible before
+            you read a line. The agent runs in print mode, reads only, and writes one file under <code>.sldev/runs</code>; it doesn't appear
+            in your missions.
+          </p>
+          <p>
+            Give each part a verdict: <b>Looks good</b> (<kbd>A</kbd>), <b>Send back…</b> with a note (<kbd>S</kbd>), or <b>Cut it</b> for a
+            part nobody asked for. <b>Ask why</b> (<kbd>Q</kbd>) puts a question about one part to an agent, with that part's diff and the
+            task, and the answer shows under it. <kbd>J</kbd> and <kbd>K</kbd> move between parts. When you're through, <b>Send back</b>{' '}
+            gives every note to the agent that did the work as one follow-up, each with its part and files. A Board card in Review has a{' '}
+            <b>Review</b> button that opens the same tab.
           </p>
         </>
       )

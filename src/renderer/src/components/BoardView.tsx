@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitPullRequest, Hourglass, Link2, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
+import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
 import { BOARD_COLUMNS, blockersOf, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
@@ -8,14 +8,14 @@ import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot } from './StatusDot'
 import { Empty, ErrorBanner, Loading } from './States'
 import { useAgents } from '../state/agents'
-import { addItem, approve, board, getItem, importIssues, markReleased, moveTo, prDescriptionOf, refreshPrs, removeItem, saveBoardSettings, startItem, startRetro, syncBoardFiles, updateItem, useBoardItems, useBoardSettings, useStoryJobs, workOf, writeStories } from '../state/board'
+import { addItem, approve, board, getItem, importIssues, markReleased, missionsOf, moveTo, prDescriptionOf, refreshPrs, removeItem, saveBoardSettings, startItem, startRetro, syncBoardFiles, updateItem, useBoardItems, useBoardSettings, useStoryJobs, workOf, writeStories } from '../state/board'
 import { toast } from './Toast'
 import { activatePanel, activePanelId } from '../dock/dockApi'
 import { createStore } from '../state/store'
 import type { GhIssue } from '@shared/types'
 import { factory, loadRecipes, openPipeline } from '../state/factory'
 import { useKinds } from '../state/missionKinds'
-import { missions } from '../state/missions'
+import { missions, reviewMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 
@@ -224,6 +224,8 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
   const unblocks = waits.length ? [] : dependentsOf(i, all).filter((x) => x.column !== 'done')
   const finished = !!i.started?.id && (i.state === 'finished' || i.state === 'failed')
   const retroBusy = !!i.retro && !i.retro.done
+  // the mission whose change is up for review: the newest one that did the work (a follow-up, a takeover, the Lead)
+  const reviewable = i.column === 'review' && i.started?.type === 'mission' ? missionsOf(i).filter((m) => !m.delegate && !m.explains && m.parent?.kind !== 'second-opinion').sort((a, b) => a.createdAt - b.createdAt).pop() : undefined
   const copyPr = (): void =>
     void prDescriptionOf(i.id).then((md) => window.api.clipboard.writeText(md)).then(() => toast('Copied the pull request description'))
   const menu = (): MenuItem[] => [
@@ -234,6 +236,7 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
       { label: waits.length ? `Start now, without waiting for ${waits.map((x) => `#${x.key}`).join(', ')}` : 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) },
       { label: 'Start with a Lead (it delegates the parts)', icon: <Network size={13} />, run: () => (updateItem(i.id, { work: { type: 'mission', kind: 'lead', brief: '' } }), void startItem(i.id)) }
     ] : []),
+    ...(reviewable ? [{ label: 'Review the change', icon: <ListChecks size={13} />, run: () => reviewMission(reviewable.id) }] : []),
     ...(work?.open ? [{ label: i.started?.type === 'run' ? 'Open pipeline' : 'Open mission', run: work.open }] : []),
     ...(i.started?.id || i.column === 'review' || i.column === 'done' ? [{ label: 'Copy as PR description', icon: <ClipboardCopy size={13} />, run: copyPr }] : []),
     ...(finished ? [{ label: i.retro?.done ? 'Run the retro again…' : 'Retro: save lessons to memory', icon: <Brain size={13} />, disabled: retroBusy, run: () => void startRetro(i.id).then(() => toast('A retro mission is looking back at this card')).catch((e: Error) => toast(e.message)) }] : []),
@@ -308,6 +311,11 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
           {startable && (
             <button className="btn sm" onClick={() => void startItem(i.id)} disabled={waits.length > 0} title={waits.length ? `Waits for ${waits.map((x) => `#${x.key}`).join(', ')} (start it anyway from the ⋯ menu)` : 'Start its run now'}>
               <Play size={12} /> Start
+            </button>
+          )}
+          {reviewable && (
+            <button className="btn sm" onClick={() => reviewMission(reviewable.id)} title="The change part by part: why each is there, and whether it was asked for">
+              <ListChecks size={12} /> Review
             </button>
           )}
           {proposed && !i.refining && (

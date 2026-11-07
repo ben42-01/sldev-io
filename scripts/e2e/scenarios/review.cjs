@@ -48,6 +48,9 @@ module.exports = async (h) => {
 
   // review: its own tab, sidebars hidden, side by side
   await h.js(`(document.querySelector('.mission-card .next-step') ?? document.querySelector('.mission-card [aria-label="Review changes"]'))?.click()`)
+  // it opens on the walkthrough (review-cockpit.cjs); this checks the plain file list
+  await h.until(() => h.js(`!!document.querySelector('.diff-toolbar')`), 8000)
+  await h.click('.diff-toolbar .seg button', 'All files')
   h.expect(await h.until(() => h.js(`document.querySelectorAll('.diff-section').length >= 2`), 8000), 'the review lists the changed files')
   h.expect(await h.js(`document.querySelector('.app').classList.contains('focus-review') && !document.querySelector('.main > .sidebar:not([style*="display: none"])')?.offsetWidth`), 'the sidebars step aside while reviewing')
   h.expect(await h.js(`!!document.querySelector('.diff-table.split td.code.del') && !!document.querySelector('.diff-table.split td.code.add')`), 'old and new lines sit side by side')

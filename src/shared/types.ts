@@ -64,6 +64,8 @@ export interface AppSettings {
   missionCards: 'cards' | 'compact'
   /** the review tab: old and new side by side, or one column */
   diffLayout?: 'split' | 'unified'
+  /** the Review tab opens on the walkthrough (the review cockpit) or on every file */
+  reviewView?: 'walk' | 'files'
   /** the sidebars hide while a review tab is on screen (default on) */
   reviewFocus?: boolean
   terminalFontSize: number
@@ -374,6 +376,20 @@ export interface Mission {
   repeat?: { loop: string; pass: number; of: number; accept?: boolean }
   /** Claude Code transcript (from its hooks), for token usage */
   transcriptPath?: string
+  /** the review cockpit on this mission's diff (src/shared/review.ts): the walkthrough, the reviewer's marks and questions */
+  review?: ReviewState
+  /** a helper of the review cockpit (a walkthrough or a question about another mission): hidden from the boards, no notifications */
+  explains?: { mission: string }
+}
+
+export interface ReviewState {
+  /** the walkthrough an agent wrote to a file under .sldev/runs; `diff` is what the diff looked like then */
+  walk?: { file: string; mission: string; agent: string; status: 'writing' | 'ready' | 'failed'; at: number; note?: string; diff?: string }
+  /** by part id: looked good, or sent back with a note */
+  marks?: Record<string, { ok?: boolean; note?: string }>
+  asks?: Array<{ id: string; part: string; q: string; file: string; mission: string; agent: string; a?: string; failed?: boolean; at: number }>
+  /** the follow-up the marked parts went back in */
+  sent?: { at: number; mission: string; parts: number }
 }
 
 export interface ClaudeAsset {

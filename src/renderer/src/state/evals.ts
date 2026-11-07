@@ -159,7 +159,7 @@ async function tick(runId: string): Promise<void> {
 }
 
 /** Resolves when the mission's process ends, or 'timeout' after `ms`. */
-function missionEnd(id: string, ms: number): Promise<'ended' | 'failed' | 'timeout'> {
+export function missionEnd(id: string, ms: number): Promise<'ended' | 'failed' | 'timeout'> {
   return new Promise<'ended' | 'failed' | 'timeout'>((done) => {
     let stop = (): void => undefined
     const check = (): boolean => {
@@ -186,7 +186,7 @@ function missionEnd(id: string, ms: number): Promise<'ended' | 'failed' | 'timeo
 }
 
 /** Print-mode missions start a terminal tab; the tab the user was on stays in front. */
-async function quietly<T>(f: () => Promise<T>): Promise<T> {
+export async function quietly<T>(f: () => Promise<T>): Promise<T> {
   const front = activePanelId()
   try {
     return await f()

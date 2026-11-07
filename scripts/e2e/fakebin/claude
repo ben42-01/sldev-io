@@ -50,6 +50,22 @@ if (args.includes('-p')) {
       rpc(2, 'tools/call', { name: 'sldev_board_add', arguments: { title: 'Add tests for the health check', details: 'src/health.js has no tests.', labels: ['tests'], priority: 'high' } })].join('\n') + '\n'
     spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
   }
+  // the review cockpit: a walkthrough of the change (the first file is the asked part, the rest extra), or an answer about one part
+  if (prompt.startsWith('Walkthrough:')) {
+    const file = /as JSON to (\S+) \(the one file/.exec(prompt)[1]
+    const files = [...prompt.matchAll(/^- (\S+) \((\d+) hunks?/gm)].map((m) => m[1])
+    const parts = [{ title: 'The asked change', why: 'This is what the task asks for.', need: 'asked', serves: [1], risk: 'Callers that pass nothing now get the default.', files: [{ path: files[0], hunks: [1] }] }]
+    if (files.length > 1) parts.push({ title: 'A helper for later', why: 'Added while there; nothing uses it yet.', need: 'extra', simpler: 'Leave it out until something needs it.', files: files.slice(1) })
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, 'Here it is:\n```json\n' + JSON.stringify({ summary: `Changes ${files.length} files. The first is what was asked; the rest was not.`, parts, criteria: [{ n: 1, met: true, note: 'done in part 1' }] }) + '\n```\n')
+    sleep(500); fire('Stop', {}); process.exit(0)
+  }
+  if (prompt.startsWith('Question about the change')) {
+    const file = /as Markdown to (\S+) \(the one file/.exec(prompt)[1]
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, 'It is not needed: nothing calls it. Remove `helper.js`.\n')
+    sleep(500); fire('Stop', {}); process.exit(0)
+  }
   // an eval's judge: a verdict in the file it was given (JUDGE_FAIL in the rubric fails it)
   if (out && prompt.startsWith('Judge:')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], prompt.includes('JUDGE_FAIL') ? 'VERDICT: FAIL\nNo test for it.\n' : 'VERDICT: PASS\nThe change does what the rubric asks.\n'); fire('Stop', {}); process.exit(0) }
   if (out && !prompt.includes('NO_OUTPUT') && !prompt.includes('USE_MCP')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }

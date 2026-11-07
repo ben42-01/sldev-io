@@ -828,6 +828,15 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .art-tree i.p { background: var(--brand-purple); }
 .art-tree i.b { background: var(--brand-blue); }
 .art-tree .indent { padding-left: 18px; border-left: 1px solid var(--border-strong); margin-left: 3px; }
+.art-review { display: grid; gap: 7px; font: 12px var(--font-mono); color: var(--fg); }
+.art-review .bar { display: flex; gap: 2px; height: 5px; margin-bottom: 4px; }
+.art-review .bar i { flex-basis: 0; background: var(--border-strong); }
+.art-review .bar i.a, .art-review b.a { background: var(--green); }
+.art-review .bar i.x, .art-review b.x { background: var(--amber); }
+.art-review div:not(.bar) { display: flex; align-items: center; gap: 8px; }
+.art-review b { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); flex: none; }
+.art-review em { font-style: normal; color: var(--fg-subtle); margin-left: auto; white-space: nowrap; }
+.art-review .dim { color: var(--fg-subtle); }
 .art-lock { display: flex; gap: 8px; flex-wrap: wrap; font: 12px var(--font-mono); }
 .art-lock .art-chip { display: inline-flex; align-items: center; gap: 5px; }
 @media (max-width: 960px) { .bento { grid-template-columns: repeat(2, 1fr); } .bento-card, .bento-card.wide { grid-column: span 1; } }

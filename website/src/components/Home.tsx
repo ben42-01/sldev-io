@@ -90,15 +90,15 @@ export function Bento() {
               <div className="indent"><i className="b" /> Gemini CLI · Tests · working</div>
             </div>
           </a>
-          <a className="bento-card wide" href="/docs/missions#limits" style={{ '--glow': '#f5a52422' } as React.CSSProperties}>
-            <h3>Continues at the usage limit</h3>
-            <p>When one agent stops at its plan's limit, the next one in your order picks up the same task in the same folder.</p>
-            <div className="bento-art art-row" aria-hidden="true">
-              <span className="art-chip dim">Claude Code · limit reached</span>
-              <span className="art-arrow">→</span>
-              <span className="art-chip">Codex continues</span>
-              <span className="art-arrow">→</span>
-              <span className="art-chip">✓ tests pass</span>
+          <a className="bento-card wide" href="/docs/missions#review" style={{ '--glow': '#2ee6a81f' } as React.CSSProperties}>
+            <span className="bento-tag">new</span>
+            <h3>Review by purpose, not by file</h3>
+            <p>Each part of the change says why it's there and whether anyone asked for it. Noise is folded, overengineering shows up before you read a line.</p>
+            <div className="bento-art art-review" aria-hidden="true">
+              <div className="bar"><i className="a" style={{ flexGrow: 4 }} /><i className="x" style={{ flexGrow: 2 }} /><i className="n" style={{ flexGrow: 5 }} /></div>
+              <div><b className="a" /> Rate limit on /invite <em>asked for · ✓ looks good</em></div>
+              <div><b className="x" /> A cache layer for later <em>not asked for · cut it</em></div>
+              <div className="dim"><b /> 640 lines of noise <em>folded</em></div>
             </div>
           </a>
           <a className="bento-card" href="/docs/evals" style={{ '--glow': '#2ee6a822' } as React.CSSProperties}>
@@ -136,11 +136,15 @@ export function Bento() {
               <span className="art-chip">.sldev/memory.md</span><span className="art-chip dim">context/</span>
             </div>
           </a>
-          <a className="bento-card" href="/docs/agents">
-            <h3>One set of rules</h3>
-            <p>Write your rules once; every agent's file stays in sync, and hand edits are never overwritten.</p>
+          <a className="bento-card" href="/docs/missions#limits" style={{ '--glow': '#f5a52422' } as React.CSSProperties}>
+            <h3>Continues at the usage limit</h3>
+            <p>When one agent stops at its plan's limit, the next one in your order picks up the same task in the same folder.</p>
             <div className="bento-art art-row" aria-hidden="true">
-              <span className="art-chip">AGENTS.md</span><span className="art-chip dim">CLAUDE.md</span><span className="art-chip dim">GEMINI.md</span>
+              <span className="art-chip dim">Claude Code · limit reached</span>
+              <span className="art-arrow">→</span>
+              <span className="art-chip">Codex continues</span>
+              <span className="art-arrow">→</span>
+              <span className="art-chip">✓ tests pass</span>
             </div>
           </a>
           <a className="bento-card" href="/privacy">

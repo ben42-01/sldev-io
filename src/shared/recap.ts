@@ -93,7 +93,7 @@ export function firstLine(report: string | undefined, max = 160): string | undef
 export function buildRecap(missions: Mission[], start: number, end: number): Recap {
   const live = (m: Mission): boolean => m.status !== 'ended' && m.status !== 'failed'
   const picked = missions
-    .filter((m) => !m.factory && !m.eval && !m.continuedBy)
+    .filter((m) => !m.factory && !m.eval && !m.explains && !m.continuedBy)
     .filter((m) => live(m) || activeIn(m, start, end, end) || (m.updatedAt >= start && m.updatedAt <= end))
     .sort((a, b) => b.updatedAt - a.updatedAt)
   const items = picked.map((m): RecapItem => ({ mission: m, group: groupOf(m), summary: m.reportFrom === 'terminal' ? undefined : firstLine(m.report) }))

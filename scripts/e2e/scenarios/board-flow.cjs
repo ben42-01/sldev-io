@@ -54,6 +54,7 @@ module.exports = async (h) => {
   h.expect(await h.until(() => h.js(`!!${card('Create a team')}.querySelector('.board-spent')?.textContent.match(/\\d+s|min/)`), 5000), 'a finished card says what its work took')
   const spent = await h.until(async () => (await stored()).find((i) => i.title === 'Create a team').spent, 3000)
   h.expect(!!spent && spent.missions === 1 && spent.ms > 0, `the time is saved on the card (${JSON.stringify(spent)})`)
+  h.expect(await h.js(`[...${card('Create a team')}.querySelectorAll('.board-card-foot .btn')].some(b => b.textContent.includes('Review'))`), 'a card in Review opens the review cockpit from its Review button')
   await h.wait(300)
   await h.shot('2-review-spent')
 

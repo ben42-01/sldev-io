@@ -38,7 +38,7 @@ export async function loadMissions(): Promise<void> {
   const list = (store?.missions ?? []).map((m) => (isLive(m.status) ? patchMission(m, { status: 'ended' }, m.updatedAt || now) : m))
   missions.set({ list })
   // missions whose last reply was written after the Stop hook read the transcript (fixed since; this recovers older ones)
-  for (const m of list) if (!m.report && m.transcriptPath && !m.factory && !m.eval) void rereadReply(m.id)
+  for (const m of list) if (!m.report && m.transcriptPath && !m.factory && !m.eval && !m.explains) void rereadReply(m.id)
 }
 
 /**
@@ -115,6 +115,7 @@ export interface StartMissionInput {
   parent?: Mission['parent']
   kind?: Mission['kind']
   repeat?: Mission['repeat']
+  explains?: Mission['explains']
   /** its worktree's branch; default: feature/…, fix/… from the brief (src/shared/branch.ts) */
   branch?: string
   /** where its terminal opens; default: a tab in the active group */
@@ -173,6 +174,7 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     parent: input.parent,
     kind: input.kind,
     repeat: input.repeat,
+    explains: input.explains,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     history: pushStatus(undefined, 'starting', Date.now())
@@ -354,9 +356,9 @@ function checkLimit(id: string, extra?: string): void {
   const panel = missions.get().panels[id]
   const hit = limitLine(`${panel ? terminalTail(panel, TAIL_ROWS) : ''}\n${extra ?? ''}`, agent.usageLimit)
   if (!hit) return
-  const live = isLive(m.status) && !m.factory && !m.eval
+  const live = isLive(m.status) && !m.factory && !m.eval && !m.explains
   const next = update(id, { limited: { at: Date.now(), text: hit }, notification: `${agent.name} hit its usage limit`, ...(live ? { status: 'needs-input' as const } : {}) })
-  if (!next || m.factory || m.eval) return
+  if (!next || m.factory || m.eval || m.explains) return
   const to = failoverAgent(m.options.agent)
   if (to && workspace.get().failoverAuto) void continueOnAgent(id, to)
   else notify(next, `${m.title}: ${agent.name} hit its usage limit`, to ? `Continue it on ${getAgent(to).name} from the mission card.` : hit)
@@ -387,7 +389,7 @@ function watchLimit(id: string): void {
 
 function notify(m: Mission, title: string, body: string): void {
   const { notifications, notificationSound } = workspace.get()
-  if ((m.factory || m.eval) && m.status !== 'needs-input') return
+  if ((m.factory || m.eval || m.explains) && m.status !== 'needs-input') return
   const panel = missions.get().panels[m.id]
   if (document.hasFocus() && panel && getDockApi()?.activePanel?.id === panel) return
   if (notificationSound && m.status === 'needs-input') playChime()
