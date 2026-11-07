@@ -99,6 +99,30 @@ if (ip.startsWith('Lead:')) {
   process.stdin.resume()
   return
 }
+// a retro: one lesson, through sldev_remember or into the file the prompt names
+if (ip.startsWith('Retro:')) {
+  fire('SessionStart', { source: 'startup' }); sleep(300)
+  fire('UserPromptSubmit', { prompt: ip }); sleep(800)
+  const lesson = { note: 'Teams live in src/teams.js; run npm test after touching them.', paths: ['src/teams.js'] }
+  const file = /JSON array to (\S+) \(the one file you may create\)/.exec(ip)
+  const mi = args.indexOf('--mcp-config')
+  if (file) {
+    fs.mkdirSync(path.dirname(file[1]), { recursive: true })
+    fs.writeFileSync(file[1], JSON.stringify([lesson]))
+  } else if (mi >= 0) {
+    const { command, args: sargs, env } = JSON.parse(args[mi + 1]).mcpServers.sldev
+    const rpc = (id, method, params) => JSON.stringify({ jsonrpc: '2.0', id, method, params })
+    const input = [rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } }), rpc(2, 'tools/call', { name: 'sldev_remember', arguments: lesson })].join('\n') + '\n'
+    spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
+  }
+  sleep(600)
+  const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
+  fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Saved one lesson.' }] } }) + '\n')
+  fire('Stop', { transcript_path: tp })
+  console.log('Saved one lesson.')
+  process.stdin.resume()
+  return
+}
 // story writing (the board's Write stories / Refine): file stories through the sldev tools, or into the file the prompt names
 if (ip.startsWith('Write stories:') || ip.startsWith('Refine card #')) {
   fire('SessionStart', { source: 'startup' }); sleep(300)
@@ -109,7 +133,7 @@ if (ip.startsWith('Write stories:') || ip.startsWith('Refine card #')) {
     : [
         { title: 'Create a team', details: '**Why** Teams share projects.\n\n**What to do** src/teams.js\n\n**Acceptance criteria**\n- [ ] POST /teams creates one\n\n**How to check** npm test', labels: ['feature', 'api'], priority: 'high' },
         { title: 'Invite people by email', details: '**Acceptance criteria**\n- [ ] an invite link works once', labels: ['feature'], priority: 'normal' },
-        { title: 'Remove a member', details: '**Acceptance criteria**\n- [ ] only owners can', labels: ['feature', 'auth'], priority: 'low' }
+        { title: 'Remove a member', details: '**Acceptance criteria**\n- [ ] only owners can', labels: ['feature', 'auth'], priority: 'low', after: ['Create a team'] }
       ]
   const file = /JSON array to (\S+) \(the one file you may create\)/.exec(ip)
   const mi = args.indexOf('--mcp-config')

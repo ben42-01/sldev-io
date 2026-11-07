@@ -673,6 +673,8 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .mboard-labels span { padding: 0 6px; font: 10.5px var(--font-mono); color: var(--fg-muted); background: var(--bg-hover); }
 .mboard-action { align-self: flex-end; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; font-size: 11.5px; border: 1px solid var(--border-strong); color: var(--fg); }
 .mboard-state { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-muted); }
+.mboard-waits { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--amber); }
+.mboard-spent { font: 11px var(--font-mono); color: var(--fg-subtle); }
 @media (max-width: 900px) { .mboard { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .mboard { grid-template-columns: 1fr; } .mboard-col { min-height: 0; } }
 

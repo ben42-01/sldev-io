@@ -55,6 +55,16 @@ export interface BoardItem {
   refining?: string
   /** the GitHub issue it was imported from; its run's pull request closes it */
   issue?: { number: number; url: string }
+  /** cards (by number) that must be Done before pick-up starts this one */
+  blockedBy?: number[]
+  /** what its work took, measured when it finished: wall time, agent time, and tokens where the agent's logs tell */
+  spent?: Spent
+  /** a retro mission read what happened and saved lessons to the project memory */
+  retro?: { mission: string; done?: boolean; lessons?: number }
+  /** when it reached Done, for release notes */
+  doneAt?: number
+  /** the release notes it went out in (Mark as released) */
+  released?: string
   createdAt: number
   updatedAt: number
   /** position inside its column: lower is higher up */
@@ -69,6 +79,10 @@ export interface BoardSettings {
   work: BoardWork
   /** how many items may be in progress at once by pick-up */
   parallel: number
+  /** keep the board in .sldev/board.json, to commit and share with the team */
+  sync?: boolean
+  /** cards deleted here while syncing, so a teammate's copy in the file doesn't bring them back */
+  removed?: string[]
 }
 
 export const defaultBoardSettings = (root: string): BoardSettings => ({
@@ -98,7 +112,7 @@ export function nextPickups(items: BoardItem[], s: BoardSettings): BoardItem[] {
   const room = Math.max(0, s.parallel - mine.filter(isActive).length)
   if (!room) return []
   return mine
-    .filter((i) => i.column === 'ready' && !i.started)
+    .filter((i) => i.column === 'ready' && !i.started && !blockersOf(i, mine).length)
     .sort((a, b) => RANK[a.priority] - RANK[b.priority] || a.order - b.order || a.createdAt - b.createdAt)
     .slice(0, room)
 }
@@ -118,7 +132,8 @@ export function followWork(i: BoardItem, state: WorkState, now: number): BoardIt
 /** Moving a card by hand. Back to Agent ready, Proposed or Backlog forgets the old work, so pick-up can start it again. */
 export function moveItem(i: BoardItem, column: BoardColumn, now: number, order = now): BoardItem {
   const requeue = (column === 'ready' || column === 'backlog' || column === 'proposed') && i.column !== column && !!i.started && !isActive(i)
-  return { ...i, column, order, updatedAt: now, ...(requeue ? { started: undefined, state: undefined } : {}) }
+  const done = column === 'done' && i.column !== 'done' ? { doneAt: now } : column !== 'done' ? { doneAt: undefined, released: undefined } : {}
+  return { ...i, column, order, updatedAt: now, ...done, ...(requeue ? { started: undefined, state: undefined, spent: undefined } : {}) }
 }
 
 /** What the agent is told: the title, the details and the labels. */
@@ -154,7 +169,7 @@ export function boardCardLines(items: BoardItem[], column?: BoardColumn): string
   for (const c of BOARD_COLUMNS) {
     if (column && c.id !== column) continue
     for (const i of columnItems(items, c.id)) {
-      const meta = [c.id, i.priority !== 'normal' && i.priority, i.labels.length && i.labels.join(',')].filter(Boolean).join(' · ')
+      const meta = [c.id, i.priority !== 'normal' && i.priority, i.labels.length && i.labels.join(','), i.blockedBy?.length && `after ${i.blockedBy.map((k) => `#${k}`).join(',')}`].filter(Boolean).join(' · ')
       lines.push(`#${i.key} [${meta}] ${i.title}`)
     }
   }
@@ -180,7 +195,7 @@ export function issueCard(x: GhIssue): Pick<BoardItem, 'title' | 'body' | 'label
  */
 export function followPr(i: BoardItem, pr: { number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' }, now: number): BoardItem | null {
   const live = i.column === 'review' || i.column === 'progress'
-  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now }
+  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now, doneAt: now }
   if (pr.state === 'CLOSED' && live && i.note !== `PR #${pr.number} closed without merging`) return { ...i, note: `PR #${pr.number} closed without merging`, updatedAt: now }
   return null
 }
@@ -196,6 +211,8 @@ export interface StoryDraft {
   details: string
   labels: string[]
   priority: BoardPriority
+  /** what it waits for: card numbers, or the titles of stories filed before it */
+  after?: Array<number | string>
 }
 
 /** a story-writing mission, so its cards (or its reply) end up on the board */
@@ -219,7 +236,8 @@ export const STORY_SHAPE = [
   '- a title: imperative, under 80 characters ("Add rate limiting to /api/login")',
   '- details in Markdown with these parts: **Why** (one or two lines), **What to do** (the files and functions likely to change), **Acceptance criteria** (a checklist anyone can verify), **How to check** (the tests or commands to run)',
   '- labels: one to three, lowercase, e.g. feature, bug, tests, ui, api, refactor, docs',
-  '- a priority: high, normal or low'
+  '- a priority: high, normal or low',
+  '- after: only when it can\'t start before another story is done, that story\'s title (or a card number like 12); agents pick it up once those are Done'
 ].join('\n')
 
 /**
@@ -234,7 +252,7 @@ export function storiesPrompt(o: { feature: string; tools: boolean; max: number;
     ? o.refine
       ? `First look at the board with sldev_board. Save the rewritten card with sldev_board_update (key ${o.refine.key}), and file any extra parts with sldev_board_add. They go to Proposed, where the user approves them. Then call sldev_done with a one-line summary.`
       : 'First look at the board with sldev_board so you do not file what is already there. File each story with sldev_board_add: they go to Proposed, where the user approves them for the agents. Then call sldev_done with a one-line summary.'
-    : `When you are done, write the stories as a JSON array to ${o.file} (the one file you may create), each like {"title": "…", "details": "…", "labels": ["feature"], "priority": "normal"}. sldev-io adds them to the board's Proposed column${o.refine ? ', the first one in place of the card' : ''}. Then say in one line what you wrote.`
+    : `When you are done, write the stories as a JSON array to ${o.file} (the one file you may create), each like {"title": "…", "details": "…", "labels": ["feature"], "priority": "normal", "after": ["title of an earlier story"]} (after is optional). sldev-io adds them to the board's Proposed column${o.refine ? ', the first one in place of the card' : ''}. Then say in one line what you wrote.`
   const rules = o.tools ? 'Read whatever you need (code, docs, tests), but do not create, modify or delete any files, and do not commit.' : 'Read whatever you need (code, docs, tests), but do not change any project files, and do not commit.'
   return [...head, rules, STORY_SHAPE, 'Ask the user if something important is unclear instead of guessing.', how].filter(Boolean).join('\n\n')
 }
@@ -242,12 +260,17 @@ export function storiesPrompt(o: { feature: string; tools: boolean; max: number;
 const PRIORITIES: BoardPriority[] = ['high', 'normal', 'low']
 
 /** One story from loose input (a tool call, a JSON object), or null without a title. */
-export function storyDraft(v: { title?: unknown; details?: unknown; labels?: unknown; priority?: unknown }): StoryDraft | null {
+export function storyDraft(v: { title?: unknown; details?: unknown; labels?: unknown; priority?: unknown; after?: unknown }): StoryDraft | null {
   const title = typeof v.title === 'string' ? v.title.trim().slice(0, 120) : ''
   if (!title) return null
   const labels = parseLabels(Array.isArray(v.labels) ? v.labels.filter((l) => typeof l === 'string').join(',') : typeof v.labels === 'string' ? v.labels : '')
   const priority = PRIORITIES.includes(v.priority as BoardPriority) ? (v.priority as BoardPriority) : 'normal'
-  return { title, details: typeof v.details === 'string' ? v.details.trim().slice(0, 6000) : '', labels, priority }
+  const raw = Array.isArray(v.after) ? v.after : v.after === undefined || v.after === null || v.after === '' ? [] : [v.after]
+  const after = raw
+    .map((x) => (typeof x === 'number' ? x : typeof x === 'string' ? (/^#?\d+$/.test(x.trim()) ? Number(x.trim().replace('#', '')) : x.trim()) : null))
+    .filter((x): x is number | string => x !== null && x !== '' && x !== 0)
+    .slice(0, 8)
+  return { title, details: typeof v.details === 'string' ? v.details.trim().slice(0, 6000) : '', labels, priority, ...(after.length ? { after } : {}) }
 }
 
 /** The stories in a file or a reply: a JSON array, or the last ```stories (or ```json) block holding one. */
@@ -268,3 +291,270 @@ export function parseStories(text: string): StoryDraft[] {
 
 /** Approving a Proposed card makes it Agent ready (at the bottom, by the order given). */
 export const approveItem = (i: BoardItem, now: number, order = now): BoardItem => ({ ...i, column: 'ready', order, updatedAt: now, note: undefined })
+
+// ── dependencies: a card waits for others to be Done ─────────────────
+
+/** "#3, 7 #9" → [3, 7, 9] */
+export function parseKeys(text: string): number[] {
+  return [...new Set([...text.matchAll(/\d+/g)].map((m) => Number(m[0])).filter((n) => n > 0))].slice(0, 12)
+}
+
+/** The cards this one still waits for: those it is blocked by that aren't Done (a deleted card no longer blocks). */
+export function blockersOf(i: Pick<BoardItem, 'root' | 'blockedBy'>, items: BoardItem[]): BoardItem[] {
+  if (!i.blockedBy?.length) return []
+  return items.filter((x) => x.root === i.root && i.blockedBy!.includes(x.key) && x.column !== 'done')
+}
+
+/** The cards waiting for this one, for the card's "unblocks" line. */
+export const dependentsOf = (i: Pick<BoardItem, 'root' | 'key'>, items: BoardItem[]): BoardItem[] => items.filter((x) => x.root === i.root && x.blockedBy?.includes(i.key))
+
+/** Whether `key` waiting for `blockedBy` would make a loop (a card that, through others, waits for itself). */
+export function wouldCycle(items: BoardItem[], root: string, key: number, blockedBy: number[]): boolean {
+  const deps = new Map(items.filter((x) => x.root === root).map((x) => [x.key, x.blockedBy ?? []]))
+  deps.set(key, blockedBy)
+  const seen = new Set<number>()
+  const stack = [...blockedBy]
+  while (stack.length) {
+    const k = stack.pop()!
+    if (k === key) return true
+    if (seen.has(k)) continue
+    seen.add(k)
+    stack.push(...(deps.get(k) ?? []))
+  }
+  return false
+}
+
+/** A story's `after` as card numbers: numbers stay, titles are looked up among the project's cards. */
+export function resolveAfter(after: Array<number | string> | undefined, items: BoardItem[], root: string): number[] {
+  const keys = (after ?? []).map((a) => (typeof a === 'number' ? a : items.find((x) => x.root === root && x.title.toLowerCase() === a.toLowerCase())?.key)).filter((k): k is number => !!k && items.some((x) => x.root === root && x.key === k))
+  return [...new Set(keys)]
+}
+
+// ── what a card's work took ──────────────────────────────────────────
+
+export interface Spent {
+  /** from the start of its work to when it finished */
+  ms: number
+  /** the time its agents were working (several at once count several times) */
+  agentMs: number
+  /** how many missions worked on it: stages, follow-ups, a Lead's workers */
+  missions: number
+  tokens?: number
+  /** USD at API list prices, for the tokens with a known price */
+  cost?: number
+}
+
+const dur = (ms: number): string => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))}s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 3_600_000).toFixed(1)} h`)
+const tok = (n: number): string => (n < 1000 ? `${n}` : n < 1_000_000 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1)}M`)
+
+/** "12 min · 3 agents · 840k tokens · $1.20" */
+export function spentText(s: Spent): string {
+  return [dur(s.ms), s.missions > 1 && `${s.missions} agents`, s.tokens ? `${tok(s.tokens)} tokens` : '', s.cost ? `$${s.cost < 0.01 ? '<0.01' : s.cost.toFixed(2)}` : ''].filter(Boolean).join(' · ')
+}
+
+/** The board's totals for a set of cards (Done this week, a release). */
+export function spentTotal(items: BoardItem[]): Spent | null {
+  const s = items.map((i) => i.spent).filter((x): x is Spent => !!x)
+  if (!s.length) return null
+  const sum = (f: (x: Spent) => number | undefined): number => s.reduce((n, x) => n + (f(x) ?? 0), 0)
+  return { ms: sum((x) => x.ms), agentMs: sum((x) => x.agentMs), missions: sum((x) => x.missions), tokens: sum((x) => x.tokens) || undefined, cost: sum((x) => x.cost) || undefined }
+}
+
+// ── a pull request description from a card ───────────────────────────
+
+/** The part of a story under a heading such as **Acceptance criteria** or ## How to check, without the heading. */
+export function storySection(body: string, name: RegExp): string {
+  const lines = body.split('\n')
+  // "## Why", "**Why**", "**Why:** text on the same line"
+  const head = (l: string): { title: string; rest: string } | null => {
+    const m = /^\s*(?:#{1,6}\s+(.+?)\s*$|\*\*([^*]+?)\*\*:?\s*(.*)$|__([^_]+?)__:?\s*(.*)$)/.exec(l)
+    return m ? { title: (m[1] ?? m[2] ?? m[4]).replace(/:$/, ''), rest: (m[3] ?? m[5] ?? '').replace(/^:\s*/, '') } : null
+  }
+  const start = lines.findIndex((l) => {
+    const h = head(l)
+    return !!h && name.test(h.title)
+  })
+  if (start < 0) return ''
+  const out = [head(lines[start])!.rest]
+  for (const l of lines.slice(start + 1)) {
+    if (head(l)) break
+    out.push(l)
+  }
+  return out.join('\n').trim()
+}
+
+/** The acceptance criteria as plain lines, without their bullets or ticks. */
+export function acceptanceCriteria(body: string): string[] {
+  return storySection(body, /acceptance/i)
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-*+]|\d+[.)])\s*(?:\[[ xX]\]\s*)?/, '').trim())
+    .filter(Boolean)
+}
+
+/** A pull request description: what it is, what changed (the agent's report), the criteria to tick, how to check, and the issue it closes. */
+export function prDescription(i: Pick<BoardItem, 'key' | 'title' | 'body' | 'issue' | 'spent'>, o: { report?: string; agent?: string; diff?: { files: number; insertions: number; deletions: number } } = {}): string {
+  const why = storySection(i.body, /^\W*why/i)
+  const criteria = acceptanceCriteria(i.body)
+  const check = storySection(i.body, /how to (check|test|verify)/i)
+  const plain = !why && !criteria.length && !check ? i.body.replace(/\n*https:\/\/github\.com\/\S+\/issues\/\d+\s*$/, '').trim() : ''
+  const report = o.report?.trim().replace(/^#+\s*/gm, '').slice(0, 3000)
+  const meta = [o.agent && `Agent: ${o.agent}`, o.diff && `${o.diff.files} file${o.diff.files === 1 ? '' : 's'}, +${o.diff.insertions} −${o.diff.deletions}`, i.spent && spentText(i.spent)].filter(Boolean).join(' · ')
+  return [
+    `## ${i.title}`,
+    i.issue ? `Closes #${i.issue.number}` : '',
+    why || plain,
+    report ? `### What changed\n\n${report}` : '',
+    criteria.length ? `### Acceptance criteria\n\n${criteria.map((c) => `- [ ] ${c}`).join('\n')}` : '',
+    check ? `### How to check\n\n${check}` : '',
+    meta ? `---\n\n<sub>Card #${i.key} · ${meta}</sub>` : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+// ── release notes from Done ──────────────────────────────────────────
+
+const GROUPS: Array<{ title: string; match: RegExp }> = [
+  { title: 'Fixes', match: /^(bug|fix|bugfix|hotfix|regression)$/ },
+  { title: 'Docs', match: /^(docs?|documentation)$/ },
+  { title: 'Under the hood', match: /^(tests?|refactor|chore|ci|build|deps|infra|perf)$/ }
+]
+
+/** Done cards that haven't gone out in release notes yet, in the order they were finished. */
+export const unreleased = (items: BoardItem[]): BoardItem[] => items.filter((i) => i.column === 'done' && !i.released).sort((a, b) => (a.doneAt ?? a.updatedAt) - (b.doneAt ?? b.updatedAt))
+
+/** Which section a card goes under: its first label that names one, else New. */
+export function releaseGroup(i: Pick<BoardItem, 'labels'>): string {
+  for (const l of i.labels) for (const g of GROUPS) if (g.match.test(l)) return g.title
+  return 'New'
+}
+
+/** Release notes in Markdown: New, Fixes, Docs, Under the hood, one line per card (with its issue). */
+export function releaseNotes(items: BoardItem[], title: string): string {
+  if (!items.length) return `## ${title}\n\nNothing new yet.`
+  const order = ['New', ...GROUPS.map((g) => g.title)]
+  const by = new Map<string, BoardItem[]>()
+  for (const i of items) by.set(releaseGroup(i), [...(by.get(releaseGroup(i)) ?? []), i])
+  const sections = order.filter((g) => by.has(g)).map((g) => `### ${g}\n\n${by.get(g)!.map((i) => `- ${i.title}${i.issue ? ` (#${i.issue.number})` : ''}`).join('\n')}`)
+  return [`## ${title}`, ...sections].join('\n\n')
+}
+
+// ── retros: lessons from a card's work, into the project memory ──────
+
+/** What a retro mission is told: what happened, and to save only lessons a future agent needs. */
+export function retroPrompt(o: { card: Pick<BoardItem, 'key' | 'title' | 'body'>; story: string[]; base?: string; tools: boolean; file?: string }): string {
+  return [
+    `Retro: card #${o.card.key} ${o.card.title}`,
+    `Agents worked on this card. Look back at how it went and save what the next agent on this project should know.`,
+    `The card:\n\n${o.card.body.trim() || '(no details)'}`,
+    o.story.length ? `What happened:\n\n${o.story.map((l) => `- ${l}`).join('\n')}` : '',
+    o.base ? `The work is the diff from ${o.base} (git diff ${o.base}); read it and whatever code you need.` : '',
+    'Find at most three lessons: a project convention the agent missed, a command that has to run, a gotcha in this code, a reviewer\'s correction that will come up again. Each is one or two sentences a future agent can act on, naming the files it is about. Not a summary of the change, nothing that is obvious from the code or already in the project memory. If nothing is worth remembering, save nothing and say so.',
+    'Do not change any project files and do not commit.',
+    o.tools
+      ? 'Save each lesson with sldev_remember (with the paths it is about). Then call sldev_done with a one-line summary.'
+      : `Write the lessons as a JSON array to ${o.file} (the one file you may create), each like {"note": "…", "paths": ["src/x.ts"]}; an empty array when there is nothing. sldev-io adds them to the project memory. Then say in one line what you saved.`
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/** Lessons from a retro's file: [{note, paths}] or plain strings. */
+export function parseLessons(text: string): Array<{ note: string; paths?: string[] }> {
+  const blocks = [text.trim(), ...[...text.matchAll(/```(?:json)?[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1])]
+  for (const b of blocks.reverse()) {
+    try {
+      const v = JSON.parse(b) as unknown
+      if (!Array.isArray(v)) continue
+      return v
+        .map((x) => (typeof x === 'string' ? { note: x } : x && typeof x === 'object' && typeof (x as { note?: unknown }).note === 'string' ? { note: (x as { note: string }).note, paths: Array.isArray((x as { paths?: unknown }).paths) ? ((x as { paths: unknown[] }).paths.filter((p) => typeof p === 'string') as string[]) : undefined } : null))
+        .filter((x): x is { note: string; paths?: string[] } => !!x && !!x.note.trim())
+        .map((x) => ({ ...x, note: x.note.trim().slice(0, 600) }))
+        .slice(0, 3)
+    } catch {
+      // not JSON
+    }
+  }
+  return []
+}
+
+// ── the board in git: .sldev/board.json, shared with the team ─────────
+
+export const BOARD_FILE = '.sldev/board.json'
+
+/** the fields a teammate sees; runs, missions and their state stay on the machine that ran them */
+const SHARED = ['id', 'key', 'title', 'body', 'column', 'labels', 'priority', 'work', 'by', 'issue', 'blockedBy', 'doneAt', 'released', 'createdAt', 'updatedAt', 'order'] as const
+export type SharedCard = Pick<BoardItem, (typeof SHARED)[number]>
+
+export interface BoardFile {
+  version: 1
+  cards: SharedCard[]
+  /** ids of cards deleted, so an older copy elsewhere doesn't bring them back */
+  removed?: string[]
+}
+
+const shared = (i: BoardItem): SharedCard => {
+  const out: Record<string, unknown> = {}
+  for (const k of SHARED) if (i[k] !== undefined && !(Array.isArray(i[k]) && !(i[k] as unknown[]).length && k === 'blockedBy')) out[k] = i[k]
+  return out as unknown as SharedCard
+}
+
+/** The file's text: cards by number, two-space JSON, so a change is a readable diff. */
+export function boardFileText(items: BoardItem[], root: string, removed: string[] = []): string {
+  const cards = items.filter((i) => i.root === root).sort((a, b) => a.key - b.key).map(shared)
+  const file: BoardFile = { version: 1, cards, ...(removed.length ? { removed: [...removed].sort() } : {}) }
+  return `${JSON.stringify(file, null, 2)}\n`
+}
+
+/** The file, or why it can't be read (a merge left conflict markers in it). */
+export function parseBoardFile(text: string): { file?: BoardFile; error?: string } {
+  if (/^(<{7}|>{7}|={7})( |$)/m.test(text)) return { error: `${BOARD_FILE} has merge conflicts. Resolve them in your editor; the board waits until then.` }
+  try {
+    const v = JSON.parse(text) as Partial<BoardFile>
+    if (!v || !Array.isArray(v.cards)) return { error: `${BOARD_FILE} has no cards list` }
+    const cards = v.cards.filter((c): c is SharedCard => !!c && typeof c.id === 'string' && typeof c.key === 'number' && typeof c.title === 'string' && BOARD_COLUMNS.some((x) => x.id === c.column))
+    return { file: { version: 1, cards: cards.map((c) => ({ ...c, body: c.body ?? '', labels: Array.isArray(c.labels) ? c.labels : [], priority: PRIORITIES.includes(c.priority) ? c.priority : 'normal' })), removed: Array.isArray(v.removed) ? v.removed.filter((x) => typeof x === 'string') : [] } }
+  } catch (e) {
+    return { error: `${BOARD_FILE} is not valid JSON: ${(e as Error).message}` }
+  }
+}
+
+/**
+ * The board after reading a teammate's file. A card's newer side wins (by updatedAt), and only the shared
+ * fields come from the file: which run or mission worked on it stays local. A card deleted on either side
+ * goes. A new card whose number is taken by another card here keeps its number, and the local one, which
+ * nobody else has seen yet, gets the next free one.
+ */
+export function mergeBoardFile(items: BoardItem[], root: string, file: BoardFile, removedHere: string[] = []): { items: BoardItem[]; changed: boolean } {
+  const gone = new Set([...(file.removed ?? []), ...removedHere])
+  let changed = false
+  const fileIds = new Set(file.cards.map((c) => c.id))
+  let out = items.filter((i) => {
+    if (i.root !== root || !gone.has(i.id)) return true
+    changed = true
+    return false
+  })
+  for (const c of file.cards) {
+    if (gone.has(c.id)) continue
+    const cur = out.find((i) => i.id === c.id)
+    if (cur) {
+      if (c.updatedAt <= cur.updatedAt) continue
+      const next: BoardItem = { ...cur, ...c, root }
+      for (const k of SHARED) if (!(k in c)) delete (next as unknown as Record<string, unknown>)[k]
+      // a card moved back to a waiting column elsewhere forgets this machine's finished run, like moving it here
+      if (cur.column !== c.column && (c.column === 'ready' || c.column === 'backlog' || c.column === 'proposed') && cur.started && !isActive(cur)) Object.assign(next, { started: undefined, state: undefined, spent: undefined })
+      out = out.map((i) => (i.id === c.id ? next : i))
+      changed = true
+      continue
+    }
+    const clash = out.find((i) => i.root === root && i.key === c.key && !fileIds.has(i.id))
+    if (clash) {
+      const key = Math.max(nextKey(out, root), ...file.cards.map((x) => x.key + 1))
+      // cards here that wait for the renumbered one follow it
+      out = out.map((i) => (i.id === clash.id ? { ...i, key } : i.root === root && !fileIds.has(i.id) && i.blockedBy?.includes(c.key) ? { ...i, blockedBy: i.blockedBy.map((k) => (k === c.key ? key : k)) } : i))
+    }
+    out = [...out, { ...c, root, body: c.body ?? '', labels: c.labels ?? [] } as BoardItem]
+    changed = true
+  }
+  return { items: out, changed }
+}

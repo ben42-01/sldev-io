@@ -1,5 +1,5 @@
 import { stageMode } from '@shared/agents'
-import { contestantKey, diffCheckResult, judgePrompt, judgeResult, nextAttempts, parseEval, plannedAttempts, runCheckResult, attemptDone, attemptStatus, slugifyEval, evalTemplate, type CheckResult, type Contestant, type EvalAttempt, type EvalRun, type EvalSpec } from '@shared/evals'
+import { attemptBrief, contestantKey, diffCheckResult, judgePrompt, judgeResult, nextAttempts, parseEval, plannedAttempts, runCheckResult, attemptDone, attemptStatus, slugifyEval, evalTemplate, promptTemplate, type CheckResult, type Contestant, type EvalAttempt, type EvalRun, type EvalSpec } from '@shared/evals'
 import { renderKind } from '@shared/missionKinds'
 import type { Mission } from '@shared/types'
 import { activatePanel, activePanelId, closePanel } from '../dock/dockApi'
@@ -89,6 +89,21 @@ const getRun = (id: string): EvalRun | undefined => evals.get().runs.find((r) =>
 
 function patchAttempt(runId: string, attemptId: string, patch: Partial<EvalAttempt>): void {
   setRun(runId, (r) => ({ ...r, attempts: r.attempts.map((a) => (a.id === attemptId ? { ...a, ...patch } : a)) }))
+}
+
+export interface PromptFile {
+  path: string
+  name: string
+  text: string
+}
+
+export const loadPrompts = (root: string): Promise<PromptFile[]> => window.api.evals.prompts(root).catch(() => [])
+
+/** A new prompt variant from the template, opened in the editor; returns its path. */
+export async function newPromptFile(root: string, name: string): Promise<string> {
+  const p = await window.api.evals.savePrompt(root, slugifyEval(name), promptTemplate(name))
+  void openInEditor(p)
+  return p
 }
 
 export async function startEvalRun(root: string, o: { specs: EvalSpec[]; contestants: Contestant[]; repeat: number; parallel: number }): Promise<string> {
@@ -206,9 +221,9 @@ async function runAttempt(runId: string, attemptId: string): Promise<void> {
     const kind = getKind('build')
     const m = await quietly(() =>
       startMission({
-        prompt: renderKind(kind, { title: spec.name, brief: spec.brief }),
-        brief: spec.brief,
-        title: `Eval: ${spec.name} · ${agent.name}${a.contestant.model ? ` ${a.contestant.model}` : ''}`.slice(0, 60),
+        prompt: renderKind(kind, { title: spec.name, brief: attemptBrief(spec, a.contestant) }),
+        brief: attemptBrief(spec, a.contestant),
+        title: `Eval: ${spec.name} · ${agent.name}${a.contestant.model ? ` ${a.contestant.model}` : ''}${a.contestant.prompt ? ` · ${a.contestant.prompt.name}` : ''}`.slice(0, 60),
         root: run.root,
         cwd: wt.path,
         // nobody approves tool calls in print mode: the same unattended mode as factory stages

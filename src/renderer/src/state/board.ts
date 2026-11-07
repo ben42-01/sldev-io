@@ -1,6 +1,7 @@
-import { PR_POLL_MS, approveItem, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, moveItem, nextKey, nextPickups, parseStories, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type StoryJob, type WorkState } from '@shared/board'
+import { PR_POLL_MS, approveItem, boardFileText, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
 import type { GhIssue, Mission } from '@shared/types'
+import { NO_TOKENS, addTokens, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
 import { activatePanel, activePanelId } from '../dock/dockApi'
 import { startAction } from './automations'
 import { factory } from './factory'
@@ -16,7 +17,7 @@ import { createStore, useStore } from './store'
  * nothing is pushed: a recipe's pr stage still waits for its click.
  */
 
-export const board = createStore<{ items: BoardItem[]; settings: BoardSettings[]; jobs: StoryJob[] }>({ items: [], settings: [], jobs: [] })
+export const board = createStore<{ items: BoardItem[]; settings: BoardSettings[]; jobs: StoryJob[]; syncError: Record<string, string> }>({ items: [], settings: [], jobs: [], syncError: {} })
 
 export const useBoardItems = (root: string | null): BoardItem[] => {
   const items = useStore(board, (s) => s.items)
@@ -30,7 +31,11 @@ export const useBoardSettings = (root: string | null): BoardSettings => {
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 function persist(): void {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void window.api.store.set('board', board.get()), 300)
+  saveTimer = setTimeout(() => {
+    const { items, settings, jobs } = board.get()
+    void window.api.store.set('board', { items, settings, jobs })
+    for (const s of settings) if (s.sync) void flushFile(s.root)
+  }, 300)
 }
 
 const TICK_MS = 10_000
@@ -48,11 +53,13 @@ window.api.missions.onMcp((e) => {
   if (e.type === 'board-update') {
     const target = board.get().items.find((i) => i.root === m.root && i.key === e.key)
     if (!target || (target.column !== 'backlog' && target.column !== 'proposed')) return
-    updateItem(target.id, { ...e.card, by, refining: undefined, note: undefined })
+    const { after, ...card } = e.card
+    updateItem(target.id, { ...card, by, refining: undefined, note: undefined, ...(after ? { blockedBy: resolveAfter(after, board.get().items, m.root).filter((k) => k !== target.key) } : {}) })
     if (target.column !== 'proposed') moveTo(target.id, 'proposed')
     return
   }
-  if (!onBoard(m.root, e.card.title)) addItem(m.root, { ...e.card, column: 'proposed', by })
+  const { after, ...card } = e.card
+  if (!onBoard(m.root, card.title)) addItem(m.root, { ...card, column: 'proposed', by, blockedBy: resolveAfter(after, board.get().items, m.root) })
 })
 
 /** a card with this title is already open on the board (agents re-file what they find) */
@@ -60,7 +67,8 @@ const onBoard = (root: string, title: string): boolean => board.get().items.some
 
 export async function loadBoard(): Promise<void> {
   const data = (await window.api.store.get('board')) ?? { items: [], settings: [] }
-  board.set({ items: data.items ?? [], settings: data.settings ?? [], jobs: data.jobs ?? [] })
+  board.set({ items: data.items ?? [], settings: data.settings ?? [], jobs: data.jobs ?? [], syncError: {} })
+  for (const s of board.get().settings) if (s.sync) void flushFile(s.root)
   for (const u of unsub) u()
   unsub = [missions.subscribe(scheduleSync), factory.subscribe(scheduleSync)]
   clearInterval(timer)
@@ -81,9 +89,10 @@ export function getItem(id: string): BoardItem | undefined {
   return board.get().items.find((i) => i.id === id)
 }
 
-export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & Partial<Pick<BoardItem, 'work' | 'issue' | 'by'>>): BoardItem {
+export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & Partial<Pick<BoardItem, 'work' | 'issue' | 'by' | 'blockedBy'>>): BoardItem {
   const t = now()
-  const item: BoardItem = { id: newId(), root, key: nextKey(board.get().items, root), createdAt: t, updatedAt: t, order: t, ...fields }
+  const { blockedBy, ...rest } = fields
+  const item: BoardItem = { id: newId(), root, key: nextKey(board.get().items, root), createdAt: t, updatedAt: t, order: t, ...rest, ...(blockedBy?.length ? { blockedBy } : {}) }
   setItems((items) => [...items, item])
   scheduleTick()
   return item
@@ -100,7 +109,11 @@ export function updateItem(id: string, patch: Partial<BoardItem>): void {
 
 /** Ask first (removeBoardItemFlow); a run or mission it started stays. */
 export function removeItem(id: string): void {
-  setItems((items) => items.filter((i) => i.id !== id))
+  const i = getItem(id)
+  setItems((items) => items.filter((x) => x.id !== id))
+  // a shared board remembers the deletion, so a teammate's older copy doesn't bring the card back
+  const s = i && board.get().settings.find((x) => x.root === i.root)
+  if (s?.sync) saveBoardSettings({ ...s, removed: [...(s.removed ?? []), id].slice(-300) })
 }
 
 /** Drops a card into a column, above `before` or at the bottom. */
@@ -208,12 +221,20 @@ function finishJob(j: StoryJob): void {
 
 function addStories(j: StoryJob, stories: ReturnType<typeof parseStories>, by: string): void {
   const card = j.card ? getItem(j.card) : undefined
+  const ids: Array<string | undefined> = []
   stories.forEach((st, n) => {
     const fields = { title: st.title, body: st.details, labels: st.labels, priority: st.priority, by }
     if (n === 0 && card && (card.column === 'backlog' || card.column === 'proposed')) {
       updateItem(card.id, { ...fields, refining: undefined })
       if (card.column !== 'proposed') moveTo(card.id, 'proposed')
-    } else if (!onBoard(j.root, st.title)) addItem(j.root, { ...fields, column: 'proposed' })
+      ids.push(card.id)
+    } else ids.push(onBoard(j.root, st.title) ? undefined : addItem(j.root, { ...fields, column: 'proposed' }).id)
+  })
+  // a story may wait for one later in the list: resolve `after` once they are all on the board
+  stories.forEach((st, n) => {
+    const id = ids[n]
+    const me = id && getItem(id)
+    if (me && st.after?.length) updateItem(me.id, { blockedBy: resolveAfter(st.after, board.get().items, j.root).filter((k) => k !== me.key) })
   })
   setJobs((jobs) => jobs.map((x) => (x.mission === j.mission ? { ...x, filed: stories.length } : x)))
 }
@@ -264,6 +285,7 @@ function scheduleSync(): void {
 
 function sync(): void {
   followJobs()
+  followRetros()
   const t = now()
   let changed = false
   const items = board.get().items.map((i) => {
@@ -279,6 +301,7 @@ function sync(): void {
     const next = followWork(i, w.state, t)
     if (!next) return i
     changed = true
+    if ((next.state === 'finished' || next.state === 'failed') && next.state !== i.state) void measure(i.id)
     return next
   })
   if (changed) {
@@ -304,6 +327,7 @@ async function tick(): Promise<void> {
   ticking = true
   try {
     sync()
+    syncBoardFiles()
     await checkPrs()
     for (const s of board.get().settings) {
       for (const i of nextPickups(board.get().items, s)) if (!starting.has(i.id)) await startItem(i.id)
@@ -360,7 +384,200 @@ export async function startItem(id: string): Promise<void> {
     updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: (e as Error).message.split('\n')[0] })
   } finally {
     starting.delete(id)
-    if (front === 'mission-board') activatePanel(front)
+    if (front === 'board' || front === 'mission-board') activatePanel(front)
   }
   scheduleSync()
+}
+
+// ── what a card's work took ──────────────────────────────────────────
+
+/** Every mission that worked on a card: a run's stages, or the mission with its failovers, follow-ups and a Lead's workers. */
+export function missionsOf(i: BoardItem): Mission[] {
+  if (!i.started?.id) return []
+  const all = missions.get().list
+  if (i.started.type === 'run') return all.filter((m) => m.factory?.run === i.started!.id)
+  const out = new Map<string, Mission>()
+  const stack = [i.started.id]
+  while (stack.length) {
+    const id = stack.pop()!
+    const m = all.find((x) => x.id === id)
+    if (!m || out.has(id)) continue
+    out.set(id, m)
+    if (m.continuedBy) stack.push(m.continuedBy)
+    for (const x of all) if ((x.parent?.id === id && x.parent.kind !== 'second-opinion') || x.delegate?.lead === id) stack.push(x.id)
+  }
+  return [...out.values()]
+}
+
+/** Wall time, agent time and, for agents whose logs say, tokens and cost, saved on the card when its work finishes. */
+async function measure(id: string): Promise<void> {
+  const i = getItem(id)
+  if (!i?.started) return
+  const t = now()
+  const list = missionsOf(i)
+  const end = Math.max(i.started.at, ...list.map((m) => m.updatedAt))
+  const spent: Spent = { ms: Math.max(0, end - i.started.at), agentMs: timeIn(list, 'working', i.started.at, t, t), missions: list.length }
+  const reqs = list
+    .filter((m) => m.options.agent === 'codex' || (m.options.agent ?? 'claude') === 'claude')
+    .map((m) => ({ id: m.id, agent: m.options.agent ?? 'claude', cwd: m.cwd, from: m.createdAt, to: m.updatedAt, transcriptPath: m.transcriptPath }))
+  if (reqs.length) {
+    const usage = await window.api.usage.tokens(reqs).catch((): Record<string, TokenUsage | null> => ({}))
+    const sum = Object.values(usage).reduce<TokenUsage>((a, u) => (u ? addTokens(a, u) : a), NO_TOKENS)
+    if (tokenTotal(sum)) Object.assign(spent, { tokens: tokenTotal(sum), cost: sum.cost || undefined })
+  }
+  // only what it took is saved, not a change to the card: its place in the file stays as it was
+  setItems((items) => items.map((x) => (x.id === id ? { ...x, spent } : x)))
+}
+
+// ── retros: lessons from a card's work, into the project memory ──────
+
+/**
+ * A read-only mission looks back at how a card's work went (sent back, failed over, the review notes, the
+ * diff) and saves at most three lessons to .sldev/memory.md, which every later mission reads. Agents with the
+ * sldev tools save them with sldev_remember; others write them to a file the app adds.
+ */
+export async function startRetro(id: string): Promise<string> {
+  const i = getItem(id)
+  if (!i) throw new Error('That card is gone')
+  const list = missionsOf(i).sort((a, b) => a.createdAt - b.createdAt)
+  const first = list[0]
+  const run = i.started?.type === 'run' ? factory.get().runs.find((r) => r.id === i.started!.id) : undefined
+  const story: string[] = []
+  if (run) story.push(`Ran as the ${run.recipe.name} recipe (${Object.keys(run.nodes).length} stages), ${run.status}${run.pr ? `, pull request #${run.pr.number}` : ''}.`)
+  for (const m of list) {
+    const agent = getAgent(m.options.agent).name
+    const what = m.delegate ? `worker of the Lead` : m.parent?.kind === 'follow-up' ? 'sent back with a follow-up' : m.parent?.kind === 'failover' ? 'took over at a usage limit' : m.factory ? `stage ${m.factory.node}` : (m.kind?.name ?? 'Build')
+    story.push(`${agent}, ${what}: "${m.title}", ${m.status === 'failed' ? 'FAILED' : m.status}${m.limited ? ', hit its usage limit' : ''}${m.handoff ? `. Review notes: ${m.handoff.trim().slice(0, 600)}` : ''}${m.report && m.reportFrom !== 'terminal' ? `. Its report: ${m.report.trim().slice(0, 500)}` : ''}`)
+  }
+  if (i.note) story.push(`On the card: ${i.note}`)
+  const agent = getAgent(workspace.get().defaultAgent)
+  const tools = workspace.get().agentTools !== false && !!agent.mcpArgs
+  const dir = `${i.root}/.sldev/runs/retro-${now().toString(36)}`
+  const file = tools ? undefined : `${dir}/lessons.json`
+  if (file) await window.api.factory.prepare(dir)
+  const cwd = first?.cwd && (await window.api.fs.isDir(first.cwd).catch(() => false)) ? first.cwd : i.root
+  const base = first?.worktree?.base ?? first?.baseCommit
+  const before = (await window.api.memory.info(i.root).catch(() => null))?.entries ?? 0
+  // like story writing, the board stays in front; the retro's progress shows on its card
+  const front = activePanelId()
+  const m = await startMission({
+    prompt: retroPrompt({ card: i, story, base: cwd !== i.root || first?.baseCommit ? base : undefined, tools, file }),
+    brief: `Retro of #${i.key} ${i.title}`,
+    title: `Retro #${i.key} ${i.title}`.slice(0, 60),
+    root: i.root,
+    cwd,
+    options: { agent: agent.id, permissionMode: tools ? agent.readOnlyMode : undefined },
+    worktree: false,
+    kind: { id: 'retro', name: 'Retro', readOnly: true }
+  }).finally(() => front && activatePanel(front))
+  retroWatch.set(m.id, { card: i.id, file, before })
+  updateItem(i.id, { retro: { mission: m.id } })
+  return m.id
+}
+
+/** retros in flight: the lessons file, and how many memory entries there were before (tools add their own) */
+const retroWatch = new Map<string, { card: string; file?: string; before: number }>()
+
+function followRetros(): void {
+  // a retro the app was closed during: it is over once its mission is, lessons unknown
+  for (const i of board.get().items) {
+    if (!i.retro || i.retro.done || retroWatch.has(i.retro.mission)) continue
+    const m = missions.get().list.find((x) => x.id === i.retro!.mission)
+    if (!m || m.status === 'ended' || m.status === 'failed') setItems((items) => items.map((x) => (x.id === i.id ? { ...x, retro: { ...x.retro!, done: true } } : x)))
+  }
+  for (const [mission, w] of retroWatch) {
+    const m = missions.get().list.find((x) => x.id === mission)
+    const ended = !m || m.status === 'ended' || m.status === 'failed'
+    if (!ended && !(m.status === 'waiting' && (m.report || w.file))) continue
+    retroWatch.delete(mission)
+    void (async () => {
+      const card = getItem(w.card)
+      if (!card) return
+      if (w.file) {
+        const lessons = parseLessons((await window.api.factory.read(w.file)) ?? '')
+        if (!lessons.length && !ended) return void retroWatch.set(mission, w)
+        for (const l of lessons) await window.api.memory.remember(card.root, l.note, `retro of card #${card.key}`, l.paths).catch(() => undefined)
+        setItems((items) => items.map((x) => (x.id === card.id ? { ...x, retro: { mission, done: true, lessons: lessons.length } } : x)))
+      } else {
+        const after = (await window.api.memory.info(card.root).catch(() => null))?.entries ?? w.before
+        setItems((items) => items.map((x) => (x.id === card.id ? { ...x, retro: { mission, done: true, lessons: Math.max(0, after - w.before) } } : x)))
+      }
+    })()
+  }
+}
+
+// ── release notes ────────────────────────────────────────────────────
+
+/** The cards went out in a release: the next notes start after them. */
+export function markReleased(ids: string[], version: string): void {
+  setItems((items) => items.map((i) => (ids.includes(i.id) ? { ...i, released: version, updatedAt: now() } : i)))
+}
+
+// ── the board in git ─────────────────────────────────────────────────
+
+/** what this window last wrote to (or read from) each project's file, to tell a teammate's change from its own */
+const lastFile = new Map<string, string>()
+const flushing = new Map<string, Promise<void>>()
+
+/** Turning sharing on reads what's there first, so a teammate's board is merged, never overwritten. */
+export function setBoardSync(root: string, on: boolean): void {
+  const s = board.get().settings.find((x) => x.root === root) ?? defaultBoardSettings(root)
+  saveBoardSettings({ ...s, sync: on })
+  if (!on) board.set((b) => ({ ...b, syncError: { ...b.syncError, [root]: '' } }))
+}
+
+/** "Read the shared board now" and the window's focus: pick up a git pull. */
+export function syncBoardFiles(): void {
+  for (const s of board.get().settings) if (s.sync) void flushFile(s.root)
+}
+window.addEventListener('focus', syncBoardFiles)
+
+/**
+ * Brings `.sldev/board.json` and this board together: a file changed since we last saw it (a git pull, a
+ * teammate) is merged in first, then the merged board is written back when it differs. Conflict markers
+ * stop both, with the reason on the board, until they are resolved.
+ */
+function flushFile(root: string): Promise<void> {
+  const prev = flushing.get(root) ?? Promise.resolve()
+  const next = prev.then(async () => {
+    const s = board.get().settings.find((x) => x.root === root)
+    if (!s?.sync) return
+    const disk = await window.api.board.readFile(root)
+    if (disk !== null && disk !== lastFile.get(root)) {
+      const parsed = parseBoardFile(disk)
+      if (parsed.error) return void board.set((b) => ({ ...b, syncError: { ...b.syncError, [root]: parsed.error! } }))
+      const merged = mergeBoardFile(board.get().items, root, parsed.file!, s.removed)
+      if (merged.changed) {
+        board.set((b) => ({ ...b, items: merged.items }))
+        const { items, settings, jobs } = board.get()
+        void window.api.store.set('board', { items, settings, jobs })
+        scheduleTick()
+      }
+    }
+    const text = boardFileText(board.get().items, root, s.removed)
+    if (text !== disk) await window.api.board.writeFile(root, text)
+    lastFile.set(root, text)
+    if (board.get().syncError[root]) board.set((b) => ({ ...b, syncError: { ...b.syncError, [root]: '' } }))
+  })
+  const done = next.catch((e: Error) => board.set((b) => ({ ...b, syncError: { ...b.syncError, [root]: e.message.split('\n')[0] } })))
+  flushing.set(root, done)
+  return done
+}
+
+// ── a pull request description from a card ───────────────────────────
+
+/** The card as a PR description: its story, the agent's report and the diff, ready to paste. */
+export async function prDescriptionOf(id: string): Promise<string> {
+  const i = getItem(id)
+  if (!i) return ''
+  const list = missionsOf(i).sort((a, b) => a.createdAt - b.createdAt)
+  // the last word: a Lead's own report, or the last stage or follow-up that reported
+  const lead = list.find((m) => m.id === i.started?.id)
+  const reporter = (lead?.kind?.id === 'lead' ? lead : undefined) ?? [...list].reverse().find((m) => m.report && m.reportFrom !== 'terminal' && !m.delegate)
+  const first = list[0]
+  const base = first?.worktree?.base ?? first?.baseCommit
+  const cwd = (lead ?? first)?.cwd
+  const stat = cwd && base ? await window.api.git.diffStat(cwd, base).catch(() => undefined) : undefined
+  const agents = [...new Set(list.filter((m) => !m.eval).map((m) => getAgent(m.options.agent).name))].join(', ')
+  return prDescription(i, { report: reporter?.report, agent: agents || undefined, diff: stat && stat.files ? stat : undefined })
 }

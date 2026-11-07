@@ -45,7 +45,8 @@ export function canDelegate(limits: LeadLimits, workers: WorkerView[]): string |
  * project's evals (pass rate, then partial credit, then speed), else the default. Explains why.
  */
 export function routeAgent(attempts: EvalAttempt[], installed: string[], fallback: string): { agent: string; model?: string; why: string } {
-  const best = scoreboard(attempts).find((s) => installed.includes(s.contestant.agent))
+  // prompt variants measure instructions, not agents: route by the plain attempts
+  const best = scoreboard(attempts.filter((a) => !a.contestant.prompt)).find((s) => installed.includes(s.contestant.agent))
   if (!best || !best.passed) return { agent: fallback, why: 'your default agent (no eval results to route by yet)' }
   return { agent: best.contestant.agent, model: best.contestant.model, why: `best on your evals: ${best.passed}/${best.attempts} passed (${contestantKey(best.contestant)})` }
 }

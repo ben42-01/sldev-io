@@ -30,6 +30,25 @@ export async function writeEval(p: string, text: string): Promise<void> {
   await fsp.writeFile(abs, text)
 }
 
+const promptsDir = (root: string): string => join(evalsDir(root), 'prompts')
+
+/** Prompt variants: Markdown files whose text goes before an eval's brief, to compare instructions. */
+export async function listPrompts(root: string): Promise<Array<{ path: string; name: string; text: string }>> {
+  const dir = promptsDir(root)
+  const files = (await fsp.readdir(dir).catch(() => [])).filter((f) => /\.md$/.test(f)).sort()
+  return Promise.all(files.map(async (f) => ({ path: join(dir, f), name: f.replace(/\.md$/, ''), text: await fsp.readFile(join(dir, f), 'utf8') })))
+}
+
+export async function savePrompt(root: string, slug: string, text: string): Promise<string> {
+  const dir = promptsDir(root)
+  await fsp.mkdir(dir, { recursive: true })
+  const safe = slug.replace(/[^a-z0-9-]/g, '') || 'prompt'
+  let p = join(dir, `${safe}.md`)
+  for (let i = 2; await fsp.stat(p).then(() => true, () => false); i++) p = join(dir, `${safe}-${i}.md`)
+  await fsp.writeFile(p, text)
+  return p
+}
+
 export interface CheckRun {
   code: number | null
   output: string

@@ -308,9 +308,9 @@ export type McpEvent =
   | { mission: string; type: 'output'; text: string }
   | { mission: string; type: 'done'; text?: string }
   /** an agent filed a card on the work board (it lands in Proposed) */
-  | { mission: string; type: 'board-add'; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low' } }
+  | { mission: string; type: 'board-add'; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low'; after?: Array<number | string> } }
   /** an agent rewrote a card it was asked to refine (it moves to Proposed) */
-  | { mission: string; type: 'board-update'; key: number; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low' } }
+  | { mission: string; type: 'board-update'; key: number; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low'; after?: Array<number | string> } }
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
 

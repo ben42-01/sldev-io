@@ -104,7 +104,7 @@ export function Bento() {
           <a className="bento-card" href="/docs/evals" style={{ '--glow': '#2ee6a822' } as React.CSSProperties}>
             <span className="bento-tag">new</span>
             <h3>Evals on your code</h3>
-            <p>Which agent and model does your work best, measured with your tests.</p>
+            <p>Which agent, model and prompt does your work best, measured with your tests.</p>
             <div className="bento-art art-bars" aria-hidden="true">
               <div>Codex<i><b style={{ width: '90%' }} /></i>90%</div>
               <div>Claude Code<i><b style={{ width: '80%' }} /></i>80%</div>
@@ -114,7 +114,7 @@ export function Bento() {
           <a className="bento-card" href="/docs/board">
             <span className="bento-tag">new</span>
             <h3>A board agents work from</h3>
-            <p>Agents write the stories, you approve, pick-up does the rest.</p>
+            <p>Agents write the stories in order, you approve, pick-up does the rest. Every card shows what it cost.</p>
             <div className="bento-art art-cols" aria-hidden="true">
               <div><em>proposed</em><span /><span /></div>
               <div><em>ready</em><span /><span /></div>

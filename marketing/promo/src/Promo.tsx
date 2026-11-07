@@ -5,14 +5,14 @@ import { Agents, Cta, Failover } from './scenes/Closing'
 import { FactoryScene } from './scenes/FactoryScene'
 import { Missions } from './scenes/Missions'
 import { INTRO_BARS, Intro } from './scenes/Intro'
-import { Review } from './scenes/Review'
+import { LeadScene } from './scenes/LeadScene'
 
 // The story, in bars of the track (2 s each at 120 BPM). Every cut lands on a downbeat.
 export const SCENES = [
   // chaos (5 bars), the turn (2) and the logo on the drop (2), as one continuous shot
   { id: 'intro', bars: INTRO_BARS, Scene: Intro, backdrop: false },
   { id: 'missions', bars: 8, Scene: Missions, backdrop: true },
-  { id: 'review', bars: 5, Scene: Review, backdrop: true },
+  { id: 'lead', bars: 6, Scene: LeadScene, backdrop: true },
   { id: 'factory', bars: 8, Scene: FactoryScene, backdrop: true },
   { id: 'failover', bars: 5, Scene: Failover, backdrop: true },
   { id: 'agents', bars: 5, Scene: Agents, backdrop: true },

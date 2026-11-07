@@ -46,7 +46,8 @@ src/main/       Electron main process (Node): everything privileged
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
-  evals.ts        eval files (.sldev/evals/*.yml) and the check commands of an eval attempt (exit code + output, killed on timeout)
+  evals.ts        eval files (.sldev/evals/*.yml), prompt variants (.sldev/evals/prompts/*.md) and the check commands of an eval attempt (exit code + output, killed on timeout)
+  boardFile.ts    the work board shared through git: .sldev/board.json, written atomically (merging is in src/shared/board.ts)
   profiles.ts     project agent profiles (.sldev/agents/*.md) and export to Claude/OpenCode agent files
   rules.ts        rules sync: .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
   usage.ts        token usage read from local agent logs (Claude transcripts, Codex sessions); reads only the
@@ -65,7 +66,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
-                  board.ts (the work board: columns, pick-up order, how a card follows its run, story prompts and parsing), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
+                  board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
@@ -175,12 +176,22 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   always land in Proposed, and only a person approves them into Agent ready, so agents can't feed pick-up themselves.
   Story missions are read-only; agents without the sldev tools write their stories to a JSON file under `.sldev/runs/`. A merged PR
   (asked through gh every 5 minutes for cards in Review) moves its card to Done; imported issues are closed by their run's PR.
+  A card with `blockedBy` (card numbers; agents set it with `after`) isn't picked up until those are Done; manual Start can
+  override from the menu. `spent` (time, agents, tokens from local logs) is measured once its work finishes and is not a change
+  to the card (no `updatedAt` bump). Retros are read-only missions whose lessons go to `.sldev/memory.md` (sldev_remember, or a
+  JSON file the app adds), never anywhere else.
+- **Board in git** (`.sldev/board.json`, opt-in per project, `src/main/boardFile.ts`): only the shared fields are written
+  (`SHARED` in `src/shared/board.ts`); runs, missions, state and spend stay local. The file is read before it is ever written
+  (focus, every tick, before each write), merged card by card by `updatedAt`, deletions kept as tombstones. Conflict markers or
+  bad JSON stop the sync with the reason on the board and the file untouched. The app never commits it.
 - **Evals** (`src/shared/evals.ts`, Mission Control → Evals): every attempt gets its own worktree from the eval's `base`
   (default: HEAD when the run started), setup is committed before the agent starts so the diff is the agent's alone, and the
   agent runs in print mode with the factory's unattended mode. Checks run after it exits; a judge is a second print-mode
   mission that writes `VERDICT: PASS|FAIL` to a file under `.sldev/runs`. Eval missions carry `eval` (like `factory`): no
   notifications, no failover, kept out of the missions board and Recap. Only while the app is open; a restart stops running
   attempts (Continue starts the queue again), and nothing is pushed. Deleting a run removes its worktrees and branches.
+  Prompt variants (`.sldev/evals/prompts/*.md`) are part of the contestant (`agent/model+prompt`) and go before the brief;
+  `routeAgent` ignores attempts with a variant, since they measure instructions, not agents.
 - **Lead missions** (kind `lead`, `src/shared/lead.ts`, `state/lead.ts`): only a Lead may call sldev_delegate, wait, followup and
   integrate (main checks the caller's kind; the CLI has none). Main can't start missions, so it forwards those calls to the
   window (`lead:request`/`lead:reply`) and waits. Workers run in print mode with the unattended mode, each in a worktree

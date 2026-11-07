@@ -1,16 +1,29 @@
-import { ChevronDown, CheckCheck, CircleDot, Plus, RefreshCw, Settings2, Sparkles, SquareKanban } from 'lucide-react'
+import { ChevronDown, CheckCheck, CircleDot, GitBranch, Plus, RefreshCw, Settings2, Sparkles, SquareKanban, Tag } from 'lucide-react'
 import { BoardView, openBoardDialog } from '../components/BoardView'
 import { showContextMenu, type MenuItem } from '../components/ContextMenu'
-import { approve, refreshPrs, useBoardItems, useBoardSettings, useStoryJobs } from '../state/board'
+import { approve, refreshPrs, setBoardSync, syncBoardFiles, useBoardItems, useBoardSettings, useStoryJobs } from '../state/board'
+import { confirmAction } from '../components/Modal'
+import { unreleased } from '@shared/board'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
 import { openPanel } from './dockApi'
 
 /** The work board in its own tab: agents write stories, you approve them, the factory picks them up. */
-export function openBoard(then?: 'stories'): void {
+export function openBoard(then?: 'stories' | 'release'): void {
   openPanel('board', 'board', 'Board')
-  if (then === 'stories') setTimeout(() => openBoardDialog({ type: 'stories' }), 50)
+  if (then) setTimeout(() => openBoardDialog({ type: then }), 50)
+}
+
+async function shareFlow(root: string | null): Promise<void> {
+  if (!root) return
+  const ok = await confirmAction({
+    title: 'Share the board through git?',
+    message: 'The cards are kept in .sldev/board.json in your project. Commit it, and teammates who pull it see the same board; their changes come in when you pull. If the file is already there, it is merged with this board first.',
+    keeps: ['Which runs and missions worked on a card: they stay on this machine', 'Committing and pushing: that stays yours, nothing is committed for you'],
+    confirmLabel: 'Share the board'
+  })
+  if (ok) setBoardSync(root, true)
 }
 
 export function BoardPanel(): React.JSX.Element {
@@ -26,7 +39,8 @@ export function BoardPanel(): React.JSX.Element {
     proposed.length && `${proposed.length} to approve`,
     count('ready') && `${count('ready')} agent ready`,
     count('progress') && `${count('progress')} in progress`,
-    `pick-up ${settings.pickup ? 'on' : 'off'}`
+    `pick-up ${settings.pickup ? 'on' : 'off'}`,
+    settings.sync && 'shared in git'
   ]
     .filter(Boolean)
     .join(' · ')
@@ -37,7 +51,13 @@ export function BoardPanel(): React.JSX.Element {
     { type: 'separator' },
     { label: `Approve all proposed${proposed.length ? ` (${proposed.length})` : ''}`, icon: <CheckCheck size={13} />, disabled: !proposed.length, run: () => approve(proposed.map((i) => i.id)) },
     { label: 'Check pull requests now', icon: <RefreshCw size={13} />, run: refreshPrs },
-    { label: 'Pick-up settings…', icon: <Settings2 size={13} />, run: () => openBoardDialog({ type: 'pickup' }) }
+    { label: `Release notes from Done${unreleased(items).length ? ` (${unreleased(items).length})` : ''}…`, icon: <Tag size={13} />, run: () => openBoardDialog({ type: 'release' }) },
+    { label: 'Pick-up settings…', icon: <Settings2 size={13} />, run: () => openBoardDialog({ type: 'pickup' }) },
+    { type: 'separator' },
+    settings.sync
+      ? { label: 'Stop sharing the board through git', icon: <GitBranch size={13} />, run: () => root && setBoardSync(root, false) }
+      : { label: 'Share the board through git…', icon: <GitBranch size={13} />, run: () => void shareFlow(root) },
+    ...(settings.sync ? [{ label: 'Read .sldev/board.json now', icon: <RefreshCw size={13} />, run: syncBoardFiles }] : [])
   ]
   return (
     <div className="mc board-panel">

@@ -4,6 +4,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { ContextMenuHost } from './components/ContextMenu'
 import { PromptHost } from './components/PromptHost'
 import { ConfirmHost } from './components/Modal'
+import { ToastHost } from './components/Toast'
 import { RecapHost } from './components/RecapDialog'
 import { MissionDetailsHost } from './components/MissionDetails'
 import { NewMissionHost } from './components/MissionsView'
@@ -88,6 +89,7 @@ export function App(): React.JSX.Element {
       <NewRunHost />
       <ImportRecipeHost />
       <ConfirmHost />
+      <ToastHost />
       <RecapHost />
     </div>
   )

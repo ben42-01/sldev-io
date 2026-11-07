@@ -79,7 +79,8 @@ export const MCP_TOOLS = [
         title: { type: 'string', description: 'What needs doing, under 100 characters' },
         details: { type: 'string', description: 'Markdown: why, what to do (files), acceptance criteria, how to check' },
         labels: { type: 'array', items: { type: 'string' }, description: 'e.g. bug, tests, refactor' },
-        priority: { type: 'string', enum: ['high', 'normal', 'low'] }
+        priority: { type: 'string', enum: ['high', 'normal', 'low'] },
+        after: { type: 'array', items: { type: ['string', 'number'] }, description: 'Only when it cannot start before other work is done: card numbers, or the titles of stories you filed before this one. Agents pick it up once those are Done.' }
       },
       required: ['title']
     }
@@ -95,7 +96,8 @@ export const MCP_TOOLS = [
         title: { type: 'string', description: 'What needs doing, under 100 characters' },
         details: { type: 'string', description: 'Markdown: why, what to do (files), acceptance criteria, how to check' },
         labels: { type: 'array', items: { type: 'string' } },
-        priority: { type: 'string', enum: ['high', 'normal', 'low'] }
+        priority: { type: 'string', enum: ['high', 'normal', 'low'] },
+        after: { type: 'array', items: { type: ['string', 'number'] }, description: 'Card numbers or story titles this one waits for' }
       },
       required: ['key', 'title']
     }

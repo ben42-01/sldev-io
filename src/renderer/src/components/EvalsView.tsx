@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, ExternalLink, FileDiff, FlaskConical, Pause, Play, Plus, RefreshCw, Trash2, Trophy, X } from 'lucide-react'
-import { attemptDone, cellTone, contestantKey, scoreboard, scoreboardMarkdown, type Contestant, type EvalAttempt, type EvalRun, type Score } from '@shared/evals'
+import { attemptDone, cellTone, contestantKey, scoreboard, scoreboardMarkdown, withPrompts, type Contestant, type EvalAttempt, type EvalRun, type Score } from '@shared/evals'
 import type { Signal } from '@shared/status'
 import { Modal, confirmAction } from './Modal'
 import { StatusDot } from './StatusDot'
@@ -8,11 +8,12 @@ import { Empty } from './States'
 import { TimeAgo } from './TimeAgo'
 import { openMissionDetails } from './MissionDetails'
 import { getAgent, useAgents } from '../state/agents'
-import { continueRun, evals, loadEvalFiles, newEvalFile, removeRun, startEvalRun, stopRun, useEvalRuns, type EvalFile } from '../state/evals'
+import { continueRun, evals, loadEvalFiles, loadPrompts, newEvalFile, newPromptFile, removeRun, startEvalRun, stopRun, useEvalRuns, type EvalFile, type PromptFile } from '../state/evals'
 import { reviewMission } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { openInEditor } from '../lib/actions'
+import { toast } from './Toast'
 
 /**
  * Mission Control → Evals: the project's eval files, a leaderboard of every attempt so far, and each
@@ -21,7 +22,7 @@ import { openInEditor } from '../lib/actions'
 
 const NO_FILES: EvalFile[] = []
 
-export const contestantLabel = (c: Contestant): string => `${getAgent(c.agent).name}${c.model ? ` · ${c.model}` : ''}`
+export const contestantLabel = (c: Contestant): string => `${getAgent(c.agent).name}${c.model ? ` · ${c.model}` : ''}${c.prompt ? ` · ${c.prompt.name}` : ''}`
 
 const pct = (n: number): string => `${Math.round(n * 100)}%`
 const lines = (n: number): string => `${n} line${n === 1 ? '' : 's'}`
@@ -128,7 +129,14 @@ function Leaderboard({ scores }: { scores: Score[] }): React.JSX.Element {
           {scores.map((s, n) => (
             <tr key={s.key} className={n === 0 ? 'lead' : undefined}>
               <td className="muted">{n + 1}</td>
-              <td className="evals-who">{contestantLabel(s.contestant)}</td>
+              <td className="evals-who">
+                {contestantLabel(s.contestant)}
+                {s.contestant.prompt && (
+                  <button type="button" className="icon-btn evals-copy-prompt" title={`Copy the “${s.contestant.prompt.name}” prompt`} aria-label="Copy the prompt" onClick={() => void window.api.clipboard.writeText(s.contestant.prompt!.text).then(() => toast(`Copied the “${s.contestant.prompt!.name}” prompt`))}>
+                    <Copy size={11} />
+                  </button>
+                )}
+              </td>
               <td>
                 <div className="evals-rate">
                   <span className="evals-bar"><span style={{ width: pct(s.attempts ? s.passed / s.attempts : 0) }} /></span>
@@ -255,9 +263,38 @@ function RunDialog({ root, files, onClose }: { root: string; files: EvalFile[]; 
   const [repeat, setRepeat] = useState(1)
   const [parallel, setParallel] = useState(1)
   const [busy, setBusy] = useState(false)
+  const [prompts, setPrompts] = useState<PromptFile[]>([])
+  const [usePrompts, setUsePrompts] = useState<Set<string>>(new Set())
+  const [asWritten, setAsWritten] = useState(true)
+  const [newName, setNewName] = useState<string | null>(null)
+  const reloadPrompts = (): void => void loadPrompts(root).then(setPrompts)
+  useEffect(() => {
+    reloadPrompts()
+    window.addEventListener('focus', reloadPrompts)
+    return () => window.removeEventListener('focus', reloadPrompts)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [root])
+  const chosen = prompts.filter((p) => usePrompts.has(p.name))
+  const all = withPrompts(contestants, chosen, asWritten)
   const keys = contestants.map(contestantKey)
   const dupes = keys.length !== new Set(keys).size
-  const total = picked.size * contestants.length * repeat
+  const total = picked.size * all.length * repeat
+  const togglePrompt = (n: string): void => setUsePrompts((p) => {
+    const next = new Set(p)
+    if (next.has(n)) next.delete(n)
+    else next.add(n)
+    return next
+  })
+  const createPrompt = async (): Promise<void> => {
+    const name = newName?.trim()
+    if (!name) return setNewName(null)
+    const p = await newPromptFile(root, name)
+    const list = await loadPrompts(root)
+    setPrompts(list)
+    const made = list.find((x) => x.path === p)
+    if (made) setUsePrompts((s) => new Set([...s, made.name]))
+    setNewName(null)
+  }
   const toggle = (n: string): void => setPicked((p) => {
     const next = new Set(p)
     if (next.has(n)) next.delete(n)
@@ -267,7 +304,7 @@ function RunDialog({ root, files, onClose }: { root: string; files: EvalFile[]; 
   const set = (i: number, patch: Partial<Contestant>): void => setContestants((cs) => cs.map((c, n) => (n === i ? { ...c, ...patch, model: (patch.model ?? c.model)?.trim() || undefined } : c)))
   const go = async (): Promise<void> => {
     setBusy(true)
-    await startEvalRun(root, { specs: files.filter((f) => picked.has(f.spec!.name)).map((f) => f.spec!), contestants, repeat, parallel })
+    await startEvalRun(root, { specs: files.filter((f) => picked.has(f.spec!.name)).map((f) => f.spec!), contestants: all, repeat, parallel })
     onClose()
   }
   return (
@@ -316,6 +353,37 @@ function RunDialog({ root, files, onClose }: { root: string; files: EvalFile[]; 
           })}
           <button type="button" className="btn sm evals-add" onClick={() => setContestants((cs) => [...cs, { agent: def }])}><Plus size={12} /> Add an agent or model</button>
           {dupes && <span className="field-hint evals-error">The same agent and model is listed twice.</span>}
+        </div>
+        <div className="field">
+          <span>Prompts</span>
+          <ul className="board-import-list">
+            <li>
+              <label className="check">
+                <input type="checkbox" checked={asWritten || !chosen.length} disabled={!chosen.length} onChange={(e) => setAsWritten(e.target.checked)} />
+                <span className="board-import-title">As written</span>
+                <span className="muted small">the eval's brief alone</span>
+              </label>
+            </li>
+            {prompts.map((p) => (
+              <li key={p.path}>
+                <label className="check">
+                  <input type="checkbox" checked={usePrompts.has(p.name)} onChange={() => togglePrompt(p.name)} />
+                  <span className="board-import-title">{p.name}</span>
+                  <span className="muted small evals-prompt-peek">{p.text.replace(/<!--[\s\S]*?-->/g, '').trim().split('\n')[0]}</span>
+                </label>
+                <button type="button" className="icon-btn" title="Open in your editor" aria-label="Open in your editor" onClick={() => void openInEditor(p.path)}><ExternalLink size={12} /></button>
+              </li>
+            ))}
+          </ul>
+          {newName === null ? (
+            <button type="button" className="btn sm evals-add" onClick={() => setNewName('')}><Plus size={12} /> New prompt variant</button>
+          ) : (
+            <div className="evals-contestant">
+              <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void createPrompt() } if (e.key === 'Escape') { e.stopPropagation(); setNewName(null) } }} placeholder="A name, e.g. tests first" aria-label="Prompt name" />
+              <button type="button" className="btn sm" onClick={() => void createPrompt()}>Create and edit</button>
+            </div>
+          )}
+          <span className="field-hint">Each variant's text goes before the brief, for every agent: measure which instructions work on your code before you put them in your rules. Files in .sldev/evals/prompts.</span>
         </div>
         <div className="field-row">
           <label className="field">

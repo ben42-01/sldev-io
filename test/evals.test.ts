@@ -107,3 +107,21 @@ describe('scoreboard', () => {
     expect(md).toContain('| codex | 100% (2/2) | 100% | 40s | 11 lines | 1/1 | 1/1 |')
   })
 })
+
+describe('prompt variants', () => {
+  it('crosses every agent with every variant, as written first', async () => {
+    const { withPrompts, contestantKey, attemptBrief } = await import('@shared/evals')
+    const cs = withPrompts([{ agent: 'claude' }, { agent: 'codex', model: 'o4' }], [{ name: 'terse', text: 'Be brief.' }], true)
+    expect(cs.map(contestantKey)).toEqual(['claude', 'claude+terse', 'codex/o4', 'codex/o4+terse'])
+    expect(withPrompts([{ agent: 'claude' }], [{ name: 'a', text: 'x' }], false).map(contestantKey)).toEqual(['claude+a'])
+    expect(withPrompts([{ agent: 'claude' }], [], false).map(contestantKey)).toEqual(['claude'])
+    expect(attemptBrief({ brief: 'Fix it' }, cs[1])).toBe('Be brief.\n\nFix it')
+    expect(attemptBrief({ brief: 'Fix it' }, cs[0])).toBe('Fix it')
+  })
+  it('routing ignores prompt variants', async () => {
+    const { routeAgent } = await import('@shared/lead')
+    const a = (agent: string, status: 'passed' | 'failed', prompt?: { name: string; text: string }) => ({ id: Math.random().toString(), eval: 'e', contestant: { agent, ...(prompt ? { prompt } : {}) }, status, checks: [{ label: 'x', ok: status === 'passed' }] })
+    const r = routeAgent([a('codex', 'passed', { name: 'p', text: 't' }), a('claude', 'passed'), a('codex', 'failed')], ['claude', 'codex'], 'claude')
+    expect(r.agent).toBe('claude')
+  })
+})

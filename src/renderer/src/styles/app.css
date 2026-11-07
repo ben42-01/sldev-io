@@ -6474,7 +6474,7 @@ a {
   color: var(--fg-muted);
 }
 .board-approve-all {
-  margin-left: 2px;
+  margin: -4px 0 -4px 2px;
 }
 /* a story-writing mission at the top of Proposed */
 .board-job {
@@ -6570,6 +6570,62 @@ button.board-label:hover {
 }
 .board-note.error {
   color: var(--status-error);
+}
+.board-waits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--status-attention);
+}
+.board-waits.unblocks {
+  color: var(--fg-muted);
+}
+.board-waits .board-key {
+  font-size: 10.5px;
+  color: inherit;
+}
+.board-spent {
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.board-release-notes {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-strong);
+  font-size: 12px;
+  color: var(--fg);
+  transform: translateX(-50%);
+  animation: toast-in 160ms ease-out;
+}
+.toast svg {
+  color: var(--status-working);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
 .board-card-foot {
   display: flex;
@@ -6690,6 +6746,34 @@ button.board-label:hover {
 }
 
 /* ── evals (Mission Control → Evals) ─────────────────────────── */
+.board-import-list li:has(> .icon-btn) {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+}
+.board-import-list li:has(> .icon-btn) .check {
+  flex: 1;
+}
+.evals-prompt-peek {
+  flex: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-import-list .evals-prompt-peek ~ .board-import-title,
+.board-import-list .check:has(.evals-prompt-peek) .board-import-title {
+  flex: none;
+  max-width: 40%;
+}
+.evals-copy-prompt {
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.6;
+}
+.evals-copy-prompt:hover {
+  opacity: 1;
+}
 .evals-page {
   gap: 14px;
 }

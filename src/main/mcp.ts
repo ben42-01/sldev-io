@@ -87,7 +87,7 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
       const agent = self.options.agent ?? 'claude'
       // stories it was asked to write carry no footer; follow-up work it found says where it came from
       const footer = self.kind?.id === 'stories' ? '' : `Filed by ${agent} during mission "${self.title}".`
-      deps.send({ mission: self.id, type: 'board-add', card: { title: card.title, body: [card.details, footer].filter(Boolean).join('\n\n'), labels: card.labels, priority: card.priority } })
+      deps.send({ mission: self.id, type: 'board-add', card: { title: card.title, body: [card.details, footer].filter(Boolean).join('\n\n'), labels: card.labels, priority: card.priority, after: card.after } })
       return { text: `Filed "${card.title}" in Proposed.` }
     }
     case 'sldev_board_update': {
@@ -98,7 +98,7 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
       if (target.column !== 'backlog' && target.column !== 'proposed') return { error: `#${key} is in ${target.column}: only cards in Backlog or Proposed can be rewritten.` }
       const card = storyDraft(r.args)
       if (!card) return { error: 'title is empty' }
-      deps.send({ mission: self.id, type: 'board-update', key, card: { title: card.title, body: card.details, labels: card.labels, priority: card.priority } })
+      deps.send({ mission: self.id, type: 'board-update', key, card: { title: card.title, body: card.details, labels: card.labels, priority: card.priority, after: card.after } })
       return { text: `Rewrote #${key}; it waits in Proposed for approval.` }
     }
     case 'sldev_delegate':

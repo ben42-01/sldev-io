@@ -1370,6 +1370,82 @@ const board: DocPage = {
       )
     },
     {
+      id: 'waits',
+      title: 'Cards that wait for others',
+      body: (
+        <>
+          <p>
+            A card can wait for others: set <strong>Waits for</strong> (card numbers) when you edit it. Pick-up skips it until every card it
+            waits for is Done, then starts it on its own, so "Create a team" goes before "Invite people to a team" without you watching.
+            The card says what it waits for, and the one it waits for says what it unblocks. A loop is refused.
+          </p>
+          <p>
+            Agents that write stories set this too: a story filed <code>after</code> another (by its title or number) waits for it.{' '}
+            <strong>Start now</strong> from the card's menu still starts it early if you want.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'spent',
+      title: 'What the work took, and the PR description',
+      body: (
+        <>
+          <p>
+            When a card's run or mission finishes, the card shows what it took: the time from start to finish, how many agents worked on it
+            (stages, follow-ups, a Lead's workers) and, for agents whose logs say (Claude Code, Codex), the tokens and their cost at API list
+            prices. The Done column adds them up for a release.
+          </p>
+          <p>
+            <strong>Copy as PR description</strong> on a card gives Markdown for your pull request: the story's why, the agent's own report
+            of what changed, the acceptance criteria as boxes to tick, how to check it, <code>Closes #42</code> for an imported issue, and the
+            diff size.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'retro',
+      title: 'Retros into the project memory',
+      body: (
+        <p>
+          <strong>Retro: save lessons to memory</strong> on a finished card starts a read-only mission that looks back at how the work went:
+          what was sent back, what failed over at a usage limit, the review notes, the diff. It saves at most three lessons the next agent
+          needs (a convention it missed, a command that has to run, a gotcha) to <a href="/docs/context">.sldev/memory.md</a>, which every
+          later mission reads. No summaries of the change, and nothing when nothing is worth remembering. The card shows how many it left.
+        </p>
+      )
+    },
+    {
+      id: 'release',
+      title: 'Release notes from Done',
+      body: (
+        <p>
+          The tag on the Done column (or <strong>Release notes from Done</strong> in the Board menu) writes release notes from the cards
+          finished since the last ones, grouped by label: New, Fixes, Docs and Under the hood, with issue numbers. Edit them, copy them,
+          and <strong>Copy and mark released</strong> so the next notes start after these cards.
+        </p>
+      )
+    },
+    {
+      id: 'git',
+      title: 'Share the board through git',
+      body: (
+        <>
+          <p>
+            <strong>Share the board through git</strong> (Board menu) keeps the cards in <code>.sldev/board.json</code> in your project.
+            Commit it, and everyone who pulls sees the same board; their changes come in when the window gets focus after a pull. Each card's
+            newer side wins, a deleted card stays deleted, and which runs and missions worked on a card stays on the machine that ran them.
+          </p>
+          <Note>
+            The file is written as stable, two-space JSON sorted by card number, so a change is a readable diff. If a merge leaves conflict
+            markers in it, the board says so and waits until you resolve them; it never overwrites the file. sldev-io doesn't commit or push
+            it for you.
+          </Note>
+        </>
+      )
+    },
+    {
       id: 'github',
       title: 'GitHub issues and pull requests',
       body: (
@@ -1440,6 +1516,28 @@ checks:
           <p>
             Every attempt gets its own worktree from the eval's base. Setup is committed first, so the diff is the agent's alone. The agent
             runs in print mode with the unattended mode, then the checks run. Nothing is pushed, and deleting a run removes its worktrees.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'prompts',
+      title: 'Tune your prompts',
+      body: (
+        <>
+          <p>
+            Evals measure instructions as well as agents. A prompt variant is a Markdown file in <code>.sldev/evals/prompts/</code> whose
+            text goes before the eval's brief. In <strong>Run evals</strong>, tick the variants to compare (and <em>As written</em>, the brief
+            alone): every agent runs every eval with each of them, and the matrix and leaderboard show them side by side.
+          </p>
+          <Code file=".sldev/evals/prompts/tests-first.md">{`
+Before you change anything, read the tests next to the code you will touch.
+Keep the change as small as the task allows, and run the tests before you finish.
+`}</Code>
+          <p>
+            <strong>New prompt variant</strong> writes one from a template and opens it in your editor. When one wins, copy it from the
+            leaderboard into <a href="/docs/agents#rules">your rules</a> or a mission kind. Routing for a Lead's <code>auto</code> uses the
+            plain attempts only, since a variant measures the words, not the agent.
           </p>
         </>
       )

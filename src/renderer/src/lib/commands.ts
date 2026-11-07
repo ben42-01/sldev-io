@@ -197,6 +197,7 @@ export function staticCommands(): Command[] {
     { id: 'missions.board', category: 'Agents', title: 'Open Mission Control (missions, factory runs, usage)', run: () => openMissionControl('missions') },
     { id: 'board.open', category: 'Agents', title: 'Open the work board (Backlog → Proposed → Agent ready → Review)', run: () => openBoard() },
     { id: 'board.stories', category: 'Agents', title: 'Write stories with an agent (they land on the board to approve)', run: () => openBoard('stories') },
+    { id: 'board.release', category: 'Agents', title: 'Release notes from the board’s Done cards', run: () => openBoard('release') },
     { id: 'evals.open', category: 'Agents', title: 'Open evals: measure agents and models on this project (scoreboard)', run: () => openMissionControl('evals') },
     { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
     { id: 'factory.run', category: 'Factory', title: 'New factory run…', run: () => openNewRun() },

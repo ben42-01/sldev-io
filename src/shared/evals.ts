@@ -97,9 +97,24 @@ export const slugifyEval = (name: string): string => name.toLowerCase().replace(
 export interface Contestant {
   agent: string
   model?: string
+  /** a prompt variant: instructions that go before the eval's brief (a file in .sldev/evals/prompts) */
+  prompt?: { name: string; text: string }
 }
 
-export const contestantKey = (c: Contestant): string => (c.model ? `${c.agent}/${c.model}` : c.agent)
+export const contestantKey = (c: Contestant): string => `${c.model ? `${c.agent}/${c.model}` : c.agent}${c.prompt ? `+${c.prompt.name}` : ''}`
+
+/** Every agent with every prompt variant; `asWritten` keeps the brief alone as one of them. */
+export function withPrompts(contestants: Contestant[], prompts: Array<{ name: string; text: string }>, asWritten: boolean): Contestant[] {
+  const variants: Array<Contestant['prompt']> = [...(asWritten || !prompts.length ? [undefined] : []), ...prompts.map((p) => ({ name: p.name, text: p.text }))]
+  return contestants.flatMap((c) => variants.map((prompt) => ({ agent: c.agent, ...(c.model ? { model: c.model } : {}), ...(prompt ? { prompt } : {}) })))
+}
+
+/** What the agent of an attempt is told: the variant's instructions, then the task. */
+export const attemptBrief = (spec: Pick<EvalSpec, 'brief'>, c: Contestant): string => (c.prompt?.text.trim() ? `${c.prompt.text.trim()}\n\n${spec.brief}` : spec.brief)
+
+/** A new prompt variant's file. */
+export const promptTemplate = (name: string): string =>
+  `<!-- ${name}: instructions an eval's agent gets before the task. Compare variants in Run evals → Prompts; the best one is worth putting in .sldev/rules.md or a mission kind. -->\n\nBefore you change anything, read the tests next to the code you will touch. Keep the change as small as the task allows, and run the tests before you finish.\n`
 
 export interface CheckResult {
   /** what was checked, in words: "npm test", "diff ≤ 80 lines", "judge" */

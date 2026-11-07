@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUp, Check, CircleDot, Sparkles, Trophy } from 'lucide-react'
+import { ArrowRight, ArrowUp, Check, CircleDot, Hourglass, Sparkles, Trophy } from 'lucide-react'
 import { L, useSeen } from './Workflows'
 
 /**
@@ -55,7 +55,7 @@ export function LeadSpotlight() {
   )
 }
 
-const columns: Array<{ title: string; note?: string; cards: Array<{ key: number; title: string; labels: string[]; by?: string; high?: boolean; state?: 'working' | 'review'; action?: string; issue?: number }> }> = [
+const columns: Array<{ title: string; note?: string; cards: Array<{ key: number; title: string; labels: string[]; by?: string; high?: boolean; state?: 'working' | 'review'; action?: string; issue?: number; waits?: number; spent?: string }> }> = [
   {
     title: 'Proposed',
     note: 'written by agents',
@@ -69,11 +69,12 @@ const columns: Array<{ title: string; note?: string; cards: Array<{ key: number;
     note: 'auto pick-up',
     cards: [
       { key: 9, title: 'Login button does nothing on Safari', labels: ['bug', 'p1'], high: true, issue: 42 },
-      { key: 13, title: 'Create a team', labels: ['feature', 'api'] }
+      { key: 13, title: 'Create a team', labels: ['feature', 'api'] },
+      { key: 16, title: 'Share a project with a team', labels: ['feature'], waits: 13 }
     ]
   },
   { title: 'In progress', cards: [{ key: 11, title: 'Rate-limit the public API', labels: ['api'], state: 'working' }] },
-  { title: 'Review', cards: [{ key: 8, title: 'Dark mode toggle', labels: ['ui'], state: 'review' }] }
+  { title: 'Review', cards: [{ key: 8, title: 'Dark mode toggle', labels: ['ui'], state: 'review', spent: '14 min · 3 agents · $1.84' }] }
 ]
 
 /** The work board: agents write stories into Proposed, you approve, the factory picks them up. */
@@ -112,6 +113,8 @@ export function BoardSpotlight() {
                   </div>
                   <div className="mboard-title">{k.title}</div>
                   <div className="mboard-labels">{k.labels.map((l) => <span key={l}>{l}</span>)}</div>
+                  {k.waits && <div className="mboard-waits"><Hourglass size={11} /> Waits for #{k.waits}</div>}
+                  {k.spent && <div className="mboard-spent">{k.spent}</div>}
                   {k.action && <div className="mboard-action"><Check size={11} /> {k.action}</div>}
                   {k.state === 'working' && <div className="mboard-state"><span className="dot ready" /> Codex · Build · 2/4 stages</div>}
                   {k.state === 'review' && <div className="mboard-state"><span className="dot working" /> PR #12 · waiting for review</div>}
@@ -132,6 +135,18 @@ export function BoardSpotlight() {
           <div>
             <h3>GitHub in, merged out</h3>
             <p>Import open issues with their labels (P1 comes in as high priority). A card's pull request closes its issue, and a merged PR moves the card to Done.</p>
+          </div>
+          <div>
+            <h3>In the right order</h3>
+            <p>A card waits for the cards it depends on; pick-up starts it the moment they are Done. Agents writing stories set the order themselves.</p>
+          </div>
+          <div>
+            <h3>Costed, described, shipped</h3>
+            <p>Every finished card shows its time, agents and token cost. Copy as PR description writes the pull request from the story; release notes come from Done.</p>
+          </div>
+          <div>
+            <h3>Learns, and shared</h3>
+            <p>A retro saves what went wrong as lessons in the project memory for the next agent. Keep the board in git and your team works from the same one.</p>
           </div>
         </div>
       </div>

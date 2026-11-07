@@ -19,6 +19,7 @@ import * as diagram from './diagram'
 import * as rules from './rules'
 import * as factory from './factory'
 import * as evals from './evals'
+import * as boardFile from './boardFile'
 import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
@@ -318,6 +319,10 @@ function registerIpc(): void {
   ipcMain.handle('evals:save', (_e, root: string, slug: string, text: string) => evals.saveEval(root, slug, text))
   ipcMain.handle('evals:write', (_e, p: string, text: string) => evals.writeEval(p, text))
   ipcMain.handle('evals:check', (_e, cwd: string, command: string, timeoutMs: number) => evals.runCheck(cwd, command, timeoutMs))
+  ipcMain.handle('evals:prompts', (_e, root: string) => evals.listPrompts(root))
+  ipcMain.handle('evals:savePrompt', (_e, root: string, slug: string, text: string) => evals.savePrompt(root, slug, text))
+  ipcMain.handle('board:readFile', (_e, root: string) => boardFile.readBoardFile(root))
+  ipcMain.handle('board:writeFile', (_e, root: string, text: string) => boardFile.writeBoardFile(root, text))
   ipcMain.handle('factory:recipes', (_e, root: string) => factory.listRecipes(root))
   ipcMain.handle('factory:saveRecipe', (_e, root: string, slug: string, text: string) => factory.saveRecipe(root, slug, text))
   ipcMain.handle('factory:prepare', (_e, dir: string) => factory.prepareRunDir(dir))

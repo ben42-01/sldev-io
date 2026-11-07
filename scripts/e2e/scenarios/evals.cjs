@@ -43,7 +43,7 @@ module.exports = async (h) => {
   // run both good evals against Claude and Codex
   await h.click('.evals-page .btn.primary', 'Run evals')
   h.expect(await h.until(() => h.js(`document.querySelector('dialog[open] .modal-title')?.textContent === 'Run evals'`), 2000), 'the run dialog opens')
-  h.expect(await h.js(`document.querySelectorAll('dialog[open] .board-import-list li').length === 2`), 'only the valid evals are offered')
+  h.expect(await h.js(`document.querySelectorAll('dialog[open] .board-import-list')[0].querySelectorAll('li').length === 2`), 'only the valid evals are offered')
   await h.setValue('dialog[open] .evals-contestant select', 'claude', `e === document.querySelectorAll('dialog[open] .evals-contestant select')[0]`)
   await h.setValue('dialog[open] .evals-contestant input', 'opus', `e === document.querySelectorAll('dialog[open] .evals-contestant input')[0]`)
   await h.setValue('dialog[open] .evals-contestant select', 'codex', `e === document.querySelectorAll('dialog[open] .evals-contestant select')[1]`)
@@ -99,4 +99,33 @@ module.exports = async (h) => {
   await h.click('dialog[open] .btn', 'Delete run')
   h.expect(await h.until(() => h.js(`!document.querySelector('.evals-run')`), 10000), 'the run is gone')
   h.expect(await h.until(() => wts.every((p) => !fs.existsSync(p)), 5000), 'and so are its worktrees')
+
+  // prompt variants: the same eval with and without extra instructions, side by side
+  fs.mkdirSync(path.join(dir, 'prompts'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'prompts', 'terse.md'), 'PROMPT_MARK Keep every change tiny.\n')
+  await h.click('.evals-page .btn.primary', 'Run evals')
+  await h.until(() => h.js(`document.querySelector('dialog[open] .modal-title')?.textContent === 'Run evals'`), 2000)
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('dialog[open] .board-import-title')].some(t => t.textContent === 'terse')`), 3000), 'prompt variants in .sldev/evals/prompts are offered')
+  // one eval, one agent
+  await h.js(`[...document.querySelectorAll('dialog[open] .board-import-list')[0].querySelectorAll('li')].filter(li => /Small change|My first eval/.test(li.textContent)).forEach(li => li.querySelector('input').click())`)
+  await h.js(`document.querySelectorAll('dialog[open] .evals-contestant .icon-btn[aria-label="Remove"]')[1]?.click()`)
+  await h.js(`[...document.querySelectorAll('dialog[open] .board-import-list li')].find(li => li.textContent.includes('terse')).querySelector('input').click()`)
+  // a new variant from the template, created from the dialog
+  await h.click('dialog[open] .btn', 'New prompt variant')
+  await h.setValue('dialog[open] input[aria-label="Prompt name"]', 'tests first')
+  await h.click('dialog[open] .btn', 'Create and edit')
+  h.expect(await h.until(() => fs.existsSync(path.join(dir, 'prompts', 'tests-first.md')), 3000), 'New prompt variant writes a file from the template')
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('dialog[open] .board-import-list li')].find(li => li.textContent.includes('tests-first'))?.querySelector('input').checked`), 3000), 'and picks it')
+  h.expect(await h.until(() => h.js(`document.querySelector('dialog[open] .btn.primary').textContent.includes('Run 3 attempts')`), 2000), '1 eval × 1 agent × 3 prompts (as written, terse, tests first) = 3 attempts')
+  await h.wait(300)
+  await h.shot('4-prompt-variants')
+  await h.click('dialog[open] .btn.primary', 'Run')
+  h.expect(await h.until(async () => !!(await run())?.finishedAt, 120000), 'the variant run finishes')
+  const pr = await run()
+  h.expect(JSON.stringify(pr.contestants.map((c) => c.prompt?.name ?? '')) === JSON.stringify(['', 'terse', 'tests-first']), `each variant is a contestant (${JSON.stringify(pr.contestants)})`)
+  const vm = (await h.js(`window.api.store.get('missions')`)).missions.filter((m) => m.eval?.run === pr.id && !m.eval.judge)
+  h.expect(vm.some((m) => m.prompt.includes('PROMPT_MARK Keep every change tiny.') && m.prompt.indexOf('PROMPT_MARK') < m.prompt.indexOf('Write down what you change')) && vm.some((m) => !m.prompt.includes('PROMPT_MARK') && !m.prompt.includes('read the tests next to')), 'the variant goes before the brief; as written gets the brief alone')
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.evals-leaderboard .evals-who')].some(t => t.textContent.includes('terse')) && !!document.querySelector('.evals-copy-prompt')`), 3000), 'the leaderboard ranks prompts too, with a copy button')
+  await h.wait(300)
+  await h.shot('5-prompt-scoreboard')
 }

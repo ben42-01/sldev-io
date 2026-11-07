@@ -16,7 +16,7 @@ npm run music           # public/music.mp3: an original placeholder track (see M
 npm run render:music    # with public/music.mp3
 ```
 
-## The story (44 bars at 120 BPM = 88 s)
+## The story (45 bars at 120 BPM = 90 s)
 
 | Bars | Scene | Says |
 |---|---|---|
@@ -24,7 +24,7 @@ npm run render:music    # with public/music.mp3
 | 2 | Turn | The music breaks down and the pile becomes a whirlpool around "Coding agents got good. Keeping track of them *didn't.*" |
 | 2 | Logo | On the drop everything collapses into the centre; a flash, a shockwave, and the mark is born from it: sldev-io, the terminal-first workspace for agentic coding. |
 | 8 | Missions | Mission Control: four agents in their own worktrees; Codex needs you, one click, the cards walk to Ready. |
-| 5 | Review | The diff, then Commit / Merge / Open PR. |
+| 6 | Lead | One agent leads: it delegates to Codex (routed by your evals), Claude Code and Gemini, sends Codex's work back after review, merges all three with the tests passing; one branch for you to review, nothing pushed. |
 | 8 | Factory | A recipe as a graph: spec approval, two agents in parallel, a failing test loops back, the PR waits for your click. |
 | 5 | Failover | Claude hits its usage limit; Codex continues with the same task and branch. |
 | 5 | Agents | Every supported CLI, then: not an IDE, no new AI subscription, no telemetry. |

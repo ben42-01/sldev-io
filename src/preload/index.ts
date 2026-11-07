@@ -197,7 +197,15 @@ const api = {
     list: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('evals:list', root),
     save: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('evals:save', root, slug, text),
     write: (path: string, text: string): Promise<void> => ipcRenderer.invoke('evals:write', path, text),
-    check: (cwd: string, command: string, timeoutMs: number): Promise<{ code: number | null; output: string; timedOut?: boolean }> => ipcRenderer.invoke('evals:check', cwd, command, timeoutMs)
+    check: (cwd: string, command: string, timeoutMs: number): Promise<{ code: number | null; output: string; timedOut?: boolean }> => ipcRenderer.invoke('evals:check', cwd, command, timeoutMs),
+    /** prompt variants to compare: .sldev/evals/prompts/*.md */
+    prompts: (root: string): Promise<Array<{ path: string; name: string; text: string }>> => ipcRenderer.invoke('evals:prompts', root),
+    savePrompt: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('evals:savePrompt', root, slug, text)
+  },
+  board: {
+    /** .sldev/board.json, when the board is shared through git */
+    readFile: (root: string): Promise<string | null> => ipcRenderer.invoke('board:readFile', root),
+    writeFile: (root: string, text: string): Promise<void> => ipcRenderer.invoke('board:writeFile', root, text)
   },
   factory: {
     recipes: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('factory:recipes', root),
