@@ -5,6 +5,7 @@ import { Columns2, Maximize2, Minimize2, Plus, Rows2 } from 'lucide-react'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffPanel } from './DiffPanel'
 import { NotePanel } from './NotePanel'
+import { BoardPanel } from './BoardPanel'
 import { MissionControlPanel } from './MissionControlPanel'
 import { PreviewPanel } from './PreviewPanel'
 import { SettingsPanel } from './SettingsPanel'
@@ -31,7 +32,7 @@ const DOCK_THEMES: Record<'dark' | 'light', DockviewTheme> = {
   dark: { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 },
   light: { name: 'sldev-light', className: 'dockview-theme-sldev', colorScheme: 'light', gap: 0 }
 }
-const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel, board: BoardPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {

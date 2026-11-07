@@ -30,13 +30,16 @@ module.exports = async (h) => {
   }
   const runs = () => h.js(`window.api.store.get('factoryRuns').then(s => s.runs)`)
 
-  await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Mission Control"]')
-  await h.until(() => h.js(`!!document.querySelector('.mc')`), 3000)
-  await h.click('.mc-tab', 'Board')
-  await h.until(() => h.js(`document.querySelectorAll('.board-column').length === 5`), 2000)
+  await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Board"]')
+  await h.until(() => h.js(`document.querySelectorAll('.board-column').length === 6`), 3000)
 
-  // import: both open issues are offered, with their labels
-  await h.click('.board-page .btn', 'Import issues')
+  // import (from the Board menu): both open issues are offered, with their labels
+  const boardMenu = async (item) => {
+    await h.click('.board-head-actions .btn', 'Board')
+    await h.wait(200)
+    return h.click('.ctx-menu .ctx-item', item)
+  }
+  await boardMenu('Import GitHub issues')
   h.expect(await h.until(() => h.js(`document.querySelectorAll('dialog[open] .board-import-list li').length === 2`), 5000), 'the import lists the open issues')
   h.expect(await h.js(`[...document.querySelectorAll('dialog[open] .board-import-list li')][0].textContent.includes('bug')`), 'with their labels')
   // only #42, into Agent ready
@@ -51,7 +54,7 @@ module.exports = async (h) => {
   h.expect(await h.js(`${card('Login button does nothing on Safari')}.querySelector('.board-issue')?.textContent.includes('42')`), 'the card shows its issue number')
 
   // importing again offers it as already on the board
-  await h.click('.board-page .btn', 'Import issues')
+  await boardMenu('Import GitHub issues')
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('dialog[open] .board-import-list li')].some(l => l.textContent.includes('on the board') && l.querySelector('input').disabled)`), 5000), 'an imported issue is not offered twice')
   await h.click('dialog[open] .btn.ghost', 'Cancel')
 
@@ -75,8 +78,7 @@ module.exports = async (h) => {
   await h.until(() => h.js(`!!document.querySelector('.pipeline-node[data-node="pr"] .btn.primary')`), 3000)
   await h.click('.pipeline-node[data-node="pr"] .btn.primary', 'Push and open PR')
   h.expect(await h.until(async () => (await runs())[0].pr?.number === 12, 10000), 'the run opened PR #12')
-  await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Mission Control"]')
-  await h.click('.mc-tab', 'Board')
+  await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Board"]')
   h.expect(await h.until(async () => (await cards('review')).includes('Login button does nothing on Safari'), 10000), 'the finished run moves the card to Review')
   h.expect(await h.until(() => h.js(`${card('Login button does nothing on Safari')}.querySelector('.board-work')?.textContent.includes('PR #12')`), 3000), 'its status line names the PR')
   await h.wait(300)

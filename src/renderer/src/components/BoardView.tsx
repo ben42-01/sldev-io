@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, ArrowDown, Bot, CircleDot, Ellipsis, Factory, GitPullRequest, Play, Plus, RefreshCw, Search, Settings2, SquareKanban, Trash2 } from 'lucide-react'
-import { BOARD_COLUMNS, boardLabels, columnItems, importableIssues, matchesItem, parseLabels, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type WorkState } from '@shared/board'
+import { ArrowUp, ArrowDown, Bot, Check, CheckCheck, CircleDot, Ellipsis, Factory, GitPullRequest, Play, Plus, RefreshCw, Search, Settings2, Sparkles, SquareKanban, Trash2 } from 'lucide-react'
+import { BOARD_COLUMNS, boardLabels, columnItems, importableIssues, matchesItem, parseLabels, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
 import { Modal, confirmAction } from './Modal'
@@ -8,7 +8,9 @@ import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot } from './StatusDot'
 import { Empty, ErrorBanner, Loading } from './States'
 import { useAgents } from '../state/agents'
-import { addItem, board, importIssues, moveTo, refreshPrs, removeItem, saveBoardSettings, startItem, updateItem, useBoardItems, useBoardSettings, workOf } from '../state/board'
+import { addItem, approve, board, getItem, importIssues, moveTo, refreshPrs, removeItem, saveBoardSettings, startItem, updateItem, useBoardItems, useBoardSettings, useStoryJobs, workOf, writeStories } from '../state/board'
+import { activatePanel, activePanelId } from '../dock/dockApi'
+import { createStore } from '../state/store'
 import type { GhIssue } from '@shared/types'
 import { factory, loadRecipes, openPipeline } from '../state/factory'
 import { useKinds } from '../state/missionKinds'
@@ -16,18 +18,25 @@ import { missions } from '../state/missions'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 
+/** The board's dialogs, opened from the cards, the toolbar or the Board panel's menu. */
+export type BoardDialog = { type: 'edit'; item?: string; column: BoardColumn } | { type: 'pickup' } | { type: 'import' } | { type: 'stories'; card?: string }
+const dialog = createStore<{ open: BoardDialog | null }>({ open: null })
+export const openBoardDialog = (d: BoardDialog): void => dialog.set({ open: d })
+const closeDialog = (): void => dialog.set({ open: null })
+
 /**
- * The work board: Backlog → Agent ready → In progress → Review → Done. With pick-up on, the factory
- * takes Agent ready cards on its own; every card shows the run or mission working on it.
+ * The work board: Backlog → Proposed → Agent ready → In progress → Review → Done. Agents write stories
+ * into Proposed; you approve them; with pick-up on, the factory takes Agent ready cards on its own and
+ * every card shows the run or mission working on it.
  */
 export function BoardView({ root }: { root: string | null }): React.JSX.Element {
   const items = useBoardItems(root)
   const settings = useBoardSettings(root)
+  const jobs = useStoryJobs(root)
   const [query, setQuery] = useState('')
   const [label, setLabel] = useState<string | null>(null)
-  const [editing, setEditing] = useState<BoardItem | { column: BoardColumn } | null>(null)
-  const [setup, setSetup] = useState(false)
-  const [importing, setImporting] = useState(false)
+  const open = useStore(dialog, (d) => d.open)
+  const setEditing = (i: BoardItem | { column: BoardColumn }): void => openBoardDialog({ type: 'edit', item: 'id' in i ? i.id : undefined, column: i.column })
   // re-render cards when their runs and missions change
   useStore(missions, (s) => s.list)
   useStore(factory, (s) => s.runs)
@@ -60,31 +69,29 @@ export function BoardView({ root }: { root: string | null }): React.JSX.Element 
           <input type="checkbox" checked={settings.pickup} onChange={(e) => togglePickup(e.target.checked)} aria-label="Auto pick-up" />
           Auto pick-up
         </label>
-        <button className="btn sm" onClick={() => setSetup(true)} title="What starts for a card, and how many at once">
+        <button className="btn sm" onClick={() => openBoardDialog({ type: 'pickup' })} title="What starts for a card, and how many at once">
           <Settings2 size={13} /> <span className="board-work-summary">{workLabel(settings.work)} · {settings.parallel} at a time</span>
         </button>
-        <button className="btn sm" onClick={() => setImporting(true)} title="Make cards from open GitHub issues (through your gh)">
-          <CircleDot size={13} /> Import issues
-        </button>
-        <button className="btn sm primary" onClick={() => setEditing({ column: 'backlog' })}>
+        <button className="btn sm" onClick={() => setEditing({ column: 'backlog' })}>
           <Plus size={13} /> New card
         </button>
       </div>
       <div className="board-columns">
         {BOARD_COLUMNS.map((c) => (
-          <Column key={c.id} column={c} items={columnItems(shown, c.id)} total={items.filter((i) => i.column === c.id).length} root={root} pickup={settings.pickup} onOpen={setEditing} />
+          <Column key={c.id} column={c} items={columnItems(shown, c.id)} total={items.filter((i) => i.column === c.id).length} root={root} pickup={settings.pickup} onOpen={setEditing} jobs={c.id === 'proposed' ? jobs.filter((j) => !j.done) : []} />
         ))}
       </div>
-      {editing && <ItemDialog root={root} item={'id' in editing ? editing : undefined} column={'id' in editing ? editing.column : editing.column} onClose={() => setEditing(null)} />}
-      {setup && <PickupDialog root={root} onClose={() => setSetup(false)} />}
-      {importing && <ImportDialog root={root} onClose={() => setImporting(false)} />}
+      {open?.type === 'edit' && <ItemDialog root={root} item={open.item ? getItem(open.item) : undefined} column={open.column} onClose={closeDialog} />}
+      {open?.type === 'pickup' && <PickupDialog root={root} onClose={closeDialog} />}
+      {open?.type === 'import' && <ImportDialog root={root} onClose={closeDialog} />}
+      {open?.type === 'stories' && <StoriesDialog root={root} card={open.card ? getItem(open.card) : undefined} onClose={closeDialog} />}
     </div>
   )
 }
 
 const DRAG = 'application/x-sldev-board'
 
-function Column({ column, items, total, root, pickup, onOpen }: { column: (typeof BOARD_COLUMNS)[number]; items: BoardItem[]; total: number; root: string; pickup: boolean; onOpen: (i: BoardItem) => void }): React.JSX.Element {
+function Column({ column, items, total, root, pickup, onOpen, jobs }: { column: (typeof BOARD_COLUMNS)[number]; items: BoardItem[]; total: number; root: string; pickup: boolean; onOpen: (i: BoardItem) => void; jobs: StoryJob[] }): React.JSX.Element {
   const [over, setOver] = useState(false)
   const [adding, setAdding] = useState(false)
   const quick = column.id === 'backlog' || column.id === 'ready'
@@ -109,10 +116,21 @@ function Column({ column, items, total, root, pickup, onOpen }: { column: (typeo
         {column.title}
         {column.id === 'ready' && <span className={`board-pickup${pickup ? ' on' : ''}`} title={pickup ? 'Auto pick-up is on' : 'Auto pick-up is off: start cards with ▶'}>{pickup ? 'auto' : 'manual'}</span>}
         <span className="seg-count">{total}</span>
+        {column.id === 'proposed' && items.length > 1 && (
+          <button type="button" className="icon-btn board-approve-all" title="Approve all shown: move them to Agent ready" aria-label="Approve all" onClick={() => approve(items.map((i) => i.id))}>
+            <CheckCheck size={13} />
+          </button>
+        )}
       </h3>
       <div className="board-column-body">
+        {jobs.map((j) => <JobRow key={j.mission} job={j} />)}
         {items.map((i) => <Card key={i.id} item={i} onOpen={() => onOpen(i)} />)}
-        {!items.length && !adding && <div className="mc-column-empty"><span className="muted small">{column.hint}</span></div>}
+        {!items.length && !adding && !jobs.length && (
+          <div className="mc-column-empty">
+            <span className="muted small">{column.hint}</span>
+            {column.id === 'proposed' && <button className="btn sm" onClick={() => openBoardDialog({ type: 'stories' })}><Sparkles size={12} /> Write stories</button>}
+          </div>
+        )}
         {quick && (adding ? <QuickAdd root={root} column={column.id} onDone={() => setAdding(false)} /> : (
           <button type="button" className="board-add" onClick={() => setAdding(true)}>
             <Plus size={12} /> Add a card
@@ -170,11 +188,31 @@ function workLine(i: BoardItem): { signal: Signal; text: string; open?: () => vo
   return { signal: missionSignal(m.status), text: `${m.kind?.name ?? 'Mission'} · ${missionSignal(m.status).label}`, open: () => openMissionDetails(m.id) }
 }
 
+/** A story-writing mission at the top of Proposed, until it reports. */
+function JobRow({ job }: { job: StoryJob }): React.JSX.Element | null {
+  const m = useStore(missions, (s) => s.list.find((x) => x.id === job.mission))
+  if (!m) return null
+  const signal = missionSignal(m.status)
+  return (
+    <button type="button" className="board-job" onClick={() => openMissionDetails(m.id)} title="Open the mission">
+      <StatusDot signal={signal} small />
+      <span className="board-job-text">
+        <span>{job.card ? 'Refining' : 'Writing stories'} · {signal.label}{job.filed ? ` · ${job.filed} filed` : ''}</span>
+        <span className="muted small">{job.feature.split('\n')[0]}</span>
+      </span>
+    </button>
+  )
+}
+
 function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): React.JSX.Element {
   const work = workLine(i)
-  const startable = (i.column === 'backlog' || i.column === 'ready') && !i.started
+  const startable = (i.column === 'backlog' || i.column === 'ready') && !i.started && !i.refining
+  const proposed = i.column === 'proposed'
+  const refinable = (i.column === 'backlog' || proposed) && !i.refining
   const menu = (): MenuItem[] => [
     { label: 'Edit…', run: onOpen },
+    ...(proposed ? [{ label: 'Approve for agents', icon: <Check size={13} />, run: () => approve([i.id]) }] : []),
+    ...(refinable ? [{ label: 'Refine with an agent…', icon: <Sparkles size={13} />, run: () => openBoardDialog({ type: 'stories', card: i.id }) }] : []),
     ...(startable ? [{ label: 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) }] : []),
     ...(work?.open ? [{ label: i.started?.type === 'run' ? 'Open pipeline' : 'Open mission', run: work.open }] : []),
     ...(prOf(i) ? [
@@ -215,6 +253,7 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
             {i.priority === 'high' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
           </span>
         )}
+        {i.by && <span className="board-by" title={`Written by ${i.by}`}><Sparkles size={11} /> {i.by}</span>}
         {i.work && <span className="board-own" title={`Runs ${workLabel(i.work)} instead of the board's setting`}>{i.work.type === 'recipe' ? <Factory size={11} /> : <Bot size={11} />}</span>}
         <span className="grow" />
         <button className="icon-btn" title="More" aria-label="More" onClick={(e) => showContextMenu(e, menu())}>
@@ -224,9 +263,9 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
       <button type="button" className="board-title" onClick={onOpen} title="Edit">{i.title}</button>
       {i.labels.length > 0 && <div className="board-card-labels">{i.labels.map((l) => <span key={l} className="board-label static">{l}</span>)}</div>}
       {i.note && <div className={`board-note${i.column === 'backlog' ? ' error' : ''}`}>{i.note}</div>}
-      {(work || startable) && (
+      {(work || startable || proposed || i.refining) && (
         <div className="board-card-foot">
-          {work ? (
+          {i.refining ? <RefiningLine mission={i.refining} /> : work ? (
             <button type="button" className="board-work" onClick={work.open} disabled={!work.open} title={work.open ? 'Open it' : undefined}>
               <StatusDot signal={work.signal} small />
               <span>{work.text}</span>
@@ -237,9 +276,25 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
               <Play size={12} /> Start
             </button>
           )}
+          {proposed && !i.refining && (
+            <button className="btn sm" onClick={() => approve([i.id])} title="Move it to Agent ready">
+              <Check size={12} /> Approve
+            </button>
+          )}
         </div>
       )}
     </article>
+  )
+}
+
+function RefiningLine({ mission }: { mission: string }): React.JSX.Element {
+  const m = useStore(missions, (s) => s.list.find((x) => x.id === mission))
+  const signal = m ? missionSignal(m.status) : STATE_SIGNAL.working
+  return (
+    <button type="button" className="board-work" onClick={() => m && openMissionDetails(m.id)} disabled={!m} title="Open the mission">
+      <StatusDot signal={signal} small />
+      <span>Refining · {signal.label}</span>
+    </button>
   )
 }
 
@@ -321,6 +376,79 @@ function ImportDialog({ root, onClose }: { root: string; onClose: () => void }):
             ))}
           </ul>
         )}
+      </div>
+    </Modal>
+  )
+}
+
+/** Ask an agent for well-defined stories: from a feature description, or by refining one card. */
+function StoriesDialog({ root, card, onClose }: { root: string; card?: BoardItem; onClose: () => void }): React.JSX.Element {
+  const agents = useAgents()
+  const [feature, setFeature] = useState('')
+  const [agent, setAgent] = useState('')
+  const [max, setMax] = useState(6)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const go = async (): Promise<void> => {
+    if (!card && !feature.trim()) return
+    setBusy(true)
+    const front = activePanelId()
+    try {
+      await writeStories(root, { feature, agent: agent || undefined, max, card: card?.id })
+      onClose()
+    } catch (e) {
+      setError((e as Error).message.split('\n')[0])
+    } finally {
+      setBusy(false)
+      // the board stays in front: the agent's terminal waits as a tab, its progress shows in Proposed
+      if (front) activatePanel(front)
+    }
+  }
+  return (
+    <Modal
+      title={card ? `Refine #${card.key}` : 'Write stories'}
+      size="md"
+      onClose={onClose}
+      onSubmit={() => void go()}
+      initialFocus={ref}
+      footerNote="A read-only mission: the agent reads the code and nothing is changed. Its stories wait in Proposed until you approve them."
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn primary" disabled={busy || (!card && !feature.trim())}><Sparkles size={13} /> {card ? 'Refine' : 'Write stories'}</button>
+        </>
+      }
+    >
+      <div className="form board-form">
+        {card && (
+          <div className="board-refine-card">
+            <span className="board-key">#{card.key}</span> {card.title}
+          </div>
+        )}
+        <label className="field">
+          <span>{card ? 'Anything to add' : 'Feature, epic or problem'}</span>
+          <textarea ref={ref} rows={card ? 3 : 6} value={feature} onChange={(e) => setFeature(e.target.value)} placeholder={card ? 'Optional: what the agent should know, e.g. keep the old endpoint working' : 'e.g. Teams: users can create a team, invite people by email, and share projects with it. Owners can remove members.'} />
+          <span className="field-hint">The agent reads the code, then writes each story with why, what to change, acceptance criteria and how to check it.</span>
+        </label>
+        <div className="field-row">
+          <label className="field">
+            <span>Agent</span>
+            <select value={agent} onChange={(e) => setAgent(e.target.value)}>
+              <option value="">Default ({agents.find((a) => a.id === workspace.get().defaultAgent)?.name ?? 'Claude Code'})</option>
+              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          {!card && (
+            <label className="field">
+              <span>At most</span>
+              <select value={max} onChange={(e) => setMax(Number(e.target.value))}>
+                {[3, 6, 10, 15].map((n) => <option key={n} value={n}>{n} stories</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+        {error && <ErrorBanner>{error}</ErrorBanner>}
       </div>
     </Modal>
   )

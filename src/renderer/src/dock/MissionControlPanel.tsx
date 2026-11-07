@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, LayoutGrid, List, Rocket, Satellite, SquareKanban } from 'lucide-react'
+import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
 import type { Mission } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { missionSignal } from '@shared/status'
@@ -12,8 +12,6 @@ import { openNewRun, RunRow } from '../components/FactoryView'
 import { StatusDot } from '../components/StatusDot'
 import { Empty } from '../components/States'
 import { showRecapMenu } from '../components/RecapDialog'
-import { BoardView } from '../components/BoardView'
-import { useBoardItems } from '../state/board'
 import { nextNeedsYou } from '../state/attention'
 import { factory } from '../state/factory'
 import { isLive, missions } from '../state/missions'
@@ -23,7 +21,7 @@ import { basename } from '../lib/paths'
 import { DashboardPanel } from './DashboardPanel'
 import { openPanel } from './dockApi'
 
-export type ControlTab = 'missions' | 'board' | 'runs' | 'usage'
+export type ControlTab = 'missions' | 'runs' | 'usage'
 
 /** The one place for agent work: missions, factory runs and usage, in the main area so the sidebars can stay closed. */
 export function openMissionControl(tab: ControlTab = 'missions'): void {
@@ -33,7 +31,6 @@ export function openMissionControl(tab: ControlTab = 'missions'): void {
 
 const TABS: Array<{ id: ControlTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: 'missions', label: 'Missions', icon: Rocket },
-  { id: 'board', label: 'Board', icon: SquareKanban },
   { id: 'runs', label: 'Factory runs', icon: Factory },
   { id: 'usage', label: 'Usage', icon: ChartGantt }
 ]
@@ -55,9 +52,11 @@ const FINISHED_SHOWN = 20
 const ORDER: Record<Mission['status'], number> = { 'needs-input': 0, waiting: 1, working: 2, starting: 3, failed: 4, ended: 5 }
 
 export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: ControlTab; at?: number }>): React.JSX.Element {
-  const [tab, setTab] = useState<ControlTab>(params.tab ?? 'missions')
+  // a layout saved before the board had its own tab may still ask for it
+  const asked = (params.tab as string) === 'board' ? 'missions' : params.tab
+  const [tab, setTab] = useState<ControlTab>(asked ?? 'missions')
   useEffect(() => {
-    if (params.tab) setTab(params.tab)
+    if (asked) setTab(asked)
   }, [params.tab, params.at])
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
@@ -67,7 +66,6 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
   const needs = live.filter((m) => m.status === 'needs-input').length
   const myRuns = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
   const activeRuns = myRuns.filter(runActive)
-  const readyCards = useBoardItems(root).filter((i) => i.column === 'ready').length
   const subtitle = [root ? basename(root) : 'No folder open', `${live.length} live mission${live.length === 1 ? '' : 's'}`, needs && `${needs} need${needs === 1 ? 's' : ''} you`, activeRuns.length && `${activeRuns.length} factory run${activeRuns.length === 1 ? '' : 's'} going`]
     .filter(Boolean)
     .join(' · ')
@@ -85,7 +83,6 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`mc-tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)}>
               <t.icon size={13} /> {t.label}
               {t.id === 'missions' && live.length > 0 && <span className="seg-count">{live.length}</span>}
-              {t.id === 'board' && readyCards > 0 && <span className="seg-count" title="Agent ready">{readyCards}</span>}
               {t.id === 'runs' && activeRuns.length > 0 && <span className="seg-count">{activeRuns.length}</span>}
             </button>
           ))}
@@ -93,7 +90,6 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
       </header>
       <div className="mc-body" role="tabpanel">
         {tab === 'missions' && <MissionsBoard root={root} mine={mine} needs={needs} />}
-        {tab === 'board' && <BoardView root={root} />}
         {tab === 'runs' && <RunsBoard root={root} runs={myRuns} />}
         {tab === 'usage' && <DashboardPanel />}
       </div>

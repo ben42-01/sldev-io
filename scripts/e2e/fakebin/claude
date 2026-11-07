@@ -60,6 +60,41 @@ if (args.includes('-p')) {
   console.log('done (print mode)')
   process.exit(0)
 }
+const ip = args[args.length - 1]
+// story writing (the board's Write stories / Refine): file stories through the sldev tools, or into the file the prompt names
+if (ip.startsWith('Write stories:') || ip.startsWith('Refine card #')) {
+  fire('SessionStart', { source: 'startup' }); sleep(300)
+  fire('UserPromptSubmit', { prompt: ip }); sleep(1200)
+  const refine = /^Refine card #(\d+)/.exec(ip)
+  const stories = refine
+    ? [{ title: 'Cache the session lookup on login', details: '**Why** Login waits on two queries.\n\n**Acceptance criteria**\n- [ ] one query per login', labels: ['perf', 'api'], priority: 'high' }]
+    : [
+        { title: 'Create a team', details: '**Why** Teams share projects.\n\n**What to do** src/teams.js\n\n**Acceptance criteria**\n- [ ] POST /teams creates one\n\n**How to check** npm test', labels: ['feature', 'api'], priority: 'high' },
+        { title: 'Invite people by email', details: '**Acceptance criteria**\n- [ ] an invite link works once', labels: ['feature'], priority: 'normal' },
+        { title: 'Remove a member', details: '**Acceptance criteria**\n- [ ] only owners can', labels: ['feature', 'auth'], priority: 'low' }
+      ]
+  const file = /JSON array to (\S+) \(the one file you may create\)/.exec(ip)
+  const mi = args.indexOf('--mcp-config')
+  if (file) {
+    fs.mkdirSync(path.dirname(file[1]), { recursive: true })
+    fs.writeFileSync(file[1], JSON.stringify(stories))
+  } else if (mi >= 0) {
+    const { command, args: sargs, env } = JSON.parse(args[mi + 1]).mcpServers.sldev
+    const rpc = (id, method, params) => JSON.stringify({ jsonrpc: '2.0', id, method, params })
+    const calls = refine
+      ? [rpc(2, 'tools/call', { name: 'sldev_board_update', arguments: { key: Number(refine[1]), ...stories[0] } })]
+      : stories.map((st, n) => rpc(2 + n, 'tools/call', { name: 'sldev_board_add', arguments: st }))
+    const input = [rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } }), ...calls].join('\n') + '\n'
+    spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
+  }
+  sleep(600)
+  const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
+  fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: `Wrote ${stories.length} stories.` }] } }) + '\n')
+  fire('Stop', { transcript_path: tp })
+  console.log(`Wrote ${stories.length} stories.`)
+  process.stdin.resume()
+  return
+}
 fire('SessionStart', { source: 'startup' }); sleep(400)
 fire('UserPromptSubmit', { prompt: args[args.length - 1] }); sleep(400)
 fire('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(process.cwd(), 'src/app.js') } }); sleep(800)

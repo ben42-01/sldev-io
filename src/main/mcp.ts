@@ -1,7 +1,7 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import type { McpEvent, Mission } from '@shared/types'
-import { boardCardLines, parseLabels, type BoardColumn, type BoardItem, type BoardPriority } from '@shared/board'
+import { boardCardLines, storyDraft, type BoardColumn, type BoardItem } from '@shared/board'
 import { diff } from './git'
 import { remember } from './memory'
 import { recall } from './context'
@@ -80,14 +80,24 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
     }
     case 'sldev_board_add': {
       if (!deps.board) return { error: 'The work board lives in the sldev-io app; this session has none.' }
-      const title = str(r.args.title).trim().slice(0, 120)
-      if (!title) return { error: 'title is empty' }
-      const labels = parseLabels(Array.isArray(r.args.labels) ? r.args.labels.filter((l) => typeof l === 'string').join(',') : str(r.args.labels))
-      const priority: BoardPriority = ['high', 'low'].includes(str(r.args.priority)) ? (str(r.args.priority) as BoardPriority) : 'normal'
+      const card = storyDraft(r.args)
+      if (!card) return { error: 'title is empty' }
       const agent = self.options.agent ?? 'claude'
-      const body = [str(r.args.details).trim().slice(0, 4000), `Filed by ${agent} during mission "${self.title}".`].filter(Boolean).join('\n\n')
-      deps.send({ mission: self.id, type: 'board-add', card: { title, body, labels, priority } })
-      return { text: `Filed "${title}" in Backlog.` }
+      // stories it was asked to write carry no footer; follow-up work it found says where it came from
+      const footer = self.kind?.id === 'stories' ? '' : `Filed by ${agent} during mission "${self.title}".`
+      deps.send({ mission: self.id, type: 'board-add', card: { title: card.title, body: [card.details, footer].filter(Boolean).join('\n\n'), labels: card.labels, priority: card.priority } })
+      return { text: `Filed "${card.title}" in Proposed.` }
+    }
+    case 'sldev_board_update': {
+      if (!deps.board) return { error: 'The work board lives in the sldev-io app; this session has none.' }
+      const key = Number(r.args.key)
+      const target = deps.board().find((i) => i.root === self.root && i.key === key)
+      if (!target) return { error: `No card #${key} on this project's board. Use sldev_board.` }
+      if (target.column !== 'backlog' && target.column !== 'proposed') return { error: `#${key} is in ${target.column}: only cards in Backlog or Proposed can be rewritten.` }
+      const card = storyDraft(r.args)
+      if (!card) return { error: 'title is empty' }
+      deps.send({ mission: self.id, type: 'board-update', key, card: { title: card.title, body: card.details, labels: card.labels, priority: card.priority } })
+      return { text: `Rewrote #${key}; it waits in Proposed for approval.` }
     }
     case 'sldev_rules': {
       for (const f of ['.sldev/rules.md', 'AGENTS.md']) {

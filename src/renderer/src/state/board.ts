@@ -1,10 +1,12 @@
-import { PR_POLL_MS, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, moveItem, nextKey, nextPickups, type BoardColumn, type BoardItem, type BoardSettings, type WorkState } from '@shared/board'
+import { PR_POLL_MS, approveItem, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, moveItem, nextKey, nextPickups, parseStories, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type StoryJob, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
 import type { GhIssue, Mission } from '@shared/types'
 import { activatePanel, activePanelId } from '../dock/dockApi'
 import { startAction } from './automations'
 import { factory } from './factory'
-import { missions } from './missions'
+import { missions, startMission } from './missions'
+import { getAgent } from './agents'
+import { workspace } from './workspace'
 import { createStore, useStore } from './store'
 
 /**
@@ -14,7 +16,7 @@ import { createStore, useStore } from './store'
  * nothing is pushed: a recipe's pr stage still waits for its click.
  */
 
-export const board = createStore<{ items: BoardItem[]; settings: BoardSettings[] }>({ items: [], settings: [] })
+export const board = createStore<{ items: BoardItem[]; settings: BoardSettings[]; jobs: StoryJob[] }>({ items: [], settings: [], jobs: [] })
 
 export const useBoardItems = (root: string | null): BoardItem[] => {
   const items = useStore(board, (s) => s.items)
@@ -35,18 +37,30 @@ const TICK_MS = 10_000
 let timer: ReturnType<typeof setInterval> | undefined
 let unsub: Array<() => void> = []
 
-// agents file follow-up work with sldev_board_add: always into Backlog, so they can't feed pick-up themselves
+// agents file stories and follow-up work with sldev_board_add: always into Proposed, so a person approves
+// them before pick-up sees them (agents can't feed pick-up themselves)
 window.api.missions.onMcp((e) => {
-  if (e.type !== 'board-add') return
+  if (e.type !== 'board-add' && e.type !== 'board-update') return
   const m = missions.get().list.find((x) => x.id === e.mission)
   if (!m) return
-  const dupe = board.get().items.some((i) => i.root === m.root && i.column !== 'done' && i.title.toLowerCase() === e.card.title.toLowerCase())
-  if (!dupe) addItem(m.root, { ...e.card, column: 'backlog' })
+  const by = m.options.agent ?? 'claude'
+  bumpJob(m.id)
+  if (e.type === 'board-update') {
+    const target = board.get().items.find((i) => i.root === m.root && i.key === e.key)
+    if (!target || (target.column !== 'backlog' && target.column !== 'proposed')) return
+    updateItem(target.id, { ...e.card, by, refining: undefined, note: undefined })
+    if (target.column !== 'proposed') moveTo(target.id, 'proposed')
+    return
+  }
+  if (!onBoard(m.root, e.card.title)) addItem(m.root, { ...e.card, column: 'proposed', by })
 })
+
+/** a card with this title is already open on the board (agents re-file what they find) */
+const onBoard = (root: string, title: string): boolean => board.get().items.some((i) => i.root === root && i.column !== 'done' && i.title.toLowerCase() === title.toLowerCase())
 
 export async function loadBoard(): Promise<void> {
   const data = (await window.api.store.get('board')) ?? { items: [], settings: [] }
-  board.set({ items: data.items ?? [], settings: data.settings ?? [] })
+  board.set({ items: data.items ?? [], settings: data.settings ?? [], jobs: data.jobs ?? [] })
   for (const u of unsub) u()
   unsub = [missions.subscribe(scheduleSync), factory.subscribe(scheduleSync)]
   clearInterval(timer)
@@ -67,7 +81,7 @@ export function getItem(id: string): BoardItem | undefined {
   return board.get().items.find((i) => i.id === id)
 }
 
-export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & Partial<Pick<BoardItem, 'work' | 'issue'>>): BoardItem {
+export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & Partial<Pick<BoardItem, 'work' | 'issue' | 'by'>>): BoardItem {
   const t = now()
   const item: BoardItem = { id: newId(), root, key: nextKey(board.get().items, root), createdAt: t, updatedAt: t, order: t, ...fields }
   setItems((items) => [...items, item])
@@ -97,6 +111,111 @@ export function moveTo(id: string, column: BoardColumn, before?: string): void {
   const order = target ? target.order - 0.5 : Math.max(0, ...items.filter((i) => i.column === column).map((i) => i.order)) + 1
   setItems((list) => list.map((i) => (i.id === id ? moveItem(i, column, now(), order) : i)))
   if (column === 'ready') scheduleTick()
+}
+
+/** Proposed → Agent ready: the person read the story and lets the agents have it. */
+export function approve(ids: string[]): void {
+  const t = now()
+  const top = Math.max(0, ...board.get().items.filter((i) => i.column === 'ready').map((i) => i.order))
+  setItems((items) => items.map((i) => (ids.includes(i.id) && i.column === 'proposed' ? approveItem(i, t, top + 1 + ids.indexOf(i.id)) : i)))
+  scheduleTick()
+}
+
+// ── story writing ────────────────────────────────────────────────────
+
+function setJobs(f: (jobs: StoryJob[]) => StoryJob[]): void {
+  board.set((s) => ({ ...s, jobs: f(s.jobs).slice(0, 40) }))
+  persist()
+}
+
+function bumpJob(mission: string): void {
+  if (board.get().jobs.some((j) => j.mission === mission)) setJobs((jobs) => jobs.map((j) => (j.mission === mission ? { ...j, filed: j.filed + 1 } : j)))
+}
+
+export const useStoryJobs = (root: string | null): StoryJob[] => {
+  const jobs = useStore(board, (s) => s.jobs)
+  return root ? jobs.filter((j) => j.root === root) : []
+}
+
+/**
+ * Starts a read-only mission that turns a feature (or one card) into well-defined stories. With the
+ * sldev tools the agent files them itself; otherwise its reply's ```stories block is read when it ends.
+ * Either way they land in Proposed.
+ */
+export async function writeStories(root: string, o: { feature: string; agent?: string; max: number; card?: string }): Promise<string> {
+  const agent = getAgent(o.agent || workspace.get().defaultAgent)
+  const tools = workspace.get().agentTools !== false && !!agent.mcpArgs
+  const card = o.card ? getItem(o.card) : undefined
+  // without the sldev tools the stories come back as a file in the git-ignored run folder
+  const dir = `${root}/.sldev/runs/stories-${now().toString(36)}`
+  const file = tools ? undefined : `${dir}/stories.json`
+  if (file) await window.api.factory.prepare(dir)
+  const prompt = storiesPrompt({ feature: o.feature, tools, max: o.max, refine: card, file })
+  const title = card ? `Refine #${card.key} ${card.title}` : `Stories: ${o.feature.trim().split('\n')[0]}`
+  const m = await startMission({
+    prompt,
+    brief: card ? itemIntent(card) : o.feature,
+    title: title.slice(0, 60),
+    root,
+    // read-only where the agent has such a mode, unless it has to write its stories file
+    options: { agent: agent.id, permissionMode: tools ? agent.readOnlyMode : undefined },
+    worktree: false,
+    kind: { id: 'stories', name: card ? 'Refine' : 'Stories', readOnly: true }
+  })
+  setJobs((jobs) => [{ mission: m.id, root, feature: card ? `#${card.key} ${card.title}` : o.feature.trim(), card: card?.id, filed: 0, file, at: now() }, ...jobs])
+  if (card) updateItem(card.id, { refining: m.id })
+  return m.id
+}
+
+const jobBusy = new Set<string>()
+
+/**
+ * A story job whose agent stopped: stories it didn't file through the tools come from its file, or
+ * from its reply's ```stories block. A refinement replaces its card with the first one. A job is
+ * finished once, so nothing is added twice; a terminal agent that pauses before writing its file is
+ * checked again the next time it stops.
+ */
+function followJobs(): void {
+  for (const j of board.get().jobs) {
+    if (j.done || jobBusy.has(j.mission)) continue
+    const m = missions.get().list.find((x) => x.id === j.mission)
+    const ended = !m || m.status === 'ended' || m.status === 'failed'
+    const stopped = ended || m.status === 'waiting'
+    if (!stopped) continue
+    if (j.filed) {
+      if (ended || m.report) finishJob(j)
+      continue
+    }
+    jobBusy.add(j.mission)
+    void (async () => {
+      try {
+        const text = j.file ? await window.api.factory.read(j.file) : m?.reportFrom !== 'terminal' ? (m?.report ?? null) : null
+        const stories = text ? parseStories(text) : []
+        if (stories.length) addStories(j, stories, m?.options.agent ?? 'claude')
+        if (stories.length || ended || (!j.file && m?.report)) finishJob(j)
+      } finally {
+        jobBusy.delete(j.mission)
+      }
+    })()
+  }
+}
+
+function finishJob(j: StoryJob): void {
+  setJobs((jobs) => jobs.map((x) => (x.mission === j.mission ? { ...x, done: true } : x)))
+  const card = j.card ? getItem(j.card) : undefined
+  if (card?.refining === j.mission) updateItem(card.id, { refining: undefined })
+}
+
+function addStories(j: StoryJob, stories: ReturnType<typeof parseStories>, by: string): void {
+  const card = j.card ? getItem(j.card) : undefined
+  stories.forEach((st, n) => {
+    const fields = { title: st.title, body: st.details, labels: st.labels, priority: st.priority, by }
+    if (n === 0 && card && (card.column === 'backlog' || card.column === 'proposed')) {
+      updateItem(card.id, { ...fields, refining: undefined })
+      if (card.column !== 'proposed') moveTo(card.id, 'proposed')
+    } else if (!onBoard(j.root, st.title)) addItem(j.root, { ...fields, column: 'proposed' })
+  })
+  setJobs((jobs) => jobs.map((x) => (x.mission === j.mission ? { ...x, filed: stories.length } : x)))
 }
 
 export function saveBoardSettings(s: BoardSettings): void {
@@ -144,6 +263,7 @@ function scheduleSync(): void {
 }
 
 function sync(): void {
+  followJobs()
   const t = now()
   let changed = false
   const items = board.get().items.map((i) => {

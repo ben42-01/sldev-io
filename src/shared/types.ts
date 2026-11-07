@@ -1,6 +1,6 @@
 import type { FactoryRun } from './factory'
 import type { Automation } from './automations'
-import type { BoardItem, BoardSettings } from './board'
+import type { BoardItem, BoardSettings, StoryJob } from './board'
 
 export interface DirEntry {
   name: string
@@ -242,7 +242,7 @@ export interface StoreFiles {
   automations: { automations: Automation[] }
   savedMissions: { saved: SavedMission[] }
   /** the work board (src/shared/board.ts): items of every project, and each project's pick-up setting */
-  board: { items: BoardItem[]; settings: BoardSettings[] }
+  board: { items: BoardItem[]; settings: BoardSettings[]; jobs?: StoryJob[] }
 }
 
 /** a mission written in the New mission form and kept to launch later (Save for later) */
@@ -304,8 +304,10 @@ export type McpEvent =
   | { mission: string; type: 'status'; state: 'working' | 'needs_input' | 'done'; text?: string }
   | { mission: string; type: 'output'; text: string }
   | { mission: string; type: 'done'; text?: string }
-  /** an agent filed a card on the work board (it lands in Backlog) */
+  /** an agent filed a card on the work board (it lands in Proposed) */
   | { mission: string; type: 'board-add'; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low' } }
+  /** an agent rewrote a card it was asked to refine (it moves to Proposed) */
+  | { mission: string; type: 'board-update'; key: number; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low' } }
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
 

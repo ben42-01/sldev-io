@@ -6362,11 +6362,16 @@ a {
   user-select: text;
 }
 
-/* ── work board (Mission Control → Board) ─────────────────── */
-/* five columns side by side; a narrow dock scrolls them sideways instead of squeezing the cards */
+/* ── work board (its own Board tab) ─────────────────────────── */
+.board-head-actions {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 12px;
+}
+/* six columns side by side; a narrow dock scrolls them sideways instead of squeezing the cards */
 .board-columns {
   display: grid;
-  grid-template-columns: repeat(5, minmax(176px, 1fr));
+  grid-template-columns: repeat(6, minmax(156px, 1fr));
   gap: 10px;
   align-items: start;
   overflow-x: auto;
@@ -6457,6 +6462,56 @@ a {
 .board-own {
   display: inline-flex;
   color: var(--fg-muted);
+}
+.board-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  color: var(--fg-muted);
+}
+.board-approve-all {
+  margin-left: 2px;
+}
+/* a story-writing mission at the top of Proposed */
+.board-job {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--tint);
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.board-job:hover {
+  background: var(--surface-raised);
+}
+.board-job .sdot {
+  margin-top: 4px;
+}
+.board-job-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.board-job-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-refine-card {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12.5px;
 }
 .board-priority.low {
   color: var(--fg-subtle);

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Factory, Files, ListChecks, Network, NotebookPen, Play, Satellite, Server } from 'lucide-react'
+import { Factory, Files, ListChecks, Network, NotebookPen, Play, Satellite, Server, SquareKanban } from 'lucide-react'
 import { whenDockReady } from '../dock/dockApi'
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
+import { openBoard } from '../dock/BoardPanel'
+import { useBoardItems, useStoryJobs } from '../state/board'
 import { showView, shortcutLabel, staticCommands } from '../lib/commands'
 import { updateSettings, workspace, type ViewId } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -30,6 +32,7 @@ export function ActivityBar(): React.JSX.Element {
   return (
     <nav className="activitybar" aria-label="Views">
       <MissionControlButton badges={badges} />
+      <BoardButton />
       <div className="activity-sep" role="separator" />
       {VIEW_META.map(({ id, label, icon: Icon }) => {
         const key = shortcutLabel(cmds.find((c) => c.id === `view.${id}`)!)
@@ -106,6 +109,21 @@ function MissionControlButton({ badges }: { badges: Partial<Record<string, ViewB
       ) : b?.live ? (
         <span className="live-dot sdot small pulse tone-working" />
       ) : null}
+    </button>
+  )
+}
+
+/** The work board: its bubble counts stories waiting for your approval, a dot means an agent is writing some. */
+function BoardButton(): React.JSX.Element {
+  const on = useActivePanel('board')
+  const root = useStore(workspace, (w) => w.rootFolder)
+  const proposed = useBoardItems(root).filter((i) => i.column === 'proposed').length
+  const writing = useStoryJobs(root).some((j) => !j.done)
+  const name = proposed ? `Board: ${proposed} to approve` : writing ? 'Board: an agent is writing stories' : 'Board'
+  return (
+    <button className={`activity-btn${on ? ' active' : ''}`} title={`${name} (stories, agent pick-up)`} aria-label={name} aria-current={on ? 'page' : undefined} onClick={() => openBoard()}>
+      <SquareKanban size={20} />
+      {proposed ? <span className="count-bubble tone-review">{proposed > 99 ? '99+' : proposed}</span> : writing ? <span className="live-dot sdot small pulse tone-working" /> : null}
     </button>
   )
 }

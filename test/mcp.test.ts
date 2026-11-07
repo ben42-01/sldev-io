@@ -106,11 +106,20 @@ describe('tool calls', () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board', args: {}, cwd: '/p' }, withBoard([]))).text).toBe('#1 [ready · high · bug] Card 1\n#2 [done] Card 2')
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board', args: { column: 'backlog' }, cwd: '/p' }, withBoard([]))).text).toBe('No cards in backlog.')
   })
-  it('files a card for the window to add to Backlog, and says who filed it', async () => {
+  it('files a card for the window to add to Proposed, and says who filed it', async () => {
     const events: McpEvent[] = []
     const r = await handleMcp({ mission: 'a', tool: 'sldev_board_add', args: { title: 'Add tests for auth', details: 'src/auth.ts has none.', labels: ['Tests', 'auth'], priority: 'urgent' }, cwd: '/p' }, withBoard(events))
-    expect(r.text).toBe('Filed "Add tests for auth" in Backlog.')
+    expect(r.text).toBe('Filed "Add tests for auth" in Proposed.')
     expect(events).toEqual([{ mission: 'a', type: 'board-add', card: { title: 'Add tests for auth', body: 'src/auth.ts has none.\n\nFiled by codex during mission "T a".', labels: ['tests', 'auth'], priority: 'normal' } }])
+  })
+  it('rewrites a card it was asked to refine, only in Backlog or Proposed', async () => {
+    const events: McpEvent[] = []
+    const board = () => [card(1, '/p', { column: 'backlog' }), card(2, '/p', { column: 'progress' })]
+    const r = await handleMcp({ mission: 'a', tool: 'sldev_board_update', args: { key: 1, title: 'Add rate limiting', details: '**Acceptance criteria**', labels: ['api'] }, cwd: '/p' }, { ...deps(events), board })
+    expect(r.text).toContain('Rewrote #1')
+    expect(events).toEqual([{ mission: 'a', type: 'board-update', key: 1, card: { title: 'Add rate limiting', body: '**Acceptance criteria**', labels: ['api'], priority: 'normal' } }])
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_board_update', args: { key: 2, title: 'x' }, cwd: '/p' }, { ...deps([]), board })).error).toContain('only cards in Backlog or Proposed')
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_board_update', args: { key: 9, title: 'x' }, cwd: '/p' }, { ...deps([]), board })).error).toContain('No card #9')
   })
   it('has no board outside the app (the CLI)', async () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board_add', args: { title: 'x' }, cwd: '/p' }, deps([]))).error).toContain('lives in the sldev-io app')

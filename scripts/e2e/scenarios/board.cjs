@@ -22,13 +22,13 @@ module.exports = async (h) => {
   const cards = (column) => h.js(`[...document.querySelectorAll('.board-column[data-column="${column}"] .board-card .board-title')].map(t => t.textContent)`)
   const card = (title) => `[...document.querySelectorAll('.board-card')].find(c => c.querySelector('.board-title')?.textContent === ${JSON.stringify(title)})`
 
-  // the palette opens the board in Mission Control
+  // the palette opens the board in its own tab
   h.key('P', ['control', 'shift'])
   await h.wait(300)
-  await h.type('work board')
+  await h.type('open the work board')
   await h.wait(200)
   await h.key('Enter')
-  h.expect(await h.until(() => h.js(`document.querySelector('.mc-tab.on')?.textContent.includes('Board') && document.querySelectorAll('.board-column').length === 5`), 3000), 'the board opens with five columns')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.board-panel') && document.querySelectorAll('.board-column').length === 6`), 3000), 'the board opens in its own tab with six columns')
   h.expect(await h.js(`document.querySelector('[data-column="ready"] .board-pickup')?.textContent === 'manual'`), 'Agent ready says pick-up is manual')
 
   // quick add in Backlog
@@ -41,7 +41,7 @@ module.exports = async (h) => {
 
   // a full card, straight into Agent ready, high priority
   const newCard = async (title, body, labels, priority, column) => {
-    await h.click('.board-page .btn.primary', 'New card')
+    await h.click('.board-page .btn', 'New card')
     await h.until(() => h.js(`!!document.querySelector('dialog[open] .board-form')`), 2000)
     await h.setValue('dialog[open] .board-form input', title, `e.placeholder.startsWith('e.g.')`)
     await h.setValue('dialog[open] .board-form textarea', body)
@@ -90,7 +90,7 @@ module.exports = async (h) => {
 
   // a card with its own recipe starts a factory run instead
   await h.click('.board-page .chip-check input')
-  await h.click('.board-page .btn.primary', 'New card')
+  await h.click('.board-page .btn', 'New card')
   await h.until(() => h.js(`!!document.querySelector('dialog[open] .board-form')`), 2000)
   await h.setValue('dialog[open] .board-form input', 'Add a health check', `e.placeholder.startsWith('e.g.')`)
   // BOARD_MCP: the fake agent files a follow-up card through the sldev MCP tools
@@ -111,9 +111,9 @@ module.exports = async (h) => {
   await h.shot('4-factory-run')
   h.expect(await h.until(async () => (await cards('review')).includes('Add a health check'), 40000), 'the finished run moves the card to Review')
   h.expect(await h.js(`${card('Add a health check')}.querySelector('.board-work')?.textContent.includes('2/2 stages')`), 'with its stages done')
-  h.expect(await h.until(async () => (await cards('backlog')).includes('Add tests for the health check'), 3000), 'the agent filed a follow-up card in Backlog (sldev_board_add)')
+  h.expect(await h.until(async () => (await cards('proposed')).includes('Add tests for the health check'), 3000), 'the agent filed a follow-up card in Proposed (sldev_board_add)')
   const filed = (await h.js(`window.api.store.get('board')`)).items.find((i) => i.title === 'Add tests for the health check')
-  h.expect(filed?.priority === 'high' && filed.labels.join() === 'tests' && filed.body.includes('Filed by claude'), 'with its priority, labels and who filed it')
+  h.expect(filed?.priority === 'high' && filed.labels.join() === 'tests' && filed.body.includes('Filed by claude') && filed.by === 'claude', 'with its priority, labels and who filed it')
 
   // drag a reviewed card to Done
   const drag = (title, column) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardLabels, columnItems, followPr, importableIssues, issueCard, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
+import { approveItem, parseStories, storiesPrompt, storyDraft, boardLabels, columnItems, followPr, importableIssues, issueCard, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
 
 let n = 0
 const item = (patch: Partial<BoardItem> = {}): BoardItem => {
@@ -111,5 +111,48 @@ describe('GitHub', () => {
     expect(closed).toMatchObject({ column: 'review', note: 'PR #12 closed without merging' })
     expect(followPr(closed, { number: 12, state: 'CLOSED' }, 10)).toBeNull()
     expect(followPr(item({ column: 'backlog' }), { number: 12, state: 'MERGED' }, 9)).toBeNull()
+  })
+})
+
+describe('stories', () => {
+  it('asks for well-defined stories, filed with the tools when the agent has them', () => {
+    const p = storiesPrompt({ feature: 'Teams: invite people by email', tools: true, max: 6 })
+    expect(p.split('\n')[0]).toBe('Write stories: Teams: invite people by email')
+    expect(p).toContain('at most 6')
+    expect(p).toContain('**Acceptance criteria**')
+    expect(p).toContain('sldev_board_add')
+    expect(p).toContain('do not create, modify or delete any files')
+  })
+  it('without the tools, asks for a JSON file it can read back', () => {
+    const p = storiesPrompt({ feature: 'x', tools: false, max: 3, file: '/p/.sldev/runs/stories-1/stories.json' })
+    expect(p).not.toContain('sldev_board_add')
+    expect(p).toContain('JSON array to /p/.sldev/runs/stories-1/stories.json (the one file you may create)')
+    expect(parseStories('[{"title": "From a file"}]')).toEqual([{ title: 'From a file', details: '', labels: [], priority: 'normal' }])
+  })
+  it('a refinement names the card and the update tool', () => {
+    const p = storiesPrompt({ feature: '', tools: true, max: 3, refine: { key: 4, title: 'Login is slow', body: 'Users wait 5s.', labels: ['perf'] } })
+    expect(p.split('\n')[0]).toBe('Refine card #4: Login is slow')
+    expect(p).toContain('Users wait 5s.')
+    expect(p).toContain('sldev_board_update (key 4)')
+    expect(p).not.toContain('From the user')
+  })
+  it('reads the last stories block of a reply, skipping what is not a story', () => {
+    const reply = 'Here is a draft:\n```json\n[{"title": "old"}]\n```\nFinal:\n```stories\n[{"title": "Add invites", "details": "**Why**", "labels": ["Feature"], "priority": "high"}, {"details": "no title"}, {"title": "Remove members", "priority": "urgent"}]\n```\n'
+    expect(parseStories(reply)).toEqual([
+      { title: 'Add invites', details: '**Why**', labels: ['feature'], priority: 'high' },
+      { title: 'Remove members', details: '', labels: [], priority: 'normal' }
+    ])
+    expect(parseStories('no block')).toEqual([])
+    expect(parseStories('```stories\nnot json\n```')).toEqual([])
+  })
+  it('cleans a story from a tool call', () => {
+    expect(storyDraft({ title: '  ', details: 'x' })).toBeNull()
+    expect(storyDraft({ title: 'A', labels: 'ui, UI', priority: 'low' })).toEqual({ title: 'A', details: '', labels: ['ui'], priority: 'low' })
+  })
+  it('approving makes a proposed card Agent ready, so pick-up can take it', () => {
+    const i = approveItem(item({ column: 'proposed', note: 'x' }), 50)
+    expect(i).toMatchObject({ column: 'ready', note: undefined, order: 50 })
+    expect(nextPickups([i], on)).toHaveLength(1)
+    expect(nextPickups([item({ column: 'proposed' })], on)).toEqual([])
   })
 })

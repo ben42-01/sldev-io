@@ -64,7 +64,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
-                  board.ts (the work board: columns, pick-up order, how a card follows its run), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
+                  board.ts (the work board: columns, pick-up order, how a card follows its run, story prompts and parsing), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
                   repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
@@ -78,7 +78,7 @@ src/renderer/src/
                   and the pick-up loop that starts Agent ready cards as runs or missions)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
-                  Dashboard, Agents, Diagram (code map + schema, local parsing, opened from the Explorer header), Preview, Settings
+                  Dashboard, Agents, Board (the work board in its own tab), Diagram (code map + schema, local parsing, opened from the Explorer header), Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
@@ -166,11 +166,13 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   prompt would flag it too. Factory stages continue on their own only with Settings → Agents → continue automatically.
 - **Automations** run only while the app is open, skip (never catch up) a time missed while it was closed, never start
   a second thing while their last one is live, and never push.
-- **Board pick-up** (`src/shared/board.ts`, Mission Control → Board) follows the automation rules: only while the app is open,
+- **Board pick-up** (`src/shared/board.ts`, the Board tab: `dock/BoardPanel.tsx`) follows the automation rules: only while the app is open,
   never more than the set number of cards at once, never pushes. Work only moves a card forward (Agent ready → In progress →
   Review); a card the human put in Backlog, Review or Done stays there. Moving a card back to Agent ready forgets its finished
   run so it can be picked up again; a card that can't start goes to Backlog with the reason, never retried every tick.
-  Cards an agent files (`sldev_board_add`) always land in Backlog, so agents can't feed pick-up themselves. A merged PR
+  Cards an agent files or rewrites (`sldev_board_add`, `sldev_board_update`, the story-writing missions of Write stories and Refine)
+  always land in Proposed, and only a person approves them into Agent ready, so agents can't feed pick-up themselves.
+  Story missions are read-only; agents without the sldev tools write their stories to a JSON file under `.sldev/runs/`. A merged PR
   (asked through gh every 5 minutes for cards in Review) moves its card to Done; imported issues are closed by their run's PR.
 - **Repeat** (`src/shared/repeat.ts`): a pass ends only on a signal that can't be mistaken: the agent's process exits
   (print mode, the default) or the user accepts it. Never end a pass on a Stop hook or a quiet terminal: a turn can end

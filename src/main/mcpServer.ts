@@ -66,22 +66,38 @@ export const MCP_TOOLS = [
   {
     name: 'sldev_board',
     description:
-      "The project's work board in sldev-io: cards with their number, column (backlog, ready, progress, review, done), priority, labels and title. Check it before filing a card, so you don't add one that is already there.",
-    inputSchema: { type: 'object', properties: { column: { type: 'string', enum: ['backlog', 'ready', 'progress', 'review', 'done'], description: 'Only this column' } } }
+      "The project's work board in sldev-io: cards with their number, column (backlog, proposed, ready, progress, review, done), priority, labels and title. Check it before filing a card, so you don't add one that is already there.",
+    inputSchema: { type: 'object', properties: { column: { type: 'string', enum: ['backlog', 'proposed', 'ready', 'progress', 'review', 'done'], description: 'Only this column' } } }
   },
   {
     name: 'sldev_board_add',
     description:
-      'File follow-up work you found but should not do now (a bug, a missing test, a refactor) as a card on the work board. It goes to Backlog, where a person decides whether an agent picks it up. One card per piece of work.',
+      'File a story on the work board: follow-up work you found but should not do now (a bug, a missing test, a refactor), or a story you were asked to write. It goes to Proposed, where a person approves it before an agent picks it up. One card per piece of work.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'What needs doing, under 100 characters' },
-        details: { type: 'string', description: 'Why, where (files) and what done looks like' },
+        details: { type: 'string', description: 'Markdown: why, what to do (files), acceptance criteria, how to check' },
         labels: { type: 'array', items: { type: 'string' }, description: 'e.g. bug, tests, refactor' },
         priority: { type: 'string', enum: ['high', 'normal', 'low'] }
       },
       required: ['title']
+    }
+  },
+  {
+    name: 'sldev_board_update',
+    description:
+      'Rewrite a card on the work board you were asked to refine (by its number), as a well-defined story. Only cards in Backlog or Proposed can be changed; the card goes to Proposed for the user to approve.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: { type: 'number', description: 'The card number, e.g. 12 for #12' },
+        title: { type: 'string', description: 'What needs doing, under 100 characters' },
+        details: { type: 'string', description: 'Markdown: why, what to do (files), acceptance criteria, how to check' },
+        labels: { type: 'array', items: { type: 'string' } },
+        priority: { type: 'string', enum: ['high', 'normal', 'low'] }
+      },
+      required: ['key', 'title']
     }
   },
   {
