@@ -13,7 +13,7 @@ module.exports = async (h) => {
   await h.wait(500)
   await h.click('.btn', 'New mission')
   await h.wait(400)
-  h.expect(await h.js(`[...document.querySelectorAll('.kind-picker button')].map(b => b.textContent).join(',') === 'Build,Research,Investigate,Plan,Review,Map project,Freeform'`), 'the built-in kinds are offered')
+  h.expect(await h.js(`[...document.querySelectorAll('.kind-picker button')].map(b => b.textContent).join(',') === 'Build,Research,Investigate,Plan,Review,Map project,Lead,Freeform'`), 'the built-in kinds are offered')
   h.expect(await h.js(`document.querySelector('.kind-picker button.on').textContent === 'Build'`), 'Build is the default')
   h.expect(await h.js(`[...document.querySelectorAll('.form .check input')][0]?.checked === true`), 'Build isolates in a worktree by default')
 

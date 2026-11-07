@@ -6894,3 +6894,51 @@ button.board-label:hover {
 .evals-add {
   align-self: flex-start;
 }
+
+/* ── a Lead's workers, inside its mission card ───────────────── */
+.lead-workers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 2px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--tint);
+}
+.lead-workers.empty {
+  padding: 6px 8px;
+}
+.lead-workers-head {
+  padding: 0 4px 2px;
+}
+.lead-worker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  text-align: left;
+  color: var(--fg);
+}
+.lead-worker:hover {
+  background: var(--surface-raised);
+}
+.lead-worker-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-worker-agent {
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.lead-merged {
+  display: inline-flex;
+  color: var(--status-done);
+}

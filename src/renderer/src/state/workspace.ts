@@ -10,6 +10,8 @@ import { loadFactory, loadRecipes } from './factory'
 import { loadAutomations } from './automations'
 import { loadBoard } from './board'
 import { loadEvals } from './evals'
+// answers Lead missions' sldev_delegate, wait, followup and integrate calls
+import './lead'
 
 export type ViewId = 'explorer' | 'runtimes' | 'factory' | 'tasks' | 'notes' | 'remote' | RightTab
 

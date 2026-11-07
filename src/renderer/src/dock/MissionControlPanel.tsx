@@ -64,8 +64,9 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
   const root = useStore(workspace, (w) => w.rootFolder)
   const list = useStore(missions, (s) => s.list)
   const runs = useStore(factory, (s) => s.runs)
-  // eval attempts report to their eval run (Mission Control → Evals), not here
-  const mine = useMemo(() => list.filter((m) => m.root === root && !m.eval), [list, root])
+  // eval attempts report to their eval run (Mission Control → Evals), not here;
+  // a Lead's workers show inside its card, not as missions of their own
+  const mine = useMemo(() => list.filter((m) => m.root === root && !m.eval && !m.delegate), [list, root])
   const live = mine.filter((m) => isLive(m.status))
   const needs = live.filter((m) => m.status === 'needs-input').length
   const myRuns = useMemo(() => runs.filter((r) => r.root === root), [runs, root])

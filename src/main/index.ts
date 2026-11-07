@@ -424,6 +424,21 @@ app.whenReady().then(async () => {
   startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   startUpdateChecks((s) => win?.webContents.send('update:changed', s))
   startLicenseChecks((s) => win?.webContents.send('license:changed', s))
+  // Lead tools start and watch missions, which the window owns: ask it and wait for the answer
+  const leadAsks = new Map<string, (r: { text?: string; error?: string }) => void>()
+  ipcMain.on('lead:reply', (_e, id: string, r: { text?: string; error?: string }) => {
+    leadAsks.get(id)?.(r)
+    leadAsks.delete(id)
+  })
+  const askLead = (r: { mission: string; tool: string; args: Record<string, unknown> }): Promise<{ text?: string; error?: string }> =>
+    new Promise((done) => {
+      const wc = win?.webContents
+      if (!wc || wc.isDestroyed()) return done({ error: 'The sldev-io window is closed.' })
+      const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      leadAsks.set(id, done)
+      wc.send('lead:request', { id, mission: r.mission, tool: r.tool, args: r.args })
+      setTimeout(() => leadAsks.delete(id) && done({ error: 'sldev-io did not answer in time. Try again.' }), 170_000)
+    })
   const toWindow = (channel: string) => (e: unknown): void => {
     const wc = win?.webContents
     if (wc && !wc.isDestroyed()) wc.send(channel, e)
@@ -432,7 +447,7 @@ app.whenReady().then(async () => {
     dir: userData(),
     node: process.execPath,
     onHook: toWindow('mission:hook'),
-    mcp: { missions: () => stores.missions.get().missions, send: toWindow('mission:mcp'), board: () => stores.board.get().items }
+    mcp: { missions: () => stores.missions.get().missions, send: toWindow('mission:mcp'), board: () => stores.board.get().items, lead: askLead }
   })
   await loadShellEnv()
   buildMenu()

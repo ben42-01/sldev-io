@@ -21,6 +21,8 @@ export interface McpDeps {
   send: (e: McpEvent) => void
   /** the app's work board; the CLI has none */
   board?: () => BoardItem[]
+  /** Lead tools (sldev_delegate, wait, followup, integrate), answered by the window; the CLI has none */
+  lead?: (r: McpRequest) => Promise<{ text?: string; error?: string }>
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -98,6 +100,14 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
       if (!card) return { error: 'title is empty' }
       deps.send({ mission: self.id, type: 'board-update', key, card: { title: card.title, body: card.details, labels: card.labels, priority: card.priority } })
       return { text: `Rewrote #${key}; it waits in Proposed for approval.` }
+    }
+    case 'sldev_delegate':
+    case 'sldev_wait':
+    case 'sldev_followup':
+    case 'sldev_integrate': {
+      if (!deps.lead) return { error: 'Lead missions live in the sldev-io app; this session cannot delegate.' }
+      if (self.kind?.id !== 'lead') return { error: 'Only a Lead mission can delegate. Workers do their own part and report back.' }
+      return deps.lead(r)
     }
     case 'sldev_rules': {
       for (const f of ['.sldev/rules.md', 'AGENTS.md']) {

@@ -121,6 +121,15 @@ describe('tool calls', () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board_update', args: { key: 2, title: 'x' }, cwd: '/p' }, { ...deps([]), board })).error).toContain('only cards in Backlog or Proposed')
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board_update', args: { key: 9, title: 'x' }, cwd: '/p' }, { ...deps([]), board })).error).toContain('No card #9')
   })
+  it('only a Lead may delegate, and only in the app', async () => {
+    const asked: string[] = []
+    const lead = async (r: { tool: string }) => (asked.push(r.tool), { text: 'ok' })
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_delegate', args: { title: 't', brief: 'b' }, cwd: '/p' }, { ...deps([]), lead })).error).toContain('Only a Lead mission')
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_wait', args: {}, cwd: '/p' }, deps([]))).error).toContain('live in the sldev-io app')
+    const withLead = { missions: () => [m('l', '/p', { kind: { id: 'lead', name: 'Lead', readOnly: false } })], send: () => undefined, lead }
+    expect(await handleMcp({ mission: 'l', tool: 'sldev_integrate', args: { ids: ['x'] }, cwd: '/p' }, withLead)).toEqual({ text: 'ok' })
+    expect(asked).toEqual(['sldev_integrate'])
+  })
   it('has no board outside the app (the CLI)', async () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_board_add', args: { title: 'x' }, cwd: '/p' }, deps([]))).error).toContain('lives in the sldev-io app')
   })

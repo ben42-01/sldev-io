@@ -1,3 +1,4 @@
+import { DEFAULT_LEAD } from '@shared/lead'
 import type { AgentOptions, HookEvent, Mission, MissionStatus, SavedMission } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
@@ -59,7 +60,7 @@ function persist(): void {
   saveTimer = setTimeout(() => void save(), 400)
 }
 
-function update(id: string, patch: Partial<Mission>): Mission | undefined {
+export function update(id: string, patch: Partial<Mission>): Mission | undefined {
   let updated: Mission | undefined
   missions.set((s) => ({
     list: s.list.map((m) => (m.id === id ? (updated = patchMission(m, patch, Date.now())) : m))
@@ -165,6 +166,8 @@ export async function startMission(input: StartMissionInput): Promise<Mission> {
     taskId: input.taskId,
     factory: input.factory,
     eval: input.eval,
+    // a Lead delegates within these limits (src/shared/lead.ts)
+    lead: input.kind?.id === 'lead' ? DEFAULT_LEAD : undefined,
     brief: input.brief,
     criteria: input.criteria?.trim() || undefined,
     parent: input.parent,

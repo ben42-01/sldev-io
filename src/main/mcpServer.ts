@@ -101,6 +101,37 @@ export const MCP_TOOLS = [
     }
   },
   {
+    name: 'sldev_delegate',
+    description:
+      'Lead missions only: start another agent on one task, in its own worktree branched from yours. It runs unattended and reports back; collect the result with sldev_wait. Give it everything it needs: the task, the files, and acceptance criteria.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'The task in a few words, e.g. "Team invites by email"' },
+        brief: { type: 'string', description: 'What to do, where, and any constraints' },
+        criteria: { type: 'string', description: 'Acceptance criteria, one per line' },
+        agent: { type: 'string', description: 'auto (best on this project\'s evals, the default), or claude, codex, gemini, …' },
+        kind: { type: 'string', enum: ['build', 'investigate', 'research', 'review'], description: 'build (default) changes code; the others read and report' }
+      },
+      required: ['title', 'brief']
+    }
+  },
+  {
+    name: 'sldev_wait',
+    description: 'Lead missions only: wait for your workers to finish (up to 45 seconds per call) and get their reports. Without ids, waits for any worker you have not heard back from. Call it again while some are still running.',
+    inputSchema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' }, description: 'Worker ids from sldev_delegate' }, seconds: { type: 'number', description: 'At most 45' } } }
+  },
+  {
+    name: 'sldev_followup',
+    description: 'Lead missions only: send a finished worker back with feedback (what is wrong, what to change). It continues in the same branch; wait for it again with sldev_wait.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, message: { type: 'string' } }, required: ['id', 'message'] }
+  },
+  {
+    name: 'sldev_integrate',
+    description: "Lead missions only: merge finished workers' branches into your branch, in the order given, then optionally run a check command (e.g. npm test). Stops at the first merge conflict and tells you which files; resolve them in your folder, commit, and call it again.",
+    inputSchema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } }, check: { type: 'string', description: 'A command to run after merging, e.g. npm test' } }, required: ['ids'] }
+  },
+  {
     name: 'sldev_rules',
     description: "The project's agent rules (.sldev/rules.md, or AGENTS.md when there is none).",
     inputSchema: { type: 'object', properties: {} }
@@ -112,6 +143,8 @@ const fs = require('fs')
 const path = require('path')
 const readline = require('readline')
 const TOOLS = ${JSON.stringify(MCP_TOOLS)}
+// tools that wait for workers or run their checks
+const LONG = ['sldev_wait', 'sldev_integrate', 'sldev_delegate']
 const at = process.argv.indexOf('--mission')
 const mission = at > 0 ? process.argv[at + 1] : ''
 let endpoint = null
@@ -121,7 +154,7 @@ function call(tool, args) {
   return new Promise((resolve) => {
     if (!endpoint) return resolve({ error: 'sldev-io is not running' })
     const body = JSON.stringify({ mission, tool, args, cwd: process.cwd() })
-    const req = http.request({ host: '127.0.0.1', port: endpoint.port, path: '/mcp', method: 'POST', timeout: 20000,
+    const req = http.request({ host: '127.0.0.1', port: endpoint.port, path: '/mcp', method: 'POST', timeout: LONG.includes(tool) ? 180000 : 20000,
       headers: { 'content-type': 'application/json', 'x-sldev-token': endpoint.token, 'content-length': Buffer.byteLength(body) } },
       (res) => { let d = ''; res.on('data', (c) => (d += c)); res.on('end', () => { try { resolve(JSON.parse(d)) } catch { resolve({ error: 'sldev-io sent an unreadable reply' }) } }) })
     req.on('error', (e) => resolve({ error: 'sldev-io is not reachable: ' + e.message }))

@@ -188,6 +188,11 @@ const api = {
     tokens: (reqs: Array<{ id: string; agent: string; cwd: string; from: number; to: number; transcriptPath?: string }>): Promise<Record<string, TokenUsage | null>> =>
       ipcRenderer.invoke('usage:tokens', reqs)
   },
+  lead: {
+    /** a Lead mission called sldev_delegate, wait, followup or integrate; answer with reply */
+    onRequest: (cb: (r: { id: string; mission: string; tool: string; args: Record<string, unknown> }) => void): Unsubscribe => on('lead:request', cb),
+    reply: (id: string, r: { text?: string; error?: string }): void => ipcRenderer.send('lead:reply', id, r)
+  },
   evals: {
     list: (root: string): Promise<Array<{ path: string; text: string }>> => ipcRenderer.invoke('evals:list', root),
     save: (root: string, slug: string, text: string): Promise<string> => ipcRenderer.invoke('evals:save', root, slug, text),

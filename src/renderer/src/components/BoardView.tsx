@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, ArrowDown, Bot, Check, CheckCheck, CircleDot, Ellipsis, Factory, GitPullRequest, Play, Plus, RefreshCw, Search, Settings2, Sparkles, SquareKanban, Trash2 } from 'lucide-react'
+import { ArrowUp, ArrowDown, Bot, Check, CheckCheck, CircleDot, Ellipsis, Factory, GitPullRequest, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Trash2 } from 'lucide-react'
 import { BOARD_COLUMNS, boardLabels, columnItems, importableIssues, matchesItem, parseLabels, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
@@ -213,7 +213,10 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
     { label: 'Edit…', run: onOpen },
     ...(proposed ? [{ label: 'Approve for agents', icon: <Check size={13} />, run: () => approve([i.id]) }] : []),
     ...(refinable ? [{ label: 'Refine with an agent…', icon: <Sparkles size={13} />, run: () => openBoardDialog({ type: 'stories', card: i.id }) }] : []),
-    ...(startable ? [{ label: 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) }] : []),
+    ...(startable ? [
+      { label: 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) },
+      { label: 'Start with a Lead (it delegates the parts)', icon: <Network size={13} />, run: () => (updateItem(i.id, { work: { type: 'mission', kind: 'lead', brief: '' } }), void startItem(i.id)) }
+    ] : []),
     ...(work?.open ? [{ label: i.started?.type === 'run' ? 'Open pipeline' : 'Open mission', run: work.open }] : []),
     ...(prOf(i) ? [
       { label: `Open PR #${prOf(i)!.number} on GitHub`, icon: <GitPullRequest size={13} />, run: () => void window.api.shell.openExternal(prOf(i)!.url) },

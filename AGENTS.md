@@ -66,7 +66,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, layered layout, Mermaid export), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order, how a card follows its run, story prompts and parsing), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
-                  evals.ts (eval files, checks, judge verdicts, the scoreboard), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
+                  evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
   lib/            framework-free logic: terminals.ts (xterm sessions), agents.ts (re-exports the agent
@@ -75,7 +75,7 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
-                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
+                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), lead (answers a Lead's sldev_delegate/wait/followup/integrate: workers, merges), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
                   and the pick-up loop that starts Agent ready cards as runs or missions)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
@@ -181,6 +181,13 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   mission that writes `VERDICT: PASS|FAIL` to a file under `.sldev/runs`. Eval missions carry `eval` (like `factory`): no
   notifications, no failover, kept out of the missions board and Recap. Only while the app is open; a restart stops running
   attempts (Continue starts the queue again), and nothing is pushed. Deleting a run removes its worktrees and branches.
+- **Lead missions** (kind `lead`, `src/shared/lead.ts`, `state/lead.ts`): only a Lead may call sldev_delegate, wait, followup and
+  integrate (main checks the caller's kind; the CLI has none). Main can't start missions, so it forwards those calls to the
+  window (`lead:request`/`lead:reply`) and waits. Workers run in print mode with the unattended mode, each in a worktree
+  branched from the Lead's branch, carry `delegate`, show inside the Lead's card (not as missions of their own), and can't
+  delegate. `maxWorkers`/`parallel` are hard limits. sldev_wait returns within 45 s (agents' tool calls time out), so the
+  Lead calls it again. Integrating merges worker branches into the Lead's own worktree; a conflict stops there for the Lead
+  to resolve. Nothing is pushed: the human reviews the Lead's branch. "auto" routes to the best agent on the project's evals.
 - **Repeat** (`src/shared/repeat.ts`): a pass ends only on a signal that can't be mistaken: the agent's process exits
   (print mode, the default) or the user accepts it. Never end a pass on a Stop hook or a quiet terminal: a turn can end
   with a question. Passes share the first pass's worktree and each is committed there; in place, nothing is committed.

@@ -1,5 +1,6 @@
 import { parse, stringify } from 'yaml'
 import { MAP_INSTRUCTIONS } from './context'
+import { LEAD_METHOD } from './lead'
 
 /**
  * What kind of work a mission is: it decides how the brief is framed, how the agent should end, and
@@ -116,6 +117,16 @@ export const BUILTIN_KINDS: MissionKind[] = [
     placeholder: 'Optional: what to focus on, e.g. the payment flow and how releases work',
     scope: 'builtin',
     template: ['Mission: {title}', '{brief}', '{criteria}', MAP_INSTRUCTIONS, 'End with: the files you wrote, and what you could not verify.'].join('\n\n')
+  },
+  {
+    id: 'lead',
+    name: 'Lead',
+    description: 'Plans a big goal and delegates the parts to other agents in parallel, reviews and merges their work. Needs the sldev tools (Claude Code, Codex).',
+    worktree: true,
+    readOnly: false,
+    placeholder: 'e.g. Teams: users create a team, invite people by email, share projects with it, and owners remove members',
+    scope: 'builtin',
+    template: ['Lead: {title}', '{brief}', '{criteria}', LEAD_METHOD].join('\n\n')
   },
   {
     id: 'freeform',
