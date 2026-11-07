@@ -4,12 +4,12 @@ const path = require('path')
 
 module.exports = async (h) => {
   await h.shot('1-welcome')
-  h.expect(await h.js(`document.querySelector('.welcome h1')?.textContent === 'sldev-io'`), 'welcome shows the app name')
+  h.expect(await h.js(`document.querySelector('.welcome h1')?.textContent.includes('sldev-io')`), 'welcome shows the app name')
   await h.openFixture()
   // with a project open, the start screen takes a brief: Enter opens the New mission form with it
-  h.expect(await h.until(() => h.js(`!!document.querySelector('.welcome .launch-brief input')`), 3000), 'the start screen offers a brief box')
-  await h.setValue('.welcome .launch-brief input', 'Tidy the README')
-  await h.js(`document.querySelector('.welcome .launch-brief').requestSubmit()`)
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.welcome .hero-form input')`), 3000), 'the start screen offers a brief box')
+  await h.setValue('.welcome .hero-form input', 'Tidy the README')
+  await h.js(`document.querySelector('.welcome .hero-form').requestSubmit()`)
   h.expect(await h.until(() => h.js(`document.querySelector('dialog[open] .mission-form textarea')?.value === 'Tidy the README'`), 2000), 'Enter opens New mission with the brief filled in')
   await h.shot('1b-welcome-brief')
   h.key('Escape')

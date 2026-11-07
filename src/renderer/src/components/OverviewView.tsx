@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { Mission } from '@shared/types'
 import { ChartGantt, LayoutGrid, Rocket } from 'lucide-react'
 import { activeIn, addTokens, NO_TOKENS, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
 import { showView } from '../lib/commands'
@@ -21,6 +22,55 @@ const startOfToday = (now: number): number => {
   const d = new Date(now)
   d.setHours(0, 0, 0, 0)
   return d.getTime()
+}
+
+/** The last seven days, oldest first: each day's missions and how long agents worked in it. */
+function weekDays(list: Mission[], now: number): { start: number; label: string; missions: number; working: number }[] {
+  const today = startOfToday(now)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(d.getDate() - (6 - i))
+    const start = d.getTime()
+    const end = i === 6 ? now : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime()
+    const active = list.filter((m) => activeIn(m, start, end, now))
+    return { start, label: d.toLocaleDateString(undefined, { weekday: 'short' }), missions: active.length, working: timeIn(active, 'working', start, end, now) }
+  })
+}
+
+/** Agent time per day as thin bars, today emphasised; the headline is the week's total. Nothing in a quiet week. */
+function WeekStrip({ list, now }: { list: Mission[]; now: number }): React.JSX.Element | null {
+  const days = weekDays(list, now)
+  const total = days.reduce((t, d) => t + d.working, 0)
+  const count = list.filter((m) => activeIn(m, days[0].start, now, now)).length
+  if (!count) return null
+  const max = Math.max(...days.map((d) => d.working), 1)
+  return (
+    <>
+      <div className="section-label">This week</div>
+      <div className="ov-week" role="group" aria-label="Agent time this week">
+        <div className="ov-week-head">
+          <b>{duration(total)}</b>
+          <span>
+            of agent work · {count} mission{count === 1 ? '' : 's'}
+          </span>
+        </div>
+        <div className="ov-week-bars">
+          {days.map((d, i) => (
+            <div
+              key={d.start}
+              className={`ov-week-day${i === 6 ? ' today' : ''}`}
+              title={`${d.label}: ${duration(d.working)} of agent work, ${d.missions} mission${d.missions === 1 ? '' : 's'}`}
+            >
+              <span className="ov-week-track">
+                <span className="ov-week-bar" style={{ height: d.working ? `${Math.max(6, (d.working / max) * 100)}%` : 0 }} />
+              </span>
+              <span className="ov-week-label">{d.label.slice(0, 2)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
 }
 
 /** At a glance, across all projects: what needs you, today's usage, and the latest missions and runs. */
@@ -124,6 +174,8 @@ export function OverviewView(): React.JSX.Element {
             ))}
           </ul>
         )}
+
+        <WeekStrip list={list} now={end} />
 
         <div className="section-label">Latest missions</div>
         {latest.length ? (

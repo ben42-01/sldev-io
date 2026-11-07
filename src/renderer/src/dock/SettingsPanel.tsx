@@ -180,16 +180,49 @@ function ThemePicker(): React.JSX.Element {
   )
 }
 
-/** Jump links to every section heading on the page, read from the DOM so sections from other components count too. */
+/** Jump links to every section heading on the page, read from the DOM so sections from other components count too.
+ * The link of the section being read is marked as you scroll. */
 function SectionNav({ page }: { page: React.RefObject<HTMLDivElement | null> }): React.JSX.Element {
   const [heads, setHeads] = useState<HTMLElement[]>([])
+  const [active, setActive] = useState(0)
+  const nav = useRef<HTMLElement>(null)
   useEffect(() => {
     setHeads([...(page.current?.querySelectorAll<HTMLElement>(':scope > section > h3') ?? [])])
   }, [page])
+  useEffect(() => {
+    const box = page.current
+    if (!box || !heads.length) return
+    const onScroll = (): void => {
+      const line = box.getBoundingClientRect().top + (nav.current?.offsetHeight ?? 0) + 24
+      const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4
+      let i = 0
+      heads.forEach((h, n) => {
+        if ((h.parentElement ?? h).getBoundingClientRect().top <= line) i = n
+      })
+      setActive(atEnd ? heads.length - 1 : i)
+    }
+    onScroll()
+    box.addEventListener('scroll', onScroll, { passive: true })
+    return () => box.removeEventListener('scroll', onScroll)
+  }, [page, heads])
+  useEffect(() => {
+    // only the nav scrolls sideways: scrollIntoView would also move the page and cut a smooth jump short
+    const bar = nav.current
+    const link = bar?.children[active] as HTMLElement | undefined
+    if (!bar || !link) return
+    if (link.offsetLeft < bar.scrollLeft) bar.scrollLeft = link.offsetLeft
+    else if (link.offsetLeft + link.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = link.offsetLeft + link.offsetWidth - bar.clientWidth
+  }, [active])
   return (
-    <nav className="settings-nav" aria-label="Settings sections">
-      {heads.map((h) => (
-        <button key={h.textContent} type="button" onClick={() => scrollToTop(h.parentElement, 'smooth')}>
+    <nav className="settings-nav" aria-label="Settings sections" ref={nav}>
+      {heads.map((h, i) => (
+        <button
+          key={h.textContent}
+          type="button"
+          className={i === active ? 'on' : undefined}
+          aria-current={i === active ? 'true' : undefined}
+          onClick={() => scrollToTop(h.parentElement, 'smooth')}
+        >
           {h.textContent}
         </button>
       ))}
