@@ -25,10 +25,16 @@ import {
   UserCog,
   Workflow,
   NotebookPen,
+  Network,
+  SquareKanban,
+  Sparkles,
+  FlaskConical,
+  Route,
+  ClipboardList,
   type LucideIcon
 } from 'lucide-react'
 
-type GroupId = 'run' | 'automate' | 'control' | 'workspace'
+type GroupId = 'team' | 'run' | 'automate' | 'control' | 'workspace'
 
 interface Feature {
   icon: LucideIcon
@@ -37,8 +43,9 @@ interface Feature {
   group: GroupId
 }
 
-/** The three things the site sells, plus the everyday workspace around them. */
+/** The four things the site sells, plus the everyday workspace around them. */
 const groups: { id: GroupId; icon: LucideIcon; title: string; text: string }[] = [
+  { id: 'team', icon: Network, title: 'Lead a team of agents', text: 'One agent plans and delegates, agents write the stories, and your own evals decide who does what.' },
   { id: 'run', icon: Layers, title: 'Run every agent', text: "All the agents you pay for, working together instead of one vendor's model on everything." },
   { id: 'automate', icon: Factory, title: 'Automate the pipeline', text: 'From an issue or a CI failure to a reviewed pull request, with your own skills at every step.' },
   { id: 'control', icon: ShieldCheck, title: 'Stay in control', text: 'On your machine, with your setup. Nothing is merged or pushed without your click.' },
@@ -46,6 +53,13 @@ const groups: { id: GroupId; icon: LucideIcon; title: string; text: string }[] =
 ]
 
 const features: Feature[] = [
+  { group: 'team', icon: Network, title: 'Lead missions', text: 'Give one agent a big goal. It splits it into tasks, delegates them to other agents running in parallel in their own worktrees, reviews each diff, sends work back, and merges the good branches with your tests as the check.' },
+  { group: 'team', icon: SquareKanban, title: 'A board agents work from', text: 'Backlog, Proposed, Agent ready, In progress, Review, Done. Turn on pick-up and the factory takes approved cards itself, highest priority first; a merged pull request moves the card to Done.' },
+  { group: 'team', icon: Sparkles, title: 'Agents write the stories', text: 'Describe a feature and an agent reads the code, then writes stories with acceptance criteria and how to check them. Refine turns a vague card into one. You approve before any agent picks one up.' },
+  { group: 'team', icon: FlaskConical, title: 'Evals and a leaderboard', text: 'Tasks from your own repo with checks: tests, output, a diff limit or a judge agent. Run them against any agents and models and see who passes most, fastest, with the smallest diff.' },
+  { group: 'team', icon: Route, title: 'Routing by results', text: 'A Lead with agent "auto" gives each task to the agent that scored best on your evals, and says why. Your data picks the agent, not a vendor.' },
+  { group: 'team', icon: ClipboardList, title: 'Recap for your standup', text: 'What your agents did since your last working day, today or this week, as Markdown grouped into done, in review, in progress and blocked. Made on your machine.' },
+
   { group: 'run', icon: Layers, title: 'Every agent, one window', text: 'Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini side by side, plus any CLI you add with a command template.' },
   { group: 'run', icon: ArrowRightLeft, title: 'Continues at the usage limit', text: 'When an agent stops at its plan\'s limit, the next agent in your order takes over in the same folder, with the task and the work so far.' },
   { group: 'run', icon: Compass, title: 'Missions for every kind of work', text: 'Build, Research, Investigate, Plan and Review missions, each framed for the job. A Research mission answers without touching your code; your own kinds are Markdown templates.' },
@@ -111,7 +125,7 @@ export function FeatureHighlights() {
           <div>
             <p className="eyebrow">Features</p>
             <h2>What one vendor's agent app can't do.</h2>
-            <p className="section-lead">Agents write the code. sldev-io makes them work together, keeps them busy and keeps you in charge.</p>
+            <p className="section-lead">Agents write the code. sldev-io makes agents from every vendor work as one team, measures who's best at what, keeps them busy and keeps you in charge.</p>
           </div>
           <a className="more-link" href="/features">
             All features <ArrowRight size={15} />

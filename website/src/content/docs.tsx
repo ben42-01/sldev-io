@@ -1226,4 +1226,237 @@ const remote: DocPage = {
   ]
 }
 
-export const docs: DocPage[] = [recipes, missions, context, workspace, agents, remote]
+const lead: DocPage = {
+  id: 'lead',
+  title: 'Lead missions: one agent delegates to others',
+  summary:
+    'Give a Lead a big goal. It plans, hands the parts to other agents running in parallel in their own worktrees, reviews each diff, sends work back and merges what passes. Nothing is pushed.',
+  sections: [
+    {
+      id: 'what',
+      title: 'What a Lead does',
+      body: (
+        <>
+          <p>
+            A Lead is a mission kind. Instead of writing the code, the Lead agent reads enough of the project to plan, splits the goal into
+            tasks of one pull request each with acceptance criteria, and starts a worker for each. Workers can be any agent with the sldev
+            tools, so a Claude Lead can hand the API to Codex and the tests to Gemini.
+          </p>
+          <p>
+            Each worker runs unattended (print mode, with the unattended mode from Settings → Software Factory) in its own git worktree,
+            branched from the Lead's branch. The Lead collects their reports, reads every diff against the criteria, sends a worker back
+            with feedback when it falls short, and merges the good branches into its own branch with your tests as the check. You review
+            the Lead's branch at the end.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'start',
+      title: 'Start a Lead',
+      body: (
+        <>
+          <p>
+            Open New mission, pick the <strong>Lead</strong> kind and describe the goal, as you would to a tech lead. Or, on the Board,
+            open a card's menu and choose <strong>Start with a Lead</strong>: the card follows the Lead to Review.
+          </p>
+          <p>
+            The Lead runs in an ordinary terminal, so you can watch it plan and answer its questions. Its workers show inside its card in
+            Mission Control, each with its agent, its state, and a mark once it is merged.
+          </p>
+          <Note>The Lead needs an agent with the sldev tools: Claude Code or Codex. Workers can be any agent with them.</Note>
+        </>
+      )
+    },
+    {
+      id: 'tools',
+      title: 'The tools a Lead uses',
+      body: (
+        <>
+          <p>Only a Lead mission can call these; a worker that tries is told to do its own part.</p>
+          <ul>
+            <li><code>sldev_delegate</code>: start a worker with a title, a brief, acceptance criteria, an agent (or <code>auto</code>) and a kind (build, investigate, research, review).</li>
+            <li><code>sldev_wait</code>: get the reports of workers that finished, with their branch and diff size. It returns within 45 seconds; the Lead calls it again while some are still running.</li>
+            <li><code>sldev_mission_diff</code>: read a worker's diff.</li>
+            <li><code>sldev_followup</code>: send a finished worker back with what to fix. It continues in the same branch.</li>
+            <li><code>sldev_integrate</code>: merge finished branches into the Lead's, in order, then run a check such as <code>npm test</code>. A merge conflict stops there, for the Lead to resolve in its folder.</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      id: 'routing',
+      title: 'Routing by your evals',
+      body: (
+        <p>
+          With agent <code>auto</code> (the default), each task goes to the installed agent that scored best on this project's{' '}
+          <a href="/docs/evals">evals</a>: pass rate first, then checks passed, then speed. The worker's card says why it was chosen.
+          Without eval results it falls back to your default agent.
+        </p>
+      )
+    },
+    {
+      id: 'limits',
+      title: 'Limits and safety',
+      body: (
+        <ul>
+          <li>A Lead starts at most 6 workers, 3 at a time. Workers can't delegate further.</li>
+          <li>Workers start from the Lead's branch, so a later worker sees what was already integrated.</li>
+          <li>Nothing is pushed. The Lead's branch waits for your review, like any mission's.</li>
+          <li>It all runs on your machine, only while the app is open.</li>
+        </ul>
+      )
+    }
+  ]
+}
+
+const board: DocPage = {
+  id: 'board',
+  title: 'The Board: stories, approval and pick-up',
+  summary:
+    'Plan work in columns. Agents write well-defined stories into Proposed, you approve them, and the factory picks up Agent ready cards on its own. GitHub issues come in; merged pull requests move cards to Done.',
+  sections: [
+    {
+      id: 'columns',
+      title: 'The columns',
+      body: (
+        <>
+          <p>The Board has its own button on the left bar. Cards move left to right:</p>
+          <ul>
+            <li><strong>Backlog</strong>: ideas and work that isn't ready for an agent.</li>
+            <li><strong>Proposed</strong>: stories an agent wrote or refined, waiting for your approval.</li>
+            <li><strong>Agent ready</strong>: approved, clear enough for an agent. Pick-up takes these.</li>
+            <li><strong>In progress</strong>: an agent is on it; the card shows how its run is going.</li>
+            <li><strong>Review</strong>: the agent is done; review the diff or the pull request.</li>
+            <li><strong>Done</strong>: reviewed and merged.</li>
+          </ul>
+          <p>Drag cards between columns, filter by text, number or label, and set a priority. The Board menu has everything else.</p>
+        </>
+      )
+    },
+    {
+      id: 'stories',
+      title: 'Agents write the stories',
+      body: (
+        <>
+          <p>
+            <strong>Write stories</strong> takes a feature, an epic or a problem. A read-only agent reads the code and splits it into
+            stories, each with <em>why</em>, <em>what to do</em> (the files likely to change), <em>acceptance criteria</em> and{' '}
+            <em>how to check</em>, plus labels and a priority. It checks the board first, so it doesn't file what is already there.
+          </p>
+          <p>
+            <strong>Refine with an agent</strong> on a Backlog or Proposed card rewrites a vague card ("Login is slow") as a proper story in
+            place, and splits it when it is really several pieces of work.
+          </p>
+          <p>
+            Whatever an agent writes lands in Proposed with its name on it. Approve cards one by one or all at once; only then can pick-up
+            see them. Agents that find follow-up work during a mission (a missing test, a bug next door) file it the same way, with{' '}
+            <code>sldev_board_add</code>.
+          </p>
+          <Note>Agents without the sldev tools write their stories to a JSON file that sldev-io reads, so story writing works with every agent.</Note>
+        </>
+      )
+    },
+    {
+      id: 'pickup',
+      title: 'Pick-up',
+      body: (
+        <p>
+          Turn on <strong>Auto pick-up</strong> and choose what starts for a card (a factory recipe or a mission of a kind on an agent) and
+          how many at once. Pick-up takes Agent ready cards highest priority first, follows each run to Review, and flags a question or a
+          failure on the card. A card can have its own recipe, or start with a <a href="/docs/lead">Lead</a>. It runs only while the app is
+          open, and a recipe's pull request step still waits for your click.
+        </p>
+      )
+    },
+    {
+      id: 'github',
+      title: 'GitHub issues and pull requests',
+      body: (
+        <p>
+          <strong>Import GitHub issues</strong> lists open issues (filter by label) and makes cards with their labels and a link back; P1,
+          urgent or critical labels come in as high priority. A card's factory run closes its issue with its pull request, and once that
+          pull request is merged (checked through your <code>gh</code> every few minutes) the card moves to Done.
+        </p>
+      )
+    }
+  ]
+}
+
+const evalsGuide: DocPage = {
+  id: 'evals',
+  title: 'Evals: measure agents on your own code',
+  summary:
+    'An eval is a task from your repository with checks. Run a suite against any agents and models, each attempt in its own worktree, and compare pass rate, time and diff size on a leaderboard.',
+  sections: [
+    {
+      id: 'file',
+      title: 'An eval file',
+      body: (
+        <>
+          <p>
+            Evals are YAML files in <code>.sldev/evals/</code>, committed with your code. Mission Control → Evals → <strong>New eval</strong>{' '}
+            writes one from a template, and <strong>Save as eval</strong> on any mission turns a task you already gave an agent into one,
+            starting from the commit that mission started from.
+          </p>
+          <Code file=".sldev/evals/leap-years.yml">{`
+name: Leap years
+description: Date parsing edge cases
+brief: |
+  parseDate('2024-02-29') must return a date; parseDate('2023-02-29') must throw.
+base: main          # where every attempt starts (default: HEAD when the run starts)
+setup: npm ci       # dependencies (default: detected, like factory runs)
+timeout: 20         # minutes before the agent is stopped
+checks:
+  - run: npm test
+  - run: node scripts/check-dates.js
+    expect: ok
+  - diff: 80
+  - judge: Adds a test for 2024-02-29 and keeps the public API.
+`}</Code>
+        </>
+      )
+    },
+    {
+      id: 'checks',
+      title: 'Checks',
+      body: (
+        <ul>
+          <li><code>run</code>: a command in the attempt's worktree that must exit 0. With <code>expect</code>, its output must contain that text.</li>
+          <li><code>diff</code>: the most changed lines allowed. An attempt that changes nothing fails it.</li>
+          <li><code>judge</code>: a second agent reads the diff against your rubric and writes a verdict. It passes only if every point is met.</li>
+        </ul>
+      )
+    },
+    {
+      id: 'run',
+      title: 'Running a suite',
+      body: (
+        <>
+          <p>
+            <strong>Run evals</strong> asks which evals, which agents (each with an optional model, so two models of one agent can compete),
+            how many attempts each and how many at a time. Agents vary from run to run: three attempts tell you more than one.
+          </p>
+          <p>
+            Every attempt gets its own worktree from the eval's base. Setup is committed first, so the diff is the agent's alone. The agent
+            runs in print mode with the unattended mode, then the checks run. Nothing is pushed, and deleting a run removes its worktrees.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'scores',
+      title: 'The scoreboard',
+      body: (
+        <p>
+          Each run shows a matrix of evals against agents. The leaderboard ranks every finished attempt in the project by pass rate, then
+          checks passed (partial credit), then median time, with median diff size alongside. <strong>Copy</strong> gives a Markdown table
+          for a pull request or a team channel. A <a href="/docs/lead">Lead</a> with agent <code>auto</code> routes each task to the
+          leaderboard's best installed agent.
+        </p>
+      )
+    }
+  ]
+}
+
+export const docs: DocPage[] = [lead, board, evalsGuide, recipes, missions, context, workspace, agents, remote]

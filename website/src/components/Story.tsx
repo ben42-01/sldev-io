@@ -5,6 +5,8 @@ const before = [
   'Two agents editing the same folder at once',
   'Copying diffs around to review what an agent changed',
   'An agent hits its usage limit and the work waits hours for the reset',
+  'Splitting a big feature across agents by hand, then merging it all yourself',
+  'Picking an agent by gut feeling and benchmarks of someone else\'s code',
   'Yet another tool rewriting your agent settings'
 ]
 const after = [
@@ -12,6 +14,8 @@ const after = [
   'Each mission in its own git worktree',
   'Diff, commit and pull request built in',
   'Another agent continues where the stopped one left off',
+  'A Lead agent delegates the parts, reviews them and merges what passes',
+  'Evals on your repo, and a leaderboard that routes the work',
   'Your own agent settings left untouched'
 ]
 

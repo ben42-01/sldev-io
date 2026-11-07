@@ -31,7 +31,7 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
               <span className="brand-text">nothing in the way.</span>
             </>
           }
-          lead="The terminal is the main surface. Everything else exists to launch, organise and watch what runs in it."
+          lead="Agents from every vendor, working as one team on your machine: a Lead that delegates, a board they work from, evals that measure them, and everything around the terminal."
         />
         <FeatureGrid />
         <AgentAgnostic />

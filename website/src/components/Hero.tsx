@@ -19,9 +19,9 @@ export function Hero() {
           <span className="brand-text">Working as one team.</span>
         </h1>
         <p className="lead">
-          Run Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini on your own machine. When one hits its usage limit, the
-          next one picks up the work. Chain them into a Software Factory that turns an issue into a reviewed pull request, and step in
-          only where it matters.
+          Claude Code, Codex, Cursor Agent, Copilot, OpenCode and Gemini on your own machine, as one team. A Lead agent splits a feature and
+          delegates the parts to the others in parallel, agents write the stories on your board and pick up what you approve, and evals
+          on your own code show who does what best. Nothing is pushed without your click.
         </p>
         <div className="hero-cta">
           <DownloadButton />

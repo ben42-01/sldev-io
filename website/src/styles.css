@@ -317,7 +317,7 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .card p { margin-top: 8px; font-size: 14.5px; color: var(--fg-muted); }
 
 /* home: the three pillars, each listing what makes it up */
-.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 56px; background: var(--border); border: 1px solid var(--border); }
+.pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 56px; background: var(--border); border: 1px solid var(--border); }
 .pillar { padding: 32px 28px; background: var(--bg); border-top: 2px solid transparent; border-image: var(--brand) 1; border-image-slice: 1 0 0 0; }
 .pillar > svg { color: var(--fg); margin-bottom: 18px; }
 .pillar h3 { font-size: 20px; letter-spacing: -0.02em; }
@@ -326,7 +326,8 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .pillar li a { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14.5px; color: var(--fg); border-top: 1px solid var(--border); }
 .pillar li a:hover { color: var(--fg-muted); }
 .pillar li svg { flex: none; color: var(--fg-muted); }
-@media (max-width: 900px) { .pillars { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .pillars { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .pillars { grid-template-columns: 1fr; } }
 
 /* /features: one block per group */
 .feature-group { scroll-margin-top: 80px; }
@@ -650,3 +651,40 @@ h2 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.12; letter-spacing: -0.
 .ctx-points h3 { font-size: 16px; margin-bottom: 6px; }
 .ctx-points p { color: var(--fg-muted); font-size: 14.5px; }
 @media (max-width: 860px) { .ctx-points { grid-template-columns: 1fr; gap: 20px; } }
+
+/* ── the agent team: Lead, Board, Evals ──────────────────────── */
+.t-purple { color: var(--brand-purple); }
+.t-blue { color: var(--brand-blue); }
+.split.reverse > :first-child { order: 0; }
+@media (max-width: 900px) { .split.reverse > :first-child { order: 1; } }
+
+/* a mini board: four columns of cards */
+.mboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 44px; }
+.mboard-col { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg); border: 1px solid var(--border); min-height: 210px; }
+.mboard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 2px 6px; font: 600 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
+.mboard-note { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg-subtle); }
+.mboard-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--bg-elev); border: 1px solid var(--border); border-left: 2px solid var(--border-strong); }
+.mboard-card.working { border-left-color: var(--brand-blue); }
+.mboard-card.review { border-left-color: var(--brand-purple); }
+.mboard-meta { display: flex; align-items: center; gap: 6px; font: 11px var(--font-mono); color: var(--fg-subtle); }
+.mboard-chip { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border: 1px solid var(--border-strong); color: var(--fg-muted); }
+.mboard-title { font-size: 13.5px; line-height: 1.35; color: var(--fg); }
+.mboard-labels { display: flex; flex-wrap: wrap; gap: 4px; }
+.mboard-labels span { padding: 0 6px; font: 10.5px var(--font-mono); color: var(--fg-muted); background: var(--bg-hover); }
+.mboard-action { align-self: flex-end; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; font-size: 11.5px; border: 1px solid var(--border-strong); color: var(--fg); }
+.mboard-state { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-muted); }
+@media (max-width: 900px) { .mboard { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mboard { grid-template-columns: 1fr; } .mboard-col { min-height: 0; } }
+
+/* the eval leaderboard mock */
+.evals-mock table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.evals-mock th { text-align: left; padding: 10px 10px 6px; font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-subtle); }
+.evals-mock td { padding: 9px 10px; border-top: 1px solid var(--border); color: var(--fg-muted); white-space: nowrap; }
+.evals-mock tr.top td:first-child { color: var(--fg); font-weight: 600; }
+.evals-mock .code-h { display: flex; align-items: center; gap: 6px; }
+.evals-bar { display: inline-block; width: 44px; height: 5px; margin-right: 6px; vertical-align: middle; background: var(--border-strong); }
+.evals-bar > span { display: block; height: 100%; background: var(--green); }
+.evals-yaml { margin: 0; padding: 14px; border-top: 1px solid var(--border); font: 12px/1.6 var(--font-mono); color: var(--fg-muted); overflow-x: auto; }
+.evals-mock-table { overflow-x: auto; }
+@media (max-width: 520px) { .evals-mock th:nth-child(3), .evals-mock td:nth-child(3), .evals-mock th:nth-child(5), .evals-mock td:nth-child(5) { display: none; } }
+.failover pre, .evals-mock-table, .evals-yaml { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }

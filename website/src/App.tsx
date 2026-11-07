@@ -7,6 +7,7 @@ import { Nav } from './components/Nav'
 import { HomeFaq } from './components/Pricing'
 import { WhySection } from './components/Story'
 import { WorkflowsSpotlight } from './components/Workflows'
+import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
 
 export function App() {
   return (
@@ -16,6 +17,9 @@ export function App() {
         <Hero />
         <AgentStrip />
         <WhySection />
+        <LeadSpotlight />
+        <BoardSpotlight />
+        <EvalsSpotlight />
         <FailoverSpotlight />
         <ContextSpotlight />
         <FeatureHighlights />
