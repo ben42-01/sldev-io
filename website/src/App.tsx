@@ -1,31 +1,32 @@
 import { ContextSpotlight } from './components/ContextSpotlight'
 import { FailoverSpotlight } from './components/Failover'
-import { FeatureHighlights } from './components/Features'
 import { FinalCta, Footer } from './components/Footer'
-import { AgentStrip, Hero } from './components/Hero'
+import { Hero } from './components/Hero'
+import { Bento, FlowSteps, ProofBand, Showcase } from './components/Home'
 import { Nav } from './components/Nav'
 import { HomeFaq } from './components/Pricing'
 import { WhySection } from './components/Story'
-import { WorkflowsSpotlight } from './components/Workflows'
 import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
 
+/** The home page tells one story: the team at work (hero), how a feature ships, each part of it, then everything else. */
 export function App() {
   return (
     <>
       <Nav />
       <main>
         <Hero />
-        <AgentStrip />
-        <WhySection />
-        <LeadSpotlight />
+        <ProofBand />
+        <FlowSteps />
         <BoardSpotlight />
+        <LeadSpotlight />
         <EvalsSpotlight />
+        <WhySection />
+        <Bento />
         <FailoverSpotlight />
         <ContextSpotlight />
-        <FeatureHighlights />
-        <WorkflowsSpotlight />
+        <Showcase />
         <HomeFaq />
-        <FinalCta />
+        <FinalCta install />
       </main>
       <Footer />
     </>

@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   ArrowRightLeft,
   Boxes,
   Brain,
@@ -111,48 +110,6 @@ export function FeatureGrid() {
             </div>
           </div>
         ))}
-      </div>
-    </section>
-  )
-}
-
-/** The three pillars, on the home page: what sets sldev-io apart, each with what makes it up. */
-export function FeatureHighlights() {
-  return (
-    <section className="section alt" id="features">
-      <div className="container">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Features</p>
-            <h2>What one vendor's agent app can't do.</h2>
-            <p className="section-lead">Agents write the code. sldev-io makes agents from every vendor work as one team, measures who's best at what, keeps them busy and keeps you in charge.</p>
-          </div>
-          <a className="more-link" href="/features">
-            All features <ArrowRight size={15} />
-          </a>
-        </div>
-        <div className="pillars">
-          {groups
-            .filter((g) => g.id !== 'workspace')
-            .map(({ id, icon: Icon, title, text }) => (
-              <article className="pillar" key={id}>
-                <Icon size={22} />
-                <h3>{title}</h3>
-                <p>{text}</p>
-                <ul>
-                  {features
-                    .filter((f) => f.group === id)
-                    .map((f) => (
-                      <li key={f.title}>
-                        <a href={`/features#${id}`}>
-                          <f.icon size={14} /> {f.title}
-                        </a>
-                      </li>
-                    ))}
-                </ul>
-              </article>
-            ))}
-        </div>
       </div>
     </section>
   )

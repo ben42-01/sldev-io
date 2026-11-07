@@ -9,6 +9,7 @@ import { Layout, PageHeader } from './components/Layout'
 import { LegalPage } from './components/LegalPage'
 import { FaqSection, PricingPlans } from './components/Pricing'
 import { AgentAgnostic, HowItWorks } from './components/Spotlight'
+import { WorkflowsSpotlight } from './components/Workflows'
 import { Thanks } from './components/Thanks'
 import { docs } from './content/docs'
 import { legalPages, type LegalPageId } from './content/legal'
@@ -34,6 +35,7 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
           lead="Agents from every vendor, working as one team on your machine: a Lead that delegates, a board they work from, evals that measure them, and everything around the terminal."
         />
         <FeatureGrid />
+        <WorkflowsSpotlight />
         <AgentAgnostic />
         <HowItWorks />
         <FinalCta />

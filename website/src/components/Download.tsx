@@ -38,7 +38,7 @@ const cards: Card[] = [
   { id: 'linux', name: 'Linux', note: 'Debian, Ubuntu and derivatives, x86_64', files: [{ platform: 'linux', label: 'Package (.deb)' }] }
 ]
 
-function CopyCommand() {
+export function CopyCommand() {
   const [copied, setCopied] = useState(false)
   const copy = (): void => {
     void navigator.clipboard.writeText(installCommand).then(() => {

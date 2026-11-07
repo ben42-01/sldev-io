@@ -1,19 +1,25 @@
 import { site } from '../lib/pricing'
-import { DownloadButton } from './Download'
+import { CopyCommand, DownloadButton } from './Download'
 import { Logo } from './Logo'
 
-export function FinalCta() {
+export function FinalCta({ install = false }: { install?: boolean }) {
   return (
     <section className="section final">
       <div className="container center">
         <h2>
           Stop juggling terminals.
           <br />
-          <span className="brand-text">Start shipping with agents.</span>
+          <span className="brand-text">Lead a team of agents.</span>
         </h2>
         <div className="hero-cta">
           <DownloadButton />
         </div>
+        {install && (
+          <>
+            <p className="final-or">or, on macOS and Linux</p>
+            <div className="final-install"><CopyCommand /></div>
+          </>
+        )}
         <p className="platforms">
           <a href="/download">{site.platforms.join(' · ')}</a>
         </p>
