@@ -93,6 +93,8 @@ module.exports = async (h) => {
   await h.click('.board-page .btn.primary', 'New card')
   await h.until(() => h.js(`!!document.querySelector('dialog[open] .board-form')`), 2000)
   await h.setValue('dialog[open] .board-form input', 'Add a health check', `e.placeholder.startsWith('e.g.')`)
+  // BOARD_MCP: the fake agent files a follow-up card through the sldev MCP tools
+  await h.setValue('dialog[open] .board-form textarea', 'GET /health returns ok. BOARD_MCP')
   await h.click('dialog[open] .board-form .check input')
   await h.wait(200)
   await h.click('dialog[open] .board-form .seg button', 'Factory recipe')
@@ -109,6 +111,9 @@ module.exports = async (h) => {
   await h.shot('4-factory-run')
   h.expect(await h.until(async () => (await cards('review')).includes('Add a health check'), 40000), 'the finished run moves the card to Review')
   h.expect(await h.js(`${card('Add a health check')}.querySelector('.board-work')?.textContent.includes('2/2 stages')`), 'with its stages done')
+  h.expect(await h.until(async () => (await cards('backlog')).includes('Add tests for the health check'), 3000), 'the agent filed a follow-up card in Backlog (sldev_board_add)')
+  const filed = (await h.js(`window.api.store.get('board')`)).items.find((i) => i.title === 'Add tests for the health check')
+  h.expect(filed?.priority === 'high' && filed.labels.join() === 'tests' && filed.body.includes('Filed by claude'), 'with its priority, labels and who filed it')
 
   // drag a reviewed card to Done
   const drag = (title, column) =>
@@ -139,6 +144,6 @@ module.exports = async (h) => {
   await h.click('dialog[open] .btn', 'Delete card')
   h.expect(await h.until(async () => !(await cards('backlog')).includes('Write the README'), 2000), 'and removes it')
 
-  const stored = await h.until(() => h.js(`window.api.store.get('board')`).then((b) => b.items.length === 3 && b), 3000)
+  const stored = await h.until(() => h.js(`window.api.store.get('board')`).then((b) => b.items.length === 4 && b), 3000)
   h.expect(!!stored && stored.settings[0]?.pickup === false, 'the board and its pick-up setting are saved')
 }

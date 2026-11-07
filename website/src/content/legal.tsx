@@ -165,6 +165,11 @@ const privacy: LegalPage = {
         they are switched on and the app is open. That goes from your computer to GitHub, signed in as you; nothing goes to us.
       </p>
       <p>
+        The work board asks GitHub through your GitHub CLI for your open issues when you import them, and, while the app is open, about
+        every five minutes whether the pull request of a card waiting for review was merged. That goes from your computer to GitHub,
+        signed in as you; nothing goes to us.
+      </p>
+      <p>
         The free sldev CLI makes no network requests of its own. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
         attached) asks GitHub for your repository's recent workflow runs through your GitHub CLI when you open it, and every 15 seconds
         while it stays open; rerunning a run or opening it in the browser goes the same way. Nothing goes to us.

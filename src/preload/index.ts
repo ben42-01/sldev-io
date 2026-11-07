@@ -173,6 +173,7 @@ const api = {
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
+    prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n)
   },
   notes: {

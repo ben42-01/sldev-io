@@ -98,8 +98,17 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
   return { number: pr.number, title: pr.title, state: pr.state, url: pr.url, isDraft: pr.isDraft, checks }
 }
 
-export const listIssues = (cwd: string, label?: string): Promise<GhIssue[]> =>
-  ghJson(['issue', 'list', '--state', 'open', '--limit', '50', ...(label ? ['--label', label] : []), '--json', 'number,title,body,url'], cwd, [])
+export async function listIssues(cwd: string, label?: string): Promise<GhIssue[]> {
+  const list = await ghJson<Array<Omit<GhIssue, 'labels'> & { labels?: { name: string }[] }>>(['issue', 'list', '--state', 'open', '--limit', '50', ...(label ? ['--label', label] : []), '--json', 'number,title,body,url,labels'], cwd, [])
+  return list.map((i) => ({ ...i, labels: (i.labels ?? []).map((l) => l.name) }))
+}
+
+/** A pull request's state: OPEN, MERGED or CLOSED; null when gh can't tell. */
+export async function prState(cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> {
+  const r = await ghJson<{ state?: string } | null>(['pr', 'view', String(n), '--json', 'state'], cwd, null)
+  const s = r?.state?.toUpperCase()
+  return s === 'OPEN' || s === 'MERGED' || s === 'CLOSED' ? s : null
+}
 
 interface Author { login?: string }
 

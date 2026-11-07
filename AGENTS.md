@@ -170,6 +170,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   never more than the set number of cards at once, never pushes. Work only moves a card forward (Agent ready → In progress →
   Review); a card the human put in Backlog, Review or Done stays there. Moving a card back to Agent ready forgets its finished
   run so it can be picked up again; a card that can't start goes to Backlog with the reason, never retried every tick.
+  Cards an agent files (`sldev_board_add`) always land in Backlog, so agents can't feed pick-up themselves. A merged PR
+  (asked through gh every 5 minutes for cards in Review) moves its card to Done; imported issues are closed by their run's PR.
 - **Repeat** (`src/shared/repeat.ts`): a pass ends only on a signal that can't be mistaken: the agent's process exits
   (print mode, the default) or the user accepts it. Never end a pass on a Stop hook or a quiet terminal: a turn can end
   with a question. Passes share the first pass's worktree and each is committed there; in place, nothing is committed.

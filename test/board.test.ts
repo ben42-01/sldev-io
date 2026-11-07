@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardLabels, columnItems, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
+import { boardLabels, columnItems, followPr, importableIssues, issueCard, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
 
 let n = 0
 const item = (patch: Partial<BoardItem> = {}): BoardItem => {
@@ -89,5 +89,27 @@ describe('items', () => {
   })
   it('sorts a column by position', () => {
     expect(columnItems([item({ order: 5 }), item({ order: 1 }), item({ column: 'done' })], 'ready').map((i) => i.order)).toEqual([1, 5])
+  })
+})
+
+describe('GitHub', () => {
+  const issue = (number: number, labels: string[] = []) => ({ number, title: `Issue ${number}`, body: 'Steps to reproduce.', url: `https://github.com/acme/shop/issues/${number}`, labels })
+  it('offers only issues that are not on the board yet', () => {
+    const on = item({ issue: { number: 42, url: 'u' }, column: 'done' })
+    expect(importableIssues([on, item({ root: '/q', issue: { number: 7, url: 'u' } })], '/p', [issue(42), issue(7)]).map((x) => x.number)).toEqual([7])
+  })
+  it('makes a card with the labels, the link back, and a high priority for urgent labels', () => {
+    expect(issueCard(issue(42, ['Bug', 'P1']))).toEqual({ title: 'Issue 42', body: 'Steps to reproduce.\n\nhttps://github.com/acme/shop/issues/42', labels: ['bug', 'p1'], priority: 'high', issue: { number: 42, url: 'https://github.com/acme/shop/issues/42' } })
+    expect(issueCard(issue(7)).priority).toBe('normal')
+  })
+  it('a merged pull request moves its card to Done', () => {
+    expect(followPr(item({ column: 'review' }), { number: 12, state: 'MERGED' }, 9)).toMatchObject({ column: 'done', note: 'PR #12 merged' })
+    expect(followPr(item({ column: 'review' }), { number: 12, state: 'OPEN' }, 9)).toBeNull()
+  })
+  it('a closed one only says so, once, and a card moved by hand stays', () => {
+    const closed = followPr(item({ column: 'review' }), { number: 12, state: 'CLOSED' }, 9)!
+    expect(closed).toMatchObject({ column: 'review', note: 'PR #12 closed without merging' })
+    expect(followPr(closed, { number: 12, state: 'CLOSED' }, 10)).toBeNull()
+    expect(followPr(item({ column: 'backlog' }), { number: 12, state: 'MERGED' }, 9)).toBeNull()
   })
 })

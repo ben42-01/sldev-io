@@ -1,4 +1,5 @@
 import type { Action } from './automations'
+import type { GhIssue } from './types'
 
 /**
  * The work board: items move Backlog → Agent ready → In progress → Review → Done. With pick-up on,
@@ -46,6 +47,8 @@ export interface BoardItem {
   state?: WorkState
   /** why it couldn't start, or what happened to its work */
   note?: string
+  /** the GitHub issue it was imported from; its run's pull request closes it */
+  issue?: { number: number; url: string }
   createdAt: number
   updatedAt: number
   /** position inside its column: lower is higher up */
@@ -138,3 +141,43 @@ export function matchesItem(i: BoardItem, query: string, label: string | null): 
   if (!q) return true
   return `#${i.key} ${i.title} ${i.body} ${i.labels.join(' ')}`.toLowerCase().includes(q)
 }
+
+/** The board as text for an agent (the sldev_board tool): one line per card, by column. */
+export function boardCardLines(items: BoardItem[], column?: BoardColumn): string {
+  const lines: string[] = []
+  for (const c of BOARD_COLUMNS) {
+    if (column && c.id !== column) continue
+    for (const i of columnItems(items, c.id)) {
+      const meta = [c.id, i.priority !== 'normal' && i.priority, i.labels.length && i.labels.join(',')].filter(Boolean).join(' · ')
+      lines.push(`#${i.key} [${meta}] ${i.title}`)
+    }
+  }
+  return lines.length ? lines.join('\n') : column ? `No cards in ${column}.` : 'The board is empty.'
+}
+
+/** Open issues not on the board yet (by issue number, in any column), to offer for import. */
+export function importableIssues(items: BoardItem[], root: string, issues: GhIssue[]): GhIssue[] {
+  const on = new Set(items.filter((i) => i.root === root && i.issue).map((i) => i.issue!.number))
+  return issues.filter((x) => !on.has(x.number))
+}
+
+/** A card's fields from a GitHub issue: its title and body, its labels, and the link back. */
+export function issueCard(x: GhIssue): Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'issue'> {
+  const labels = parseLabels((x.labels ?? []).join(','))
+  const priority: BoardPriority = labels.some((l) => /^(p0|p1|priority:?-?high|urgent|critical)$/.test(l)) ? 'high' : 'normal'
+  return { title: x.title.slice(0, 200), body: [x.body.trim(), x.url].filter(Boolean).join('\n\n'), labels, priority, issue: { number: x.number, url: x.url } }
+}
+
+/**
+ * What a pull request's state does to its card. Merged moves it to Done from Review or In progress
+ * (the work is in); closed without merging only says so. A card already moved by hand stays.
+ */
+export function followPr(i: BoardItem, pr: { number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' }, now: number): BoardItem | null {
+  const live = i.column === 'review' || i.column === 'progress'
+  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now }
+  if (pr.state === 'CLOSED' && live && i.note !== `PR #${pr.number} closed without merging`) return { ...i, note: `PR #${pr.number} closed without merging`, updatedAt: now }
+  return null
+}
+
+/** How often a card's pull request is checked while it waits in Review. */
+export const PR_POLL_MS = 5 * 60_000

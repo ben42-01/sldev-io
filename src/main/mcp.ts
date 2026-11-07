@@ -1,6 +1,7 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import type { McpEvent, Mission } from '@shared/types'
+import { boardCardLines, parseLabels, type BoardColumn, type BoardItem, type BoardPriority } from '@shared/board'
 import { diff } from './git'
 import { remember } from './memory'
 import { recall } from './context'
@@ -18,6 +19,8 @@ export interface McpRequest {
 export interface McpDeps {
   missions: () => Mission[]
   send: (e: McpEvent) => void
+  /** the app's work board; the CLI has none */
+  board?: () => BoardItem[]
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -69,6 +72,22 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
       if (!query.trim() && !path.trim()) return { error: 'Give a query, a path, or both' }
       const { hits, related } = await recall(self.root, { query, path: path ? (projectPath(self, path) ?? path) : undefined })
       return { text: recallText(hits, self.root, related) }
+    }
+    case 'sldev_board': {
+      if (!deps.board) return { error: 'The work board lives in the sldev-io app; this session has none.' }
+      const column = str(r.args.column) as BoardColumn
+      return { text: boardCardLines(deps.board().filter((i) => i.root === self.root), column || undefined) }
+    }
+    case 'sldev_board_add': {
+      if (!deps.board) return { error: 'The work board lives in the sldev-io app; this session has none.' }
+      const title = str(r.args.title).trim().slice(0, 120)
+      if (!title) return { error: 'title is empty' }
+      const labels = parseLabels(Array.isArray(r.args.labels) ? r.args.labels.filter((l) => typeof l === 'string').join(',') : str(r.args.labels))
+      const priority: BoardPriority = ['high', 'low'].includes(str(r.args.priority)) ? (str(r.args.priority) as BoardPriority) : 'normal'
+      const agent = self.options.agent ?? 'claude'
+      const body = [str(r.args.details).trim().slice(0, 4000), `Filed by ${agent} during mission "${self.title}".`].filter(Boolean).join('\n\n')
+      deps.send({ mission: self.id, type: 'board-add', card: { title, body, labels, priority } })
+      return { text: `Filed "${title}" in Backlog.` }
     }
     case 'sldev_rules': {
       for (const f of ['.sldev/rules.md', 'AGENTS.md']) {

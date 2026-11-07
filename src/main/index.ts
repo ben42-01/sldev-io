@@ -283,6 +283,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
+  ipcMain.handle('gh:prState', (_e, cwd: string, n: number) => gh.prState(cwd, Number(n)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes
@@ -425,7 +426,7 @@ app.whenReady().then(async () => {
     dir: userData(),
     node: process.execPath,
     onHook: toWindow('mission:hook'),
-    mcp: { missions: () => stores.missions.get().missions, send: toWindow('mission:mcp') }
+    mcp: { missions: () => stores.missions.get().missions, send: toWindow('mission:mcp'), board: () => stores.board.get().items }
   })
   await loadShellEnv()
   buildMenu()

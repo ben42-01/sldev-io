@@ -6,6 +6,7 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import type { McpEvent, Mission } from '@shared/types'
 import { handleMcp } from '../src/main/mcp'
+import type { BoardItem } from '@shared/board'
 import { MCP_SERVER, MCP_TOOLS } from '../src/main/mcpServer'
 import { agentCommand as agentArgv, commandText, findAgent, sldevMcp } from '@renderer/lib/agents'
 
@@ -98,6 +99,21 @@ describe('tool calls', () => {
   it('lists the other missions of the same project only', async () => {
     const r = await handleMcp({ mission: 'a', tool: 'sldev_missions', args: {}, cwd: '/p' }, deps([]))
     expect(r.text).toBe('b · codex · waiting · in place · T b')
+  })
+  const card = (key: number, root: string, extra: Partial<BoardItem> = {}): BoardItem => ({ id: `i${key}`, root, key, title: `Card ${key}`, body: '', column: 'ready', labels: [], priority: 'normal', createdAt: key, updatedAt: key, order: key, ...extra })
+  const withBoard = (events: McpEvent[]) => ({ ...deps(events), board: () => [card(1, '/p', { labels: ['bug'], priority: 'high' }), card(2, '/p', { column: 'done' }), card(3, '/other')] })
+  it('lists the board of the same project, by column', async () => {
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_board', args: {}, cwd: '/p' }, withBoard([]))).text).toBe('#1 [ready · high · bug] Card 1\n#2 [done] Card 2')
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_board', args: { column: 'backlog' }, cwd: '/p' }, withBoard([]))).text).toBe('No cards in backlog.')
+  })
+  it('files a card for the window to add to Backlog, and says who filed it', async () => {
+    const events: McpEvent[] = []
+    const r = await handleMcp({ mission: 'a', tool: 'sldev_board_add', args: { title: 'Add tests for auth', details: 'src/auth.ts has none.', labels: ['Tests', 'auth'], priority: 'urgent' }, cwd: '/p' }, withBoard(events))
+    expect(r.text).toBe('Filed "Add tests for auth" in Backlog.')
+    expect(events).toEqual([{ mission: 'a', type: 'board-add', card: { title: 'Add tests for auth', body: 'src/auth.ts has none.\n\nFiled by codex during mission "T a".', labels: ['tests', 'auth'], priority: 'normal' } }])
+  })
+  it('has no board outside the app (the CLI)', async () => {
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_board_add', args: { title: 'x' }, cwd: '/p' }, deps([]))).error).toContain('lives in the sldev-io app')
   })
   it('never reads another project\'s mission', async () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_mission_diff', args: { id: 'c' }, cwd: '/p' }, deps([]))).error).toContain('No mission with that id')

@@ -304,6 +304,8 @@ export type McpEvent =
   | { mission: string; type: 'status'; state: 'working' | 'needs_input' | 'done'; text?: string }
   | { mission: string; type: 'output'; text: string }
   | { mission: string; type: 'done'; text?: string }
+  /** an agent filed a card on the work board (it lands in Backlog) */
+  | { mission: string; type: 'board-add'; card: { title: string; body: string; labels: string[]; priority: 'high' | 'normal' | 'low' } }
 
 export type MissionStatus = 'starting' | 'working' | 'waiting' | 'needs-input' | 'ended' | 'failed'
 
@@ -423,6 +425,7 @@ export interface GhIssue {
   title: string
   body: string
   url: string
+  labels?: string[]
 }
 
 export interface GhPr {

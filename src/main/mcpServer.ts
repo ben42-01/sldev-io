@@ -64,6 +64,27 @@ export const MCP_TOOLS = [
     }
   },
   {
+    name: 'sldev_board',
+    description:
+      "The project's work board in sldev-io: cards with their number, column (backlog, ready, progress, review, done), priority, labels and title. Check it before filing a card, so you don't add one that is already there.",
+    inputSchema: { type: 'object', properties: { column: { type: 'string', enum: ['backlog', 'ready', 'progress', 'review', 'done'], description: 'Only this column' } } }
+  },
+  {
+    name: 'sldev_board_add',
+    description:
+      'File follow-up work you found but should not do now (a bug, a missing test, a refactor) as a card on the work board. It goes to Backlog, where a person decides whether an agent picks it up. One card per piece of work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'What needs doing, under 100 characters' },
+        details: { type: 'string', description: 'Why, where (files) and what done looks like' },
+        labels: { type: 'array', items: { type: 'string' }, description: 'e.g. bug, tests, refactor' },
+        priority: { type: 'string', enum: ['high', 'normal', 'low'] }
+      },
+      required: ['title']
+    }
+  },
+  {
     name: 'sldev_rules',
     description: "The project's agent rules (.sldev/rules.md, or AGENTS.md when there is none).",
     inputSchema: { type: 'object', properties: {} }

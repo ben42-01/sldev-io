@@ -6594,3 +6594,42 @@ button.board-label:hover {
 .board-form {
   padding: 0;
 }
+.board-issue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 11px var(--font-mono);
+  color: var(--fg-muted);
+}
+.board-import-load {
+  align-self: flex-start;
+}
+.board-import-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.board-import-list li + li {
+  border-top: 1px solid var(--border);
+}
+.board-import-list .check {
+  padding: 7px 10px;
+  min-width: 0;
+}
+.board-import-num {
+  flex: none;
+  font: 11px var(--font-mono);
+  color: var(--fg-subtle);
+}
+.board-import-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

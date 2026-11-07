@@ -42,7 +42,15 @@ if (args.includes('-p')) {
     const input2 = [call(3, 'sldev_status', { state: 'working', message: 'Using Postgres' }),
       call(4, 'sldev_output', { markdown: '# Spec via MCP\n\nUse Postgres.\n' })].join('\n') + '\n'
     spawnSync(command, sargs, { input: input2, env: { ...process.env, ...env }, encoding: 'utf8' })
-  } else if (out && !prompt.includes('NO_OUTPUT')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
+  } else if (mi >= 0 && prompt.includes('BOARD_MCP')) {
+    // files follow-up work on the board, like an agent that found something it shouldn't fix now
+    const { command, args: sargs, env } = JSON.parse(args[mi + 1]).mcpServers.sldev
+    const rpc = (id, method, params) => JSON.stringify({ jsonrpc: '2.0', id, method, params })
+    const input = [rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake-claude', version: '0' } }),
+      rpc(2, 'tools/call', { name: 'sldev_board_add', arguments: { title: 'Add tests for the health check', details: 'src/health.js has no tests.', labels: ['tests'], priority: 'high' } })].join('\n') + '\n'
+    spawnSync(command, sargs, { input, env: { ...process.env, ...env }, encoding: 'utf8' })
+  }
+  if (out && !prompt.includes('NO_OUTPUT') && !prompt.includes('USE_MCP')) { fs.mkdirSync(path.dirname(out[1]), { recursive: true }); fs.writeFileSync(out[1], `# Output from fake claude\n\n${prompt.split('\n')[0]}\n`) }
   const note = /From the user: (.*)/.exec(prompt)
   if (note) fs.appendFileSync('USER-NOTES.md', `${note[1]}\n`)
   // NO_CHANGES: a repeat pass with nothing left to improve

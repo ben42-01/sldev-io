@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, ArrowDown, Bot, Ellipsis, Factory, Play, Plus, Search, Settings2, SquareKanban, Trash2 } from 'lucide-react'
-import { BOARD_COLUMNS, boardLabels, columnItems, matchesItem, parseLabels, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type WorkState } from '@shared/board'
+import { ArrowUp, ArrowDown, Bot, CircleDot, Ellipsis, Factory, GitPullRequest, Play, Plus, RefreshCw, Search, Settings2, SquareKanban, Trash2 } from 'lucide-react'
+import { BOARD_COLUMNS, boardLabels, columnItems, importableIssues, matchesItem, parseLabels, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
 import { Modal, confirmAction } from './Modal'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot } from './StatusDot'
-import { Empty } from './States'
+import { Empty, ErrorBanner, Loading } from './States'
 import { useAgents } from '../state/agents'
-import { addItem, moveTo, removeItem, saveBoardSettings, startItem, updateItem, useBoardItems, useBoardSettings, workOf } from '../state/board'
+import { addItem, board, importIssues, moveTo, refreshPrs, removeItem, saveBoardSettings, startItem, updateItem, useBoardItems, useBoardSettings, workOf } from '../state/board'
+import type { GhIssue } from '@shared/types'
 import { factory, loadRecipes, openPipeline } from '../state/factory'
 import { useKinds } from '../state/missionKinds'
 import { missions } from '../state/missions'
@@ -26,6 +27,7 @@ export function BoardView({ root }: { root: string | null }): React.JSX.Element 
   const [label, setLabel] = useState<string | null>(null)
   const [editing, setEditing] = useState<BoardItem | { column: BoardColumn } | null>(null)
   const [setup, setSetup] = useState(false)
+  const [importing, setImporting] = useState(false)
   // re-render cards when their runs and missions change
   useStore(missions, (s) => s.list)
   useStore(factory, (s) => s.runs)
@@ -61,6 +63,9 @@ export function BoardView({ root }: { root: string | null }): React.JSX.Element 
         <button className="btn sm" onClick={() => setSetup(true)} title="What starts for a card, and how many at once">
           <Settings2 size={13} /> <span className="board-work-summary">{workLabel(settings.work)} · {settings.parallel} at a time</span>
         </button>
+        <button className="btn sm" onClick={() => setImporting(true)} title="Make cards from open GitHub issues (through your gh)">
+          <CircleDot size={13} /> Import issues
+        </button>
         <button className="btn sm primary" onClick={() => setEditing({ column: 'backlog' })}>
           <Plus size={13} /> New card
         </button>
@@ -72,6 +77,7 @@ export function BoardView({ root }: { root: string | null }): React.JSX.Element 
       </div>
       {editing && <ItemDialog root={root} item={'id' in editing ? editing : undefined} column={'id' in editing ? editing.column : editing.column} onClose={() => setEditing(null)} />}
       {setup && <PickupDialog root={root} onClose={() => setSetup(false)} />}
+      {importing && <ImportDialog root={root} onClose={() => setImporting(false)} />}
     </div>
   )
 }
@@ -157,7 +163,8 @@ function workLine(i: BoardItem): { signal: Signal; text: string; open?: () => vo
     const nodes = Object.values(w.run.nodes)
     const waiting = nodes.some((n) => n.status === 'approval')
     const done = nodes.filter((n) => n.status === 'done').length
-    return { signal: runSignal(w.run.status, waiting), text: `${w.run.recipe.name} · ${done}/${nodes.length} stages${waiting ? ' · waiting for you' : ''}`, open: () => openPipeline(w.run!.id) }
+    const pr = w.run.pr ? ` · PR #${w.run.pr.number}` : ''
+    return { signal: runSignal(w.run.status, waiting), text: `${w.run.recipe.name} · ${done}/${nodes.length} stages${waiting ? ' · waiting for you' : ''}${pr}`, open: () => openPipeline(w.run!.id) }
   }
   const m = w.mission!
   return { signal: missionSignal(m.status), text: `${m.kind?.name ?? 'Mission'} · ${missionSignal(m.status).label}`, open: () => openMissionDetails(m.id) }
@@ -170,6 +177,11 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
     { label: 'Edit…', run: onOpen },
     ...(startable ? [{ label: 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) }] : []),
     ...(work?.open ? [{ label: i.started?.type === 'run' ? 'Open pipeline' : 'Open mission', run: work.open }] : []),
+    ...(prOf(i) ? [
+      { label: `Open PR #${prOf(i)!.number} on GitHub`, icon: <GitPullRequest size={13} />, run: () => void window.api.shell.openExternal(prOf(i)!.url) },
+      { label: 'Check pull requests now', icon: <RefreshCw size={13} />, run: refreshPrs }
+    ] : []),
+    ...(i.issue ? [{ label: `Open issue #${i.issue.number} on GitHub`, icon: <CircleDot size={13} />, run: () => void window.api.shell.openExternal(i.issue!.url) }] : []),
     { type: 'separator' },
     { type: 'header', label: 'Move to' },
     ...BOARD_COLUMNS.filter((c) => c.id !== i.column).map((c): MenuItem => ({ label: c.title, run: () => moveTo(i.id, c.id) })),
@@ -197,6 +209,7 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
     >
       <div className="board-card-head">
         <span className="board-key">#{i.key}</span>
+        {i.issue && <span className="board-issue" title={`GitHub issue #${i.issue.number}`}><CircleDot size={11} /> {i.issue.number}</span>}
         {i.priority !== 'normal' && (
           <span className={`board-priority ${i.priority}`} title={`${i.priority === 'high' ? 'High' : 'Low'} priority`}>
             {i.priority === 'high' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
@@ -227,6 +240,89 @@ function Card({ item: i, onOpen }: { item: BoardItem; onOpen: () => void }): Rea
         </div>
       )}
     </article>
+  )
+}
+
+const prOf = (i: BoardItem): { number: number; url: string } | undefined => (i.started?.type === 'run' ? workOf(i)?.run?.pr : undefined)
+
+/** Open GitHub issues as cards: pick which, and the column they land in. */
+function ImportDialog({ root, onClose }: { root: string; onClose: () => void }): React.JSX.Element {
+  const [label, setLabel] = useState('')
+  const [issues, setIssues] = useState<GhIssue[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [column, setColumn] = useState<BoardColumn>('backlog')
+  const load = (): void => {
+    setIssues(null)
+    setError(null)
+    window.api.gh
+      .issues(root, label.trim() || undefined)
+      .then((all) => {
+        const fresh = importableIssues(board.get().items, root, all)
+        setIssues(all)
+        setPicked(new Set(fresh.map((x) => x.number)))
+      })
+      .catch((e: Error) => setError(e.message))
+  }
+  useEffect(load, [])
+  const onBoard = new Set(issues ? issues.filter((x) => !importableIssues(board.get().items, root, [x]).length).map((x) => x.number) : [])
+  const toggle = (n: number): void => setPicked((p) => {
+    const next = new Set(p)
+    if (next.has(n)) next.delete(n)
+    else next.add(n)
+    return next
+  })
+  const go = (): void => {
+    importIssues(root, (issues ?? []).filter((x) => picked.has(x.number)), column)
+    onClose()
+  }
+  return (
+    <Modal
+      title="Import GitHub issues"
+      size="md"
+      onClose={onClose}
+      onSubmit={go}
+      footerNote="Asked through your GitHub CLI. A card's factory run closes its issue with the pull request."
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn primary" disabled={!picked.size}>Import {picked.size || ''}</button>
+        </>
+      }
+    >
+      <div className="form board-form">
+        <div className="field-row">
+          <label className="field">
+            <span>Label</span>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), load())} placeholder="Any label, e.g. agent-ready" />
+          </label>
+          <label className="field">
+            <span>Into</span>
+            <select value={column} onChange={(e) => setColumn(e.target.value as BoardColumn)}>
+              <option value="backlog">Backlog</option>
+              <option value="ready">Agent ready</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" className="btn sm board-import-load" onClick={load}><RefreshCw size={12} /> Load issues</button>
+        {error ? <ErrorBanner onRetry={load}>{error}</ErrorBanner> : !issues ? <Loading what="Asking GitHub…" /> : !issues.length ? (
+          <div className="mc-column-empty"><span className="muted small">No open issues{label.trim() ? ` with the label “${label.trim()}”` : ''}.</span></div>
+        ) : (
+          <ul className="board-import-list">
+            {issues.map((x) => (
+              <li key={x.number}>
+                <label className={`check${onBoard.has(x.number) ? ' muted' : ''}`}>
+                  <input type="checkbox" checked={picked.has(x.number)} disabled={onBoard.has(x.number)} onChange={() => toggle(x.number)} />
+                  <span className="board-import-num">#{x.number}</span>
+                  <span className="board-import-title">{x.title}</span>
+                  {onBoard.has(x.number) ? <span className="muted small">on the board</span> : (x.labels ?? []).slice(0, 3).map((l) => <span key={l} className="board-label static">{l}</span>)}
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   )
 }
 

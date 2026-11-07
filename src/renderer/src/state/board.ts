@@ -1,6 +1,6 @@
-import { defaultBoardSettings, followWork, itemIntent, moveItem, nextKey, nextPickups, type BoardColumn, type BoardItem, type BoardSettings, type WorkState } from '@shared/board'
+import { PR_POLL_MS, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, moveItem, nextKey, nextPickups, type BoardColumn, type BoardItem, type BoardSettings, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
-import type { Mission } from '@shared/types'
+import type { GhIssue, Mission } from '@shared/types'
 import { activatePanel, activePanelId } from '../dock/dockApi'
 import { startAction } from './automations'
 import { factory } from './factory'
@@ -35,6 +35,15 @@ const TICK_MS = 10_000
 let timer: ReturnType<typeof setInterval> | undefined
 let unsub: Array<() => void> = []
 
+// agents file follow-up work with sldev_board_add: always into Backlog, so they can't feed pick-up themselves
+window.api.missions.onMcp((e) => {
+  if (e.type !== 'board-add') return
+  const m = missions.get().list.find((x) => x.id === e.mission)
+  if (!m) return
+  const dupe = board.get().items.some((i) => i.root === m.root && i.column !== 'done' && i.title.toLowerCase() === e.card.title.toLowerCase())
+  if (!dupe) addItem(m.root, { ...e.card, column: 'backlog' })
+})
+
 export async function loadBoard(): Promise<void> {
   const data = (await window.api.store.get('board')) ?? { items: [], settings: [] }
   board.set({ items: data.items ?? [], settings: data.settings ?? [] })
@@ -58,12 +67,17 @@ export function getItem(id: string): BoardItem | undefined {
   return board.get().items.find((i) => i.id === id)
 }
 
-export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & { work?: BoardItem['work'] }): BoardItem {
+export function addItem(root: string, fields: Pick<BoardItem, 'title' | 'body' | 'labels' | 'priority' | 'column'> & Partial<Pick<BoardItem, 'work' | 'issue'>>): BoardItem {
   const t = now()
   const item: BoardItem = { id: newId(), root, key: nextKey(board.get().items, root), createdAt: t, updatedAt: t, order: t, ...fields }
   setItems((items) => [...items, item])
   scheduleTick()
   return item
+}
+
+/** Cards from GitHub issues, into one column; issues already on the board are skipped by the dialog. */
+export function importIssues(root: string, issues: GhIssue[], column: BoardColumn): void {
+  for (const x of issues) addItem(root, { ...issueCard(x), column })
 }
 
 export function updateItem(id: string, patch: Partial<BoardItem>): void {
@@ -170,12 +184,40 @@ async function tick(): Promise<void> {
   ticking = true
   try {
     sync()
+    await checkPrs()
     for (const s of board.get().settings) {
       for (const i of nextPickups(board.get().items, s)) if (!starting.has(i.id)) await startItem(i.id)
     }
   } finally {
     ticking = false
   }
+}
+
+/** when each card's pull request was last asked about (not saved: a restart asks again) */
+const prChecked = new Map<string, number>()
+
+/**
+ * Cards waiting in Review or In progress whose run opened a pull request: ask GitHub (through gh)
+ * at most every few minutes whether it was merged. Merged moves the card to Done.
+ */
+async function checkPrs(): Promise<void> {
+  const t = now()
+  for (const i of board.get().items) {
+    if ((i.column !== 'review' && i.column !== 'progress') || i.started?.type !== 'run') continue
+    const pr = factory.get().runs.find((r) => r.id === i.started!.id)?.pr
+    if (!pr || t - (prChecked.get(i.id) ?? 0) < PR_POLL_MS) continue
+    prChecked.set(i.id, t)
+    const state = await window.api.gh.prState(i.root, pr.number).catch(() => null)
+    const cur = getItem(i.id)
+    const next = state && cur ? followPr(cur, { number: pr.number, state }, now()) : null
+    if (next) setItems((items) => items.map((x) => (x.id === i.id ? next : x)))
+  }
+}
+
+/** "Check pull requests now": forget when they were last asked about and ask again. */
+export function refreshPrs(): void {
+  prChecked.clear()
+  scheduleTick()
 }
 
 /** Starts an item's work now: its own recipe or mission, or the board's. Behind pick-up and the Start button. */
@@ -191,7 +233,7 @@ export async function startItem(id: string): Promise<void> {
   updateItem(id, { column: 'progress', order: now(), state: 'working', note: undefined, started: { type: work.type === 'recipe' ? 'run' : 'mission', id: '', at: now() } })
   // an item that can't start goes back to Backlog with the reason, or pick-up would retry it every tick
   try {
-    const started = await startAction(i.root, work, { intent: (text) => [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n'), title: `#${i.key} ${i.title}` })
+    const started = await startAction(i.root, work, { intent: (text) => [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n'), title: `#${i.key} ${i.title}`, issue: i.issue?.number })
     if ('error' in started) updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: started.error })
     else updateItem(id, { started: { type: started.type, id: started.id, at: now() }, note: undefined })
   } catch (e) {
