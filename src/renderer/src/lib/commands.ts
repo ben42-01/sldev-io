@@ -194,6 +194,7 @@ export function staticCommands(): Command[] {
     { id: 'rightPanel.toggle', category: 'View', title: 'Toggle right sidebar', keys: { mac: 'Cmd+Alt+B', other: 'Ctrl+Alt+Shift+B' }, run: () => (releaseReviewFocus(), updateSettings({ rightPanelVisible: !workspace.get().rightPanelVisible })) },
     { id: 'missions.new', category: 'Agents', title: 'New agent mission', keys: { mac: 'Cmd+Shift+M', other: 'Ctrl+Shift+M' }, run: () => openNewMission() },
     { id: 'missions.board', category: 'Agents', title: 'Open Mission Control (missions, factory runs, usage)', run: () => openMissionControl('missions') },
+    { id: 'board.open', category: 'Agents', title: 'Open the work board (Backlog → Agent ready → Review)', run: () => openMissionControl('board') },
     { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
     { id: 'factory.run', category: 'Factory', title: 'New factory run…', run: () => openNewRun() },
     { id: 'factory.recipes', category: 'Factory', title: 'Open recipes (library and builder)', run: () => openRecipes() },

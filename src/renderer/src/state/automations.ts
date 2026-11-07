@@ -1,4 +1,4 @@
-import { ciIntent, newFailures, newIssues, remember, scheduleState, shouldPoll, type Automation } from '@shared/automations'
+import { ciIntent, newFailures, newIssues, remember, scheduleState, shouldPoll, type Action, type Automation } from '@shared/automations'
 import { stageMode } from '@shared/agents'
 import { issueText } from '@shared/factory'
 import { renderKind } from '@shared/missionKinds'
@@ -164,32 +164,45 @@ export async function fire(id: string, ctx: FireContext | undefined): Promise<vo
     return startPass(id)
   }
   if (busy(a)) return patch(id, { lastRunAt: now, lastNote: `Skipped at ${time(now)}: what it started last is still running` })
-  const action = a.action
-  if (action.type === 'recipe') {
-    const { recipes } = await readRecipes(a.root)
-    const entry = recipes.find((r) => r.recipe.name === action.recipe)
-    if (!entry) return patch(id, { lastRunAt: now, lastNote: `No recipe called "${action.recipe}" in ${a.root}` })
-    const intent = ctx ? ctx.intent(action.intent) : action.intent
-    const run = await startRun({ recipe: entry.recipe, intent, root: a.root, base: a.trigger.type === 'ci-failed' ? a.trigger.branch : undefined, issue: ctx?.issue })
-    patch(id, { lastRunAt: now, lastStarted: { type: 'run', id: run.id }, lastNote: `Started ${entry.recipe.name} at ${time(now)}` })
-  } else {
-    const kind = getKind(action.kind)
-    const brief = ctx ? ctx.intent(action.brief) : action.brief
-    const title = (ctx?.title ?? a.name).slice(0, 60)
-    const agent = getAgent(action.agent || workspace.get().defaultAgent)
-    const repo = await window.api.git.isRepo(a.root)
-    const m = await startMission({
-      prompt: renderKind(kind, { title, brief }),
-      brief,
-      title,
-      root: a.root,
-      options: { agent: agent.id, permissionMode: kind.readOnly ? agent.readOnlyMode : undefined },
-      worktree: kind.worktree && repo,
-      kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly }
-    })
-    patch(id, { lastRunAt: now, lastStarted: { type: 'mission', id: m.id }, lastNote: `Started a mission (${kind.name}) at ${time(now)}` })
-  }
+  const started = await startAction(a.root, a.action, { intent: ctx?.intent, issue: ctx?.issue, title: ctx?.title ?? a.name, base: a.trigger.type === 'ci-failed' ? a.trigger.branch : undefined })
+  if ('error' in started) return patch(id, { lastRunAt: now, lastNote: started.error })
+  patch(id, { lastRunAt: now, lastStarted: { type: started.type, id: started.id }, lastNote: `${started.note} at ${time(now)}` })
   if (workspace.get().notifications && !document.hasFocus()) new Notification(`Automation: ${a.name}`, { body: get(id)?.lastNote ?? '' })
+}
+
+export interface StartContext {
+  /** turns the action's own text into the brief (adds the issue, the CI failure, the board item) */
+  intent?: (text: string) => string
+  issue?: number
+  title: string
+  base?: string
+}
+
+/** Starts an automation's or a board item's work: a factory run from a recipe, or a mission of a kind. */
+export async function startAction(root: string, action: Action, ctx: StartContext): Promise<{ type: 'run' | 'mission'; id: string; note: string } | { error: string }> {
+  if (action.type === 'recipe') {
+    const { recipes } = await readRecipes(root)
+    const entry = recipes.find((r) => r.recipe.name === action.recipe)
+    if (!entry) return { error: `No recipe called "${action.recipe}" in ${root}` }
+    const intent = ctx.intent ? ctx.intent(action.intent) : action.intent
+    const run = await startRun({ recipe: entry.recipe, intent, root, base: ctx.base, issue: ctx.issue })
+    return { type: 'run', id: run.id, note: `Started ${entry.recipe.name}` }
+  }
+  const kind = getKind(action.kind)
+  const brief = ctx.intent ? ctx.intent(action.brief) : action.brief
+  const title = ctx.title.slice(0, 60)
+  const agent = getAgent(action.agent || workspace.get().defaultAgent)
+  const repo = await window.api.git.isRepo(root)
+  const m = await startMission({
+    prompt: renderKind(kind, { title, brief }),
+    brief,
+    title,
+    root,
+    options: { agent: agent.id, permissionMode: kind.readOnly ? agent.readOnlyMode : undefined },
+    worktree: kind.worktree && repo,
+    kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly }
+  })
+  return { type: 'mission', id: m.id, note: `Started a mission (${kind.name})` }
 }
 
 // ── repeat: the same mission pass after pass (src/shared/repeat.ts) ─────────

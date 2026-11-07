@@ -1,5 +1,6 @@
 import type { FactoryRun } from './factory'
 import type { Automation } from './automations'
+import type { BoardItem, BoardSettings } from './board'
 
 export interface DirEntry {
   name: string
@@ -240,6 +241,8 @@ export interface StoreFiles {
   factoryRuns: { runs: FactoryRun[] }
   automations: { automations: Automation[] }
   savedMissions: { saved: SavedMission[] }
+  /** the work board (src/shared/board.ts): items of every project, and each project's pick-up setting */
+  board: { items: BoardItem[]; settings: BoardSettings[] }
 }
 
 /** a mission written in the New mission form and kept to launch later (Save for later) */

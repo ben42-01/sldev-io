@@ -407,7 +407,8 @@ app.whenReady().then(async () => {
     connections: new JsonStore<StoreFiles['connections']>(userData(), 'connections', { connections: [] as SshConnection[] }),
     factoryRuns: new JsonStore<StoreFiles['factoryRuns']>(userData(), 'factory-runs', { runs: [] }),
     automations: new JsonStore<StoreFiles['automations']>(userData(), 'automations', { automations: [] }),
-    savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] })
+    savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] }),
+    board: new JsonStore<StoreFiles['board']>(userData(), 'board', { items: [], settings: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))

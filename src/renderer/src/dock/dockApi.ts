@@ -115,6 +115,13 @@ export function openPanel(component: string, id: string, title: string, params: 
   else api.addPanel({ id, component, title, params })
 }
 
+/** The active tab's id, to go back to it after something opened another tab in front. */
+export const activePanelId = (): string | undefined => api?.activePanel?.id
+
+export function activatePanel(id: string): void {
+  api?.getPanel(id)?.api.setActive()
+}
+
 /** Ids of the terminals currently on screen (the visible tab of every group). */
 export function visibleTerminalIds(): string[] {
   return (api?.groups ?? []).map((g) => g.activePanel?.id).filter((id): id is string => !!id?.startsWith(TERMINAL_PREFIX))
