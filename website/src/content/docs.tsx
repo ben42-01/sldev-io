@@ -691,7 +691,7 @@ const missions: DocPage = {
           <p>
             Most planning happens in a chat with an agent. The sldev skills let that agent write the result straight into sldev-io as a{' '}
             <b>draft</b>, instead of you copying it into a form. Add them from the right sidebar → <b>Skills</b> → <b>Add to this project</b>,
-            or with the free CLI: <code>sldev skills install</code>. They are plain <code>SKILL.md</code> folders in{' '}
+            with the free CLI (<code>sldev skills install</code>), or with <code>npx skills add ben42-01/downloads.sldev.io</code>. They are plain <code>SKILL.md</code> folders in{' '}
             <code>.claude/skills</code> and <code>.agents/skills</code>, so Claude Code, Codex, OpenCode, Copilot and the others find them;
             commit them and your team has them too.
           </p>

@@ -205,7 +205,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   which the app takes in while it is open (saved missions, the board's Proposed column) and then empties; nothing an agent drafts
   launches or reaches Agent ready without a person. Recipes and evals are written where the app already reads them. Install never
   overwrites a hand-edited copy unless asked; bump `SKILLS_VERSION` when a skill's text changes, and keep each skill's example in step
-  with its parser (test/sldevSkills.test.ts parses them).
+  with its parser (test/sldevSkills.test.ts parses them). They are also public in the downloads repo's `skills/` (`npx skills add
+  ben42-01/downloads.sldev.io`): run `npm run skills:publish` after changing one.
 - **Lead missions** (kind `lead`, `src/shared/lead.ts`, `state/lead.ts`): only a Lead may call sldev_delegate, wait, followup and
   integrate (main checks the caller's kind; the CLI has none). Main can't start missions, so it forwards those calls to the
   window (`lead:request`/`lead:reply`) and waits. Workers run in print mode with the unattended mode, each in a worktree
