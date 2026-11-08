@@ -14,7 +14,7 @@ import { loadRuns, runColumns } from './workflows'
 import { startDaemon } from './daemon'
 import { dataDir } from './paths'
 import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
-import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync } from './repo'
+import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync, skillsInstall, skillsStatus } from './repo'
 import { defaultServices, runTui } from './tui'
 import { claudeUsage, codexUsage, periodStart, usageTable } from './usage'
 import { VERSION } from './version'
@@ -57,6 +57,8 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
   sldev stop                    stop the daemon and every agent in it
 
   sldev rules [status|init|sync [--overwrite <ids>]]   one .sldev/rules.md for every agent
+  sldev skills [status|install [--overwrite <names>]] skills that let agents draft missions, stories,
+                                                       recipes and evals for the sldev-io app
   sldev remember "note" [--files a,b]                  add a line to .sldev/memory.md
   sldev recall [topic] [--path <file>]                 search the project's memory and docs
   sldev memory                                         where the memory is, how big
@@ -306,6 +308,14 @@ async function main(argv: string[]): Promise<void> {
       if (sub === 'init') return void console.log(await rulesInit(root))
       if (sub === 'sync') return void console.log(await rulesSync(root, list(values.overwrite)))
       return fail('sldev rules [status|init|sync]')
+    }
+    case 'skills': {
+      const { values, positionals } = opts({ overwrite: { type: 'string' } })
+      const root = await projectRoot(process.cwd())
+      const sub = positionals[0] ?? 'status'
+      if (sub === 'status') return void console.log(await skillsStatus(root))
+      if (sub === 'install') return void console.log(await skillsInstall(root, list(values.overwrite)))
+      return fail('sldev skills [status|install]')
     }
     case 'remember': {
       const { values, positionals } = opts({ files: { type: 'string' } })

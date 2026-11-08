@@ -1,3 +1,4 @@
+import { startDrafts } from './drafts'
 import { loadSaved } from './savedMissions'
 import type { AppSettings, EditorInfo, RightTab } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -55,9 +56,10 @@ export async function initWorkspace(): Promise<void> {
   void loadFactory()
   void loadRecipes(settings.rootFolder)
   void loadAutomations()
-  void loadBoard()
+  const boardLoaded = loadBoard()
   void loadEvals()
-  void loadSaved()
+  // drafts go into the board and the saved missions: only once both are loaded, or they'd be overwritten
+  void Promise.all([boardLoaded, loadSaved()]).then(startDrafts)
 }
 
 export async function refreshBranch(): Promise<void> {

@@ -23,6 +23,7 @@ import * as boardFile from './boardFile'
 import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
+import { installSkills, listDrafts, settleDraft, skillsState } from './sldevSkills'
 import { hookInfo, knownTranscripts, lastAssistantText, startHookServer } from './hooks'
 import { importSshConfig, ping as pingHost, SshManager } from './ssh'
 import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
@@ -274,6 +275,12 @@ function registerIpc(): void {
   ipcMain.handle('claude:assets', (_e, root: string | null) => listClaudeAssets(root))
   ipcMain.handle('claude:createSkill', (_e, scope: 'user' | 'project', root: string | null, name: string, desc: string, body: string) => createSkill(scope, root, name, desc, body))
   ipcMain.handle('claude:mcpList', (_e, cwd: string) => listMcpServers(cwd))
+
+  // sldev's own skills and the drafts agents leave in .sldev/drafts
+  ipcMain.handle('sldevSkills:state', (_e, root: string) => skillsState(root))
+  ipcMain.handle('sldevSkills:install', (_e, root: string, overwrite: string[]) => installSkills(root, overwrite))
+  ipcMain.handle('sldevSkills:drafts', (_e, root: string) => listDrafts(root))
+  ipcMain.handle('sldevSkills:settle', (_e, root: string, name: string, ok: boolean) => settleDraft(root, name, ok))
 
   // GitHub
   ipcMain.handle('gh:repo', (_e, cwd: string) => gh.repoInfo(cwd))

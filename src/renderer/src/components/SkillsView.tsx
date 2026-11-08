@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ClaudeAsset, McpServer } from '@shared/types'
-import { ChevronRight, Copy, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal } from 'lucide-react'
+import type { SkillState } from '@shared/sldevSkills'
+import { Check, ChevronRight, Copy, Download, ExternalLink, FolderOpen, Plus, RefreshCw, Rocket, SendHorizontal, Sparkles } from 'lucide-react'
 import { activeTerminalId, openTerminal } from '../dock/dockApi'
 import { openInEditor } from '../lib/actions'
 import { writeToTerminal, focusTerminal, shellKind } from '../lib/terminals'
@@ -15,6 +16,7 @@ import { useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { RulesTab } from './RulesTab'
+import { confirmAction } from './Modal'
 import { ViewShell } from './RuntimesView'
 import { StatusDot } from './StatusDot'
 
@@ -71,6 +73,7 @@ export function SkillsView(): React.JSX.Element {
         <RulesTab />
       ) : (
         <>
+          {tab === 'skill' && root && <SldevSkillsCard root={root} onChange={load} />}
           {creating && <NewSkillForm onDone={(created) => (setCreating(false), created && load())} />}
           {running && <RunAssetForm asset={running} onDone={() => setRunning(null)} />}
           <div className="view-filter">
@@ -102,6 +105,85 @@ export function SkillsView(): React.JSX.Element {
         </>
       )}
     </ViewShell>
+  )
+}
+
+/**
+ * sldev's own skills: any agent can draft a mission, board stories, a recipe or an eval as files, and they
+ * show up here as drafts. Installing writes them into the project (.claude/skills and .agents/skills).
+ */
+function SldevSkillsCard({ root, onChange }: { root: string; onChange: () => void }): React.JSX.Element | null {
+  const [skills, setSkills] = useState<SkillState[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const load = useCallback(() => void window.api.sldevSkills.state(root).then(setSkills, () => setSkills([])), [root])
+  useEffect(load, [load])
+  if (!skills?.length) return null
+  const todo = skills.filter((s) => s.state === 'missing' || s.state === 'outdated')
+  const kept = skills.filter((s) => s.state === 'edited' || s.state === 'foreign')
+  const install = async (overwrite: string[] = []): Promise<void> => {
+    setBusy(true)
+    setError('')
+    try {
+      await window.api.sldevSkills.install(root, overwrite)
+      load()
+      onChange()
+    } catch (e) {
+      setError(errText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const replaceKept = async (): Promise<void> => {
+    const ok = await confirmAction({
+      title: 'Replace the edited skills?',
+      message: <>{kept.map((s) => `/${s.name}`).join(', ')} {kept.length === 1 ? 'was' : 'were'} changed by hand in this project.</>,
+      removes: ['Those changes to the SKILL.md files'],
+      keeps: ['Everything else in the project'],
+      confirmLabel: 'Replace',
+      danger: true
+    })
+    if (ok) await install(kept.map((s) => s.name))
+  }
+  const fresh = skills.every((s) => s.state === 'missing')
+  return (
+    <div className={`sldev-skills${todo.length ? ' todo' : ''}`} data-state={todo.length ? 'todo' : 'done'}>
+      <div className="sldev-skills-head">
+        <Sparkles size={14} aria-hidden />
+        <span className="sldev-skills-title">sldev skills</span>
+        {!todo.length && <span className="sldev-skills-ok"><Check size={12} /> In this project</span>}
+      </div>
+      {todo.length > 0 && (
+        <p className="sldev-skills-text">
+          {fresh
+            ? 'Let any agent draft sldev work while you plan with it in the terminal: missions, board stories, factory recipes and evals. They show up here as drafts, and nothing starts until you launch it.'
+            : `${todo.length === 1 ? 'One skill is' : `${todo.length} skills are`} older than this version of sldev-io or missing.`}
+        </p>
+      )}
+      <ul className="sldev-skills-list">
+        {skills.map((s) => (
+          <li key={s.name} data-skill={s.name} className={s.state}>
+            <code>/{s.name}</code> {s.label}
+            {s.state === 'outdated' && <span className="muted"> · update</span>}
+            {(s.state === 'edited' || s.state === 'foreign') && <span className="muted"> · edited by hand, kept</span>}
+          </li>
+        ))}
+      </ul>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      <div className="sldev-skills-actions">
+        {todo.length > 0 && (
+          <button className="btn sm primary" disabled={busy} onClick={() => void install()}>
+            <Download size={12} /> {busy ? 'Adding…' : fresh ? 'Add to this project' : 'Update'}
+          </button>
+        )}
+        {kept.length > 0 && (
+          <button className="btn sm ghost" disabled={busy} title="Replace the edited copies with this version's" onClick={() => void replaceKept()}>
+            Replace edited copies
+          </button>
+        )}
+        {todo.length > 0 && <span className="field-hint">Writes .claude/skills and .agents/skills; commit them to share with the team.</span>}
+      </div>
+    </div>
   )
 }
 

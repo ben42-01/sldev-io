@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { SavedMission } from '@shared/types'
-import { Bookmark, Rocket, Trash2 } from 'lucide-react'
+import { Bookmark, Rocket, Sparkles, Trash2 } from 'lucide-react'
 import { launchSavedById, removeSaved, savedTitle } from '../state/savedMissions'
 import { getAgent } from '../state/agents'
 import { getKind } from '../state/missionKinds'
@@ -14,6 +14,7 @@ export function SavedMissionRow({ saved: m }: { saved: SavedMission }): React.JS
   const title = savedTitle(m)
   const agents = [getAgent(m.options.agent).name, ...(m.compare ?? []).map((a) => getAgent(a).name)].join(' + ')
   const kind = getKind(m.kind)
+  const drafted = m.draftedBy ? (m.draftedBy === 'agent' ? 'an agent' : getAgent(m.draftedBy).name) : null
   const launch = async (): Promise<void> => {
     setBusy(true)
     try {
@@ -29,12 +30,12 @@ export function SavedMissionRow({ saved: m }: { saved: SavedMission }): React.JS
     if (ok) removeSaved(m.id)
   }
   return (
-    <div className="mission-row saved" data-saved={m.id} onDoubleClick={() => openNewMission({ saved: m })}>
-      <Bookmark size={13} className="saved-icon" aria-hidden />
+    <div className={`mission-row saved${drafted ? ' drafted' : ''}`} data-saved={m.id} onDoubleClick={() => openNewMission({ saved: m })}>
+      {drafted ? <Sparkles size={13} className="saved-icon" aria-hidden /> : <Bookmark size={13} className="saved-icon" aria-hidden />}
       <div className="mission-row-main">
         <button type="button" className="mission-title" title={`${title}: edit before launching`} onClick={() => openNewMission({ saved: m })}>{title}</button>
         <div className="mission-row-sub" title={m.brief}>
-          Saved · {agents}{kind.id !== 'build' ? ` · ${kind.name}` : ''}
+          {drafted ? `Drafted by ${drafted}` : 'Saved'} · {agents}{kind.id !== 'build' ? ` · ${kind.name}` : ''}
         </div>
       </div>
       <TimeAgo t={m.updatedAt} className="mission-time" />

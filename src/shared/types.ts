@@ -268,6 +268,8 @@ export interface SavedMission {
   /** other agents to run it on as a bake-off */
   compare?: string[]
   issue?: number
+  /** an agent wrote it with the sldev-mission skill (its id, or 'agent'); it waits here like any saved mission */
+  draftedBy?: string
   createdAt: number
   updatedAt: number
 }

@@ -4,6 +4,7 @@ import type { LicenseStatus } from '@shared/license'
 import type { TokenUsage } from '@shared/usage'
 import type { MissionKind } from '@shared/missionKinds'
 import type { ContextHit, ContextStats } from '@shared/context'
+import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph } from '@shared/diagram'
 import type {
   AgentProfile,
@@ -162,6 +163,15 @@ const api = {
     createSkill: (scope: 'user' | 'project', root: string | null, name: string, description: string, body: string): Promise<string> =>
       ipcRenderer.invoke('claude:createSkill', scope, root, name, description, body),
     mcpList: (cwd: string): Promise<{ servers: McpServer[]; raw: string }> => ipcRenderer.invoke('claude:mcpList', cwd)
+  },
+  /** sldev's own skills (draft a mission, stories, a recipe, an eval) and the drafts agents leave in .sldev/drafts */
+  sldevSkills: {
+    state: (root: string): Promise<SkillState[]> => ipcRenderer.invoke('sldevSkills:state', root),
+    /** writes missing and outdated copies; hand-edited ones only when named in overwrite; returns the files written */
+    install: (root: string, overwrite: string[] = []): Promise<string[]> => ipcRenderer.invoke('sldevSkills:install', root, overwrite),
+    drafts: (root: string): Promise<DraftFile[]> => ipcRenderer.invoke('sldevSkills:drafts', root),
+    /** ok: taken, the file goes; not ok: renamed to .bad */
+    settle: (root: string, name: string, ok: boolean): Promise<void> => ipcRenderer.invoke('sldevSkills:settle', root, name, ok)
   },
   gh: {
     repo: (cwd: string): Promise<GhRepoInfo> => ipcRenderer.invoke('gh:repo', cwd),

@@ -4,6 +4,7 @@ import { createRules, rulesState, syncRules } from '../../src/main/rules'
 import { memoryInfo, remember } from '../../src/main/memory'
 import { initContext, recall } from '../../src/main/context'
 import { run } from '../../src/main/git'
+import { installSkills, skillsState } from '../../src/main/sldevSkills'
 
 /**
  * The repo features, without the daemon: they read and write the same `.sldev/` files as the app,
@@ -67,4 +68,31 @@ export async function recallNotes(dataDir: string, root: string, query: string, 
   initContext(dataDir)
   const { hits, related } = await recall(root, { query, path })
   return recallText(hits, root, related)
+}
+
+const SKILL_STATE: Record<string, string> = {
+  missing: 'not installed',
+  current: 'installed',
+  outdated: 'older version (sldev skills install updates it)',
+  edited: 'edited by hand (install --overwrite <name> to replace)',
+  foreign: 'another skill with this name (install --overwrite <name> to replace)'
+}
+
+/** sldev's own skills: agents draft missions, board stories, recipes and evals as files the app picks up. */
+export async function skillsStatus(root: string): Promise<string> {
+  const s = await skillsState(root)
+  const width = Math.max(...s.map((x) => x.name.length))
+  return [`sldev skills in ${root}:`, ...s.map((x) => `  /${x.name.padEnd(width)}  ${x.label.padEnd(24)} ${SKILL_STATE[x.state]}`)].join('\n')
+}
+
+export async function skillsInstall(root: string, overwrite: string[]): Promise<string> {
+  const wrote = await installSkills(root, overwrite)
+  const after = await skillsState(root)
+  const kept = after.filter((x) => x.state === 'edited' || x.state === 'foreign').map((x) => x.name)
+  return [
+    wrote.length ? `Wrote ${wrote.length} files:` : 'Already up to date.',
+    ...wrote.map((p) => `  ${p}`),
+    ...(kept.length ? [`Kept (edited by hand): ${kept.join(', ')}. Use --overwrite ${kept.join(',')} to replace them.`] : []),
+    'Agents now draft missions and stories into .sldev/drafts; sldev-io takes them in when it is open.'
+  ].join('\n')
 }

@@ -684,6 +684,35 @@ const missions: DocPage = {
       )
     },
     {
+      id: 'skills',
+      title: 'Let your agents draft work: the sldev skills',
+      body: (
+        <>
+          <p>
+            Most planning happens in a chat with an agent. The sldev skills let that agent write the result straight into sldev-io as a{' '}
+            <b>draft</b>, instead of you copying it into a form. Add them from the right sidebar → <b>Skills</b> → <b>Add to this project</b>,
+            or with the free CLI: <code>sldev skills install</code>. They are plain <code>SKILL.md</code> folders in{' '}
+            <code>.claude/skills</code> and <code>.agents/skills</code>, so Claude Code, Codex, OpenCode, Copilot and the others find them;
+            commit them and your team has them too.
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><code>/sldev-mission</code></td><td>A mission: brief, acceptance criteria, kind and optionally an agent. It shows up under <b>Saved for later</b>, marked with who drafted it.</td></tr>
+              <tr><td><code>/sldev-stories</code></td><td>Board stories with why, what to change, acceptance criteria and which story waits for which. They land in <b>Proposed</b>.</td></tr>
+              <tr><td><code>/sldev-recipe</code></td><td>A factory recipe in <code>.sldev/factory</code>. It shows up in Recipes.</td></tr>
+              <tr><td><code>/sldev-eval</code></td><td>An eval in <code>.sldev/evals</code>. It shows up in Mission Control → Evals.</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Agents leave missions and stories in <code>.sldev/drafts</code> (kept out of git). While the app is open it takes them in within
+            a few seconds and empties the folder; a draft it can't read is renamed to <code>.bad</code> and kept. <b>Nothing starts on its
+            own</b>: you read the draft, edit it if you like, and press Launch or approve the stories. A new version of sldev-io with better
+            skills offers <b>Update</b>; copies you edited by hand are kept unless you replace them.
+          </p>
+        </>
+      )
+    },
+    {
       id: 'kinds',
       title: 'Mission kinds',
       body: (

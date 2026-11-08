@@ -46,6 +46,7 @@ src/main/       Electron main process (Node): everything privileged
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
+  sldevSkills.ts  installs sldev's skills into a project (.claude/skills, .agents/skills) and lists/clears .sldev/drafts; no electron (the CLI's `sldev skills` uses it)
   evals.ts        eval files (.sldev/evals/*.yml), prompt variants (.sldev/evals/prompts/*.md) and the check commands of an eval attempt (exit code + output, killed on timeout)
   boardFile.ts    the work board shared through git: .sldev/board.json, written atomically (merging is in src/shared/board.ts)
   profiles.ts     project agent profiles (.sldev/agents/*.md) and export to Claude/OpenCode agent files
@@ -68,6 +69,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
                   review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing),
+                  sldevSkills.ts (sldev's own skills: their SKILL.md texts and versions, and the mission/story drafts agents leave in .sldev/drafts),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
 src/renderer/src/
@@ -77,7 +79,7 @@ src/renderer/src/
   state/          tiny stores (createStore/useStore in store.ts): workspace (settings), missions, savedMissions (briefs kept
                   to launch later), focus (review focus / focus mode),
                   tasks, runs, runtimes, agents, profiles, factory (the run executor), notes, remote,
-                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), lead (answers a Lead's sldev_delegate/wait/followup/integrate: workers, merges), review (the review cockpit's walkthrough and Ask why helpers, verdicts per part, Send back), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
+                  missionKinds, evals (eval runs: a worktree, a print-mode mission and the checks per attempt), lead (answers a Lead's sldev_delegate/wait/followup/integrate: workers, merges), review (the review cockpit's walkthrough and Ask why helpers, verdicts per part, Send back), drafts (takes the drafts agents leave in .sldev/drafts into saved missions and Proposed), automations (the trigger loop and repeat passes, while the app is open), board (work board cards
                   and the pick-up loop that starts Agent ready cards as runs or missions)
   dock/           dockview panels: Terminal, Diff, Note, MissionControl (missions board, factory runs, usage; opened from
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
@@ -199,6 +201,11 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
   kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
   is committed or pushed.
+- **sldev skills** (`src/shared/sldevSkills.ts`): they only ever create drafts. Missions and stories go through `.sldev/drafts/` (git-ignored),
+  which the app takes in while it is open (saved missions, the board's Proposed column) and then empties; nothing an agent drafts
+  launches or reaches Agent ready without a person. Recipes and evals are written where the app already reads them. Install never
+  overwrites a hand-edited copy unless asked; bump `SKILLS_VERSION` when a skill's text changes, and keep each skill's example in step
+  with its parser (test/sldevSkills.test.ts parses them).
 - **Lead missions** (kind `lead`, `src/shared/lead.ts`, `state/lead.ts`): only a Lead may call sldev_delegate, wait, followup and
   integrate (main checks the caller's kind; the CLI has none). Main can't start missions, so it forwards those calls to the
   window (`lead:request`/`lead:reply`) and waits. Workers run in print mode with the unattended mode, each in a worktree
@@ -222,7 +229,7 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
-  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds), never the UI, licensing or
+  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills), never the UI, licensing or
   beta. Keep those modules free of `electron` imports (they take a data dir or a sink instead). Its runtime files go in
   `<userData>/cli`, never over the app's. It makes no network requests of its own; the one exception is the workflows view
   (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating

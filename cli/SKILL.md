@@ -47,6 +47,7 @@ sldev recall "how are tests run"        # notes, .sldev/context docs, pinned fil
 sldev recall --path src/parser.ts       # everything known about a file
 sldev remember "Parser tests need TZ=UTC" --files src/parser.ts
 sldev rules sync                        # .sldev/rules.md → AGENTS.md, CLAUDE.md, GEMINI.md, Cursor, Copilot
+sldev skills install                    # skills to draft missions, board stories, recipes and evals for the app
 ```
 
 Agents started by sldev also get these as MCP tools (`sldev_recall`, `sldev_remember`, `sldev_status`,

@@ -92,7 +92,15 @@ export async function listClaudeAssets(root: string | null): Promise<ClaudeAsset
     jobs.push(skillsIn(join(p.path, 'skills'), 'plugin', p.name), commandsIn(join(p.path, 'commands'), 'plugin', p.name), agentsIn(join(p.path, 'agents'), 'plugin', p.name))
   }
   const all = (await Promise.all(jobs)).flat()
-  return all.filter((a) => !(a.kind === 'skill' && basename(dirname(a.path)) === 'synced'))
+  // one skill in several project folders (sldev's own skills go in .claude/skills and .agents/skills) is listed once
+  const seen = new Set<string>()
+  return all.filter((a) => {
+    if (a.kind === 'skill' && basename(dirname(a.path)) === 'synced') return false
+    if (a.kind !== 'skill' || a.source !== 'project') return true
+    if (seen.has(a.name)) return false
+    seen.add(a.name)
+    return true
+  })
 }
 
 export async function createSkill(scope: 'user' | 'project', root: string | null, name: string, description: string, body: string): Promise<string> {

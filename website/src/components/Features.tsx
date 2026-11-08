@@ -1,4 +1,5 @@
 import {
+  Wand2,
   ArrowRightLeft,
   Boxes,
   Brain,
@@ -58,6 +59,7 @@ const groups: { id: GroupId; icon: LucideIcon; title: string; text: string }[] =
 const features: Feature[] = [
   { group: 'team', icon: Network, title: 'Lead missions', text: 'Give one agent a big goal. It splits it into tasks, delegates them to other agents running in parallel in their own worktrees, reviews each diff, sends work back, and merges the good branches with your tests as the check.' },
   { group: 'team', icon: SquareKanban, title: 'A board agents work from', text: 'Backlog, Proposed, Agent ready, In progress, Review, Done. Turn on pick-up and the factory takes approved cards itself, highest priority first; a merged pull request moves the card to Done.' },
+  { group: 'team', icon: Wand2, title: 'Plan in the chat, launch in sldev', text: 'Add the sldev skills and any agent you plan with drafts the result for you: a mission with its acceptance criteria, board stories in order, a factory recipe or an eval. It shows up in sldev-io as a draft, and nothing starts until you launch it.' },
   { group: 'team', icon: Sparkles, title: 'Agents write the stories', text: 'Describe a feature and an agent reads the code, then writes stories with acceptance criteria and how to check them. Refine turns a vague card into one. You approve before any agent picks one up.' },
   { group: 'team', icon: FlaskConical, title: 'Evals and a leaderboard', text: 'Tasks from your own repo with checks: tests, output, a diff limit or a judge agent. Run them against any agents, models and prompt variants, and see who passes most, fastest, with the smallest diff.' },
   { group: 'team', icon: Hourglass, title: 'Cards that wait for others', text: 'A card waits for the cards it depends on, and pick-up starts it the moment they are Done. Story-writing agents set the order themselves; you see what each card waits for and unblocks.' },

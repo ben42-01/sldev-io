@@ -22,6 +22,8 @@ What it does that a plain multiplexer doesn't:
   same from a script. `sldev clean` drops finished panes and removes their worktrees, asking first.
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
+- **sldev skills** (`sldev skills install`): any agent can draft a mission, board stories, a factory recipe or an eval
+  as files the sldev-io app takes in as drafts.
 - **Project memory** in `.sldev/memory.md`, searchable with `sldev recall`, and the sldev MCP tools in
   every agent it starts.
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
@@ -78,7 +80,7 @@ the CLI can run at the same time without answering each other's agents.
 ## Development
 
 The CLI lives in `cli/` of the sldev-io repo and imports only `src/shared/` and the Electron-free
-modules of `src/main/` (pty, launch, hooks, mcp, git, rules, memory, context, missionKinds).
+modules of `src/main/` (pty, launch, hooks, mcp, git, rules, memory, context, missionKinds, sldevSkills).
 
 ```bash
 npm run cli:build            # → cli/dist/sldev.mjs
