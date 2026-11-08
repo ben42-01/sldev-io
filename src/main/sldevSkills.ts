@@ -37,6 +37,18 @@ export async function installSkills(root: string, overwrite: string[] = []): Pro
   return wrote
 }
 
+/** The skills as plain folders (`<dir>/<name>/SKILL.md`), for the public skills repo that `npx skills add` reads. */
+export async function exportSkills(dir: string): Promise<string[]> {
+  const out: string[] = []
+  for (const s of SLDEV_SKILLS) {
+    const p = join(dir, s.name, 'SKILL.md')
+    await fsp.mkdir(join(dir, s.name), { recursive: true })
+    await fsp.writeFile(p, skillText(s))
+    out.push(p)
+  }
+  return out
+}
+
 const draftsDir = (root: string): string => join(root, ...DRAFTS_DIR.split('/'))
 
 /** The drafts folder, kept out of git: drafts are an inbox the app empties. */

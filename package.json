@@ -18,6 +18,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p cli/tsconfig.json",
+    "skills:publish": "bash scripts/publish-skills.sh",
     "cli:build": "vite build --config cli/vite.config.mts",
     "cli:pack": "npm run cli:build && mkdir -p dist && npm pack ./cli --pack-destination dist",
     "postinstall": "electron-builder install-app-deps",

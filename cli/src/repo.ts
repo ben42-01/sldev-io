@@ -4,7 +4,7 @@ import { createRules, rulesState, syncRules } from '../../src/main/rules'
 import { memoryInfo, remember } from '../../src/main/memory'
 import { initContext, recall } from '../../src/main/context'
 import { run } from '../../src/main/git'
-import { installSkills, skillsState } from '../../src/main/sldevSkills'
+import { exportSkills, installSkills, skillsState } from '../../src/main/sldevSkills'
 
 /**
  * The repo features, without the daemon: they read and write the same `.sldev/` files as the app,
@@ -95,4 +95,9 @@ export async function skillsInstall(root: string, overwrite: string[]): Promise<
     ...(kept.length ? [`Kept (edited by hand): ${kept.join(', ')}. Use --overwrite ${kept.join(',')} to replace them.`] : []),
     'Agents now draft missions and stories into .sldev/drafts; sldev-io takes them in when it is open.'
   ].join('\n')
+}
+
+export async function skillsExport(dir: string): Promise<string> {
+  const wrote = await exportSkills(resolve(dir))
+  return [`Wrote ${wrote.length} skills:`, ...wrote.map((p) => `  ${p}`)].join('\n')
 }
