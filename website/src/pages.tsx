@@ -10,6 +10,10 @@ import { LegalPage } from './components/LegalPage'
 import { FaqSection, PricingPlans } from './components/Pricing'
 import { AgentAgnostic, HowItWorks } from './components/Spotlight'
 import { WorkflowsSpotlight } from './components/Workflows'
+import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
+import { FailoverSpotlight } from './components/Failover'
+import { ContextSpotlight } from './components/ContextSpotlight'
+import { WhySection } from './components/Story'
 import { Thanks } from './components/Thanks'
 import { docs } from './content/docs'
 import { legalPages, type LegalPageId } from './content/legal'
@@ -35,6 +39,12 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
           lead="Agents from every vendor, working as one team on your machine: a Lead that delegates, a board they work from, evals that measure them, and everything around the terminal."
         />
         <FeatureGrid />
+        <LeadSpotlight />
+        <BoardSpotlight />
+        <EvalsSpotlight />
+        <WhySection />
+        <FailoverSpotlight />
+        <ContextSpotlight />
         <WorkflowsSpotlight />
         <AgentAgnostic />
         <HowItWorks />

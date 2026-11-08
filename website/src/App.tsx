@@ -1,14 +1,15 @@
-import { ContextSpotlight } from './components/ContextSpotlight'
-import { FailoverSpotlight } from './components/Failover'
 import { FinalCta, Footer } from './components/Footer'
+import { Loop, PriceBand, Shift } from './components/Flagship'
 import { Hero } from './components/Hero'
-import { Bento, FlowSteps, ProofBand, Showcase } from './components/Home'
+import { Bento, ProofBand, Showcase } from './components/Home'
 import { Nav } from './components/Nav'
 import { HomeFaq } from './components/Pricing'
-import { WhySection } from './components/Story'
-import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
 
-/** The home page tells one story: the team at work (hero), how a feature ships, each part of it, then everything else. */
+/**
+ * The home page makes one argument: writing code got cheap, deciding what ships didn't (the shift), so you
+ * lead a team of agents through one loop (plan, build, review, prove), in one window, for one payment.
+ * The deep dives on each feature live on /features.
+ */
 export function App() {
   return (
     <>
@@ -16,15 +17,11 @@ export function App() {
       <main>
         <Hero />
         <ProofBand />
-        <FlowSteps />
-        <BoardSpotlight />
-        <LeadSpotlight />
-        <EvalsSpotlight />
-        <WhySection />
-        <Bento />
-        <FailoverSpotlight />
-        <ContextSpotlight />
+        <Shift />
+        <Loop />
         <Showcase />
+        <Bento />
+        <PriceBand />
         <HomeFaq />
         <FinalCta install />
       </main>

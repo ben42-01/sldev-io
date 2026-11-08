@@ -1,9 +1,10 @@
 import { ArrowRight } from 'lucide-react'
-import { betaMessage, betaStatus, site } from '../lib/pricing'
+import { betaMessage, betaStatus, formatPrice, pricing, site } from '../lib/pricing'
 import { TeamGraph } from './TeamGraph'
 import { DownloadButton } from './Download'
 
 export function Hero() {
+  const personal = pricing.plans.find((p) => p.id === 'personal') ?? pricing.plans[0]
   return (
     <section className="hero" id="top">
       <div className="hero-glow" aria-hidden="true" />
@@ -19,8 +20,8 @@ export function Hero() {
           <span className="brand-text">Working as one team.</span>
         </h1>
         <p className="lead">
-          A Lead agent splits the work. Claude Code, Codex, Gemini and the rest build it in parallel, each in its own worktree. Your tests
-          decide what gets merged, and you decide what ships. All on your own machine.
+          Stop babysitting agents in nine terminal tabs. Claude Code, Codex, Gemini and the rest plan, build and review together, each in
+          its own worktree, on your machine. You decide what gets built and what ships.
         </p>
         <div className="hero-cta">
           <DownloadButton />
@@ -29,7 +30,7 @@ export function Hero() {
           </a>
         </div>
         <p className="platforms">
-          <a href="/download">{site.platforms.join(' · ')}</a> · one-time license, no subscription
+          Free for 14 days · then {formatPrice(personal.price)} once, no subscription · <a href="/download">{site.platforms.join(' · ')}</a>
         </p>
         <TeamGraph />
         <p className="tg-caption">A Lead mission, replayed. Pick another goal to watch it again.</p>
