@@ -101,6 +101,13 @@ describe('in a project', () => {
     expect((await skillsState(root)).find((s) => s.name === 'sldev-eval')!.state).toBe('edited')
     expect(await installSkills(root, ['sldev-eval'])).toEqual([mine])
 
+    const one = mkdtempSync(join(tmpdir(), 'sldev-skills-one-'))
+    for (const s of SLDEV_SKILLS) {
+      await fsp.mkdir(join(one, '.agents/skills', s.name), { recursive: true })
+      await fsp.writeFile(join(one, '.agents/skills', s.name, 'SKILL.md'), skillText(s))
+    }
+    expect((await skillsState(one)).every((s) => s.state === 'current')).toBe(true)
+
     const dir = join(root, '.sldev/drafts')
     const old = Date.now() / 1000 - 60
     for (const [n, t] of [['mission-a.md', 'brief A'], ['stories-b.json', '[]'], ['notes.txt', 'x']]) {

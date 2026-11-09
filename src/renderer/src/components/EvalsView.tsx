@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SkillsHint } from './SkillsHint'
 import { Check, Copy, ExternalLink, FileDiff, FlaskConical, Pause, Play, Plus, RefreshCw, Trash2, Trophy, X } from 'lucide-react'
 import { attemptDone, cellTone, contestantKey, scoreboard, scoreboardMarkdown, withPrompts, type Contestant, type EvalAttempt, type EvalRun, type Score } from '@shared/evals'
 import type { Signal } from '@shared/status'
@@ -70,7 +71,7 @@ export function EvalsView({ root }: { root: string | null }): React.JSX.Element 
           big
           icon={<FlaskConical size={22} />}
           title="Measure your agents on your own code"
-          hint="An eval is a task with checks: a brief, the commit to start from, and how to tell a good result (tests pass, a command prints ok, a small diff, or a judge agent with a rubric). Run a suite against Claude, Codex or any agent and model, and see who passes most, fastest, with the smallest diff."
+          hint={<>An eval is a task with checks: a brief, the commit to start from, and how to tell a good result (tests pass, a command prints ok, a small diff, or a judge agent with a rubric). Run a suite against Claude, Codex or any agent and model, and see who passes most, fastest, with the smallest diff. <SkillsHint skill="sldev-eval" what="an eval" /></>}
           action={<button className="btn sm" onClick={() => void create()}><Plus size={13} /> New eval</button>}
         />
       ) : (

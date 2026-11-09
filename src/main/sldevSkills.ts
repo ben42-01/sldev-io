@@ -12,7 +12,9 @@ const RANK: SkillCopyState[] = ['missing', 'outdated', 'edited', 'foreign', 'cur
 export async function skillsState(root: string): Promise<SkillState[]> {
   return Promise.all(
     SLDEV_SKILLS.map(async (s) => {
-      const states = await Promise.all(copies(root, s.name).map(async (p) => copyState(s, await read(p))))
+      const all = await Promise.all(copies(root, s.name).map(async (p) => copyState(s, await read(p))))
+      // npx skills add writes one folder, so a missing copy only counts when no other copy exists
+      const states = all.some((st) => st !== 'missing') ? all.filter((st) => st !== 'missing') : all
       return { name: s.name, label: s.label, state: RANK.find((r) => states.includes(r)) ?? 'current' }
     })
   )
@@ -64,6 +66,8 @@ export async function prepareDrafts(root: string): Promise<void> {
 export async function listDrafts(root: string): Promise<DraftFile[]> {
   const dir = draftsDir(root)
   const names = (await fsp.readdir(dir).catch(() => [] as string[])).filter((n) => draftKind(n))
+  // skills installed by npx never ran prepareDrafts: keep the inbox out of git before the first draft is taken
+  if (names.length) await prepareDrafts(root).catch(() => undefined)
   const files = await Promise.all(
     names.map(async (name) => {
       const st = await fsp.stat(join(dir, name)).catch(() => null)

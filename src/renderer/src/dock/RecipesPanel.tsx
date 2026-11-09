@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SkillsHint } from '../components/SkillsHint'
 import type { IDockviewPanelProps } from 'dockview-react'
 import {
   ArrowDown,
@@ -267,7 +268,7 @@ export function RecipesPanel({ params }: IDockviewPanelProps<{ select?: string; 
       <div className={`recipes-body${mode.kind === 'edit' ? ' editing' : ''}`}>
         {mode.kind !== 'edit' && <nav className="recipes-list" aria-label="Recipes">
           <div className="section-label">In this project{own.length ? ` · ${own.length}` : ''}</div>
-          {own.length === 0 && <div className="muted-note">None yet. Build one, import one, or customize a built-in; they are saved in .sldev/factory so you can commit and share them.</div>}
+          {own.length === 0 && <div className="muted-note">None yet. Build one, import one, or customize a built-in; they are saved in .sldev/factory so you can commit and share them. <SkillsHint skill="sldev-recipe" what="a recipe" /></div>}
           {own.map((r) => <RecipeItem key={r.recipe.path ?? r.recipe.name} entry={r} on={mode.kind === 'browse' && entry === r} onClick={() => void pick(r.recipe.name)} />)}
           {Object.entries(errors).map(([path, error]) => (
             <button key={path} className="recipe-item broken" title={error} onClick={() => void openInEditor(path)}>

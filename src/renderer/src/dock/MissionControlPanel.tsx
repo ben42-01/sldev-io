@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SkillsHint } from '../components/SkillsHint'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, FlaskConical, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
 import type { Mission } from '@shared/types'
@@ -147,7 +148,7 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
           big
           icon={<Rocket size={22} />}
           title="No missions yet"
-          hint="A mission runs a coding agent on a brief, optionally in its own git worktree. It shows up here with its state, what it's doing and the diff when it's done."
+          hint={<>A mission runs a coding agent on a brief, optionally in its own git worktree. It shows up here with its state, what it's doing and the diff when it's done. <SkillsHint skill="sldev-mission" what="a mission" /></>}
           action={<button className="btn sm" onClick={() => openNewMission()}><Rocket size={13} /> New mission</button>}
         />
       ) : layout === 'columns' ? (

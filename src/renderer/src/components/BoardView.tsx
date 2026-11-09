@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SkillsHint } from './SkillsHint'
 import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
 import { BOARD_COLUMNS, blockersOf, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
@@ -138,7 +139,7 @@ function Column({ column, items, all, total, root, pickup, onOpen, jobs }: { col
         {items.map((i) => <Card key={i.id} item={i} all={all} onOpen={() => onOpen(i)} />)}
         {!items.length && !adding && !jobs.length && (
           <div className="mc-column-empty">
-            <span className="muted small">{column.hint}</span>
+            <span className="muted small">{column.hint}{column.id === 'proposed' && <> <SkillsHint skill="sldev-stories" what="stories" /></>}</span>
             {column.id === 'proposed' && <button className="btn sm" onClick={() => openBoardDialog({ type: 'stories' })}><Sparkles size={12} /> Write stories</button>}
           </div>
         )}

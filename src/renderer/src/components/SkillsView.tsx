@@ -169,6 +169,7 @@ function SldevSkillsCard({ root, onChange }: { root: string; onChange: () => voi
           </li>
         ))}
       </ul>
+      {!todo.length && !fresh && <p className="field-hint" data-testid="sldev-skills-next">Next: in your agent&apos;s terminal, type <code>/sldev-stories</code> (or any skill above). Drafts appear here; other agents can follow the SKILL.md in .agents/skills.</p>}
       {error && <div className="form-error" role="alert">{error}</div>}
       <div className="sldev-skills-actions">
         {todo.length > 0 && (

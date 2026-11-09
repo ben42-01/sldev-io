@@ -7687,3 +7687,8 @@ button.board-label:hover {
     transition: none;
   }
 }
+
+.skills-hint { color: var(--muted-foreground); }
+.skills-hint code { font-family: var(--font-mono); font-size: 0.95em; }
+.skills-hint .link-btn { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+.skills-hint .link-btn:hover { color: var(--foreground); }

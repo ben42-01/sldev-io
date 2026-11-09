@@ -198,6 +198,23 @@ export function staticCommands(): Command[] {
     { id: 'board.open', category: 'Agents', title: 'Open the work board (Backlog → Proposed → Agent ready → Review)', run: () => openBoard() },
     { id: 'board.stories', category: 'Agents', title: 'Write stories with an agent (they land on the board to approve)', run: () => openBoard('stories') },
     { id: 'board.release', category: 'Agents', title: 'Release notes from the board’s Done cards', run: () => openBoard('release') },
+    { id: 'skills.sldev', category: 'Agents', title: 'sldev skills: let your agent draft missions, stories, recipes and evals', run: () => showView('skills') },
+    {
+      id: 'skills.install',
+      category: 'Agents',
+      title: 'Add the sldev skills to this project (/sldev-mission, /sldev-stories, /sldev-recipe, /sldev-eval)',
+      run: () => {
+        const root = workspace.get().rootFolder
+        if (!root) return showNotice('Open a folder first', 'The sldev skills are added to a project.')
+        window.api.sldevSkills.install(root, []).then(
+          () => {
+            showView('skills')
+            showNotice('sldev skills added', 'In your agent’s terminal, type /sldev-mission or /sldev-stories. Drafts show up in sldev-io and nothing starts until you launch it.')
+          },
+          (e: unknown) => showNotice('Could not add the skills', errText(e))
+        )
+      }
+    },
     { id: 'evals.open', category: 'Agents', title: 'Open evals: measure agents and models on this project (scoreboard)', run: () => openMissionControl('evals') },
     { id: 'missions.runs', category: 'Factory', title: 'Open factory runs in Mission Control', run: () => openMissionControl('runs') },
     { id: 'factory.run', category: 'Factory', title: 'New factory run…', run: () => openNewRun() },

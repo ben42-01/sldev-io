@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SkillsHint } from './SkillsHint'
 import type { AgentOptions, SavedMission } from '@shared/types'
 import { Bookmark, ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, StretchHorizontal } from 'lucide-react'
 import { openMissionControl } from '../dock/MissionControlPanel'
@@ -101,7 +102,7 @@ export function MissionsView(): React.JSX.Element {
         <div className="mission-list">{recent.slice(0, 30).map((m) => <MissionCard key={m.id} mission={m} compact={compact} />)}</div>
         {root && !mine.length && !later.length && (
           <div className="muted-note">
-            A mission runs a coding agent (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini or your own CLI) on a prompt, optionally in its own git worktree. sldev-io tracks when it's working, when it needs you, and lets you review and merge the diff when it's done.
+            A mission runs a coding agent (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini or your own CLI) on a prompt, optionally in its own git worktree. sldev-io tracks when it's working, when it needs you, and lets you review and merge the diff when it's done. <SkillsHint skill="sldev-mission" what="a mission" />
           </div>
         )}
       </div>
