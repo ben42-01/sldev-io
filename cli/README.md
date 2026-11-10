@@ -45,7 +45,7 @@ Until then, install it from GitHub (the public downloads repo, branch `cli`, wri
 
 ```bash
 npm i -g github:ben42-01/downloads.sldev.io#cli          # newest
-npm i -g github:ben42-01/downloads.sldev.io#cli-v0.1.0   # a specific version
+npm i -g github:ben42-01/downloads.sldev.io#cli-v0.2.0   # a specific version
 ```
 
 From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-<version>.tgz`, which installs with `npm i -g ./dist/sldev-<version>.tgz`.
