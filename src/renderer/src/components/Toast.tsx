@@ -5,10 +5,10 @@ import { createStore, useStore } from '../state/store'
 const toasts = createStore<{ now: { text: string; id: number } | null }>({ now: null })
 let timer: ReturnType<typeof setTimeout> | undefined
 
-export function toast(text: string): void {
+export function toast(text: string, ms = 3200): void {
   clearTimeout(timer)
   toasts.set({ now: { text, id: Date.now() } })
-  timer = setTimeout(() => toasts.set({ now: null }), 3200)
+  timer = setTimeout(() => toasts.set({ now: null }), ms)
 }
 
 export function ToastHost(): React.JSX.Element | null {

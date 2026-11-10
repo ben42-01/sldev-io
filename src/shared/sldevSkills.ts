@@ -1,5 +1,7 @@
 import { parse } from 'yaml'
 import { STORY_SHAPE, parseStories, type StoryDraft } from './board'
+import { parseEval } from './evals'
+import { parseRecipe } from './factory'
 
 /**
  * sldev's own skills: plain SKILL.md folders that teach any agent to draft sldev things (a mission, board
@@ -9,7 +11,7 @@ import { STORY_SHAPE, parseStories, type StoryDraft } from './board'
  */
 
 /** bumped when a skill's text changes, so projects with an older copy are offered the update */
-export const SKILLS_VERSION = 1
+export const SKILLS_VERSION = 2
 
 export const DRAFTS_DIR = '.sldev/drafts'
 /** where each skill is installed in a project: Claude Code reads .claude/skills, most other agents .agents/skills */
@@ -27,6 +29,24 @@ const ROOT_LINE =
   'Write it at the project root (the git top level). If you are in a git worktree, use the main checkout instead: the parent of `git rev-parse --path-format=absolute --git-common-dir`. Create the folder if it is missing.'
 
 const AGENT_IDS = 'claude, codex, cursor, copilot, opencode or gemini'
+
+const YAML_RULE =
+  'put any value that contains `: ` or ` #`, or starts with `[ { * & ! | > \' " % @` or a backtick, in double quotes (`title: "Fix: the parser"`)'
+const JSON_RULE = 'it must be valid JSON: double quotes, no trailing commas, quotes and newlines inside strings written as `\\"` and `\\n`'
+
+/**
+ * The step every skill ends with. The app reads a file once and sets one it can't read aside, so an agent
+ * that reports "done" without checking leaves a draft the user never sees.
+ */
+const checkStep = (heading: string, rule: string): string => `${heading}
+
+The app reads the file once, and sets aside one it can't read: the user never sees it. So before you say it's done, check it the way sldev-io reads it:
+
+- With the sldev tools: call \`sldev_check\` with the file's path.
+- Otherwise, if the \`sldev\` command is installed: run \`sldev skills check <file>\`.
+- Otherwise read the file back yourself: ${rule}.
+
+Fix what the check reports and check again. Say it's done only once it passes; if you couldn't check it, say that.`
 
 export const SLDEV_SKILLS: SldevSkill[] = [
   {
@@ -62,7 +82,7 @@ Add retries to \`uploadFile\` in src/api/upload.ts: up to 3 attempts for 5xx res
 waiting 1 s, 2 s and 4 s. Keep the function's signature. Don't add a dependency for this.
 \`\`\`
 
-- **title**: imperative, under 60 characters.
+- **title**: imperative, under 60 characters. In double quotes when it contains a colon.
 - **kind**: \`build\` (changes code; the default), \`research\` (answers a question, read-only), \`investigate\` (finds a bug's cause, no fix), \`plan\` (writes a plan, no code), \`review\` (reviews changes already made), \`freeform\` (the brief is sent exactly as written).
 - **criteria**: what a reviewer checks the change against. Each one observable and checkable; sldev's review shows which are met.
 - **agent**: only when the user asked for one: ${AGENT_IDS}. Leave it out for the user's default.
@@ -77,7 +97,9 @@ waiting 1 s, 2 s and 4 s. Keep the function's signature. Don't add a dependency 
 - How to check: the tests or commands to run.
 - One mission is one change someone can review in one sitting. Split bigger work into several files, or use the sldev-stories skill when the parts depend on each other.
 
-## 4. Finish
+${checkStep('## 4. Check it', `the part between the \`---\` lines is YAML: ${YAML_RULE}, and the brief under it is not empty`)}
+
+## 5. Finish
 
 Say in one line what you drafted and that it is in sldev-io under Missions, ready to launch. The app reads the file (now if it is open, otherwise when it next opens) and removes it from the drafts folder.
 `
@@ -129,7 +151,9 @@ Keep it to what was asked: at most about 12 stories, and no "nice to have" work 
 
 \`by\` is your own agent id (${AGENT_IDS}). The app adds the stories to Proposed (now if it is open, otherwise when it next opens) and removes the file.
 
-## 4. Finish
+${checkStep('## 4. Check the file', `${JSON_RULE}, and every story has a "title". Stories filed with \`sldev_board_add\` need no check`)}
+
+## 5. Finish
 
 Say in one line how many stories you wrote and that they wait in Proposed on the board.
 `
@@ -193,9 +217,11 @@ Placeholders in prompts and the PR: \`{intent}\` (what the user typed when start
 - Gate the steps a person should see (the spec, the review); not every stage.
 - Use the project's own scripts, read from package.json, the Makefile or whatever the project uses.
 
+${checkStep('## Check it', `it is YAML, so ${YAML_RULE}; each stage is exactly one kind, and every \`needs\`/\`retry\` names a stage above it`)}
+
 ## Finish
 
-Read the file back and check each stage is exactly one kind and every \`needs\`/\`retry\` names a stage above it. Then say in one line that the recipe is in sldev-io under Factory → Recipes. If it doesn't load, the library shows why under the file.
+Say in one line that the recipe is in sldev-io under Factory → Recipes.
 `
   },
   {
@@ -237,9 +263,11 @@ checks:
 - At least one \`run\` check that can't pass by accident (a test of the behaviour, not just "it builds").
 - A \`diff\` limit catches agents that rewrite too much; a \`judge\` catches what commands can't (the right place, the right approach).
 
+${checkStep('## Check it', `it is YAML, so ${YAML_RULE}; \`name\`, \`brief\` and at least one check are there`)}
+
 ## Finish
 
-Say in one line that the eval is in sldev-io under Mission Control → Evals, ready to run on the agents the user picks. If it doesn't load, Evals shows why under the file.
+Say in one line that the eval is in sldev-io under Mission Control → Evals, ready to run on the agents the user picks.
 `
   }
 ]
@@ -294,25 +322,76 @@ export interface MissionDraft {
   by?: string
 }
 
-const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined)
 
-/** A mission-*.md draft: YAML front matter (title, kind, criteria, agent, worktree, by) and the brief. */
-export function parseMissionDraft(src: string, kinds: string[] = MISSION_KINDS_DRAFTABLE): { draft?: MissionDraft; error?: string } {
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(src)
+const unquote = (v: string): string => {
+  const t = v.trim()
+  return t.length > 1 && (t[0] === '"' || t[0] === "'") && t.endsWith(t[0]) ? t.slice(1, -1) : t
+}
+
+/**
+ * Front matter read line by line, for when it isn't valid YAML: agents write `title: Fix: the parser` or
+ * `title: [WIP] …` unquoted. Each `key: value` takes the rest of its line; a key with nothing after it starts
+ * a `- item` list. Null when a line fits neither, so a truly broken header still fails.
+ */
+function looseFrontMatter(src: string): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {}
+  let list: string[] | null = null
+  for (const line of src.split(/\r?\n/)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue
+    const item = /^\s*-\s+(.*)$/.exec(line)
+    if (item && list) {
+      list.push(unquote(item[1]))
+      continue
+    }
+    const kv = /^([A-Za-z_][\w-]*):(?:\s+(.*))?$/.exec(line)
+    if (!kv) return null
+    const v = (kv[2] ?? '').trim()
+    if (!v) out[kv[1]] = list = []
+    else {
+      list = null
+      out[kv[1]] = v === 'true' ? true : v === 'false' ? false : unquote(v)
+    }
+  }
+  return out
+}
+
+/** a criterion as YAML read it: `- Retries: up to 3` comes back as a one-key mapping */
+const criterion = (c: unknown): string =>
+  c && typeof c === 'object' && !Array.isArray(c)
+    ? Object.entries(c as Record<string, unknown>)
+        .map(([k, v]) => (v === null || v === undefined ? k : `${k}: ${String(v)}`))
+        .join(', ')
+    : String(c ?? '')
+
+/**
+ * A mission-*.md draft: YAML front matter (title, kind, criteria, agent, worktree, by) and the brief. Front
+ * matter that isn't valid YAML is read line by line instead (`warning` says so), so an unquoted colon in a
+ * title doesn't lose the draft.
+ */
+export function parseMissionDraft(src: string, kinds: string[] = MISSION_KINDS_DRAFTABLE): { draft?: MissionDraft; error?: string; warning?: string } {
+  const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(src)
   let fm: Record<string, unknown> = {}
+  let warning: string | undefined
   if (m) {
     try {
       const v = parse(m[1]) as unknown
       if (v && typeof v === 'object' && !Array.isArray(v)) fm = v as Record<string, unknown>
     } catch (e) {
-      return { error: `The front matter isn't valid YAML: ${(e as Error).message.split('\n')[0]}` }
+      const why = (e as Error).message.split('\n')[0]
+      const loose = looseFrontMatter(m[1])
+      if (!loose) return { error: `The front matter isn't valid YAML: ${why}` }
+      fm = loose
+      warning = `The front matter isn't valid YAML (${why}), so it was read line by line. Put values that contain ": " or start with [ { * & ! | > ' " % @ in double quotes.`
     }
   }
   const brief = (m ? m[2] : src).trim()
   if (!brief) return { error: 'The brief is empty: write it under the front matter' }
-  const crit = Array.isArray(fm.criteria) ? fm.criteria.map((c) => String(c).trim()).filter(Boolean) : text(fm.criteria)?.split('\n').filter((l) => l.trim()) ?? []
+  const crit = Array.isArray(fm.criteria) ? fm.criteria.map((c) => criterion(c).trim()).filter(Boolean) : text(fm.criteria)?.split('\n').filter((l) => l.trim()) ?? []
   const kind = text(fm.kind)?.toLowerCase()
+  if (kind && !kinds.includes(kind)) warning = [warning, `Unknown kind "${kind}": it becomes build. Known: ${kinds.join(', ')}.`].filter(Boolean).join(' ')
   return {
+    ...(warning ? { warning } : {}),
     draft: {
       title: text(fm.title)?.slice(0, 100),
       brief,
@@ -344,4 +423,78 @@ export function draftKind(name: string): 'mission' | 'stories' | null {
   if (/^mission[^/\\]*\.md$/i.test(name)) return 'mission'
   if (/^stories[^/\\]*\.json$/i.test(name)) return 'stories'
   return null
+}
+
+// ── checking a file an sldev skill wrote ──────────────────────────────
+
+export type SkillFileKind = 'mission' | 'stories' | 'recipe' | 'eval'
+
+/** Which of the skills' files `path` is, from where it sits: a draft by its name, a recipe or eval by its folder. */
+export function skillFileKind(path: string): SkillFileKind | null {
+  const p = path.replace(/\\/g, '/')
+  if (/(^|\/)\.sldev\/factory\/[^/]+\.ya?ml$/i.test(p)) return 'recipe'
+  if (/(^|\/)\.sldev\/evals\/[^/]+\.ya?ml$/i.test(p)) return 'eval'
+  if (/(^|\/)\.sldev\/drafts\/[^/]+$/i.test(p)) return draftKind(p.split('/').pop()!)
+  return null
+}
+
+export type SkillFileCheck = { ok: true; kind: SkillFileKind; summary: string; warning?: string } | { ok: false; kind: SkillFileKind | null; error: string }
+
+/**
+ * Reads a file an agent wrote with an sldev skill the way the app will, so the agent can fix it before it
+ * says it's done (sldev_check, `sldev skills check`). The app reads drafts once and sets bad ones aside, so a
+ * mistake found later is a draft the user never sees.
+ */
+export function checkSkillFile(path: string, src: string): SkillFileCheck {
+  const kind = skillFileKind(path)
+  if (!kind)
+    return {
+      ok: false,
+      kind,
+      error: `sldev-io doesn't read ${path}. Missions go to ${DRAFTS_DIR}/mission-<slug>.md, stories to ${DRAFTS_DIR}/stories-<slug>.json, recipes to .sldev/factory/<slug>.yml and evals to .sldev/evals/<slug>.yml, at the project root.`
+    }
+  if (kind === 'mission') {
+    const r = parseMissionDraft(src)
+    if (!r.draft) return { ok: false, kind, error: r.error! }
+    const d = r.draft
+    const crit = d.criteria ? d.criteria.split('\n').length : 0
+    return { ok: true, kind, summary: `A ${d.kind} mission: "${d.title ?? d.brief.split('\n')[0].slice(0, 60)}", ${crit} criteria.`, ...(r.warning ? { warning: r.warning } : {}) }
+  }
+  if (kind === 'stories') {
+    const t = src.trim()
+    let listed: number | undefined
+    if (t.startsWith('{') || t.startsWith('[')) {
+      try {
+        const v = JSON.parse(t) as unknown
+        const arr = Array.isArray(v) ? v : (v as { stories?: unknown })?.stories
+        if (!Array.isArray(arr)) return { ok: false, kind, error: 'The file needs a "stories" array: {"by": "…", "stories": [{"title": "…", "details": "…"}]}' }
+        listed = arr.length
+      } catch (e) {
+        return { ok: false, kind, error: `Not valid JSON: ${(e as Error).message}. Escape quotes and newlines inside strings (\\" and \\n).` }
+      }
+    }
+    const { stories } = parseStoriesDraft(src)
+    if (!stories.length) return { ok: false, kind, error: 'No stories found: each story needs at least a "title".' }
+    const dropped = listed !== undefined ? listed - stories.length : 0
+    return {
+      ok: true,
+      kind,
+      summary: `${stories.length} ${stories.length === 1 ? 'story' : 'stories'}: ${stories.map((st) => st.title).join('; ').slice(0, 300)}`,
+      ...(dropped > 0 ? { warning: `${dropped} of the ${listed} entries were skipped: each story needs a "title".` } : {})
+    }
+  }
+  if (kind === 'recipe') {
+    const r = parseRecipe(src, path)
+    if (!r.recipe) return { ok: false, kind, error: r.error }
+    return { ok: true, kind, summary: `The recipe "${r.recipe.name}": ${r.recipe.nodes.map((n) => n.id).join(' → ')}.` }
+  }
+  const e = parseEval(src, path)
+  if (!e.spec) return { ok: false, kind, error: e.error ?? 'Not an eval' }
+  return { ok: true, kind, summary: `The eval "${e.spec.name}": ${e.spec.checks.length} checks.` }
+}
+
+/** A check's result in a few lines, for an agent (the MCP tool) or a terminal (the CLI). */
+export function checkText(path: string, c: SkillFileCheck): string {
+  if (!c.ok) return `${path}: NOT OK. sldev-io would not take this file.\n${c.error}\nFix the file and check it again before you say it's done.`
+  return `${path}: OK. ${c.summary}${c.warning ? `\nBut: ${c.warning}` : ''}`
 }

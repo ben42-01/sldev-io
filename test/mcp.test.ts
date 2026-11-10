@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import { mkdtempSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
 import { createServer } from 'http'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -95,6 +95,23 @@ describe('tool calls', () => {
   it('rejects a bad state and unknown sessions', async () => {
     expect((await handleMcp({ mission: 'a', tool: 'sldev_status', args: { state: 'sleeping' }, cwd: '/p' }, deps([]))).error).toContain('working, needs_input or done')
     expect((await handleMcp({ mission: 'zz', tool: 'sldev_rules', args: {}, cwd: '/p' }, deps([]))).error).toContain('not started by sldev-io')
+  })
+  it('sldev_check reads a draft the way the app will, and says when it sits where the app never looks', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sldev-check-'))
+    const drafts = join(root, '.sldev', 'drafts')
+    mkdirSync(drafts, { recursive: true })
+    const wt = join(root, 'wt', '.sldev', 'drafts')
+    mkdirSync(wt, { recursive: true })
+    writeFileSync(join(drafts, 'mission-ok.md'), '---\ntitle: "Fix: the parser"\n---\nDo it.\n')
+    writeFileSync(join(drafts, 'stories-bad.json'), '{"stories": [{"title": "A",}]}')
+    writeFileSync(join(wt, 'mission-ok.md'), '---\ntitle: Fine\n---\nDo it.\n')
+    const deps = { missions: () => [m('a', root, { cwd: join(root, 'wt') })], send: () => undefined }
+    const check = async (path: string) => (await handleMcp({ mission: 'a', tool: 'sldev_check', args: { path }, cwd: root }, deps)).text ?? ''
+    expect(await check(join(drafts, 'mission-ok.md'))).toMatch(/OK\. A build mission: "Fix: the parser"/)
+    expect(await check(join(drafts, 'stories-bad.json'))).toMatch(/NOT OK[\s\S]*Not valid JSON/)
+    // relative to the agent's own folder: a worktree's drafts folder isn't the project's
+    expect(await check('.sldev/drafts/mission-ok.md')).toMatch(/OK[\s\S]*reads drafts from .*Move it there/)
+    expect((await handleMcp({ mission: 'a', tool: 'sldev_check', args: { path: 'nope.md' }, cwd: root }, deps)).error).toContain('Could not read')
   })
   it('lists the other missions of the same project only', async () => {
     const r = await handleMcp({ mission: 'a', tool: 'sldev_missions', args: {}, cwd: '/p' }, deps([]))

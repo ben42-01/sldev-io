@@ -4,7 +4,7 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { parseRecipe } from '../src/shared/factory'
 import { parseEval } from '../src/shared/evals'
-import { SKILLS_VERSION, SLDEV_SKILLS, copyState, draftKind, parseMissionDraft, parseStoriesDraft, skillText, skillVersionOf } from '../src/shared/sldevSkills'
+import { SKILLS_VERSION, SLDEV_SKILLS, checkSkillFile, copyState, draftKind, parseMissionDraft, parseStoriesDraft, skillFileKind, skillText, skillVersionOf } from '../src/shared/sldevSkills'
 import { installSkills, listDrafts, settleDraft, skillsState } from '../src/main/sldevSkills'
 
 const skill = (name: string): (typeof SLDEV_SKILLS)[number] => SLDEV_SKILLS.find((s) => s.name === name)!
@@ -70,7 +70,8 @@ describe('mission drafts', () => {
   })
   it('refuses an empty brief or broken front matter', () => {
     expect(parseMissionDraft('---\ntitle: x\n---\n\n').error).toMatch(/empty/)
-    expect(parseMissionDraft('---\ntitle: [x\n---\nbrief').error).toMatch(/YAML/)
+    // not YAML, but plain key: value lines: kept, with a warning (see "a draft an agent got slightly wrong")
+    expect(parseMissionDraft('---\ntitle: [x\n---\nbrief')).toMatchObject({ draft: { title: '[x' }, warning: expect.stringMatching(/YAML/) })
   })
 })
 
@@ -120,5 +121,65 @@ describe('in a project', () => {
     await settleDraft(root, 'stories-b.json', false)
     expect((await fsp.readdir(dir)).sort()).toEqual(['.gitignore', 'mission-still-writing.md', 'notes.txt', 'stories-b.json.bad'])
     await expect(settleDraft(root, '../../package.json', true)).rejects.toThrow('Not a draft')
+  })
+})
+
+describe('a draft an agent got slightly wrong', () => {
+  it('keeps a mission whose title has an unquoted colon, and says how to write it', () => {
+    const src = '---\ntitle: Fix: the parser drops the last line\nkind: build\ncriteria:\n  - Retries: up to 3\n  - "npm test passes"\nworktree: false\n---\nThe brief.\n'
+    const r = parseMissionDraft(src)
+    expect(r.draft).toMatchObject({ title: 'Fix: the parser drops the last line', kind: 'build', worktree: false, brief: 'The brief.' })
+    expect(r.draft!.criteria).toBe('- Retries: up to 3\n- npm test passes')
+    expect(r.warning).toMatch(/isn't valid YAML.*double quotes/)
+  })
+  it('reads a criterion YAML took for a mapping as the line it was', () => {
+    const r = parseMissionDraft('---\ncriteria:\n  - Retries: up to 3\n---\nBrief\n')
+    expect(r.warning).toBeUndefined()
+    expect(r.draft!.criteria).toBe('- Retries: up to 3')
+  })
+  it('still refuses a header that is neither YAML nor key: value lines, or an empty brief', () => {
+    expect(parseMissionDraft('---\ntitle: "unclosed\n  {broken\n---\nBrief\n').error).toMatch(/isn't valid YAML/)
+    expect(parseMissionDraft('---\ntitle: x\n---\n\n').error).toMatch(/brief is empty/)
+  })
+  it('warns about an unknown kind instead of silently building', () => {
+    expect(parseMissionDraft('---\nkind: refactor\n---\nBrief\n').warning).toMatch(/Unknown kind "refactor"/)
+  })
+})
+
+describe('checking the files the skills write', () => {
+  it('knows each file by where it sits', () => {
+    expect(skillFileKind('/p/.sldev/drafts/mission-x.md')).toBe('mission')
+    expect(skillFileKind('C:\\p\\.sldev\\drafts\\stories-x.json')).toBe('stories')
+    expect(skillFileKind('/p/.sldev/factory/feature.yml')).toBe('recipe')
+    expect(skillFileKind('.sldev/evals/pages.yaml')).toBe('eval')
+    expect(skillFileKind('/p/.sldev/evals/prompts/terse.md')).toBeNull()
+    expect(skillFileKind('/p/mission-x.md')).toBeNull()
+  })
+  it('passes every skill’s own example', () => {
+    expect(checkSkillFile('.sldev/drafts/mission-a.md', example('sldev-mission', 'markdown'))).toMatchObject({ ok: true, kind: 'mission' })
+    expect(checkSkillFile('.sldev/drafts/stories-a.json', example('sldev-stories', 'json'))).toMatchObject({ ok: true, kind: 'stories' })
+    expect(checkSkillFile('.sldev/factory/a.yml', example('sldev-recipe', 'yaml'))).toMatchObject({ ok: true, kind: 'recipe' })
+    expect(checkSkillFile('.sldev/evals/a.yml', example('sldev-eval', 'yaml'))).toMatchObject({ ok: true, kind: 'eval' })
+  })
+  it('says what is wrong in each format', () => {
+    const fail = (path: string, src: string): string => {
+      const c = checkSkillFile(path, src)
+      return c.ok ? 'ok' : c.error
+    }
+    expect(fail('.sldev/drafts/stories-a.json', '{"stories": [{"title": "A", }]}')).toMatch(/Not valid JSON/)
+    expect(fail('.sldev/drafts/stories-a.json', '{"by": "codex"}')).toMatch(/"stories" array/)
+    expect(fail('.sldev/drafts/stories-a.json', '[{"details": "no title"}]')).toMatch(/needs at least a "title"/)
+    expect(fail('.sldev/factory/a.yml', 'name: Fix: it\nstages: []\n')).toMatch(/YAML/)
+    expect(fail('.sldev/evals/a.yml', 'name: x\nbrief: y\n')).not.toBe('ok')
+    expect(fail('notes/mission.md', 'x')).toMatch(/doesn't read notes\/mission\.md/)
+    const some = checkSkillFile('.sldev/drafts/stories-a.json', '[{"title": "A"}, {"details": "x"}]')
+    expect(some).toMatchObject({ ok: true, warning: expect.stringMatching(/1 of the 2 entries were skipped/) })
+  })
+  it('every skill tells the agent to check its file before it reports done', () => {
+    for (const s of SLDEV_SKILLS) {
+      expect(s.body).toContain('sldev_check')
+      expect(s.body).toContain('sldev skills check <file>')
+      expect(s.body).toMatch(/Say it's done only once it passes/)
+    }
   })
 })

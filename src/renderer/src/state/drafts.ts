@@ -1,5 +1,5 @@
 import { resolveAfter } from '@shared/board'
-import { draftKind, parseMissionDraft, parseStoriesDraft } from '@shared/sldevSkills'
+import { checkSkillFile, draftKind, DRAFTS_DIR, parseMissionDraft, parseStoriesDraft } from '@shared/sldevSkills'
 import { allAgents } from '../lib/agents'
 import { toast } from '../components/Toast'
 import { addItem, board, getItem, updateItem } from './board'
@@ -42,12 +42,15 @@ export async function takeDrafts(): Promise<void> {
     const files = await window.api.sldevSkills.drafts(root)
     // several drafts at once get one toast, or each would replace the last
     const said: string[] = []
+    let failed = false
     for (const f of files) {
-      const msg = draftKind(f.name) === 'mission' ? takeMission(root, f.text) : takeStories(root, f.text)
-      await window.api.sldevSkills.settle(root, f.name, !!msg)
-      said.push(msg ?? `Couldn't read ${f.name}: kept as ${f.name}.bad`)
+      const r = draftKind(f.name) === 'mission' ? takeMission(root, f.text) : takeStories(root, f.text)
+      await window.api.sldevSkills.settle(root, f.name, 'said' in r)
+      // the reason goes with it: the file is set aside and won't be read again
+      if ('error' in r) failed = true
+      said.push('said' in r ? r.said : `Couldn't read ${f.name} (${r.error}): kept as ${f.name}.bad in ${DRAFTS_DIR}`)
     }
-    if (said.length) toast(said.join(' · '))
+    if (said.length) toast(said.join(' · '), failed ? ERROR_TOAST_MS : undefined)
   } catch {
     // the folder went away or isn't readable: try again on the next look
   } finally {
@@ -55,9 +58,14 @@ export async function takeDrafts(): Promise<void> {
   }
 }
 
-function takeMission(root: string, text: string): string | null {
-  const { draft } = parseMissionDraft(text, allKinds().map((k) => k.id))
-  if (!draft) return null
+type Taken = { said: string } | { error: string }
+
+/** long enough to read why a draft was set aside */
+const ERROR_TOAST_MS = 12_000
+
+function takeMission(root: string, text: string): Taken {
+  const { draft, error } = parseMissionDraft(text, allKinds().map((k) => k.id))
+  if (!draft) return { error: error ?? 'not a mission draft' }
   const known = allAgents(workspace.get().customAgents).some((a) => a.id === draft.agent)
   const agent = known ? draft.agent! : workspace.get().defaultAgent
   const kind = getKind(draft.kind)
@@ -77,12 +85,15 @@ function takeMission(root: string, text: string): string | null {
     createdAt: now,
     updatedAt: now
   })
-  return `${agentName(draft.by)} drafted a mission: ${draft.title ?? draft.brief.split('\n')[0].slice(0, 50)}`
+  return { said: `${agentName(draft.by)} drafted a mission: ${draft.title ?? draft.brief.split('\n')[0].slice(0, 50)}` }
 }
 
-function takeStories(root: string, text: string): string | null {
+function takeStories(root: string, text: string): Taken {
   const { stories, by } = parseStoriesDraft(text)
-  if (!stories.length) return null
+  if (!stories.length) {
+    const c = checkSkillFile(`${DRAFTS_DIR}/stories.json`, text)
+    return { error: c.ok ? 'no stories in it' : c.error }
+  }
   const open = (title: string): boolean => board.get().items.some((i) => i.root === root && i.column !== 'done' && i.title.toLowerCase() === title.toLowerCase())
   const ids = stories.map((st) => (open(st.title) ? undefined : addItem(root, { title: st.title, body: st.details, labels: st.labels, priority: st.priority, column: 'proposed', by: by ?? 'agent' }).id))
   // `after` may name a story further down the file: resolve once they are all on the board
@@ -91,5 +102,5 @@ function takeStories(root: string, text: string): string | null {
     if (me && st.after?.length) updateItem(me.id, { blockedBy: resolveAfter(st.after, board.get().items, root).filter((k) => k !== me.key) })
   })
   const added = ids.filter(Boolean).length
-  return added ? `${agentName(by)} wrote ${added} ${added === 1 ? 'story' : 'stories'}, in Proposed on the board` : 'Those stories are already on the board'
+  return { said: added ? `${agentName(by)} wrote ${added} ${added === 1 ? 'story' : 'stories'}, in Proposed on the board` : 'Those stories are already on the board' }
 }

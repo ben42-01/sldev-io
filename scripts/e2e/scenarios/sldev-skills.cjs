@@ -36,13 +36,19 @@ module.exports = async (h) => {
     { title: 'Store login attempts per IP', details: '**Why** brute force', labels: ['api'], priority: 'high' },
     { title: 'Rate-limit the login route', details: '**Why** brute force', labels: ['api'], after: ['Store login attempts per IP'] }
   ] }))
-  put('mission-broken.md', '---\ntitle: [oops\n---\nbrief')
+  // an unquoted colon in the title isn't YAML; the draft is still taken (it was once set aside unseen)
+  put('mission-colon.md', '---\ntitle: Fix: the greeting drops its name\nkind: build\n---\nThe greeting forgets the name after a reload.\n')
+  put('mission-broken.md', '---\ntitle: "unclosed\n  {broken\n---\nbrief')
 
   h.key('3', ['control', 'shift'])
-  h.expect(await h.until(() => h.js(`document.querySelector('.mission-row.saved.drafted .mission-row-sub')?.textContent.startsWith('Drafted by Codex')`), 10000), 'the mission draft is a saved mission, drafted by Codex')
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.mission-row.saved.drafted .mission-row-sub')].some((s) => s.textContent.startsWith('Drafted by Codex'))`), 10000), 'the mission draft is a saved mission, drafted by Codex')
   h.expect(await h.js(`[...document.querySelectorAll('.toast')].length > 0`), 'and the app says so')
+  const said = await h.js(`document.querySelector('.toast')?.textContent ?? ''`)
+  h.expect(/Couldn't read mission-broken\.md \(The front matter isn't valid YAML/.test(said), `a draft it sets aside comes with the reason (${said})`)
   // saved missions are written a moment after they change
   const m = await h.until(async () => (await h.js(`window.api.store.get('savedMissions')`))?.saved?.find((s) => s.draftedBy === 'codex'), 3000)
+  const colon = (await h.js(`window.api.store.get('savedMissions')`))?.saved?.find((s) => s.title === 'Fix: the greeting drops its name')
+  h.expect(!!colon, 'a title with an unquoted colon still makes a saved mission')
   h.expect(m && m.kind === 'plan' && m.options.agent === 'codex' && m.options.permissionMode === 'read-only' && m.worktree === false && m.criteria === '- Says where the cache lives\n- Names what invalidates it', `with its kind, agent, read-only mode and criteria (${JSON.stringify(m)})`)
   h.expect(((await h.js(`window.api.store.get('missions')`))?.missions?.length ?? 0) === 0, 'nothing was launched')
   h.expect(await h.until(() => fs.readdirSync(drafts).sort().join() === '.gitignore,mission-broken.md.bad', 5000), `taken drafts leave the folder, a broken one is kept as .bad (${fs.readdirSync(drafts)})`)
@@ -63,7 +69,8 @@ module.exports = async (h) => {
   // launching is still yours
   h.key('3', ['control', 'shift'])
   await h.until(() => h.js(`!!document.querySelector('.mission-row.saved.drafted')`), 3000)
-  await h.click('.mission-row.saved.drafted .btn', 'Launch')
+  // the row of the Codex draft (the colon-title one is drafted too)
+  await h.js(`[...document.querySelectorAll('.mission-row.saved.drafted')].find((r) => r.textContent.includes('Plan a cache for the greeting'))?.querySelectorAll('.btn').forEach((b) => b.textContent.includes('Launch') && b.click())`)
   const started = await h.until(async () => (await h.js(`window.api.store.get('missions')`))?.missions?.find((x) => x.title === 'Plan a cache for the greeting'), 8000)
   h.expect(started && started.options.agent === 'codex' && started.kind?.id === 'plan', 'Launch starts it as drafted')
 }

@@ -1,5 +1,7 @@
+import { promises as fsp } from 'fs'
 import { resolve } from 'path'
 import { recallText } from '@shared/context'
+import { checkSkillFile, checkText, type SkillFileCheck } from '@shared/sldevSkills'
 import { createRules, rulesState, syncRules } from '../../src/main/rules'
 import { memoryInfo, remember } from '../../src/main/memory'
 import { initContext, recall } from '../../src/main/context'
@@ -100,4 +102,17 @@ export async function skillsInstall(root: string, overwrite: string[]): Promise<
 export async function skillsExport(dir: string): Promise<string> {
   const wrote = await exportSkills(resolve(dir))
   return [`Wrote ${wrote.length} skills:`, ...wrote.map((p) => `  ${p}`)].join('\n')
+}
+
+/** `sldev skills check <file…>`: each file read the way the app will; false when one wouldn't be taken. */
+export async function skillsCheck(files: string[]): Promise<{ ok: boolean; text: string }> {
+  const out: string[] = []
+  let ok = true
+  for (const f of files) {
+    const src = await fsp.readFile(resolve(f), 'utf8').catch(() => null)
+    const c: SkillFileCheck = src === null ? { ok: false, kind: null, error: `Could not read ${f}` } : checkSkillFile(resolve(f), src)
+    ok &&= c.ok
+    out.push(checkText(f, c))
+  }
+  return { ok, text: out.join('\n\n') }
 }

@@ -137,6 +137,12 @@ export const MCP_TOOLS = [
     name: 'sldev_rules',
     description: "The project's agent rules (.sldev/rules.md, or AGENTS.md when there is none).",
     inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'sldev_check',
+    description:
+      'Check a file you wrote with an sldev skill (a mission or stories draft in .sldev/drafts, a recipe in .sldev/factory, an eval in .sldev/evals) the way sldev-io will read it. Call it before you say the draft is done, and fix what it reports: the app sets a file it cannot read aside and the user never sees it.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'The file, absolute or relative to your working folder' } }, required: ['path'] }
   }
 ]
 

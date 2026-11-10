@@ -1,11 +1,12 @@
 import { promises as fsp } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join, relative, resolve } from 'path'
 import type { McpEvent, Mission } from '@shared/types'
 import { boardCardLines, storyDraft, type BoardColumn, type BoardItem } from '@shared/board'
 import { diff } from './git'
 import { remember } from './memory'
 import { recall } from './context'
 import { normalizePath, recallText } from '@shared/context'
+import { checkSkillFile, checkText, DRAFTS_DIR } from '@shared/sldevSkills'
 
 /** Tool calls from the sldev MCP server, answered here; status, output and done also go to the window. */
 
@@ -115,6 +116,20 @@ export async function handleMcp(r: McpRequest, deps: McpDeps): Promise<{ text?: 
         if (text) return { text }
       }
       return { text: 'This project has no agent rules yet.' }
+    }
+    case 'sldev_check': {
+      const given = str(r.args.path).trim()
+      if (!given) return { error: 'Give the path of the file you wrote' }
+      const file = isAbsolute(given) ? given : resolve(self.cwd, given)
+      const src = await fsp.readFile(file, 'utf8').catch(() => null)
+      if (src === null) return { error: `Could not read ${file}. Did you write it?` }
+      const c = checkSkillFile(file, src)
+      let text = checkText(given, c)
+      // the app takes drafts in from the project root only: one left in a worktree is never seen
+      const drafts = join(self.root, ...DRAFTS_DIR.split('/'))
+      const rel = relative(drafts, resolve(file, '..'))
+      if ((c.kind === 'mission' || c.kind === 'stories') && rel !== '') text += `\nBut: sldev-io reads drafts from ${drafts}, not from where this file is. Move it there.`
+      return { text }
     }
   }
   return { error: `Unknown tool ${r.tool}` }
