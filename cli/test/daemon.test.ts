@@ -20,6 +20,16 @@ let daemon: Daemon
 let c: Client
 const notes: string[] = []
 let restorePath: () => void
+/** shells the tests start: Windows keeps a folder locked until the process in it is really gone */
+const shellPids: number[] = []
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
 
 beforeAll(async () => {
   restorePath = useFakeAgents()
@@ -36,6 +46,7 @@ beforeAll(async () => {
 afterAll(async () => {
   c?.close()
   await daemon?.close()
+  for (let i = 0; i < 100 && shellPids.some(alive); i++) await new Promise((r) => setTimeout(r, 100))
   restorePath()
   // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
   rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
@@ -178,6 +189,7 @@ describe('sldev daemon', () => {
     expect(basename(shell.root)).toBe(basename(repo))
     expect(shell.title).toBe(shell.agentName)
     expect(shell.pid).toBeGreaterThan(0)
+    shellPids.push(shell.pid!)
     await c.request('send', { pane: shell.id, text: process.platform === 'win32' ? 'echo ("sldev-" + (40+2))' : 'echo sldev-$((40+2))' })
     let text = ''
     for (let i = 0; i < 50 && !text.includes('sldev-42'); i++) {
@@ -208,6 +220,7 @@ describe('sldev daemon', () => {
   it('keeps the tab order, names, the active tab and the split for the next attach', async () => {
     const a = await c.request('new', { shell: true, brief: '', cwd: repo, title: 'one' })
     const b = await c.request('new', { shell: true, brief: '', cwd: repo })
+    shellPids.push(a.pid!, b.pid!)
     let tabs = await c.request('tabs', {})
     expect(tabs.order.slice(-2)).toEqual([a.id, b.id])
     const all = tabs.order
