@@ -3,7 +3,7 @@ import { parseArgs } from 'util'
 import { allAgents, installedBin, setInstalledBins } from '@shared/agents'
 import { BUILTIN_KINDS } from '@shared/missionKinds'
 import { describeRepeat, parseGap, type RepeatPlan } from '@shared/repeat'
-import { missionSignal, passSignal } from '@shared/status'
+import { passSignal } from '@shared/status'
 import { findOnPath } from '../../src/main/launch'
 import { listKinds } from '../../src/main/missionKinds'
 import { createInterface } from 'readline/promises'
@@ -15,14 +15,16 @@ import { startDaemon } from './daemon'
 import { dataDir } from './paths'
 import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync, skillsExport, skillsInstall, skillsStatus } from './repo'
+import { paneSignal } from './render'
 import { defaultServices, runTui } from './tui'
 import { claudeUsage, codexUsage, periodStart, usageTable } from './usage'
 import { VERSION } from './version'
 
 const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
-  sldev                         attach: every agent, its status, and its screen
-                                (Ctrl-b w workflows, e editor, v changed files in the editor)
+  sldev                         attach: every agent and shell as a tab, with its status and screen
+                                (Ctrl-b n/p or 1-9 tabs, t shell, c agent, , rename, x close, s split,
+                                w workflows, e editor, v changed files in the editor, d detach)
   sldev new [options] "brief"   start an agent in a new pane (prints its id)
       --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)
       --kind <kind>             frame the brief as a mission kind (build, research, plan, review…)
@@ -77,8 +79,8 @@ function fail(msg: string): never {
 }
 
 function paneLine(p: PaneInfo): string {
-  const sig = missionSignal(p.status)
-  const where = p.worktree ? p.worktree.branch : 'in place'
+  const sig = paneSignal(p)
+  const where = p.shell ? 'shell' : p.worktree ? p.worktree.branch : 'in place'
   const stats = p.stats ? `  ${p.stats.files} files +${p.stats.insertions} -${p.stats.deletions}` : ''
   return `${p.id.padStart(3)}  ${p.agentName.padEnd(14)} ${sig.label.padEnd(13)} ${where.padEnd(24)} ${p.title}${stats}${p.notification ? `\n     ${p.notification}` : ''}`
 }

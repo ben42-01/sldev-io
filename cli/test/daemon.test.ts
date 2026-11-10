@@ -170,4 +170,65 @@ describe('sldev daemon', () => {
     expect((await c.request('ls', {})).some((x) => x.id === p.id)).toBe(false)
     watcher.close()
   })
+
+  it('runs a plain shell in a tab: no mission status, not a mission for the tools or wait, and send/read/kill work', async () => {
+    const shell = await c.request('new', { shell: true, brief: '', cwd: repo })
+    expect(shell).toMatchObject({ shell: true, status: 'waiting', root: repo, cwd: repo, prompt: '' })
+    expect(shell.title).toBe(shell.agentName)
+    expect(shell.pid).toBeGreaterThan(0)
+    await c.request('send', { pane: shell.id, text: 'echo sldev-$((40+2))' })
+    let text = ''
+    for (let i = 0; i < 50 && !text.includes('sldev-42'); i++) {
+      await new Promise((r) => setTimeout(r, 100))
+      text = (await c.request('read', { pane: shell.id })).text
+    }
+    expect(text).toContain('sldev-42')
+    expect((await ls(shell.id)).status).toBe('waiting')
+    // a second opinion needs an agent's changes
+    await expect(c.request('review', { pane: shell.id, agent: 'codex' })).rejects.toThrow(/is a shell/)
+    // wait without a pane is about agents: the shell's "waiting" doesn't answer it
+    const agents = (await c.request('ls', {})).filter((p) => !p.shell)
+    const idle = await c.request('wait', { for: 'idle', timeout: 1 })
+    if (idle) expect(agents.map((p) => p.id)).toContain(idle.id)
+
+    // exiting the shell closes its tab
+    const watcher = await connect({ dataDir: data, script: '', start: false })
+    const closed: string[] = []
+    watcher.onEvent((e) => e.event === 'closed' && closed.push(e.pane))
+    await watcher.request('attach', { cols: 80, rows: 24 })
+    await c.request('send', { pane: shell.id, text: 'exit' })
+    for (let i = 0; i < 50 && !closed.length; i++) await new Promise((r) => setTimeout(r, 100))
+    expect(closed).toEqual([shell.id])
+    expect((await c.request('ls', {})).some((p) => p.id === shell.id)).toBe(false)
+    watcher.close()
+  }, 20_000)
+
+  it('keeps the tab order, names, the active tab and the split for the next attach', async () => {
+    const a = await c.request('new', { shell: true, brief: '', cwd: repo, title: 'one' })
+    const b = await c.request('new', { shell: true, brief: '', cwd: repo })
+    let tabs = await c.request('tabs', {})
+    expect(tabs.order.slice(-2)).toEqual([a.id, b.id])
+    const all = tabs.order
+    // a reorder of known panes; an unknown id drops out and the ones left out keep their place
+    tabs = await c.request('tabs', { order: [b.id, '999', a.id], active: b.id, split: true })
+    expect(tabs.order).toEqual([b.id, a.id, ...all.filter((id) => id !== a.id && id !== b.id)])
+    expect(tabs).toMatchObject({ active: b.id, split: true })
+    expect(await c.request('tabs', { active: '999' })).toMatchObject({ active: b.id })
+    await expect(c.request('rename', { pane: b.id, title: '  ' })).rejects.toThrow(/needs a name/)
+    expect((await c.request('rename', { pane: b.id, title: 'logs' })).title).toBe('logs')
+
+    const again = await connect({ dataDir: data, script: '', start: false })
+    const panes = await again.request('attach', { cols: 80, rows: 24 })
+    expect(panes.map((p) => p.id)).toEqual(tabs.order)
+    expect(panes[0].title).toBe('logs')
+    again.close()
+
+    // closing the active tab brings the one in its place to the front
+    await c.request('kill', { pane: b.id })
+    tabs = await c.request('tabs', {})
+    expect(tabs.order).not.toContain(b.id)
+    expect(tabs.active).toBe(a.id)
+    await c.request('kill', { pane: a.id })
+    await c.request('tabs', { split: false })
+  }, 20_000)
 })

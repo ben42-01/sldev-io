@@ -1,8 +1,9 @@
 # sldev CLI
 
 Run coding agents side by side in your terminal: Claude Code, Codex, Cursor Agent, GitHub Copilot,
-OpenCode and Gemini CLI, each in its own pane, with a sidebar that says which one is working, which is
-ready, and which needs you. Free and open source (Apache-2.0). The paid [sldev-io](https://github.com/ben42-01/sldev-io)
+OpenCode and Gemini CLI, each in its own tab, with a marker that says which one is working, which is
+ready, and which needs you. Plain shell tabs sit next to them, so one `sldev` window can stand in for a
+terminal multiplexer while agents work. Free and open source (Apache-2.0). The paid [sldev-io](https://github.com/ben42-01/sldev-io)
 desktop app adds mission cards, the Software Factory and more on the same project files.
 
 What it does that a plain multiplexer doesn't:
@@ -60,12 +61,39 @@ and repeat checks run in cmd.exe (a check that starts with a `.ps1` runs in Powe
 ```bash
 sldev new --agent claude --kind build --worktree feature/dark-mode "Add a dark mode toggle"
 sldev new --agent codex "Why is test/parser.test.ts flaky?"
-sldev                     # attach: Ctrl-b then n/p, 1-9, s (split), c (new), x (kill), d (detach)
+sldev                     # attach: every session is a tab (keys below)
 sldev ls
 sldev wait 2 --for needs-you
 sldev send 2 "yes"
 sldev stop                # stops the daemon and every agent in it
 ```
+
+### Tabs
+
+Attached, every session (an agent or a plain shell) is a tab in the bar at the top. Its marker has the
+agent's status colour: green working, amber needs you, blue/teal ready or done, red failed, grey for a
+shell, so a tab in the background that needs you shows. On terminals 110 columns or wider a sidebar also
+lists each session's agent and status in words. Keys go to the tab in front; Ctrl-b is the prefix:
+
+| Ctrl-b then | does |
+| --- | --- |
+| `n` / `p` (or Tab, `o`) | next / previous tab |
+| `1`–`9` | that tab |
+| `t` | a new shell tab (`$SHELL`; PowerShell on Windows) in the folder of the tab in front |
+| `c` | a new agent tab: type the agent, then the brief (`codex fix the flaky test`) |
+| `,` | rename the tab |
+| `x` | close the tab (asks first while its agent or shell still runs) |
+| `<` / `>` | move the tab left / right |
+| `s` | split: the tab in front and the next one side by side (needs 60 columns) |
+| `w` / `e` / `v` | workflows, the tab's folder in your editor, its changed files |
+| `d` | detach; everything keeps running |
+| Ctrl-b | send a Ctrl-b to the tab |
+
+The daemon keeps the tabs: `sldev` attaches again to the same order, names, tab in front and split, and
+every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell tabs show in `sldev ls`
+and take `send`, `read` and `kill` like agents, but they aren't missions: the sldev MCP tools don't list
+them, and `sldev wait` without a pane waits for agents only. Tabs can't be clicked: the TUI reads only
+the keyboard.
 
 `sldev help` lists everything. `SKILL.md` teaches an agent to use sldev itself, so one agent can hand
 work to another.

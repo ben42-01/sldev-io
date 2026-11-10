@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, promises as fsp, readFileSync, unlinkSync } from 'fs'
 import { createConnection, createServer, type Server, type Socket } from 'net'
-import { join, resolve } from 'path'
+import { basename, join, resolve } from 'path'
 import { agentCommand, allAgents, findAgent, installedBin, setInstalledBins, sldevMcp, stageMode, type AgentDef } from '@shared/agents'
 import { branchName, cleanBranchName } from '@shared/branch'
 import { contextPointer } from '@shared/context'
@@ -12,14 +12,14 @@ import { withMemory } from '@shared/memory'
 import type { PassOutcome } from '@shared/repeat'
 import { wasInterrupted } from '@shared/status'
 import type { AppSettings, CustomAgent, Mission } from '@shared/types'
-import { PtyManager, type PtySink } from '../../src/main/pty'
+import { defaultShell, PtyManager, type PtySink } from '../../src/main/pty'
 import { startHookServer, stopHookServer, type HookInfo } from '../../src/main/hooks'
 import { findOnPath } from '../../src/main/launch'
 import { addWorktree, diffStat, gitBranch, head, isRepo, run } from '../../src/main/git'
 import { listKinds } from '../../src/main/missionKinds'
 import { memoryInfo } from '../../src/main/memory'
 import { closeContext, initContext, search } from '../../src/main/context'
-import { lineReader, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Request, type Requests, type Response } from './protocol'
+import { lineReader, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Request, type Requests, type Response, type TabState } from './protocol'
 import { createTerm, screenText, termScreen, type Term } from './screen'
 import { Tracker } from './tracker'
 import { Loops, type PassStart } from './loops'
@@ -34,11 +34,13 @@ import { VERSION } from './version'
 
 interface Pane {
   info: PaneInfo
-  agent: AgentDef
+  /** null for a plain shell tab */
+  agent: AgentDef | null
   term: Term
   /** the raw output, capped: a TUI that attaches replays it into its own screen */
   history: string
-  tracker: Tracker
+  /** an agent's status; a shell has none */
+  tracker?: Tracker
 }
 
 interface Waiter {
@@ -99,6 +101,8 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   const focused = new Map<Socket, string | null>()
   let waiters: Waiter[] = []
   let nextId = 1
+  /** the TUI's tabs: their order, the one in front and the split, so attaching again finds them as they were */
+  const tabs: TabState = { order: [], active: null, split: false }
   const notify = o.notify ?? desktopNotify
 
   const broadcast = (e: DaemonEvent): void => {
@@ -114,11 +118,16 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       p.history = (p.history + data).slice(-HISTORY_MAX)
       p.term.write(data, () => ptys.ack(id, data.length))
       broadcast({ event: 'output', pane: id, data })
-      p.tracker.output()
+      p.tracker?.output()
     },
     exit: (id, code) => {
       const p = panes.get(id)
       if (!p) return
+      if (!p.tracker) {
+        // a shell that exits (`exit`, Ctrl-d) closes its tab, like a terminal's
+        update(p, { pid: undefined, exitCode: code, status: 'ended' })
+        return removePane(p)
+      }
       update(p, { pid: undefined, exitCode: code })
       p.tracker.exit(code)
     },
@@ -136,7 +145,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     // a pass of a repeat is over when its pane is: the agent exited (print mode), or you accepted it
     if (p.info.repeat && isLive(before) && !isLive(p.info.status)) loops.ended(p.info.id, passOutcome(p.info), p.info.report?.trim() || p.info.lastMessage?.trim())
     const done: Waiter[] = []
-    for (const w of waiters) if ((!w.pane || w.pane === p.info.id) && w.states.includes(p.info.status)) done.push(w)
+    for (const w of waiters) if ((w.pane ? w.pane === p.info.id : !p.info.shell) && w.states.includes(p.info.status)) done.push(w)
     if (done.length) {
       waiters = waiters.filter((w) => !done.includes(w))
       for (const w of done) w.resolve(p.info)
@@ -170,9 +179,63 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   const hook: HookInfo = await startHookServer({
     dir,
     node: o.node ?? process.execPath,
-    onHook: (e) => panes.get(e.mission)?.tracker.hook(e),
-    mcp: { missions: () => [...panes.values()].map((p) => p.info), send: (e) => panes.get(e.mission)?.tracker.mcp(e) }
+    onHook: (e) => panes.get(e.mission)?.tracker?.hook(e),
+    // shell tabs aren't missions: agents don't see them through the sldev tools
+    mcp: { missions: () => agentPanes().map((p) => p.info), send: (e) => panes.get(e.mission)?.tracker?.mcp(e) }
   })
+
+  const agentPanes = (): Pane[] => [...panes.values()].filter((p) => !p.info.shell)
+
+  /** a pane joins the tab bar at the end */
+  function addTab(id: string): void {
+    tabs.order.push(id)
+    tabs.active ??= id
+  }
+
+  function removePane(p: Pane): void {
+    ptys.kill(p.info.id)
+    p.tracker?.dispose()
+    panes.delete(p.info.id)
+    const at = tabs.order.indexOf(p.info.id)
+    tabs.order = tabs.order.filter((x) => x !== p.info.id)
+    if (tabs.active === p.info.id) tabs.active = tabs.order[Math.min(Math.max(0, at), tabs.order.length - 1)] ?? null
+    broadcast({ event: 'closed', pane: p.info.id })
+  }
+
+  /** A plain shell in its own tab: the user's $SHELL (Windows: PowerShell), through the same pty code as the agents. */
+  async function newShell(a: NewPaneArgs): Promise<PaneInfo> {
+    const id = String(nextId++)
+    const now = Date.now()
+    const repo = await isRepo(a.cwd)
+    const top = repo ? (await run('git', ['rev-parse', '--show-toplevel'], a.cwd)).stdout.trim() : ''
+    const name = basename(defaultShell().shell).replace(/\.exe$/i, '')
+    const info: PaneInfo = {
+      id,
+      title: a.title?.trim() || name,
+      prompt: '',
+      root: top ? resolve(top) : a.cwd,
+      cwd: a.cwd,
+      options: { agent: 'shell' },
+      // a live shell counts as waiting for you: sldev clean leaves its folder alone, and wait doesn't hang on it
+      status: 'waiting',
+      createdAt: now,
+      updatedAt: now,
+      agentName: name,
+      shell: true
+    }
+    const pane: Pane = { info, agent: null, term: createTerm(a.cols ?? 120, a.rows ?? 40), history: '' }
+    panes.set(id, pane)
+    try {
+      const { pid } = ptys.create(sink, id, { cwd: a.cwd, cols: a.cols ?? 120, rows: a.rows ?? 40 })
+      pane.info = { ...pane.info, pid }
+    } catch (err) {
+      panes.delete(id)
+      throw new Error(`Could not start a shell: ${(err as Error).message}`)
+    }
+    addTab(id)
+    broadcast({ event: 'pane', pane: pane.info })
+    return pane.info
+  }
 
   function spawnPane(s: PaneSpec): PaneInfo {
     const id = String(nextId++)
@@ -196,7 +259,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       agentName: s.agent.name,
       failover: s.failover?.length ? s.failover : undefined
     }
-    const term = createTerm(s.cols, s.rows, { bell: () => pane.tracker.attention(), notify: (text) => pane.tracker.attention(text) })
+    const term = createTerm(s.cols, s.rows, { bell: () => pane.tracker?.attention(), notify: (text) => pane.tracker?.attention(text) })
     const pane: Pane = {
       info,
       agent: s.agent,
@@ -223,9 +286,10 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       pane.info = { ...pane.info, pid }
     } catch (err) {
       panes.delete(id)
-      pane.tracker.dispose()
+      pane.tracker?.dispose()
       throw new Error(`Could not start ${s.agent.name}: ${(err as Error).message}`)
     }
+    addTab(id)
     broadcast({ event: 'pane', pane: pane.info })
     return pane.info
   }
@@ -257,6 +321,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   }
 
   async function newPane(a: NewPaneArgs, pass?: PassStart): Promise<PaneInfo> {
+    if (a.shell) return newShell(a)
     if (a.repeat && !pass) return newLoop(a)
     const agent = agentFor(a.agent)
     if (!a.brief.trim() && a.kind) throw new Error('A mission kind needs a brief')
@@ -316,6 +381,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
 
   /** The same work continues on the next agent in the pane's failover list, in the same folder. */
   async function failover(p: Pane, line: string): Promise<void> {
+    if (!p.agent) return
     const order = p.info.failover ?? []
     const to = nextAgent(order, p.agent.id, (id) => !!installedBin(findAgent(id, custom)) && findAgent(id, custom).id === id)
     if (!to) {
@@ -344,6 +410,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
 
   function review(paneId: string, agentId: string): PaneInfo {
     const p = paneFor(paneId)
+    if (!p.agent) throw new Error(`Pane ${p.info.id} is a shell, not an agent: there are no changes of its own to review`)
     const agent = agentFor(agentId)
     const base = p.info.worktree?.base ?? p.info.baseCommit ?? 'HEAD'
     return spawnPane({
@@ -370,10 +437,11 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     const states = WAIT_STATES[a.for]
     if (!states) throw new Error('wait for ready, needs-you, done or idle')
     const id = a.pane ? paneFor(a.pane).info.id : undefined
-    const now = id ? [panes.get(id)!] : [...panes.values()]
+    // without a pane it waits for an agent: a shell tab is always "waiting"
+    const now = id ? [panes.get(id)!] : agentPanes()
     const hit = now.find((p) => states.includes(p.info.status))
     if (hit) return Promise.resolve(hit.info)
-    if (!id && !panes.size) throw new Error('No panes to wait for')
+    if (!id && !now.length) throw new Error('No agent panes to wait for')
     return new Promise((resolve) => {
       const w: Waiter = { pane: id, states, resolve }
       waiters.push(w)
@@ -393,21 +461,18 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     send: (a) => {
       const p = paneFor(a.pane)
       if (p.info.pid === undefined) throw new Error(`Pane ${p.info.id} has exited`)
-      p.tracker.input()
+      p.tracker?.input()
       ptys.write(p.info.id, a.text)
       // the Enter goes on its own: a TUI may take a pasted newline as part of the text
       if (a.enter !== false) setTimeout(() => ptys.write(p.info.id, '\r'), 50)
-      if (a.enter !== false && (p.info.status === 'waiting' || p.info.status === 'needs-input')) update(p, { status: 'working', notification: undefined, activityAt: Date.now() })
+      if (a.enter !== false && !p.info.shell && (p.info.status === 'waiting' || p.info.status === 'needs-input')) update(p, { status: 'working', notification: undefined, activityAt: Date.now() })
       return null
     },
     read: (a) => ({ text: screenText(paneFor(a.pane).term, Math.max(1, Math.min(a.lines ?? 60, 5000))) }),
     wait: (a) => wait(a),
     kill: (a) => {
       const p = paneFor(a.pane)
-      ptys.kill(p.info.id)
-      p.tracker.dispose()
-      panes.delete(p.info.id)
-      broadcast({ event: 'closed', pane: p.info.id })
+      removePane(p)
       if (p.info.repeat && isLive(p.info.status)) loops.ended(p.info.id, 'stopped')
       return null
     },
@@ -419,7 +484,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       accepted.add(p.info.id)
       // a killed pty reports no exit: the pane ends here, and with it the pass
       ptys.kill(p.info.id)
-      p.tracker.dispose()
+      p.tracker?.dispose()
       update(p, { pid: undefined, status: 'ended' })
       return null
     },
@@ -428,11 +493,28 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     attach: (_a, c) => {
       clients.add(c)
       focused.set(c, null)
-      return [...panes.values()].map((p) => p.info)
+      return tabs.order.flatMap((id) => panes.get(id)?.info ?? [])
+    },
+    tabs: (a) => {
+      if (Array.isArray(a.order)) {
+        // a reordering of the panes that are there: unknown ids drop out, ones it left out keep their place at the end
+        const known = a.order.filter((id, i) => panes.has(id) && a.order!.indexOf(id) === i)
+        tabs.order = [...known, ...tabs.order.filter((id) => !known.includes(id))]
+      }
+      if (a.active !== undefined && (a.active === null || panes.has(a.active))) tabs.active = a.active
+      if (typeof a.split === 'boolean') tabs.split = a.split
+      return { ...tabs, order: [...tabs.order] }
+    },
+    rename: (a) => {
+      const p = paneFor(a.pane)
+      const title = a.title?.trim().replace(/[\x00-\x1f]/g, ' ').slice(0, 80)
+      if (!title) throw new Error('A tab needs a name')
+      update(p, { title })
+      return p.info
     },
     input: (a) => {
       const p = paneFor(a.pane)
-      p.tracker.input()
+      p.tracker?.input()
       ptys.write(p.info.id, a.data)
       return null
     },
@@ -494,7 +576,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   async function close(): Promise<void> {
     if (closed) return
     closed = true
-    for (const p of panes.values()) p.tracker.dispose()
+    for (const p of panes.values()) p.tracker?.dispose()
     loops.dispose()
     ptys.killAll()
     panes.clear()

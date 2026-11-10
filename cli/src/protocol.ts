@@ -13,10 +13,22 @@ export interface PaneInfo extends Mission {
   exitCode?: number
   /** agents to continue on, in order, when this one hits its usage limit */
   failover?: string[]
+  /** a plain shell tab, not an agent: no mission status, no MCP tools, and it closes when the shell exits */
+  shell?: boolean
+}
+
+/** The tabs of the attached TUI, kept by the daemon so detaching and attaching again restores them. */
+export interface TabState {
+  /** pane ids in tab order */
+  order: string[]
+  active: string | null
+  split: boolean
 }
 
 export interface NewPaneArgs {
   agent?: string
+  /** a plain shell ($SHELL, the default shell on Windows) instead of an agent; brief and the agent options are ignored */
+  shell?: boolean
   brief: string
   title?: string
   kind?: string
@@ -70,7 +82,11 @@ export interface Requests {
   loops: [Record<string, never>, LoopInfo[]]
   /** no pass after the running one */
   'loop-stop': [{ loop: string }, LoopInfo]
+  /** every pane, in tab order */
   attach: [{ cols: number; rows: number }, PaneInfo[]]
+  /** reads the tab state, and sets the fields given (an order is only taken as a reordering of the live panes) */
+  tabs: [Partial<TabState>, TabState]
+  rename: [{ pane: string; title: string }, PaneInfo]
   input: [{ pane: string; data: string }, null]
   resize: [{ pane: string; cols: number; rows: number }, null]
   /** the TUI says which pane it shows, so the daemon doesn't send a desktop notification for it */

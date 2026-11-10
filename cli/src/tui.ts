@@ -1,20 +1,21 @@
-import { missionSignal } from '@shared/status'
 import type { GhRun } from '@shared/types'
 import type { Client } from './client'
 import { openPane, type OpenResult } from './editor'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, PaneInfo } from './protocol'
-import { at, drawTerm, fit, layout, TONE_SGR, type Rect } from './render'
+import { at, drawTerm, fit, layout, paneSignal, tabBar, TONE_SGR, type Rect } from './render'
 import { createTerm, type Term } from './screen'
 
 /**
- * `sldev` with no arguments: the agents in a sidebar with their status, one or two panes beside it, and
- * the keyboard going to the pane in focus. Ctrl-b is the prefix (n/p, 1-9, s split, Tab, c new, x kill,
- * w workflows, e editor, v changed files in the editor, d detach). Detaching leaves every agent running.
+ * `sldev` with no arguments: every session (an agent or a plain shell) is a tab, with its status as a
+ * coloured marker; one or two of them are shown, a sidebar beside them on wide terminals, and the keyboard
+ * goes to the tab in focus. Ctrl-b is the prefix (n/p, 1-9, </> move, s split, Tab, c new agent, t new shell,
+ * , rename, x close, w workflows, e editor, v changed files in the editor, d detach). Detaching leaves every
+ * session running, and the daemon keeps the tabs' order, names, the one in front and the split.
  */
 
 const PREFIX = '\x02'
-const HELP = 'Ctrl-b then: n/p next/prev · 1-9 pick · s split · c new · x kill · w workflows · e editor · v diff · d detach'
+const HELP = 'Ctrl-b then: n/p next/prev · 1-9 pick · t shell · c agent · , rename · x close · </> move · s split · w workflows · e editor · v diff · d detach'
 const RUNS_HELP = '↑↓ pick · Enter open in browser · r rerun failed jobs · u refresh · Esc close'
 /** how often the workflows view asks GitHub again while it's open */
 const RUNS_REFRESH_MS = 15_000
@@ -57,8 +58,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   const out = io.output
   const input = io.input
   const views = new Map<string, View>()
+  /** tab order, as the daemon keeps it */
   let order: string[] = []
-  let focus = 0
+  /** the tab in focus */
+  let active: string | null = null
   let split = false
   let prefix = false
   let prompt: { label: string; text: string; done: (text: string) => void } | null = null
@@ -67,18 +70,25 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let frame: NodeJS.Timeout | null = null
   let restored = false
 
+  const activeIndex = (): number => Math.max(0, active === null ? 0 : order.indexOf(active))
+
+  /** the tab in focus, and in a split the one after it */
   const visible = (): string[] => {
     if (!order.length) return []
-    const first = order[Math.min(focus, order.length - 1)]
-    if (!split || order.length < 2) return [first]
-    return [first, order[(Math.min(focus, order.length - 1) + 1) % order.length]]
+    const i = activeIndex()
+    if (!split || order.length < 2) return [order[i]]
+    return [order[i], order[(i + 1) % order.length]]
   }
+
+  /** the daemon keeps the tabs, so the next attach finds them as they are now */
+  const saveTabs = (patch: { order?: string[]; active?: string | null; split?: boolean }): void => void client.request('tabs', patch).catch(() => undefined)
 
   const addView = async (info: PaneInfo): Promise<void> => {
     if (views.has(info.id)) return
     const view: View = { info, term: createTerm(120, 40) }
     views.set(info.id, view)
-    order.push(info.id)
+    if (!order.includes(info.id)) order.push(info.id)
+    active ??= info.id
     const { data } = await client.request('screen', { pane: info.id }).catch(() => ({ data: '' }))
     view.term.write(data)
   }
@@ -114,15 +124,19 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     let s = '\x1b[?2026h\x1b[?25l'
     if (l.sidebar) s += drawSidebar(l.sidebar)
     const shown = visible()
+    s += at(l.tabs.x, l.tabs.y) + tabBar(order.flatMap((id) => {
+      const v = views.get(id)
+      return v ? [{ title: v.info.title, tone: paneSignal(v.info).tone, active: id === shown[0], shown: shown.includes(id) }] : []
+    }), l.tabs.w)
     if (!shown.length) {
       const r = l.panes[0]
-      const lines = ['No agents yet.', '', 'Ctrl-b c starts one here, or from another terminal:', '  sldev new --agent claude "fix the failing test"']
+      const lines = ['No sessions yet.', '', 'Ctrl-b c starts an agent here, Ctrl-b t a shell, or from another terminal:', '  sldev new --agent claude "fix the failing test"']
       for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + fit(lines[i - 2] ?? '', r.w)
     }
     if (runsView) {
       const first = l.panes[0]
       const last = l.panes[l.panes.length - 1]
-      s += drawRuns(runsView, { x: first.x, y: 0, w: last.x + last.w - first.x, h: first.h })
+      s += drawRuns(runsView, { x: first.x, y: first.y, w: last.x + last.w - first.x, h: first.h })
       s += at(0, l.status.y) + statusLine(cols)
       out.write(s + '\x1b[?2026l')
       return
@@ -133,7 +147,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       if (!v || !r) return
       s += at(r.x, r.y) + paneHeader(v.info, r.w, i === 0)
       s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 })
-      if (i === 0 && l.panes[1]) for (let y = 0; y < r.h; y++) s += at(r.x + r.w, y) + '\x1b[90m│\x1b[0m'
+      if (i === 0 && l.panes[1]) for (let y = 0; y < r.h; y++) s += at(r.x + r.w, r.y + y) + '\x1b[90m│\x1b[0m'
     })
     s += at(0, l.status.y) + statusLine(cols)
     const main = shown[0] && views.get(shown[0])
@@ -152,7 +166,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     order.forEach((id, i) => {
       const v = views.get(id)
       if (!v || y + 1 >= r.h) return
-      const sig = missionSignal(v.info.status)
+      const sig = paneSignal(v.info)
       const mark = shown.includes(id) ? '\x1b[7m' : ''
       s += at(r.x, r.y + y) + mark + ` \x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${mark} ` + fit(`${i + 1} ${v.info.title}`, r.w - 3) + '\x1b[0m'
       s += at(r.x, r.y + y + 1) + '\x1b[90m' + fit(`   ${v.info.agentName} · ${sig.label}`, r.w) + '\x1b[0m'
@@ -273,11 +287,13 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   function paneHeader(p: PaneInfo, w: number, focused: boolean): string {
-    const sig = missionSignal(p.status)
+    const sig = paneSignal(p)
+    if (p.shell) return `\x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${focused ? '\x1b[1m' : '\x1b[90m'}${fit(` #${p.id} ${p.title} · ${p.agentName} · ${p.cwd}`, w - 1)}\x1b[0m`
     const where = p.worktree ? p.worktree.branch : 'in place'
     const stats = p.stats ? ` · ${p.stats.files} files +${p.stats.insertions} -${p.stats.deletions}` : ''
     const note = p.notification ? ` · ${p.notification}` : ''
-    const text = ` ${p.id} ${p.title} · ${p.agentName} · ${where}${stats}${note}`
+    // #id is the pane id sldev send/read/kill take; the tab bar numbers positions, for Ctrl-b 1-9
+    const text = ` #${p.id} ${p.title} · ${p.agentName} · ${where}${stats}${note}`
     return `\x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${focused ? '\x1b[1m' : '\x1b[90m'}${fit(text, w - 1)}\x1b[0m`
   }
 
@@ -301,8 +317,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       schedule()
     } else if (e.event === 'closed') {
       views.delete(e.pane)
+      const at = order.indexOf(e.pane)
       order = order.filter((id) => id !== e.pane)
-      focus = Math.min(focus, Math.max(0, order.length - 1))
+      // the tab that takes the closed one's place comes to the front, as the daemon does
+      if (active === e.pane) active = order[Math.min(Math.max(0, at), order.length - 1)] ?? null
       sizeViews()
       schedule()
     } else if (e.event === 'notify' && !visible().includes(e.pane)) {
@@ -313,14 +331,36 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   const select = (i: number): void => {
     if (!order.length) return
-    focus = ((i % order.length) + order.length) % order.length
+    focusTab(order[((i % order.length) + order.length) % order.length])
+  }
+
+  const focusTab = (id: string): void => {
+    active = id
     message = ''
+    saveTabs({ active })
     sizeViews()
     schedule()
   }
 
-  const ask = (label: string, done: (text: string) => void): void => {
-    prompt = { label, text: '', done }
+  /** the tab in focus one place left or right */
+  const move = (by: number): void => {
+    const i = activeIndex()
+    const j = i + by
+    if (!order.length || j < 0 || j >= order.length) return
+    ;[order[i], order[j]] = [order[j], order[i]]
+    saveTabs({ order })
+    sizeViews()
+  }
+
+  /** a pane this TUI started comes to the front */
+  const started = (p: PaneInfo, what: string): void => {
+    if (!order.includes(p.id)) order.push(p.id)
+    message = `Started ${what} ${p.id}`
+    focusTab(p.id)
+  }
+
+  const ask = (label: string, done: (text: string) => void, text = ''): void => {
+    prompt = { label, text, done }
     schedule()
   }
 
@@ -365,11 +405,15 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         openEditor(c === 'v')
         return s.slice(1)
       }
-      if (c === 'n' || c === '\t' || c === 'o') select(focus + 1)
-      else if (c === 'p') select(focus - 1)
-      else if (/^[1-9]$/.test(c)) select(Number(c) - 1)
+      if (c === 'n' || c === '\t' || c === 'o') select(activeIndex() + 1)
+      else if (c === 'p') select(activeIndex() - 1)
+      else if (/^[1-9]$/.test(c)) {
+        if (Number(c) <= order.length) select(Number(c) - 1)
+      } else if (c === '<') move(-1)
+      else if (c === '>') move(1)
       else if (c === 's') {
         split = !split
+        saveTabs({ split })
         sizeViews()
       } else if (c === 'd') {
         detach()
@@ -379,14 +423,36 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
           const [agent, ...words] = text.trim().split(/\s+/)
           if (!agent) return
           client
-            .request('new', { agent, brief: words.join(' '), cwd, worktree: false })
-            .then((p) => ((message = `Started pane ${p.id}`), schedule()))
+            .request('new', { agent, brief: words.join(' '), cwd, worktree: false, ...paneSize() })
+            .then((p) => started(p, 'pane'))
             .catch((err: Error) => ((message = err.message), schedule()))
         })
-      else if (c === 'x' && id)
-        ask(`Kill pane ${id}? Its agent stops; files stay. (y/N) `, (text) => {
-          if (/^y/i.test(text.trim())) void client.request('kill', { pane: id }).catch((err: Error) => (message = err.message))
-        })
+      else if (c === 't') {
+        // a shell where the tab in focus works (its worktree), else where sldev was attached
+        const where = (id && views.get(id)?.info.cwd) || cwd
+        client
+          .request('new', { shell: true, brief: '', cwd: where, ...paneSize() })
+          .then((p) => started(p, 'shell'))
+          .catch((err: Error) => ((message = err.message), schedule()))
+      } else if (c === ',' && id) {
+        const info = views.get(id)?.info
+        ask(
+          `Rename tab ${id}: `,
+          (text) => {
+            if (text.trim()) void client.request('rename', { pane: id, title: text }).catch((err: Error) => ((message = err.message), schedule()))
+          },
+          info?.title ?? ''
+        )
+      } else if (c === 'x' && id) {
+        const info = views.get(id)?.info
+        const kill = (): void => void client.request('kill', { pane: id }).catch((err: Error) => ((message = err.message), schedule()))
+        // nothing runs in it any more: close it without asking
+        if (info?.pid === undefined) kill()
+        else
+          ask(info.shell ? `Close tab ${id}? Its shell and anything running in it stop. (y/N) ` : `Close tab ${id}? Its agent stops; files stay. (y/N) `, (text) => {
+            if (/^y/i.test(text.trim())) kill()
+          })
+      }
       else if (c === PREFIX && id) void client.request('input', { pane: id, data: PREFIX })
       return s.slice(1)
     }
@@ -417,8 +483,21 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     resolveExit()
   }
 
+  /** the size a new pane starts at, so it doesn't redraw as soon as it's shown */
+  function paneSize(): { cols: number; rows: number } {
+    const r = layout(out.columns || 80, out.rows || 24, split).panes[0]
+    return { cols: Math.max(20, r.w), rows: Math.max(5, r.h - 1) }
+  }
+
   const panes = await client.request('attach', { cols: out.columns || 80, rows: out.rows || 24 })
+  const saved = await client.request('tabs', {}).catch(() => null)
+  if (saved) {
+    order = saved.order.filter((id) => panes.some((p) => p.id === id))
+    active = saved.active
+    split = saved.split
+  }
   for (const p of panes) await addView(p)
+  if (active === null || !order.includes(active)) active = order[0] ?? null
   client.onEvent(onEvent)
   client.onClose(() => {
     if (restored) return

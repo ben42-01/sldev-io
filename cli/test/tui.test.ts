@@ -9,6 +9,7 @@ import { useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
 import { runTui } from '../src/tui'
+import { layout, paneSignal, SIDEBAR_MIN_COLS, SIDEBAR_W, tabBar, tabWindow, TONE_SGR } from '../src/render'
 
 /** The TUI against a real daemon and the fake codex; its output is read back through a headless screen. */
 
@@ -120,7 +121,7 @@ describe('sldev TUI', () => {
     expect(s).toContain('2 second job')
 
     input.write('\x02s')
-    s = await textWith('│● 2 second job')
+    s = await textWith('│● #2 second job')
     // both pane headers side by side on one row
     expect(s).toMatch(/● 1 tidy up the tests .*● 2 second job/)
 
@@ -137,4 +138,182 @@ describe('sldev TUI', () => {
     // detaching leaves the agents running
     expect((await c.request('ls', {})).map((p) => p.status)).not.toContain('ended')
   }, 30_000)
+})
+
+/** A TUI on its own fake terminal, against the test daemon. */
+async function attachTui(cols: number, rows: number) {
+  const screen = createTerm(cols, rows)
+  let written = Promise.resolve()
+  const output = Object.assign(
+    new Writable({
+      write(chunk, _enc, done) {
+        written = new Promise((r) => screen.write(chunk.toString(), r))
+        done()
+      }
+    }),
+    { columns: cols, rows }
+  )
+  const input = new PassThrough()
+  const services: TuiServices = { runs: async () => [], rerun: async () => undefined, openRun: async () => undefined, open: async () => ({ note: '' }) }
+  const tui = runTui(await connect({ dataDir: data, script: '', start: false }), work, { input, output }, services)
+  const text = async (): Promise<string> => {
+    await sleep(200)
+    await written
+    return screenText(screen, rows)
+  }
+  const textWith = async (want: string | RegExp, timeout = 10_000): Promise<string> => {
+    const end = Date.now() + timeout
+    const has = (t: string): boolean => (typeof want === 'string' ? t.includes(want) : want.test(t))
+    let t = await text()
+    while (!has(t) && Date.now() < end) t = await text()
+    if (!has(t)) throw new Error(`screen never showed ${want}:\n${t}`)
+    return t
+  }
+  /** the first row: the tab bar */
+  const bar = (): string => screen.buffer.active.getLine(screen.buffer.active.viewportY)?.translateToString(true) ?? ''
+  return { input, tui, textWith, bar }
+}
+
+describe('sldev TUI tabs', () => {
+  // a plain sh: the test doesn't depend on the user's shell profile
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (savedShell === undefined) delete process.env.SHELL
+    else process.env.SHELL = savedShell
+  })
+
+  it('opens a shell tab, renames it, switches tabs, closes one, and restores them all on re-attach', async () => {
+    // the first test left two codex panes, split, with pane 2 in front
+    let t = await attachTui(100, 30)
+    let s = await t.textWith('● 2 second job')
+    expect(t.bar()).toMatch(/● 1 tidy up the tests\s+● 2 second job/)
+    // the split came back: two pane headers on the second row
+    expect(s).toMatch(/● #2 second job · Codex .*│● #1 tidy up the tests · Codex/)
+    t.input.write('\x02s')
+    s = await t.textWith(/^● #2 second job · Codex[^│]*$/m)
+
+    // Ctrl-b t: a plain shell, in front, in the folder of the tab that was in focus
+    const before = (await c.request('ls', {})).map((p) => p.id)
+    t.input.write('\x02t')
+    s = await t.textWith(/● 3 \S+/)
+    const shellId = (await c.request('ls', {})).find((p) => !before.includes(p.id))!.id
+    expect(t.bar()).toMatch(new RegExp(`● 3 \\S+`))
+    expect(s).toMatch(new RegExp(`● #${shellId} \\S+ · \\S+ · ${work.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}`))
+    t.input.write('echo tab-$((20+3))\r')
+    await t.textWith('tab-23')
+    const shell = (await c.request('ls', {})).find((p) => p.id === shellId)!
+    expect(shell).toMatchObject({ shell: true, cwd: work })
+
+    // Ctrl-b , renames it (the prompt starts with the current name)
+    t.input.write('\x02,')
+    await t.textWith(`Rename tab ${shellId}: ${shell.title}`)
+    t.input.write('\x7f'.repeat(shell.title.length) + 'logs\r')
+    await t.textWith('3 logs')
+    expect((await c.request('ls', {})).find((p) => p.id === shellId)?.title).toBe('logs')
+
+    // n/p and 1-9 move the focus; a key past the last tab does nothing
+    t.input.write('\x021')
+    await t.textWith(/^● #1 tidy up the tests · Codex/m)
+    t.input.write('\x02n')
+    await t.textWith(/^● #2 second job · Codex/m)
+    t.input.write('\x02p\x02p')
+    await t.textWith(/^● #\d+ logs · /m)
+    t.input.write('\x029')
+    await t.textWith(/^● #\d+ logs · /m)
+    // Ctrl-b < moves the shell tab one place left
+    t.input.write('\x02<')
+    await t.textWith(/● 2 logs\s+● 3 second job/)
+    t.input.write('\x02d')
+    await t.tui
+
+    // attaching again: the same tabs, order, names, and the shell in front
+    expect((await c.request('tabs', {})).active).toBe(shellId)
+    t = await attachTui(100, 30)
+    s = await t.textWith('● 2 logs')
+    expect(t.bar()).toMatch(/● 1 tidy up the tests\s+● 2 logs\s+● 3 second job/)
+    expect(s).toMatch(/^● #\d+ logs · /m)
+    // the shell kept its screen while detached
+    expect(s).toContain('tab-23')
+
+    // Ctrl-b x asks before it closes a tab with a live shell
+    t.input.write('\x02x')
+    await t.textWith(`Close tab ${shellId}? Its shell`)
+    t.input.write('y\r')
+    // the tab that took its place comes to the front
+    await t.textWith(/^● #2 second job · Codex/m)
+    expect(t.bar()).toMatch(/● 1 tidy up the tests\s+● 2 second job/)
+    expect(t.bar()).not.toContain('logs')
+    expect((await c.request('ls', {})).some((p) => p.id === shellId)).toBe(false)
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
+})
+
+const plain = (s: string): string => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+
+describe('tab layout', () => {
+  it('puts the tab bar on the first row of the main area, the panes under it', () => {
+    const wide = layout(140, 40, false)
+    expect(wide.sidebar).toEqual({ x: 0, y: 0, w: SIDEBAR_W, h: 39 })
+    expect(wide.tabs).toEqual({ x: SIDEBAR_W + 1, y: 0, w: 140 - SIDEBAR_W - 1, h: 1 })
+    expect(wide.panes).toEqual([{ x: SIDEBAR_W + 1, y: 1, w: 140 - SIDEBAR_W - 1, h: 38 }])
+    expect(wide.status).toEqual({ x: 0, y: 39, w: 140, h: 1 })
+    const split = layout(140, 40, true)
+    expect(split.panes).toHaveLength(2)
+    expect(split.panes[0].w + 1 + split.panes[1].w).toBe(split.tabs.w)
+  })
+
+  it('drops the sidebar below its width, and the split when two panes would not fit', () => {
+    expect(layout(SIDEBAR_MIN_COLS - 1, 30, false).sidebar).toBeNull()
+    expect(layout(SIDEBAR_MIN_COLS - 1, 30, true).panes).toHaveLength(2)
+    const narrow = layout(50, 10, true)
+    expect(narrow.sidebar).toBeNull()
+    expect(narrow.panes).toEqual([{ x: 0, y: 1, w: 50, h: 8 }])
+    // a terminal too small for anything still gets rects that don't overlap the status row
+    const tiny = layout(5, 1, false)
+    expect(tiny.panes[0].y + tiny.panes[0].h).toBeLessThanOrEqual(tiny.status.y)
+  })
+
+  it('keeps the active tab in view when the tabs overflow', () => {
+    expect(tabWindow([10, 10, 10], 0, 40)).toEqual({ start: 0, end: 3 })
+    expect(tabWindow([10, 10, 10, 10, 10], 0, 25)).toEqual({ start: 0, end: 2 })
+    expect(tabWindow([10, 10, 10, 10, 10], 4, 25)).toEqual({ start: 3, end: 5 })
+    expect(tabWindow([10, 10, 10, 10, 10], 2, 25)).toEqual({ start: 2, end: 4 })
+  })
+
+  it('draws a bar of exactly the width, each tab with its marker in its tone, the active one inverted', () => {
+    const tabs = [
+      { title: 'fix the parser', tone: 'working' as const, active: false },
+      { title: 'bash', tone: 'neutral' as const, active: true },
+      { title: 'review it', tone: 'attention' as const, active: false }
+    ]
+    const bar = tabBar(tabs, 80)
+    expect(plain(bar)).toBe(' ● 1 fix the parser  ● 2 bash  ● 3 review it '.padEnd(80))
+    expect(bar).toContain(`\x1b[${TONE_SGR.attention}m\x1b[1m●`)
+    expect(bar).toContain(`\x1b[${TONE_SGR.working}m●`)
+    // only the active tab is inverted
+    expect(bar.split('\x1b[1;7m').length - 1).toBeGreaterThan(0)
+    expect(bar.indexOf('\x1b[1;7m')).toBeGreaterThan(bar.indexOf(' 1 fix the parser'))
+    expect(bar.indexOf('\x1b[1;7m')).toBeLessThan(bar.indexOf(' 2 bash'))
+    expect(bar.lastIndexOf('\x1b[1;7m')).toBeLessThan(bar.indexOf(' 3 review it'))
+    // too many to fit: the active tab stays, arrows say there are more, and the width holds
+    const many = Array.from({ length: 12 }, (_, i) => ({ title: `session number ${i + 1}`, tone: 'done' as const, active: i === 9 }))
+    const scrolled = plain(tabBar(many, 60))
+    expect(scrolled).toHaveLength(60)
+    expect(scrolled).toContain('10 session numbe')
+    expect(scrolled.startsWith('‹')).toBe(true)
+    expect(scrolled.endsWith('›')).toBe(true)
+    // very narrow: one tab, cut
+    expect(plain(tabBar(many, 12))).toHaveLength(12)
+  })
+
+  it('marks a shell tab neutral, and an agent by its mission status', () => {
+    expect(paneSignal({ status: 'waiting', shell: true, pid: 3 })).toEqual({ tone: 'neutral', label: 'Shell' })
+    expect(paneSignal({ status: 'needs-input' }).tone).toBe('attention')
+    expect(paneSignal({ status: 'working' }).tone).toBe('working')
+  })
 })
