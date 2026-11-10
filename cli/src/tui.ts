@@ -90,7 +90,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (!order.includes(info.id)) order.push(info.id)
     active ??= info.id
     const { data } = await client.request('screen', { pane: info.id }).catch(() => ({ data: '' }))
-    view.term.write(data)
+    // xterm parses a write later: wait for it, or a quiet pane (a shell at its prompt) stays blank until it prints again
+    await new Promise<void>((r) => view.term.write(data, r))
   }
 
   const sizeViews = (): void => {

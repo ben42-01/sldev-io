@@ -203,7 +203,8 @@ describe('sldev TUI tabs', () => {
     const shellId = (await c.request('ls', {})).find((p) => !before.includes(p.id))!.id
     expect(t.bar()).toMatch(new RegExp(`● 3 \\S+`))
     expect(s).toMatch(new RegExp(`● #${shellId} \\S+ · \\S+ · ${work.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}`))
-    t.input.write('echo tab-$((20+3))\r')
+    // the sum shows only in the output, not in the echoed command (PowerShell on Windows)
+    t.input.write(process.platform === 'win32' ? 'echo ("tab-" + (20+3))\r' : 'echo tab-$((20+3))\r')
     await t.textWith('tab-23')
     const shell = (await c.request('ls', {})).find((p) => p.id === shellId)!
     expect(shell).toMatchObject({ shell: true, cwd: work })

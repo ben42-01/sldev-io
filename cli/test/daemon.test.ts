@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
@@ -173,10 +173,12 @@ describe('sldev daemon', () => {
 
   it('runs a plain shell in a tab: no mission status, not a mission for the tools or wait, and send/read/kill work', async () => {
     const shell = await c.request('new', { shell: true, brief: '', cwd: repo })
-    expect(shell).toMatchObject({ shell: true, status: 'waiting', root: repo, cwd: repo, prompt: '' })
+    // root comes from git, which on Windows gives the long form of an 8.3 temp path: only its folder name is compared
+    expect(shell).toMatchObject({ shell: true, status: 'waiting', cwd: repo, prompt: '' })
+    expect(basename(shell.root)).toBe(basename(repo))
     expect(shell.title).toBe(shell.agentName)
     expect(shell.pid).toBeGreaterThan(0)
-    await c.request('send', { pane: shell.id, text: 'echo sldev-$((40+2))' })
+    await c.request('send', { pane: shell.id, text: process.platform === 'win32' ? 'echo ("sldev-" + (40+2))' : 'echo sldev-$((40+2))' })
     let text = ''
     for (let i = 0; i < 50 && !text.includes('sldev-42'); i++) {
       await new Promise((r) => setTimeout(r, 100))
