@@ -1,3 +1,4 @@
+import { appendFileSync } from 'fs'
 import type { GhRun } from '@shared/types'
 import type { Client } from './client'
 import { openPane, type OpenResult } from './editor'
@@ -19,6 +20,26 @@ const HELP = 'Ctrl-b then: n/p next/prev · 1-9 pick · t shell · c agent · , 
 const RUNS_HELP = '↑↓ pick · Enter open in browser · r rerun failed jobs · u refresh · Esc close'
 /** how often the workflows view asks GitHub again while it's open */
 const RUNS_REFRESH_MS = 15_000
+
+/**
+ * Windows Terminal's win32-input-mode sends every key as `ESC [ Vk ; Sc ; Uc ; Kd ; Cs ; Rc _` (virtual key,
+ * scan code, the character, down 1 / up 0, modifier state, repeat count) instead of its plain bytes. Typing
+ * into a pane works either way (its ConPTY reads both), but sldev's own keys have to be read out of it.
+ */
+const WIN32_KEY = /^\x1b\[(\d*);(\d*);(\d*);(\d*);(\d*);(\d*)_/
+/** a Ctrl-b key press in that form, anywhere in a chunk */
+const WIN32_PREFIX = /\x1b\[\d*;\d*;2;1;\d*;\d*_/
+/** keys with no character of their own, as the bytes the views already read */
+const WIN32_VK: Record<number, string> = { 13: '\r', 27: '\x1b', 8: '\x7f', 9: '\t', 37: '\x1b[D', 38: '\x1b[A', 39: '\x1b[C', 40: '\x1b[B' }
+
+/** The key a win32-input-mode event stands for: its bytes on a key press, '' on a release or a lone modifier. */
+export function win32Key(s: string): { len: number; text: string } | null {
+  const m = WIN32_KEY.exec(s)
+  if (!m) return null
+  const [vk, uc, down] = [Number(m[1] || 0), Number(m[3] || 0), m[4] === '1']
+  if (!down) return { len: m[0].length, text: '' }
+  return { len: m[0].length, text: uc ? String.fromCharCode(uc) : (WIN32_VK[vk] ?? '') }
+}
 
 interface View {
   info: PaneInfo
@@ -369,14 +390,31 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   const finished = new Promise<void>((r) => (resolveExit = r))
 
   /** Keys can arrive several to a chunk (fast typing, a paste), so the input is taken apart here. */
+  // SLDEV_DEBUG_KEYS=<file> logs what the terminal sends, to tell why a key isn't taken
+  const keyLog = process.env.SLDEV_DEBUG_KEYS
   const onKey = (d: Buffer | string): void => {
     let rest = d.toString()
+    if (keyLog) {
+      try {
+        appendFileSync(keyLog, `${JSON.stringify({ at: Date.now(), tab: visible()[0] ?? null, prefix, data: rest })}\n`)
+      } catch {
+        // a log that can't be written doesn't stop the keys
+      }
+    }
     while (rest && !restored) rest = key(rest)
     schedule()
   }
 
   /** Handles the start of `s` and returns what is left. */
   function key(s: string): string {
+    // a prompt, the prefix's next key and the workflows view read keys themselves: decode an encoded one first
+    const w = (prompt || prefix || runsView) && win32Key(s)
+    if (w) {
+      // a release, or a modifier on its own, leaves the prefix waiting for its key
+      let k = w.text
+      while (k && !restored) k = key(k)
+      return s.slice(w.len)
+    }
     if (prompt) {
       const p = prompt
       const ch = String.fromCodePoint(s.codePointAt(0)!)
@@ -457,13 +495,17 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       else if (c === PREFIX && id) void client.request('input', { pane: id, data: PREFIX })
       return s.slice(1)
     }
-    const at = s.indexOf(PREFIX)
+    // Ctrl-b as a byte, or as a win32-input-mode key press; everything before it goes to the pane as it came
+    const plain = s.indexOf(PREFIX)
+    const enc = WIN32_PREFIX.exec(s)
+    const useEnc = !!enc && (plain < 0 || enc.index < plain)
+    const at = useEnc ? enc!.index : plain
     const typed = at < 0 ? s : s.slice(0, at)
     const id = visible()[0]
     if (typed && id) void client.request('input', { pane: id, data: typed }).catch(() => undefined)
     if (at < 0) return ''
     prefix = true
-    return s.slice(at + 1)
+    return s.slice(at + (useEnc ? enc![0].length : 1))
   }
 
   const restore = (): void => {

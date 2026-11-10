@@ -8,7 +8,7 @@ import { startDaemon, type Daemon } from '../src/daemon'
 import { useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
-import { runTui } from '../src/tui'
+import { runTui, win32Key } from '../src/tui'
 import { layout, paneSignal, SIDEBAR_MIN_COLS, SIDEBAR_W, tabBar, tabWindow, TONE_SGR } from '../src/render'
 
 /** The TUI against a real daemon and the fake codex; its output is read back through a headless screen. */
@@ -252,6 +252,42 @@ describe('sldev TUI tabs', () => {
     t.input.write('\x02d')
     await t.tui
   }, 40_000)
+})
+
+/** one key as Windows Terminal's win32-input-mode sends it */
+const w32 = (vk: number, ch: string, down: boolean, ctrl = false): string => `\x1b[${vk};0;${ch ? ch.charCodeAt(0) : 0};${down ? 1 : 0};${ctrl ? 8 : 0};1_`
+/** a key pressed and released, Ctrl held around it when asked */
+const press = (vk: number, ch: string, ctrl = false): string =>
+  (ctrl ? w32(17, '', true, true) : '') + w32(vk, ch, true, ctrl) + w32(vk, ch, false, ctrl) + (ctrl ? w32(17, '', false) : '')
+
+describe('keys in win32-input-mode (Windows Terminal)', () => {
+  it('decodes a key press to its bytes, and a release or a lone modifier to nothing', () => {
+    expect(win32Key(w32(66, '\x02', true, true))).toEqual({ len: w32(66, '\x02', true, true).length, text: '\x02' })
+    expect(win32Key(w32(78, 'n', false))?.text).toBe('')
+    expect(win32Key(w32(17, '', true, true))?.text).toBe('')
+    expect(win32Key(w32(38, '', true))?.text).toBe('\x1b[A')
+    expect(win32Key('\x1b[A')).toBeNull()
+  })
+
+  it('takes Ctrl-b and the keys after it from encoded input, and passes the rest to the tab', async () => {
+    // the tabs test left the two codex panes, the second in front
+    const t = await attachTui(100, 30)
+    await t.textWith(/^● #2 second job · Codex/m)
+    // what the terminal sends for Ctrl-b, then n: modifier and release events included
+    t.input.write(press(66, '\x02', true) + press(78, 'n'))
+    await t.textWith(/^● #1 tidy up the tests · Codex/m)
+    t.input.write(press(66, '\x02', true))
+    await sleep(50)
+    t.input.write(press(80, 'p'))
+    await t.textWith(/^● #2 second job · Codex/m)
+    // a prompt reads encoded keys too
+    t.input.write(press(66, '\x02', true) + press(188, ','))
+    await t.textWith('Rename tab 2: second job')
+    t.input.write(press(8, '') + press(8, '') + press(8, '') + press(83, 'S') + press(13, '\r'))
+    await t.textWith('2 second S')
+    t.input.write('\x02d')
+    await t.tui
+  }, 30_000)
 })
 
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')

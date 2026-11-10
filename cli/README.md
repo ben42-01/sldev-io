@@ -24,7 +24,8 @@ What it does that a plain multiplexer doesn't:
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
 - **sldev skills** (`sldev skills install`): any agent can draft a mission, board stories, a factory recipe or an eval
-  as files the sldev-io app takes in as drafts.
+  as files the sldev-io app takes in as drafts. `sldev skills check <file>` reads one the way the app will (agents
+  started by sldev get the same check as the `sldev_check` tool), so a draft that wouldn't load is fixed before anyone waits for it.
 - **Project memory** in `.sldev/memory.md`, searchable with `sldev recall`, and the sldev MCP tools in
   every agent it starts.
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
@@ -45,7 +46,7 @@ Until then, install it from GitHub (the public downloads repo, branch `cli`, wri
 
 ```bash
 npm i -g github:ben42-01/downloads.sldev.io#cli          # newest
-npm i -g github:ben42-01/downloads.sldev.io#cli-v0.2.0   # a specific version
+npm i -g github:ben42-01/downloads.sldev.io#cli-v0.3.0   # a specific version
 ```
 
 From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-<version>.tgz`, which installs with `npm i -g ./dist/sldev-<version>.tgz`.
@@ -94,6 +95,10 @@ every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell
 and take `send`, `read` and `kill` like agents, but they aren't missions: the sldev MCP tools don't list
 them, and `sldev wait` without a pane waits for agents only. Tabs can't be clicked: the TUI reads only
 the keyboard.
+
+If a key does nothing, start `sldev` with `SLDEV_DEBUG_KEYS=<file>` set: each chunk the terminal sends is logged
+there (with the tab in front), which shows how your terminal encodes it. Windows Terminal's win32-input-mode
+(`ESC[66;48;2;1;8;1_` for Ctrl-b) is understood.
 
 `sldev help` lists everything. `SKILL.md` teaches an agent to use sldev itself, so one agent can hand
 work to another.
