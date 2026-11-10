@@ -1,11 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'fs'
+import { mkdirSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { PassThrough, Writable } from 'stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
-import { useFakeAgents } from './fakePath'
+import { removeTemp, useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
 import { runTui, win32Key } from '../src/tui'
@@ -32,7 +32,7 @@ afterAll(async () => {
   await daemon?.close()
   restorePath()
   // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
-  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+  removeTemp(tmp)
 })
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))

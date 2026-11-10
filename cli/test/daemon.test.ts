@@ -1,11 +1,11 @@
 import { execFileSync, spawn } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
-import { useFakeAgents } from './fakePath'
+import { removeTemp, useFakeAgents } from './fakePath'
 import type { PaneInfo } from '../src/protocol'
 
 /**
@@ -49,7 +49,7 @@ afterAll(async () => {
   for (let i = 0; i < 100 && shellPids.some(alive); i++) await new Promise((r) => setTimeout(r, 100))
   restorePath()
   // Windows keeps a just-killed process's folder locked for a moment (EBUSY): retry instead of failing
-  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+  removeTemp(tmp)
 })
 
 const ls = async (id: string): Promise<PaneInfo> => (await c.request('ls', {})).find((p) => p.id === id)!
