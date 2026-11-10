@@ -29,7 +29,8 @@ export interface FileTreeHandle {
   refresh(): void
 }
 
-export function FileTree({ root, handle }: { root: string; handle?: React.RefObject<FileTreeHandle | null> }): React.JSX.Element {
+/** `open` false folds the root itself: nothing under it shows, and the folders opened inside stay open for when it unfolds. */
+export function FileTree({ root, handle, open: rootOpen = true }: { root: string; handle?: React.RefObject<FileTreeHandle | null>; open?: boolean }): React.JSX.Element {
   const [children, setChildren] = useState<Map<string, DirEntry[]>>(new Map())
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([root]))
   const [selected, setSelected] = useState<string | null>(null)
@@ -91,6 +92,7 @@ export function FileTree({ root, handle }: { root: string; handle?: React.RefObj
 
   const rows = useMemo(() => {
     const out: Row[] = []
+    if (!rootOpen) return out
     const walk = (dir: string, depth: number): void => {
       for (const entry of children.get(dir) ?? []) {
         out.push({ entry, depth })
@@ -99,7 +101,7 @@ export function FileTree({ root, handle }: { root: string; handle?: React.RefObj
     }
     walk(root, 0)
     return out
-  }, [children, expanded, root])
+  }, [children, expanded, root, rootOpen])
 
   const activate = (e: DirEntry): void => {
     if (e.isDir) toggle(e.path)

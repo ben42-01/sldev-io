@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { ChevronsDownUp, ExternalLink, FolderOpen, Network, RefreshCw, SquareTerminal } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ChevronRight, ChevronsDownUp, ExternalLink, FolderOpen, Network, RefreshCw, SquareTerminal } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
 import { openDiagrams } from '../dock/DiagramPanel'
 import { openInEditor } from '../lib/actions'
@@ -31,10 +31,21 @@ export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
   )
 }
 
+/** projects whose root folder is folded in the Explorer, while the app is open: switching back finds it as it was */
+const foldedRoots = new Set<string>()
+
 function Explorer({ home }: { home: string }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const recent = useStore(workspace, (w) => w.recentFolders)
   const tree = useRef<FileTreeHandle | null>(null)
+  const [, setFolds] = useState(0)
+  const open = !root || !foldedRoots.has(root)
+  const toggleRoot = (): void => {
+    if (!root) return
+    if (open) foldedRoots.add(root)
+    else foldedRoots.delete(root)
+    setFolds((n) => n + 1)
+  }
 
   if (!root) {
     return (
@@ -66,7 +77,12 @@ function Explorer({ home }: { home: string }): React.JSX.Element {
   return (
     <div className="sidebar-body">
       <div className="sidebar-header">
-        <span title={root}>{basename(root)}</span>
+        <button className="sidebar-root" title={`${root}\n${open ? 'Click to fold' : 'Click to unfold'}`} aria-label={`${open ? 'Fold' : 'Unfold'} ${basename(root)}`} aria-expanded={open} onClick={toggleRoot}>
+          <span className={`tree-chevron${open ? ' open' : ''}`}>
+            <ChevronRight size={14} />
+          </span>
+          <span className="sidebar-root-name">{basename(root)}</span>
+        </button>
         <div className="sidebar-actions">
           <button className="icon-btn" title="New terminal at root" aria-label="New terminal at root" onClick={() => openTerminal({ cwd: root })}>
             <SquareTerminal size={14} />
@@ -88,7 +104,7 @@ function Explorer({ home }: { home: string }): React.JSX.Element {
           </button>
         </div>
       </div>
-      <FileTree root={root} handle={tree} />
+      <FileTree root={root} handle={tree} open={open} />
     </div>
   )
 }

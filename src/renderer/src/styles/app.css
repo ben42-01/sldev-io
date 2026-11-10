@@ -462,6 +462,37 @@ svg.lucide {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* the project's root folder in the Explorer header: folds and unfolds the whole tree */
+.sidebar-root {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-root:hover {
+  background: var(--tint);
+}
+.sidebar-root:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.sidebar-root-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sidebar-actions {
   display: flex;
   gap: 1px;
