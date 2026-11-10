@@ -7723,3 +7723,146 @@ button.board-label:hover {
 .skills-hint code { font-family: var(--font-mono); font-size: 0.95em; }
 .skills-hint .link-btn { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .skills-hint .link-btn:hover { color: var(--foreground); }
+
+/* ── design pass: finish, rhythm and motion ─────────────────────────────────────────────────────
+ * Tokens only. Everything here is cosmetic: no behaviour, no new colours. */
+
+/* selects: one quiet chevron (drawn from the text colour) instead of each platform's own arrow */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  padding-right: 26px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
+    linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+select:not([multiple]):not([size]):hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* fields: borders ease in, and keyboard focus gets a soft halo so it can't be missed */
+:is(.form, .modal-panel, .builder, .settings) :is(input, select, textarea),
+.input {
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+:is(.form, .modal-panel, .builder, .settings) :is(input, select, textarea):is(:not([type='checkbox'], [type='radio'])):focus-visible,
+.input:focus-visible {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px var(--tint-strong);
+}
+
+/* dialogs: the backdrop fades in with the panel instead of snapping */
+.modal-dialog[open]::backdrop {
+  animation: backdrop-in 160ms ease-out;
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+.modal-panel {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* Mission Control: an empty column recedes (no dashed box inside a box) so the busy ones lead */
+.mc-column:has(> .mc-column-body > .mc-column-empty:only-child) {
+  background: transparent;
+  border-style: dashed;
+}
+.mc-column:has(> .mc-column-body > .mc-column-empty:only-child) .mc-column-head {
+  border-bottom-color: transparent;
+  opacity: 0.8;
+}
+.mc-column-empty {
+  border: 0;
+  padding: 6px 10px 12px;
+  color: var(--fg-subtle);
+}
+.mc-column-empty .small {
+  color: var(--fg-subtle);
+}
+.mc-column-empty .btn {
+  color: var(--fg-muted);
+}
+
+/* Overview: the week reads as a chart even when most days are empty (a hairline marks each day's floor) */
+.ov-week-track::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(14px, 60%);
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+}
+.ov-week-bar {
+  z-index: 1;
+}
+.ov-stat {
+  transition: border-color 0.15s, background 0.15s;
+}
+.ov-stat:hover {
+  background: var(--muted);
+}
+
+/* Settings: sections get a hairline and a stronger heading, so a long page has visible chapters */
+.settings section + section {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.settings h3 {
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Welcome: cards and shortcut rows answer the pointer */
+.launch-card:hover {
+  box-shadow: 0 8px 20px -12px var(--shadow-strong);
+}
+.welcome-key {
+  align-items: center;
+  padding: 1px 0;
+  transition: color 0.15s;
+}
+.welcome-key:hover {
+  color: var(--fg);
+}
+.welcome-key kbd {
+  transition: border-color 0.15s, color 0.15s;
+}
+.welcome-key:hover kbd {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+/* Settings tabs that overflow (narrow window, large interface size) fade out instead of cutting a word in half */
+.settings-nav {
+  mask-image: linear-gradient(90deg, var(--background) calc(100% - 28px), transparent);
+}
+
+/* one place that quietens all of the above for people who ask the system for less motion */
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel,
+  .modal-dialog[open]::backdrop {
+    animation: none;
+  }
+  .launch-card:hover {
+    transform: none;
+  }
+}
