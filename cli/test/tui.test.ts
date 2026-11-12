@@ -9,7 +9,7 @@ import { removeTemp, useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
 import { runTui, win32Key } from '../src/tui'
-import { glyph, layout, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
+import { drawTerm, glyph, inSelection, layout, selectionText, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
 import type { PaneInfo } from '../src/protocol'
 
 const esc = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
@@ -167,8 +167,11 @@ async function attachTui(cols: number, rows: number) {
     { columns: cols, rows }
   )
   const input = new PassThrough()
-  const services: TuiServices = { runs: async () => [], rerun: async () => undefined, openRun: async () => undefined, open: async () => ({ note: '' }) }
-  const tui = runTui(await connect({ dataDir: data, script: '', start: false }), work, { input, output }, services)
+  // the clipboard is a fake too: the tests never touch the real one
+  const copied: string[] = []
+  const services: TuiServices = { runs: async () => [], rerun: async () => undefined, openRun: async () => undefined, open: async () => ({ note: '' }), copy: async (t) => (copied.push(t), true) }
+  let sent = ''
+  const tui = runTui(await connect({ dataDir: data, script: '', start: false }), work, { input, output: Object.assign(output, { write: ((orig) => (chunk: string, ...rest: never[]) => ((sent += chunk), orig(chunk, ...rest)))(output.write.bind(output)) }) }, services)
   const text = async (): Promise<string> => {
     await sleep(200)
     await written
@@ -184,7 +187,7 @@ async function attachTui(cols: number, rows: number) {
   }
   /** the first row: the tab bar */
   const bar = (): string => screen.buffer.active.getLine(screen.buffer.active.viewportY)?.translateToString(true) ?? ''
-  return { input, tui, textWith, bar }
+  return { input, tui, textWith, bar, copied, sent: () => sent }
 }
 
 describe('sldev TUI tabs', () => {
@@ -266,6 +269,42 @@ describe('sldev TUI tabs', () => {
     t.input.write('\x02d')
     await t.tui
   }, 40_000)
+})
+
+describe('selecting and scrolling in a tab', () => {
+  it('copies what is dragged over in a shell tab, scrolls its history with the wheel, and types back to the bottom', async () => {
+    const savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+    const t = await attachTui(110, 20)
+    t.input.write('\x02t')
+    await t.textWith(/› \d+ \S+/)
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+    t.input.write(process.platform === 'win32' ? '1..40 | % { "row-$_" }\r' : 'i=1; while [ $i -le 40 ]; do echo row-$i; i=$((i+1)); done\r')
+    let s = await t.textWith('row-40')
+    // the pane starts right of the sidebar (29 columns) and under the rule (row 2); a drag from the first
+    // visible row-N to the end of the next copies those two lines
+    const rows = s.split('\n')
+    const first = rows.findIndex((r) => /│row-\d+/.test(r))
+    const n = Number(/│row-(\d+)/.exec(rows[first])![1])
+    t.input.write(`\x1b[<0;30;${first + 1}M\x1b[<32;34;${first + 2}M\x1b[<0;36;${first + 2}m`)
+    await t.textWith('Copied')
+    expect(t.copied).toEqual([`row-${n}\nrow-${n + 1}`])
+    // and through OSC 52, for terminals that take it
+    expect(t.sent()).toContain(`\x1b]52;c;${Buffer.from(`row-${n}\nrow-${n + 1}`).toString('base64')}\x07`)
+
+    // the wheel goes back through the history, and says how far
+    t.input.write('\x1b[<64;60;8M\x1b[<64;60;8M')
+    s = await t.textWith('↑ 6 lines back')
+    expect(s).toContain(`│row-${n - 6}`)
+    // typing goes back to the newest output
+    t.input.write(' ')
+    s = await t.textWith(/^(?![\s\S]*lines back)/)
+    expect(s).toContain('row-40')
+    t.input.write('\x7f\x02x')
+    await t.textWith('(y/N)')
+    t.input.write('y\r\x02d')
+    await t.tui
+  }, 30_000)
 })
 
 /** one key as Windows Terminal's win32-input-mode sends it */
@@ -424,6 +463,23 @@ describe('sidebar', () => {
     const s = sidebar({ panes: many, order: many.map((p) => p.id), active: '18', shown: ['18'] }, SIDEBAR_W, 12)
     expect(s.lines).toHaveLength(12)
     expect(s.lines.map(plain).join('\n')).toMatch(/▌ \S 18 job 18/)
+  })
+
+  it('selects like a terminal: to the end of the first line, whole lines between, a wrapped line copied as one', async () => {
+    const term = createTerm(10, 5)
+    await new Promise<void>((r) => term.write('first line\r\nabcdefghijklmn\r\nlast', r))
+    // "first line" fills 10 columns; abcdefghijklmn wraps onto the third row
+    const sel = { a: { x: 6, y: 0 }, b: { x: 1, y: 3 } }
+    expect(selectionText(term, sel)).toBe('line\nabcdefghijklmn\nla')
+    // dragged backwards: the same text
+    expect(selectionText(term, { a: sel.b, b: sel.a })).toBe('line\nabcdefghijklmn\nla')
+    expect(inSelection(sel, 5, 0)).toBe(false)
+    expect(inSelection(sel, 9, 1)).toBe(true)
+    expect(inSelection(sel, 2, 3)).toBe(false)
+    // drawn with a background behind the selected cells only
+    const drawn = drawTerm(term, { x: 0, y: 0, w: 10, h: 5 }, sel)
+    expect(drawn).toContain(';48;5;24mline')
+    expect(drawn).not.toContain(';48;5;24mfirst')
   })
 
   it('draws a popup inside its area with its rows, the picked one marked', () => {

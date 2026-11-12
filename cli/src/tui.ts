@@ -4,10 +4,11 @@ import { allAgents, installedBin, setInstalledBins, type AgentDef } from '@share
 import type { GhRun } from '@shared/types'
 import { findOnPath } from '../../src/main/launch'
 import type { Client } from './client'
+import { copyToClipboard, osc52 } from './clipboard'
 import { openPane, type OpenResult } from './editor'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
-import { ACCENT, at, brandMark, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, type PopupRow, type Rect, type Sidebar, type TabBar } from './render'
+import { ACCENT, at, brandMark, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
 import { VERSION } from './version'
 
@@ -117,11 +118,16 @@ export interface TuiServices {
   rerun: (cwd: string, id: number) => Promise<void>
   openRun: (cwd: string, id: number) => Promise<void>
   open: (pane: PaneInfo, diff: boolean) => Promise<OpenResult>
+  /** puts text on the system clipboard; false when there's no tool for it */
+  copy?: (text: string) => Promise<boolean>
 }
 
 export function defaultServices(preferred: () => string | null): TuiServices {
-  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }) }
+  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard }
 }
+
+/** lines the wheel scrolls a tab's history by */
+const WHEEL_LINES = 3
 
 interface RunsView {
   cwd: string
@@ -155,6 +161,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let spinTimer: NodeJS.Timeout | null = null
   /** what the last frame drew where, for clicks */
   let bar: TabBar = { text: '', spans: [], plus: null }
+  /** text being selected (or just copied) in a tab by dragging the mouse */
+  let sel: { pane: string; s: Selection; dragging: boolean } | null = null
   let side: Sidebar = { lines: [], hits: [] }
   const home = homedir()
 
@@ -232,7 +240,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         if (i === 0) s += at(r.x + r.w, r.y) + '\x1b[90m┬\x1b[0m'
       } else {
         const span = bar.spans.find((x) => order[x.index] === shown[0])
-        s += at(r.x, r.y) + ruleLine(r.w, span ?? null, v ? paneDetails(v.info, home) : '')
+        const back = v ? scrolledBack(v) : 0
+        s += at(r.x, r.y) + ruleLine(r.w, span ?? null, v ? `${back ? `↑ ${back} lines back · ` : ''}${paneDetails(v.info, home)}` : '')
       }
     })
     if (l.sidebar) {
@@ -247,7 +256,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const l = layout(out.columns || 80, out.rows || 24, split)
     if (prompt) return at(3 + prompt.label.length + prompt.text.length, l.status.y) + '\x1b[?25h'
     const main = visible()[0] && views.get(visible()[0])
-    if (!main || menu || help || runsView || main.cursorHidden) return ''
+    if (!main || menu || help || runsView || main.cursorHidden || scrolledBack(main)) return ''
     const b = main.term.buffer.active
     return at(l.panes[0].x + Math.min(b.cursorX, l.panes[0].w - 1), l.panes[0].y + 1 + b.cursorY) + '\x1b[?25h'
   }
@@ -268,11 +277,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         const v = views.get(id)
         const r = l.panes[i]
         if (!v || !r) return
-        s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 })
+        s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 }, sel?.pane === id ? sel.s : null)
         if (i === 0 && l.panes[1]) for (let y = 1; y < r.h; y++) s += at(r.x + r.w, r.y + y) + '\x1b[90m│\x1b[0m'
       })
     if (menu) s += popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`)
-    else if (help) s += popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Click tabs, + and the sidebar. Shift+drag selects text.')
+    else if (help) s += popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.')
     s += at(0, l.status.y) + statusLine(cols)
     out.write(s + cursor() + '\x1b[?2026l')
     spinning()
@@ -494,26 +503,74 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     return s.slice(1)
   }
 
+  /** lines a tab is scrolled back from its newest output */
+  const scrolledBack = (v: View): number => v.term.buffer.active.baseY - v.term.buffer.active.viewportY
+
+  const scroll = (v: View, by: number): void => {
+    v.term.scrollLines(by)
+    sel = null
+  }
+
+  /** the selection to the clipboard: the system's tool, and OSC 52 for terminals that take it (over SSH too) */
+  const copySelection = (v: View, s: Selection): void => {
+    const text = selectionText(v.term, s)
+    if (!text.trim()) return void (sel = null)
+    out.write(osc52(text))
+    const n = [...text].length
+    void (services.copy ?? copyToClipboard)(text)
+      .catch(() => false)
+      .then((ok) => {
+        message = ok ? `Copied ${n} character${n === 1 ? '' : 's'}` : `Sent ${n} characters to the terminal's clipboard (OSC 52); if nothing arrived, install wl-clipboard or xclip`
+        schedule()
+      })
+  }
+
   /** A click: on a tab or + in the bar, a row of the sidebar, or inside a tab whose program reads the mouse. */
   function mouse(button: number, x: number, y: number, down: boolean): void {
     const l = layout(out.columns || 80, out.rows || 24, split)
     const wheel = (button & 64) !== 0
+    const motion = (button & 32) !== 0
+    const shown = visible()
+    /** the cell under the mouse in pane i, held inside it (a drag can leave the pane) */
+    const cellIn = (i: number): Cell => {
+      const r = l.panes[i]
+      return { x: Math.max(0, Math.min(r.w - 1, x - r.x)), y: Math.max(0, Math.min(r.h - 2, y - r.y - 1)) }
+    }
+    // a selection being dragged follows the mouse anywhere, and the release copies it
+    if (sel?.dragging) {
+      const i = shown.indexOf(sel.pane)
+      const v = views.get(sel.pane)
+      if (i < 0 || !v) return void (sel = null)
+      sel.s.b = cellIn(i)
+      if (!down) {
+        sel.dragging = false
+        if (sel.s.a.x === sel.s.b.x && sel.s.a.y === sel.s.b.y) sel = null
+        else copySelection(v, sel.s)
+      }
+      return
+    }
     if (!menu && !help && !runsView) {
-      const shown = visible()
       for (let i = 0; i < l.panes.length; i++) {
         const r = l.panes[i]
         const v = shown[i] ? views.get(shown[i]) : undefined
         if (!v || x < r.x || x >= r.x + r.w || y <= r.y || y >= r.y + r.h) continue
         const mode = v.term.modes.mouseTrackingMode
-        // a program that doesn't read the mouse gets nothing: a click isn't a key
-        if (mode === 'none' || (mode === 'x10' && (!down || wheel))) return
+        // a program that doesn't read the mouse: the wheel scrolls its history, a drag selects and copies
+        if (mode === 'none') {
+          if (wheel) return scroll(v, (button & 1) === 0 ? -WHEEL_LINES : WHEEL_LINES)
+          if (down && !motion && (button & 3) === 0) sel = { pane: v.info.id, s: { a: cellIn(i), b: cellIn(i) }, dragging: true }
+          return
+        }
+        // one that does gets the clicks it asked for: motion only in drag/any mode, x10 presses only
+        if ((mode === 'x10' && (!down || wheel || motion)) || (motion && mode === 'vt200')) return
         const [px, py] = [x - r.x + 1, y - r.y]
         const data = v.sgrMouse ? `\x1b[<${button};${px};${py}${down ? 'M' : 'm'}` : px < 223 && py < 223 ? `\x1b[M${String.fromCharCode(32 + (down ? button : 3), 32 + px, 32 + py)}` : ''
         if (data) void client.request('input', { pane: v.info.id, data }).catch(() => undefined)
         return
       }
     }
-    if (!down || wheel || (button & 3) !== 0) return
+    if (!down || wheel || motion || (button & 3) !== 0) return
+    sel = null
     if (help) return void (help = false)
     if (menu) return void (menu = null)
     if (y === l.tabs.y && x >= l.tabs.x) {
@@ -571,6 +628,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   const focusTab = (id: string): void => {
     active = id
+    sel = null
     message = ''
     saveTabs({ active })
     sizeViews()
@@ -721,7 +779,13 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const cut = click >= 0 && (at < 0 || click < at) ? click : at
     const typed = cut < 0 ? s : s.slice(0, cut)
     const id = visible()[0]
-    if (typed && id) void client.request('input', { pane: id, data: typed }).catch(() => undefined)
+    if (typed && id) {
+      // typing goes back to the newest output, and ends a selection
+      const v = views.get(id)
+      if (v && scrolledBack(v)) v.term.scrollToBottom()
+      sel = null
+      void client.request('input', { pane: id, data: typed }).catch(() => undefined)
+    }
     if (cut < 0) return ''
     if (cut === click) return s.slice(click)
     prefix = true
@@ -737,7 +801,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     input.off('data', onKey)
     if (input.isTTY) input.setRawMode?.(false)
     input.pause()
-    out.write('\x1b[?1006l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l')
+    out.write('\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l')
   }
 
   function detach(): void {
@@ -771,8 +835,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     out.write('The sldev daemon stopped.\n')
     resolveExit()
   })
-  // the alternate screen, and clicks reported (press and release, SGR form); Shift+drag still selects text
-  out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1006h')
+  // the alternate screen, and the mouse reported (presses, drags, releases, SGR form): sldev selects and copies itself
+  out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1002h\x1b[?1006h')
   if (input.isTTY) input.setRawMode?.(true)
   input.resume()
   input.on('data', onKey)

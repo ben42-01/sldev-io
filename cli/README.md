@@ -97,8 +97,11 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 | `d` | detach; everything keeps running |
 | Ctrl-b | send a Ctrl-b to the tab |
 
-Tabs, `+` and the sidebar's rows take clicks. A program in a tab that reads the mouse gets its clicks and wheel;
-hold Shift while dragging to select text.
+Tabs, `+` and the sidebar's rows take clicks. **Drag over a tab's text to copy it**: the selection stays inside
+that tab (never the sidebar or the tab beside it) and goes to the clipboard when you let go, through wl-copy,
+xclip or xsel (pbcopy, clip on macOS and Windows) and OSC 52, which also works over SSH in terminals that allow it.
+The **wheel scrolls back** through a tab's history; typing goes back to the newest output. A program in a tab that
+reads the mouse itself gets its clicks and wheel instead; Shift+drag still makes your terminal's own selection.
 
 The daemon keeps the tabs: `sldev` attaches again to the same order, names, tab in front and split, and
 every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell tabs show in `sldev ls`

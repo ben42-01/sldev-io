@@ -475,8 +475,59 @@ function sgr(cell: IBufferCell): string {
   return parts.join(';')
 }
 
-/** The visible screen of `term`, drawn into `r` (rows past the screen are cleared). */
-export function drawTerm(term: Term, r: Rect): string {
+/** A cell of a pane's visible screen: column and row from its top left. */
+export interface Cell {
+  x: number
+  y: number
+}
+
+/** A selection in a pane, from where the drag started to where it is: either way round. */
+export interface Selection {
+  a: Cell
+  b: Cell
+}
+
+/** start and end in reading order */
+function ordered(s: Selection): [Cell, Cell] {
+  return s.a.y < s.b.y || (s.a.y === s.b.y && s.a.x <= s.b.x) ? [s.a, s.b] : [s.b, s.a]
+}
+
+/** Is the cell selected? Like a terminal: from the start to the end of the line, whole lines, then to the end cell. */
+export function inSelection(s: Selection, x: number, y: number): boolean {
+  const [from, to] = ordered(s)
+  if (y < from.y || y > to.y) return false
+  if (y === from.y && x < from.x) return false
+  if (y === to.y && x > to.x) return false
+  return true
+}
+
+/**
+ * The selected text of the screen as it's shown (scrolled back or not): trailing blanks dropped per line, and
+ * a line the terminal wrapped joined to the next, so a long command copies as one line.
+ */
+export function selectionText(term: Term, s: Selection): string {
+  const [from, to] = ordered(s)
+  const b = term.buffer.active
+  let out = ''
+  for (let y = from.y; y <= to.y; y++) {
+    const line = b.getLine(b.viewportY + y)
+    if (!line) break
+    const start = y === from.y ? from.x : 0
+    const end = y === to.y ? to.x + 1 : term.cols
+    out += line.translateToString(y !== to.y ? false : true, start, end)
+    if (y < to.y) {
+      const wrapped = b.getLine(b.viewportY + y + 1)?.isWrapped
+      if (!wrapped) out = out.replace(/ +$/, '') + '\n'
+    }
+  }
+  return out.replace(/ +$/, '')
+}
+
+/** the selection's colour: a background, so the text keeps its own colours */
+const SELECTED_BG = ';48;5;24'
+
+/** The visible screen of `term`, drawn into `r` (rows past the screen are cleared); `sel` is highlighted. */
+export function drawTerm(term: Term, r: Rect, sel?: Selection | null): string {
   const b = term.buffer.active
   const cell = b.getNullCell()
   let out = ''
@@ -492,7 +543,7 @@ export function drawTerm(term: Term, r: Rect): string {
         const w = c.getWidth()
         if (w === 0) continue
         if (used + w > r.w) break
-        const style = sgr(c)
+        const style = sgr(c) + (sel && inSelection(sel, col, row) ? SELECTED_BG : '')
         if (style !== last) {
           out += `\x1b[${style}m`
           last = style
