@@ -5,7 +5,7 @@ import type { TokenUsage } from '@shared/usage'
 import type { MissionKind } from '@shared/missionKinds'
 import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
-import type { CodeGraph, SchemaGraph } from '@shared/diagram'
+import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type {
   AgentProfile,
   RulesState,
@@ -264,8 +264,10 @@ const api = {
     installMapSkill: (root: string): Promise<string> => ipcRenderer.invoke('context:installMapSkill', root)
   },
   diagram: {
-    /** TS/JS imports between folders `depth` levels deep, parsed locally */
-    code: (root: string, depth: number): Promise<CodeGraph> => ipcRenderer.invoke('diagram:code', root, depth),
+    /** imports between folders `depth` levels deep, parsed locally; `language` is a code map lang id (all when left out) */
+    code: (root: string, depth: number, language?: string): Promise<CodeGraph> => ipcRenderer.invoke('diagram:code', root, depth, language),
+    /** folders and source files of any language, `depth` levels deep */
+    structure: (root: string, depth: number): Promise<StructureGraph> => ipcRenderer.invoke('diagram:structure', root, depth),
     /** tables and foreign keys from Prisma schemas and SQL DDL */
     schema: (root: string): Promise<SchemaGraph> => ipcRenderer.invoke('diagram:schema', root)
   },

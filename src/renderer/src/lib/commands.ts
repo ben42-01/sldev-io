@@ -227,6 +227,7 @@ export function staticCommands(): Command[] {
     { id: 'recap.week', category: 'Agents', title: 'Recap: this week (agent work as Markdown)', run: () => openRecap('week') },
     { id: 'usage.dashboard', category: 'Agents', title: 'Open usage dashboard (timeline, tokens, waiting on you)', run: () => openMissionControl('usage') },
     { id: 'diagram.code', category: 'View', title: 'Open code map (imports between folders)', run: () => openDiagrams('code') },
+    { id: 'diagram.files', category: 'View', title: 'Open files diagram (folders and source files, any language)', run: () => openDiagrams('files') },
     { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },

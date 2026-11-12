@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { Copy, Database, ExternalLink, KeyRound, Maximize, Network, RefreshCw, Search, Workflow } from 'lucide-react'
-import { codeMermaid, layered, schemaMermaid, type CodeGraph, type Placed, type SchemaGraph, type Table } from '@shared/diagram'
+import { Copy, Database, ExternalLink, FolderTree, KeyRound, Maximize, Network, RefreshCw, Search, Workflow } from 'lucide-react'
+import { codeMermaid, languageSummary, layered, treeLayout, schemaMermaid, structureMermaid, type CodeGraph, type Placed, type SchemaGraph, type StructureGraph, type Table } from '@shared/diagram'
+import { LANGS } from '@shared/diagramLangs'
 import { openPanel } from './dockApi'
 import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -9,7 +10,7 @@ import { openFileAt, openInEditor } from '../lib/actions'
 import { Empty, ErrorBanner, Loading } from '../components/States'
 import { showNotice } from '../components/Modal'
 
-type Tab = 'code' | 'schema'
+type Tab = 'code' | 'files' | 'schema'
 
 export function openDiagrams(tab: Tab = 'code'): void {
   if (!workspace.get().rootFolder) return void showNotice('No folder open', 'Open a project folder to draw its diagrams.')
@@ -24,27 +25,74 @@ function joinPath(root: string, rel: string): string {
 
 type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; data: T }
 
-/** Code map (folder imports, TS/JS) and schema ERD (Prisma, SQL), parsed locally by main. */
+function baseName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path
+}
+
+const MAPPED = 'TypeScript/JavaScript, Python, Java, Kotlin, Scala, Go, C#, Rust, C/C++, Ruby and PHP'
+
+/** Code map (folder imports in the mapped languages), Files (folders and files of any language) and schema ERD (Prisma, SQL), parsed locally by main. */
 export function DiagramPanel({ params }: IDockviewPanelProps<{ tab?: Tab; at?: number }>): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const [tab, setTab] = useState<Tab>(params.tab ?? 'code')
   const [depth, setDepth] = useState(2)
+  const [language, setLanguage] = useState('')
   const [query, setQuery] = useState('')
   const [nonce, setNonce] = useState(0)
   const [code, setCode] = useState<Load<CodeGraph>>({ state: 'loading' })
+  const [files, setFiles] = useState<Load<StructureGraph>>({ state: 'loading' })
   const [schema, setSchema] = useState<Load<SchemaGraph>>({ state: 'loading' })
+  // the languages of the last code scan, so the filter doesn't flicker while the next one loads
+  const [languages, setLanguages] = useState<Record<string, number>>({})
+  // switch to Files once when the code map has nothing to map, unless the user picked a tab
+  const picked = useRef(false)
+  const switched = useRef(false)
+  const [autoHint, setAutoHint] = useState(false)
+  const pick = (t: Tab): void => {
+    picked.current = true
+    setAutoHint(false)
+    setTab(t)
+  }
 
   useEffect(() => {
     if (params.tab) setTab(params.tab)
+    picked.current = switched.current = false
   }, [params.tab, params.at])
+
+  useEffect(() => {
+    setLanguage('')
+    setLanguages({})
+    picked.current = switched.current = false
+    setAutoHint(false)
+  }, [root])
 
   useEffect(() => {
     if (!root || tab !== 'code') return
     let live = true
     setCode({ state: 'loading' })
-    window.api.diagram.code(root, depth).then(
-      (data) => live && setCode({ state: 'ready', data }),
+    window.api.diagram.code(root, depth, language || undefined).then(
+      (data) => {
+        if (!live) return
+        setCode({ state: 'ready', data })
+        setLanguages(data.languages)
+        if (data.scanned === 0 && !language && !picked.current && !switched.current) {
+          switched.current = true
+          setAutoHint(true)
+          setTab('files')
+        }
+      },
       (e: unknown) => live && setCode({ state: 'error', message: e instanceof Error ? e.message : String(e) })
+    )
+    return () => void (live = false)
+  }, [root, tab, depth, language, nonce])
+
+  useEffect(() => {
+    if (!root || tab !== 'files') return
+    let live = true
+    setFiles({ state: 'loading' })
+    window.api.diagram.structure(root, depth).then(
+      (data) => live && setFiles({ state: 'ready', data }),
+      (e: unknown) => live && setFiles({ state: 'error', message: e instanceof Error ? e.message : String(e) })
     )
     return () => void (live = false)
   }, [root, tab, depth, nonce])
@@ -60,16 +108,26 @@ export function DiagramPanel({ params }: IDockviewPanelProps<{ tab?: Tab; at?: n
     return () => void (live = false)
   }, [root, tab, nonce])
 
-  const current = tab === 'code' ? code : schema
+  const current = tab === 'code' ? code : tab === 'files' ? files : schema
+  const langCount = Object.keys(languages).length
   const subtitle =
     current.state !== 'ready'
       ? 'Parsed locally from your source'
-      : tab === 'code'
-        ? `${code.state === 'ready' ? `${code.data.nodes.length} folders · ${code.data.edges.length} links · ${code.data.scanned} files${code.data.truncated ? ' (first 4000)' : ''}` : ''}`
-        : `${schema.state === 'ready' ? `${schema.data.tables.length} tables · ${schema.data.relations.length} relations · ${schema.data.sources.length} file${schema.data.sources.length === 1 ? '' : 's'}` : ''}`
+      : tab === 'code' && code.state === 'ready'
+        ? `${code.data.nodes.length} folders · ${code.data.edges.length} links · ${code.data.scanned} files${code.data.truncated ? ' (first 4000)' : ''}${langCount ? ` · ${languageSummary(languages, 5)}` : ''}`
+        : tab === 'files' && files.state === 'ready'
+          ? `${files.data.nodes.filter((n) => n.kind === 'dir').length} folders · ${files.data.files} source files${files.data.files ? ` · ${languageSummary(files.data.languages, 5)}` : ''}${files.data.leavesHidden ? ' · files hidden (too many to draw)' : ''}`
+          : schema.state === 'ready'
+            ? `${schema.data.tables.length} tables · ${schema.data.relations.length} relations · ${schema.data.sources.length} file${schema.data.sources.length === 1 ? '' : 's'}`
+            : ''
 
   const copyMermaid = (): void => {
-    const text = tab === 'code' ? (code.state === 'ready' ? codeMermaid(code.data) : '') : schema.state === 'ready' ? schemaMermaid(schema.data) : ''
+    const text =
+      tab === 'code'
+        ? code.state === 'ready' ? codeMermaid(code.data) : ''
+        : tab === 'files'
+          ? files.state === 'ready' ? structureMermaid(files.data, baseName(root ?? '')) : ''
+          : schema.state === 'ready' ? schemaMermaid(schema.data) : ''
     if (text) void navigator.clipboard.writeText(text).then(() => showNotice('Copied as Mermaid', 'Paste it into a pull request, an issue or a Markdown doc to render the diagram.'))
   }
 
@@ -78,7 +136,7 @@ export function DiagramPanel({ params }: IDockviewPanelProps<{ tab?: Tab; at?: n
   return (
     <div className="panel-page diagram-page">
       <header className="board-head">
-        <div className="board-icon aurora">{tab === 'code' ? <Workflow size={17} /> : <Database size={17} />}</div>
+        <div className="board-icon aurora">{tab === 'code' ? <Workflow size={17} /> : tab === 'files' ? <FolderTree size={17} /> : <Database size={17} />}</div>
         <div className="board-title">
           <h2>Diagrams</h2>
           <div className="muted small">{subtitle}</div>
@@ -94,10 +152,11 @@ export function DiagramPanel({ params }: IDockviewPanelProps<{ tab?: Tab; at?: n
 
       <div className="board-filters">
         <div className="seg sm" role="group" aria-label="Diagram">
-          <button type="button" className={tab === 'code' ? 'on' : ''} aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Workflow size={12} /> Code map</button>
-          <button type="button" className={tab === 'schema' ? 'on' : ''} aria-pressed={tab === 'schema'} onClick={() => setTab('schema')}><Database size={12} /> Schema</button>
+          <button type="button" className={tab === 'code' ? 'on' : ''} aria-pressed={tab === 'code'} onClick={() => pick('code')}><Workflow size={12} /> Code map</button>
+          <button type="button" className={tab === 'files' ? 'on' : ''} aria-pressed={tab === 'files'} onClick={() => pick('files')}><FolderTree size={12} /> Files</button>
+          <button type="button" className={tab === 'schema' ? 'on' : ''} aria-pressed={tab === 'schema'} onClick={() => pick('schema')}><Database size={12} /> Schema</button>
         </div>
-        {tab === 'code' && (
+        {tab !== 'schema' && (
           <div className="seg sm" role="group" aria-label="Folder depth" title="How many folder levels each box stands for">
             {[1, 2, 3, 4].map((d) => (
               <button key={d} type="button" className={depth === d ? 'on' : ''} aria-pressed={depth === d} onClick={() => setDepth(d)}>
@@ -106,21 +165,44 @@ export function DiagramPanel({ params }: IDockviewPanelProps<{ tab?: Tab; at?: n
             ))}
           </div>
         )}
+        {tab === 'code' && langCount > 1 && (
+          <div className="seg sm" role="group" aria-label="Language" title="Map the imports of one language only">
+            <button type="button" className={!language ? 'on' : ''} aria-pressed={!language} onClick={() => setLanguage('')}>All</button>
+            {LANGS.filter((l) => languages[l.label]).map((l) => (
+              <button key={l.id} type="button" className={language === l.id ? 'on' : ''} aria-pressed={language === l.id} onClick={() => setLanguage(l.id)}>
+                {l.label} <span className="seg-count">{languages[l.label]}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <label className="search-input">
           <Search size={12} />
-          <input value={query} placeholder={tab === 'code' ? 'Highlight folders…' : 'Highlight tables or columns…'} aria-label="Highlight" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
+          <input value={query} placeholder={tab === 'schema' ? 'Highlight tables or columns…' : tab === 'files' ? 'Highlight folders or files…' : 'Highlight folders…'} aria-label="Highlight" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
         </label>
       </div>
+      {autoHint && tab === 'files' && <div className="muted small diagram-hint">No imports to map in this project's languages; showing its files.</div>}
 
       {current.state === 'loading' ? (
-        <Loading what={tab === 'code' ? 'imports' : 'schema files'} />
+        <Loading what={tab === 'code' ? 'imports' : tab === 'files' ? 'files' : 'schema files'} />
       ) : current.state === 'error' ? (
         <ErrorBanner onRetry={() => setNonce((n) => n + 1)}>Couldn't read the project: {current.message}</ErrorBanner>
       ) : tab === 'code' && code.state === 'ready' ? (
         code.data.nodes.length === 0 ? (
-          <Empty big icon={<Workflow size={22} />} title="No TypeScript or JavaScript found" hint="The code map reads TS/JS imports (relative and tsconfig paths). Other languages aren't mapped yet." />
+          <Empty
+            big
+            icon={<Workflow size={22} />}
+            title="No imports to map"
+            hint={`The code map reads imports in ${MAPPED}. Swift, Dart, Elixir and other languages are shown in Files.`}
+            action={<button className="btn sm" onClick={() => pick('files')}><FolderTree size={13} /> Show files</button>}
+          />
         ) : (
           <CodeMap graph={code.data} root={root} query={query} />
+        )
+      ) : tab === 'files' && files.state === 'ready' ? (
+        files.data.nodes.length <= 1 ? (
+          <Empty big icon={<FolderTree size={22} />} title="No source files found" hint="Files shows folders and source files in any language. Generated folders (node_modules, build output, virtualenvs) are left out." />
+        ) : (
+          <FilesMap graph={files.data} root={root} query={query} />
         )
       ) : schema.state === 'ready' ? (
         schema.data.tables.length === 0 ? (
@@ -346,6 +428,69 @@ function Deps({ title, list, onPick }: { title: string; list: Array<[string, num
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : `…${s.slice(s.length - n + 1)}`
+}
+
+// ── files ──
+
+function FilesMap({ graph, root, query }: { graph: StructureGraph; root: string; query: string }): React.JSX.Element {
+  const rootName = baseName(root)
+  const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph])
+  const label = (id: string): string => (id === '.' ? rootName : baseName(id))
+  const sub = (id: string): string => {
+    const n = byId.get(id)!
+    return n.kind === 'file' ? Object.keys(n.languages)[0] ?? '' : `${n.files} · ${languageSummary(n.languages, 2)}`
+  }
+  const placed = useMemo(
+    () => {
+      // folders first, then files, like an explorer
+      const kind = (id: string): number => (byId.get(id)!.kind === 'dir' ? 0 : 1)
+      const edges = [...graph.edges].sort((a, b) => kind(a.to) - kind(b.to) || a.to.localeCompare(b.to))
+      return treeLayout('.', edges, (id) => ({ w: Math.max(110, Math.min(280, Math.max(label(id).length * 7, sub(id).length * 6.2) + 28)), h: 40 }))
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [graph, byId, rootName]
+  )
+  const at = useMemo(() => new Map(placed.map((p) => [p.id, p])), [placed])
+  const q = query.trim().toLowerCase()
+  const dim = (id: string): boolean => !!q && !id.toLowerCase().includes(q)
+  const open = (id: string): void => {
+    const n = byId.get(id)!
+    if (n.kind === 'file') void openFileAt(joinPath(root, id))
+    else void openInEditor(joinPath(root, id), undefined, true)
+  }
+
+  return (
+    <div className="diagram-body">
+      <Canvas placed={placed} label="Project folders and source files" onBackground={() => undefined}>
+        {graph.edges.map((e) => {
+          const a = at.get(e.from)
+          const b = at.get(e.to)
+          if (!a || !b) return null
+          return <path key={`${e.from}>${e.to}`} d={link(a, b)} className={`dg-edge${q && dim(e.to) ? ' off' : ''}`} />
+        })}
+        {placed.map((p) => {
+          const n = byId.get(p.id)!
+          return (
+            <g
+              key={p.id}
+              className={`dg-node${n.kind === 'file' ? ' dg-file' : ''}${dim(p.id) ? ' off' : ''}${q && !dim(p.id) ? ' hit' : ''}`}
+              transform={`translate(${p.x},${p.y})`}
+              role="button"
+              tabIndex={0}
+              aria-label={`${p.id}, ${n.kind === 'file' ? 'file' : `${n.files} file${n.files === 1 ? '' : 's'}`}`}
+              onClick={() => open(p.id)}
+              onKeyDown={(e) => e.key === 'Enter' && open(p.id)}
+            >
+              <title>{`${p.id === '.' ? rootName : p.id}\n${n.kind === 'dir' ? `${languageSummary(n.languages, 8)}\n` : ''}Click to open in your editor`}</title>
+              <rect width={p.w} height={p.h} rx={6} />
+              <text x={12} y={17} className="dg-label">{truncate(label(p.id) + (n.kind === 'dir' ? '/' : ''), Math.floor((p.w - 24) / 7))}</text>
+              <text x={12} y={31} className="dg-sub">{truncate(sub(p.id), Math.floor((p.w - 24) / 6.2))}</text>
+            </g>
+          )
+        })}
+      </Canvas>
+    </div>
+  )
 }
 
 // ── schema ERD ──

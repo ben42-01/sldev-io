@@ -1,10 +1,10 @@
 /**
- * Code diagrams, parsed locally from source: a folder-level import graph for TS/JS and an entity
- * relationship diagram from Prisma schemas and SQL `CREATE TABLE`s. Pure, so main scans and the
- * renderer only draws. No type checker: imports and schema are read with small, forgiving parsers.
+ * Code diagrams, parsed locally from source: a folder-level import graph (TS/JS here, other languages in
+ * diagramLangs.ts), the project's folders and files, and an entity relationship diagram from Prisma schemas
+ * and SQL `CREATE TABLE`s. Pure, so main scans and the renderer only draws. No type checker: imports and
+ * schema are read with small, forgiving parsers.
  */
 
-export const CODE_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
 const RESOLVE_EXT = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
 const INDEX = RESOLVE_EXT.map((e) => `/index${e}`)
 
@@ -25,6 +25,8 @@ export interface CodeGraph {
   /** source files read (capped) and whether the cap was hit */
   scanned: number
   truncated: boolean
+  /** mapped source files per language (code map label, e.g. "Python"), counted before any language filter */
+  languages: Record<string, number>
 }
 
 export interface Column {
@@ -71,7 +73,7 @@ export function parseImports(source: string): string[] {
 /** tsconfig `paths` (already relative to the root, `./` stripped): `@shared/*` → [`src/shared/*`]. */
 export type PathAliases = Record<string, string[]>
 
-function normalize(path: string): string {
+export function normalize(path: string): string {
   const parts: string[] = []
   for (const p of path.split('/')) {
     if (!p || p === '.') continue
@@ -81,7 +83,7 @@ function normalize(path: string): string {
   return parts.join('/')
 }
 
-function dirOf(path: string): string {
+export function dirOf(path: string): string {
   const i = path.lastIndexOf('/')
   return i < 0 ? '' : path.slice(0, i)
 }
@@ -158,8 +160,12 @@ export function groupOf(file: string, depth: number): string {
   return dirs.length ? dirs.slice(0, depth).join('/') : '.'
 }
 
-/** File-level imports (file → resolved project files) collapsed to folders `depth` levels deep. */
-export function folderGraph(imports: Record<string, string[]>, depth: number): Pick<CodeGraph, 'nodes' | 'edges'> {
+/**
+ * File-level imports (file → resolved project files) collapsed to folders `depth` levels deep. A target that is
+ * a list (one import that stands for many files: a C# namespace, a Java wildcard, a Go package) counts once per
+ * folder it reaches, so a namespace spread over twenty files doesn't count twenty imports.
+ */
+export function folderGraph(imports: Record<string, Array<string | string[]>>, depth: number): Pick<CodeGraph, 'nodes' | 'edges'> {
   const files = new Map<string, number>()
   const edges = new Map<string, GraphEdge>()
   for (const f of Object.keys(imports)) {
@@ -168,20 +174,127 @@ export function folderGraph(imports: Record<string, string[]>, depth: number): P
   }
   for (const [f, targets] of Object.entries(imports)) {
     const from = groupOf(f, depth)
-    for (const t of targets) {
-      const to = groupOf(t, depth)
-      if (to === from) continue
-      if (!files.has(to)) files.set(to, 0)
-      const key = `${from}\u0000${to}`
-      const e = edges.get(key)
-      if (e) e.count++
-      else edges.set(key, { from, to, count: 1 })
+    for (const target of targets) {
+      for (const to of typeof target === 'string' ? [groupOf(target, depth)] : new Set(target.map((t) => groupOf(t, depth)))) {
+        if (to === from) continue
+        if (!files.has(to)) files.set(to, 0)
+        const key = `${from}\u0000${to}`
+        const e = edges.get(key)
+        if (e) e.count++
+        else edges.set(key, { from, to, count: 1 })
+      }
     }
   }
   return {
     nodes: [...files].map(([id, n]) => ({ id, files: n })).sort((a, b) => a.id.localeCompare(b.id)),
     edges: [...edges.values()].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
   }
+}
+
+// ---------- files ----------
+
+const LANGUAGES: Record<string, string> = {
+  ts: 'TypeScript', tsx: 'TypeScript', mts: 'TypeScript', cts: 'TypeScript',
+  js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript',
+  vue: 'Vue', svelte: 'Svelte', astro: 'Astro',
+  py: 'Python', pyi: 'Python',
+  java: 'Java', kt: 'Kotlin', kts: 'Kotlin', scala: 'Scala', sc: 'Scala', groovy: 'Groovy', clj: 'Clojure', cljs: 'Clojure',
+  go: 'Go', cs: 'C#', fs: 'F#', vb: 'Visual Basic', rs: 'Rust',
+  c: 'C', h: 'C', cc: 'C++', cpp: 'C++', cxx: 'C++', hh: 'C++', hpp: 'C++', hxx: 'C++', m: 'Objective-C', mm: 'Objective-C',
+  rb: 'Ruby', php: 'PHP', swift: 'Swift', dart: 'Dart', ex: 'Elixir', exs: 'Elixir', erl: 'Erlang',
+  hs: 'Haskell', ml: 'OCaml', lua: 'Lua', r: 'R', jl: 'Julia', zig: 'Zig', nim: 'Nim', pl: 'Perl', pm: 'Perl',
+  sh: 'Shell', bash: 'Shell', zsh: 'Shell', ps1: 'PowerShell', sql: 'SQL', prisma: 'Prisma',
+  html: 'HTML', css: 'CSS', scss: 'CSS', sass: 'CSS', less: 'CSS'
+}
+
+/** The language of a source file by its extension, or null for anything that isn't code (docs, data, images). */
+export function languageOf(file: string): string | null {
+  if (/\.d\.[mc]?ts$/.test(file)) return null
+  const dot = file.lastIndexOf('.')
+  if (dot < 0 || dot < file.lastIndexOf('/')) return null
+  return LANGUAGES[file.slice(dot + 1).toLowerCase()] ?? null
+}
+
+/** Folders hold their source files as leaves in the Files diagram when they have at most this many. */
+export const LEAF_MAX = 12
+const STRUCTURE_MAX_NODES = 600
+
+export interface StructureNode {
+  /** project-relative folder or file, `.` for the project itself */
+  id: string
+  kind: 'dir' | 'file'
+  /** source files in it, at any depth */
+  files: number
+  languages: Record<string, number>
+}
+export interface StructureGraph {
+  nodes: StructureNode[]
+  /** parent folder → child */
+  edges: Array<{ from: string; to: string }>
+  /** source files counted */
+  files: number
+  languages: Record<string, number>
+  /** file leaves were left out because the tree got too big to draw */
+  leavesHidden: boolean
+}
+
+/** The project's folders `depth` levels deep, with the source files of small folders as leaves. */
+export function structureGraph(paths: string[], depth: number): StructureGraph {
+  const nodes = new Map<string, StructureNode>()
+  const edges = new Map<string, { from: string; to: string }>()
+  const direct = new Map<string, string[]>()
+  const node = (id: string, kind: StructureNode['kind']): StructureNode => {
+    let n = nodes.get(id)
+    if (!n) nodes.set(id, (n = { id, kind, files: 0, languages: {} }))
+    return n
+  }
+  const count = (n: StructureNode, lang: string): void => {
+    n.files++
+    n.languages[lang] = (n.languages[lang] ?? 0) + 1
+  }
+  const root = node('.', 'dir')
+  for (const f of paths) {
+    const lang = languageOf(f)
+    if (!lang) continue
+    count(root, lang)
+    const dirs = f.split('/').slice(0, -1)
+    let parent = '.'
+    for (let i = 1; i <= Math.min(depth, dirs.length); i++) {
+      const id = dirs.slice(0, i).join('/')
+      count(node(id, 'dir'), lang)
+      edges.set(id, { from: parent, to: id })
+      parent = id
+    }
+    if (dirs.length <= depth) direct.set(parent, [...(direct.get(parent) ?? []), f])
+  }
+  const leaves: Array<[string, string]> = []
+  for (const [dir, files] of direct) if (files.length <= LEAF_MAX) for (const f of files) leaves.push([dir, f])
+  const leavesHidden = leaves.length > 0 && nodes.size + leaves.length > STRUCTURE_MAX_NODES
+  if (!leavesHidden) {
+    for (const [dir, f] of leaves) {
+      count(node(f, 'file'), languageOf(f)!)
+      edges.set(f, { from: dir, to: f })
+    }
+  }
+  const byId = (a: { id: string }, b: { id: string }): number => (a.id === '.' ? -1 : b.id === '.' ? 1 : a.id.localeCompare(b.id))
+  return {
+    nodes: [...nodes.values()].sort(byId),
+    edges: [...edges.values()].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to)),
+    files: root.files,
+    languages: root.languages,
+    leavesHidden
+  }
+}
+
+/** "Python 10, SQL 4": languages by count, the first `max`. */
+export function languageSummary(languages: Record<string, number>, max = 3): string {
+  const list = Object.entries(languages).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const shown = list.slice(0, max).map(([l, n]) => `${l} ${n}`)
+  return list.length > max ? `${shown.join(', ')}, +${list.length - max}` : shown.join(', ')
+}
+
+function baseName(id: string): string {
+  return id.slice(id.lastIndexOf('/') + 1)
 }
 
 // ---------- schemas ----------
@@ -410,6 +523,41 @@ export function layered(ids: string[], edges: Array<{ from: string; to: string }
   return placed
 }
 
+/**
+ * A tree laid out left to right: one column per level, leaves stacked in depth-first order and each parent centred
+ * on its children, so no two edges cross. `edges` go parent → child from `rootId`; children keep their order in `edges`.
+ */
+export function treeLayout(rootId: string, edges: Array<{ from: string; to: string }>, size: (id: string) => { w: number; h: number }, gap = { x: 60, y: 12 }): Placed[] {
+  const children = new Map<string, string[]>()
+  for (const e of edges) children.set(e.from, [...(children.get(e.from) ?? []), e.to])
+  const levels: string[][] = []
+  const level = new Map<string, number>()
+  const walk = (id: string, d: number): void => {
+    level.set(id, d)
+    ;(levels[d] ??= []).push(id)
+    for (const c of children.get(id) ?? []) if (!level.has(c)) walk(c, d + 1)
+  }
+  walk(rootId, 0)
+  const xs: number[] = []
+  let x = 0
+  for (const ids of levels) {
+    xs.push(x)
+    x += Math.max(...ids.map((id) => size(id).w)) + gap.x
+  }
+  const placed = new Map<string, Placed>()
+  let y = 0
+  const place = (id: string): void => {
+    const { w, h } = size(id)
+    const kids = (children.get(id) ?? []).filter((c) => level.get(c) === level.get(id)! + 1 && !placed.has(c))
+    for (const c of kids) place(c)
+    const at = kids.length ? (placed.get(kids[0])!.y + placed.get(kids[kids.length - 1])!.y + size(kids[kids.length - 1]).h) / 2 - h / 2 : y
+    if (!kids.length) y += h + gap.y
+    placed.set(id, { id, x: xs[level.get(id)!], y: at, w, h })
+  }
+  place(rootId)
+  return [...placed.values()]
+}
+
 // ---------- export ----------
 
 function mermaidId(s: string): string {
@@ -433,5 +581,17 @@ export function schemaMermaid(g: Pick<SchemaGraph, 'tables' | 'relations'>): str
     lines.push('  }')
   }
   for (const r of g.relations) lines.push(`  ${mermaidId(r.from)} }o--|| ${mermaidId(r.to)} : "${r.fromColumns.join(', ')}"`)
+  return lines.join('\n')
+}
+
+/** The folder tree as a Mermaid flowchart. */
+export function structureMermaid(g: Pick<StructureGraph, 'nodes' | 'edges'>, rootName = '.'): string {
+  const lines = ['flowchart LR']
+  for (const n of g.nodes) {
+    const name = n.id === '.' ? rootName : baseName(n.id)
+    const label = n.kind === 'dir' ? `${name}/ · ${n.files}` : name
+    lines.push(`  ${mermaidId(n.id)}["${label.replace(/"/g, "'")}"]`)
+  }
+  for (const e of g.edges) lines.push(`  ${mermaidId(e.from)} --> ${mermaidId(e.to)}`)
   return lines.join('\n')
 }
