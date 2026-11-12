@@ -6291,6 +6291,13 @@ a {
 .dg-rule {
   stroke: var(--border);
 }
+.dg-file rect {
+  fill: var(--background);
+  stroke-dasharray: 3 2;
+}
+.diagram-hint {
+  padding: 0 2px 8px;
+}
 .dg-table rect {
   fill: var(--surface);
 }
