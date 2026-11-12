@@ -8,7 +8,7 @@ import { copyToClipboard, osc52 } from './clipboard'
 import { openPane, type OpenResult } from './editor'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
-import { ACCENT, at, brandMark, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
+import { ACCENT, at, brandMark, gradient, isLightBackground, logo, RULE, setLight, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
 import { VERSION } from './version'
 
@@ -96,6 +96,9 @@ function trackModes(v: View): void {
   v.term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, set(false))
 }
 
+/** the terminal's answer to "what's your background colour?" (OSC 11), ended by BEL or ST */
+const BG_ANSWER = /^\x1b\]11;([^\x07\x1b]*)(?:\x07|\x1b\\)/
+
 /** a mouse report in SGR form: ESC [ < button ; x ; y M (press) or m (release) */
 const MOUSE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/
 
@@ -159,6 +162,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   /** the spinner's frame, and its timer while an agent works */
   let spin = 0
   let spinTimer: NodeJS.Timeout | null = null
+  /** the clock on the status bar moves on even when nothing else does */
+  const clock = setInterval(() => schedule(), 30_000)
+  clock.unref?.()
   /** what the last frame drew where, for clicks */
   let bar: TabBar = { text: '', spans: [], plus: null }
   /** text being selected (or just copied) in a tab by dragging the mouse */
@@ -230,14 +236,15 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     )
     s += at(l.tabs.x, l.tabs.y) + bar.text
     // the rule row: under the sidebar, the junction, then each pane's rule
-    if (l.sidebar) s += at(0, 1) + '\x1b[90m' + '─'.repeat(SIDEBAR_W) + '┬\x1b[0m'
+    // a slim brand gradient under the name, as in the app
+    if (l.sidebar) s += at(0, 1) + gradient('─'.repeat(SIDEBAR_W)) + RULE + '┬\x1b[0m'
     l.panes.forEach((r, i) => {
       const v = shown[i] ? views.get(shown[i]) : undefined
       if (l.panes.length > 1) {
         const n = order.indexOf(shown[i]) + 1
         const info = v ? `${n} ${v.info.title} · ${paneDetails(v.info, home, false)}` : ''
         s += at(r.x, r.y) + ruleLine(r.w, i === 0 ? { from: -1, to: r.w + 1 } : null, info)
-        if (i === 0) s += at(r.x + r.w, r.y) + '\x1b[90m┬\x1b[0m'
+        if (i === 0) s += at(r.x + r.w, r.y) + RULE + '┬\x1b[0m'
       } else {
         const span = bar.spans.find((x) => order[x.index] === shown[0])
         const back = v ? scrolledBack(v) : 0
@@ -246,7 +253,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     })
     if (l.sidebar) {
       side = sidebar({ panes: [...views.values()].map((v) => v.info), order, active: shown[0] ?? null, shown, loops: [...loops.values()], frame: spin, home }, l.sidebar.w, l.sidebar.h)
-      side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line + '\x1b[90m│\x1b[0m'))
+      side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line + RULE + '│\x1b[0m'))
     }
     return s
   }
@@ -277,8 +284,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         const v = views.get(id)
         const r = l.panes[i]
         if (!v || !r) return
-        s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 }, sel?.pane === id ? sel.s : null)
-        if (i === 0 && l.panes[1]) for (let y = 1; y < r.h; y++) s += at(r.x + r.w, r.y + y) + '\x1b[90m│\x1b[0m'
+        s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 }, sel?.pane === id ? sel.s : null, i > 0)
+        if (i === 0 && l.panes[1]) for (let y = 1; y < r.h; y++) s += at(r.x + r.w, r.y + y) + RULE + '│\x1b[0m'
       })
     if (menu) s += popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`)
     else if (help) s += popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.')
@@ -290,7 +297,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   /** nothing open yet: what to do, in the pane area */
   function welcome(r: Rect): string {
     const lines = [
-      ` ${brandMark()}  \x1b[90mcoding agents side by side\x1b[0m`,
+      ...logo().map((row) => ` ${row}`),
+      '',
+      ' \x1b[90mcoding agents side by side, in your terminal\x1b[0m',
       '',
       ` ${ACCENT}^b c\x1b[0m  new tab: an agent or a shell`,
       ` ${ACCENT}^b t\x1b[0m  a shell here`,
@@ -308,9 +317,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   /** the spinner runs while an agent works, and redraws only the chrome */
   function spinning(): void {
+    // a spinner while an agent works, a slow breath while one needs you
     const busy = [...views.values()].some((v) => {
       const sig = paneSignal(v.info)
-      return sig.tone === 'working' && sig.pulse
+      return (sig.tone === 'working' && sig.pulse) || (!v.info.shell && sig.tone === 'attention')
     })
     if (busy && !spinTimer && !restored)
       spinTimer = setInterval(() => {
@@ -439,7 +449,19 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (menu) return hints(MENU_HINTS, cols, ' ')
     if (help) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
-    return hints(HINTS, cols, ` ${ACCENT}^b\x1b[0m `)
+    const right = rightStatus()
+    const rw = cols >= 90 ? right.length : 0
+    return hints(HINTS, cols - rw, ` ${ACCENT}^b\x1b[0m `) + (rw ? `\x1b[90m${right}\x1b[0m` : '')
+  }
+
+  /** the bottom right: the focused tab's project and the time */
+  function rightStatus(): string {
+    const id = visible()[0]
+    const info = id ? views.get(id)?.info : undefined
+    const project = info ? (info.root || info.cwd).replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''
+    const d = new Date()
+    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return `${project ? `${project} · ` : ''}${time} `
   }
 
   /** a new tab works where the tab in focus works (its worktree), else where sldev was attached */
@@ -678,6 +700,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   /** Handles the start of `s` and returns what is left. */
   function key(s: string): string {
+    const bg = BG_ANSWER.exec(s)
+    if (bg) {
+      const light = isLightBackground(bg[1])
+      if (light !== null) setLight(light)
+      return s.slice(bg[0].length)
+    }
     const m = MOUSE.exec(s)
     if (m) {
       mouse(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - 1, m[4] === 'M')
@@ -775,7 +803,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const useEnc = !!enc && (plain < 0 || enc.index < plain)
     const at = useEnc ? enc!.index : plain
     // a mouse report before the prefix: what comes before it goes to the tab, the report is read next
-    const click = s.indexOf('\x1b[<')
+    // the background answer is read the same way: never typed into the tab
+    const answer = s.indexOf('\x1b]11;')
+    const clickAt = s.indexOf('\x1b[<')
+    const click = answer >= 0 && (clickAt < 0 || answer < clickAt) ? answer : clickAt
     const cut = click >= 0 && (at < 0 || click < at) ? click : at
     const typed = cut < 0 ? s : s.slice(0, cut)
     const id = visible()[0]
@@ -797,6 +828,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     restored = true
     if (frame) clearTimeout(frame)
     if (spinTimer) clearInterval(spinTimer)
+    clearInterval(clock)
     if (runsView) clearTimeout(runsView.timer)
     input.off('data', onKey)
     if (input.isTTY) input.setRawMode?.(false)
@@ -836,7 +868,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     resolveExit()
   })
   // the alternate screen, and the mouse reported (presses, drags, releases, SGR form): sldev selects and copies itself
-  out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1002h\x1b[?1006h')
+  // and the background colour asked for (OSC 11), so lines and popups suit a light terminal too
+  out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b]11;?\x07')
   if (input.isTTY) input.setRawMode?.(true)
   input.resume()
   input.on('data', onKey)

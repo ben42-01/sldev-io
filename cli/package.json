@@ -1,6 +1,6 @@
 {
   "name": "sldev",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Run coding agents (Claude Code, Codex, Cursor, Copilot, OpenCode, Gemini) side by side in your terminal, with rules sync, project memory, usage and failover.",
   "license": "Apache-2.0",
   "type": "module",

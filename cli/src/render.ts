@@ -58,14 +58,78 @@ export const TONE_SGR: Record<Tone, string> = { working: '32', attention: '33', 
 const DIM = '\x1b[90m'
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
-/** the accent: the bar beside the row in focus, the line under the active tab, key names */
-export const ACCENT = '\x1b[38;5;75m'
-/** the brand gradient, blue → green → purple, in 256 colours (truecolor isn't everywhere) */
-const BRAND = [75, 79, 114, 141, 177]
+
+/** 24-bit colour where the terminal says it has it; the nearest of the 256 otherwise */
+const TRUECOLOR = /truecolor|24bit/i.test(process.env.COLORTERM ?? '')
+
+/** the nearest xterm-256 colour: the grey ramp for greys, the 6×6×6 cube for the rest */
+export function to256(r: number, g: number, b: number): number {
+  if (Math.max(r, g, b) - Math.min(r, g, b) < 12) {
+    const v = (r + g + b) / 3
+    if (v < 8) return 16
+    if (v > 238) return 231
+    return 232 + Math.round((v - 8) / 10)
+  }
+  const c = (v: number): number => (v < 48 ? 0 : v < 115 ? 1 : Math.floor((v - 35) / 40))
+  return 16 + 36 * c(r) + 6 * c(g) + c(b)
+}
+
+export const rgb = (r: number, g: number, b: number, bg = false): string => (TRUECOLOR ? `\x1b[${bg ? 48 : 38};2;${r};${g};${b}m` : `\x1b[${bg ? 48 : 38};5;${to256(r, g, b)}m`)
+
+/** the app's brand gradient (--brand-blue, --brand-green, --brand-purple in app.css) */
+const STOPS: Array<[number, number, number]> = [
+  [49, 156, 252],
+  [0, 208, 151],
+  [177, 103, 247]
+]
+
+/** the brand colour at `t` (0 blue, 0.5 green, 1 purple) */
+export function brandAt(t: number): [number, number, number] {
+  t = Math.max(0, Math.min(1, t)) * (STOPS.length - 1)
+  const i = Math.min(STOPS.length - 2, Math.floor(t))
+  const f = t - i
+  return STOPS[i].map((v, k) => Math.round(v + (STOPS[i + 1][k] - v) * f)) as [number, number, number]
+}
+
+/** `text` with the brand gradient running across it, from `t0` to `t1` of the way along */
+export function gradient(text: string, t0 = 0, t1 = 1, bold = false): string {
+  const chars = [...text]
+  return chars.map((ch, i) => (bold ? BOLD : '') + rgb(...brandAt(t0 + ((t1 - t0) * i) / Math.max(1, chars.length - 1))) + ch).join('') + RESET
+}
+
+/** the accent: the bar beside the row in focus, key names; the brand's blue */
+export const ACCENT = rgb(...STOPS[0])
+/** lines and borders: quieter than text (light terminals get their own tones: see setLight) */
+export let RULE = rgb(68, 68, 72)
+/** a popup's fill: a step up from the terminal's background, like the app's raised surface */
+let RAISED = rgb(30, 30, 34, true)
+/** the selection's colour: a background, so the text keeps its own colours */
+let SELECTED_BG = TRUECOLOR ? ';48;2;38;79;120' : ';48;5;24'
+
+/** The terminal's background is light: lines, popups and the selection switch to tones that sit on it. */
+export function setLight(light: boolean): void {
+  RULE = light ? rgb(200, 200, 205) : rgb(68, 68, 72)
+  RAISED = light ? rgb(244, 244, 247, true) : rgb(30, 30, 34, true)
+  SELECTED_BG = light ? (TRUECOLOR ? ';48;2;190;215;250' : ';48;5;153') : TRUECOLOR ? ';48;2;38;79;120' : ';48;5;24'
+}
+
+/** Is an OSC 11 answer (`rgb:RRRR/GGGG/BBBB`) a light background? */
+export function isLightBackground(answer: string): boolean | null {
+  const m = /rgb:([0-9a-f]+)\/([0-9a-f]+)\/([0-9a-f]+)/i.exec(answer)
+  if (!m) return null
+  const [r, g, b] = m.slice(1, 4).map((h) => parseInt(h, 16) / (16 ** h.length - 1))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5
+}
 
 /** "sldev" in the brand gradient */
 export function brandMark(): string {
-  return [...'sldev'].map((ch, i) => `\x1b[1;38;5;${BRAND[i]}m${ch}`).join('') + RESET
+  return gradient('sldev', 0, 1, true)
+}
+
+/** the welcome screen's logo: block letters with the gradient across them */
+const LOGO = ['█▀▀ █   █▀▄ █▀▀ █ █', '▀▀█ █   █ █ █▀▀ ▐ ▌', '▀▀▀ ▀▀▀ ▀▀  ▀▀▀  ▀ ']
+export function logo(): string[] {
+  return LOGO.map((row) => gradient(row))
 }
 
 // ── status ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -89,10 +153,14 @@ export function glyph(p: Pick<PaneInfo, 'status' | 'shell' | 'pid'>, frame = 0):
   return '●'
 }
 
-/** a pane's marker in its colour; one that needs you is bold, so it stands out from across the screen */
+/** spinner frames per breath of a marker that needs you: bright, then soft (a slow pulse, never a blink) */
+const BREATH = 16
+
+/** a pane's marker in its colour; one that needs you is bold and breathes, so it stands out from across the screen */
 export function marker(p: Pick<PaneInfo, 'status' | 'shell' | 'pid'>, frame = 0): string {
   const s = paneSignal(p)
-  return `\x1b[${s.tone === 'attention' || s.tone === 'error' ? '1;' : ''}${TONE_SGR[s.tone]}m${glyph(p, frame)}${RESET}`
+  const soft = s.tone === 'attention' && frame % BREATH >= BREATH / 2
+  return `\x1b[${soft ? '2;' : s.tone === 'attention' || s.tone === 'error' ? '1;' : ''}${TONE_SGR[s.tone]}m${glyph(p, frame)}${RESET}`
 }
 
 /** which tone wins when a group of panes is summed up: what needs the human first */
@@ -216,10 +284,11 @@ export function ruleLine(w: number, under: { from: number; to: number } | null, 
     const on = heavy(x)
     let n = 1
     while (x + n < lineW && heavy(x + n) === on) n++
-    out += (on ? ACCENT + '━'.repeat(n) : DIM + '─'.repeat(n)) + RESET
+    // the active tab is underlined in the brand gradient
+    out += on ? gradient('━'.repeat(n)) : RULE + '─'.repeat(n) + RESET
     x += n
   }
-  return lw ? out + DIM + label + '──' + RESET : out
+  return lw ? out + DIM + label + RULE + '──' + RESET : out
 }
 
 /** A pane's details for the rule: who runs it and where, shortest first so a narrow pane keeps the useful part. */
@@ -227,7 +296,8 @@ export function paneDetails(p: PaneInfo, home = '', id = true): string {
   if (p.shell) return `${id ? `#${p.id} · ` : ''}${tailFit(tilde(p.cwd, home), 40).trimEnd()}`
   const parts = [...(id ? [`#${p.id}`] : []), p.agentName, paneSignal(p).label.toLowerCase()]
   if (p.worktree) parts.push(p.worktree.branch)
-  if (p.stats && (p.stats.insertions || p.stats.deletions)) parts.push(`+${p.stats.insertions} -${p.stats.deletions}`)
+  const stat = [p.stats?.insertions ? `+${p.stats.insertions}` : '', p.stats?.deletions ? `-${p.stats.deletions}` : ''].filter(Boolean).join(' ')
+  if (stat) parts.push(stat)
   if (p.notification) parts.push(p.notification)
   return parts.join(' · ')
 }
@@ -270,6 +340,8 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   const rows: Array<{ text: string; hit: string | null }> = []
   const push = (text: string, hit: string | null = null): void => void rows.push({ text, hit })
 
+  // a row of air under the brand line
+  push('')
   // groups in the order their first tab comes
   const groups = new Map<string, PaneInfo[]>()
   for (const p of panes) {
@@ -283,21 +355,25 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     first = false
     const tone = rollup(list)
     const count = String(list.length)
-    const name = fit(` ${basename(root)}`, w - count.length - 3)
-    push(`${BOLD}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET}`)
+    // like the app's labels: the project in capitals, quiet, with its most urgent state and its count
+    const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 3)
+    push(`\x1b[1;90m${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET}`)
     // agents first, then shells, each in tab order
     for (const p of [...list.filter((x) => !x.shell), ...list.filter((x) => x.shell)]) {
       const n = order.indexOf(p.id) + 1
       const focus = p.id === active
       const bar = focus ? `${ACCENT}▌${RESET}` : shown.includes(p.id) ? `${DIM}│${RESET}` : ' '
       const num = `${n}`
-      const title = fit(p.title, w - 5 - num.length)
+      const title = ellipsis(p.title, w - 5 - num.length)
       push(`${bar} ${marker(p, frame)} ${DIM}${num}${RESET} ${focus ? BOLD : ''}${title}${RESET}`, p.id)
-      const sig = paneSignal(p)
-      const sub = p.shell ? tilde(p.cwd, home) : [p.agentName, sig.label.toLowerCase(), p.worktree?.branch].filter(Boolean).join(' · ')
-      const stat = !p.shell && p.stats && (p.stats.insertions || p.stats.deletions) ? `+${p.stats.insertions} -${p.stats.deletions}` : ''
+      const sub = p.shell ? tilde(p.cwd, home) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
+      // the diff stat, only the parts that aren't zero
+      const ins = !p.shell && p.stats?.insertions ? `+${p.stats.insertions}` : ''
+      const del = !p.shell && p.stats?.deletions ? `-${p.stats.deletions}` : ''
+      const stat = [ins, del].filter(Boolean).join(' ')
       const subW = w - 4 - (stat ? stat.length + 1 : 0)
-      push(`${bar}   ${DIM}${p.shell ? tailFit(sub, subW) : fit(sub, subW)}${RESET}${stat ? ` \x1b[2;32m+${p.stats!.insertions}${RESET}\x1b[2;31m -${p.stats!.deletions}${RESET}` : ''}`, p.id)
+      const statText = stat ? ' ' + [ins && `\x1b[32m${ins}${RESET}`, del && `\x1b[31m${del}${RESET}`].filter(Boolean).join(' ') : ''
+      push(`${bar}   ${DIM}${p.shell ? tailFit(sub, subW) : ellipsis(sub, subW)}${RESET}${statText}`, p.id)
     }
   }
 
@@ -320,7 +396,7 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     foot.push(` ${ACCENT}↻${RESET} ${fit(l.name, w - 3)}`)
     foot.push(`   ${DIM}${fit(l.label, w - 3)}${RESET}`)
   }
-  if (foot.length) foot.unshift(DIM + '─'.repeat(w) + RESET)
+  if (foot.length) foot.unshift(RULE + '─'.repeat(w) + RESET)
 
   // rows that don't fit scroll so the one in focus stays in view; the footer goes first when it's tight
   const footer = foot.length && h - foot.length >= 6 ? foot : []
@@ -341,6 +417,17 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     }
   }
   return { lines, hits }
+}
+
+/** a pane's state in a word or two, for the sidebar's narrow second line */
+function shortState(p: Pick<PaneInfo, 'status' | 'shell' | 'pid'>): string {
+  const label = paneSignal(p).label
+  return label === 'Ready for you' ? 'ready' : label.toLowerCase()
+}
+
+/** cut to `w` columns with an ellipsis when it doesn't fit */
+export function ellipsis(s: string, w: number): string {
+  return width(s) <= w ? fit(s, w) : fit(fit(s, Math.max(0, w - 1)).trimEnd() + '…', w)
 }
 
 /** pads a styled string with spaces to `w` visible columns (it's built not to be longer) */
@@ -375,6 +462,9 @@ export interface PopupRow {
   head?: boolean
 }
 
+/** keeps the raised fill through the resets inside a styled line */
+const raised = (s: string): string => RAISED + s.split(RESET).join(RESET + RAISED) + RESET
+
 /** A box with rounded corners and a title, `w` wide, centred in `r`; returns its rows positioned with at(). */
 export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, footer = ''): string {
   const w = Math.min(r.w - 2, 64, Math.max(36, ...rows.map((x) => width(x.text) + width(x.key ?? '') + width(x.note ?? '') + 10), width(title) + 6, width(footer) + 4))
@@ -383,7 +473,7 @@ export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, foo
   const x = r.x + Math.floor((r.w - w) / 2)
   const y = r.y + Math.max(1, Math.floor((r.h - h) / 3))
   const keyW = Math.max(0, ...rows.map((x) => width(x.key ?? '')))
-  let s = at(x, y) + DIM + '╭─ ' + RESET + BOLD + fit(title, Math.min(width(title), w - 6)) + RESET + DIM + ' ' + '─'.repeat(Math.max(0, w - width(title) - 5)) + '╮' + RESET
+  let s = at(x, y) + raised(RULE + '╭─ ' + RESET + BOLD + fit(title, Math.min(width(title), w - 6)) + RESET + RULE + ' ' + '─'.repeat(Math.max(0, w - width(title) - 5)) + '╮')
   const inner = w - 2
   const body = rows.slice(0, h - 2 - (footer ? 2 : 0))
   body.forEach((row, i) => {
@@ -396,13 +486,13 @@ export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, foo
       const text = fit(row.text, Math.max(0, inner - keyW - 5 - noteW))
       line = `${focus ? `${ACCENT}▌${RESET}` : ' '} ${key}  ${row.off ? DIM : focus ? BOLD : ''}${text}${RESET}${row.note ? `${DIM} ${row.note}${RESET}` : ''} `
     }
-    s += at(x, y + 1 + i) + DIM + '│' + RESET + pad(line, inner) + DIM + '│' + RESET
+    s += at(x, y + 1 + i) + raised(RULE + '│' + RESET + pad(line, inner) + RULE + '│')
   })
   if (footer) {
-    s += at(x, y + 1 + body.length) + DIM + '│' + ' '.repeat(inner) + '│' + RESET
-    s += at(x, y + 2 + body.length) + DIM + '│' + RESET + ' ' + DIM + fit(footer, inner - 1) + RESET + DIM + '│' + RESET
+    s += at(x, y + 1 + body.length) + raised(RULE + '│' + ' '.repeat(inner) + '│')
+    s += at(x, y + 2 + body.length) + raised(RULE + '│' + RESET + ' ' + DIM + fit(footer, inner - 1) + RESET + RULE + '│')
   }
-  s += at(x, y + h - 1) + DIM + '╰' + '─'.repeat(w - 2) + '╯' + RESET
+  s += at(x, y + h - 1) + raised(RULE + '╰' + '─'.repeat(w - 2) + '╯')
   return s
 }
 
@@ -523,11 +613,9 @@ export function selectionText(term: Term, s: Selection): string {
   return out.replace(/ +$/, '')
 }
 
-/** the selection's colour: a background, so the text keeps its own colours */
-const SELECTED_BG = ';48;5;24'
 
 /** The visible screen of `term`, drawn into `r` (rows past the screen are cleared); `sel` is highlighted. */
-export function drawTerm(term: Term, r: Rect, sel?: Selection | null): string {
+export function drawTerm(term: Term, r: Rect, sel?: Selection | null, dim = false): string {
   const b = term.buffer.active
   const cell = b.getNullCell()
   let out = ''
@@ -543,7 +631,8 @@ export function drawTerm(term: Term, r: Rect, sel?: Selection | null): string {
         const w = c.getWidth()
         if (w === 0) continue
         if (used + w > r.w) break
-        const style = sgr(c) + (sel && inSelection(sel, col, row) ? SELECTED_BG : '')
+        // the pane not in focus (a split) is drawn faint, so the eye goes to the one that takes the keys
+        const style = sgr(c) + (dim ? ';2' : '') + (sel && inSelection(sel, col, row) ? SELECTED_BG : '')
         if (style !== last) {
           out += `\x1b[${style}m`
           last = style

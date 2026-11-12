@@ -9,7 +9,7 @@ import { removeTemp, useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
 import { runTui, win32Key } from '../src/tui'
-import { drawTerm, glyph, inSelection, layout, selectionText, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
+import { brandAt, drawTerm, ellipsis, glyph, inSelection, isLightBackground, to256, layout, selectionText, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
 import type { PaneInfo } from '../src/protocol'
 
 const esc = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
@@ -444,16 +444,17 @@ describe('sidebar', () => {
     const rows = s.lines.map(plain)
     expect(rows.every((r) => r.length === SIDEBAR_W)).toBe(true)
     expect(s.lines.join('')).not.toContain('\x1b[7m')
-    expect(rows[0]).toMatch(/^ app +● 2$/)
-    expect(rows[1]).toMatch(/^▌ ⠋ 2 fix the parser/)
-    expect(rows[2]).toMatch(/^▌ {3}Codex · working/)
-    expect(rows[3]).toMatch(/^ {2}› 1 zsh/)
-    expect(rows[4]).toMatch(/^ {4}\/w\/app/)
-    expect(rows[5].trim()).toBe('')
-    expect(rows[6]).toMatch(/^ site +● 1$/)
-    expect(rows[8]).toMatch(/Codex · needs you · rev/)
+    expect(rows[0].trim()).toBe('')
+    expect(rows[1]).toMatch(/^ APP +● 2$/)
+    expect(rows[2]).toMatch(/^▌ ⠋ 2 fix the parser/)
+    expect(rows[3]).toMatch(/^▌ {3}Codex · working/)
+    expect(rows[4]).toMatch(/^ {2}› 1 zsh/)
+    expect(rows[5]).toMatch(/^ {4}\/w\/app/)
+    expect(rows[6].trim()).toBe('')
+    expect(rows[7]).toMatch(/^ SITE +● 1$/)
+    expect(rows[9]).toMatch(/Codex · needs you · rev/)
     // clicks on either row of a tab pick it
-    expect(s.hits.slice(0, 5)).toEqual([null, '1', '1', '2', '2'])
+    expect(s.hits.slice(0, 6)).toEqual([null, null, '1', '1', '2', '2'])
     // the footer counts the agents by state
     expect(rows.join('\n')).toMatch(/● 1 need you {2}● 1 working/)
   })
@@ -478,8 +479,25 @@ describe('sidebar', () => {
     expect(inSelection(sel, 2, 3)).toBe(false)
     // drawn with a background behind the selected cells only
     const drawn = drawTerm(term, { x: 0, y: 0, w: 10, h: 5 }, sel)
-    expect(drawn).toContain(';48;5;24mline')
-    expect(drawn).not.toContain(';48;5;24mfirst')
+    // 24-bit or 256 colours, as the terminal running the tests says
+    expect(drawn).toMatch(/;48;(5;24|2;38;79;120)mline/)
+    expect(drawn).not.toMatch(/;48;(5;24|2;38;79;120)mfirst/)
+  })
+
+  it("uses the app's brand gradient, the 256-colour fallback, and tells a light background from a dark one", () => {
+    expect(brandAt(0)).toEqual([49, 156, 252])
+    expect(brandAt(0.5)).toEqual([0, 208, 151])
+    expect(brandAt(1)).toEqual([177, 103, 247])
+    // greys go to the grey ramp, colours to the cube
+    expect(to256(68, 68, 72)).toBe(238)
+    expect(to256(0, 0, 0)).toBe(16)
+    expect(to256(49, 156, 252)).toBe(75)
+    expect(isLightBackground('rgb:ffff/ffff/ffff')).toBe(true)
+    expect(isLightBackground('rgb:1e1e/1e1e/1e1e')).toBe(false)
+    expect(isLightBackground('rgb:fd/f6/e3')).toBe(true)
+    expect(isLightBackground('?')).toBeNull()
+    expect(ellipsis('fix the flaky parser test', 12)).toBe('fix the fla…')
+    expect(ellipsis('short', 8)).toBe('short   ')
   })
 
   it('draws a popup inside its area with its rows, the picked one marked', () => {
