@@ -22,9 +22,9 @@ import { VERSION } from './version'
 
 const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
-  sldev                         attach: every agent and shell as a tab, with its status and screen
-                                (Ctrl-b n/p or 1-9 tabs, t shell, c agent, , rename, x close, s split,
-                                w workflows, e editor, v changed files in the editor, d detach)
+  sldev                         attach: every agent and shell as a tab, grouped by project, with its status
+                                (Ctrl-b c new tab, t shell, 1-9 or n/p tabs, , rename, x close, s split,
+                                w workflows, e editor, v changed files, ? every key, d detach; tabs take clicks)
   sldev new [options] "brief"   start an agent in a new pane (prints its id)
       --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)
       --kind <kind>             frame the brief as a mission kind (build, research, plan, review…)
@@ -113,7 +113,8 @@ const list = (v: string | undefined): string[] =>
 async function main(argv: string[]): Promise<void> {
   const [cmd, ...rest] = argv
   const data = dataDir()
-  const client = (): ReturnType<typeof connect> => connect({ dataDir: data, script: script() })
+  const restarted = (was: string): void => void process.stderr.write(`sldev: replaced the background daemon from ${was} with ${VERSION}\n`)
+  const client = (): ReturnType<typeof connect> => connect({ dataDir: data, script: script(), onRestart: restarted })
   const opts = <T extends Record<string, { type: 'string' | 'boolean' }>>(options: T) => parseArgs({ args: rest, options, allowPositionals: true, strict: true })
 
   switch (cmd) {
@@ -203,8 +204,14 @@ async function main(argv: string[]): Promise<void> {
     }
     case 'clean': {
       const { values } = opts({ orphans: { type: 'boolean' }, discard: { type: 'boolean' }, branches: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, yes: { type: 'boolean' } })
-      const c = await connect({ dataDir: data, script: script(), start: false }).catch(() => null)
-      const [panes, loopList] = c ? await Promise.all([c.request('ls', {}), c.request('loops', {})]) : [[], []]
+      // any version's daemon: its panes and loops are what must not be cleaned, so not knowing them stops here
+      const c = await connect({ dataDir: data, script: script(), start: false, check: false }).catch(() => null)
+      const known = c ? await Promise.all([c.request('ls', {}, 5000), c.request('loops', {}, 5000)]).catch(() => null) : ([[], []] as [PaneInfo[], LoopInfo[]])
+      if (!known) {
+        c?.close()
+        return fail('the running sldev daemon is from another version and could not say what it runs; sldev stop first, then sldev clean')
+      }
+      const [panes, loopList] = known
       const o = { orphans: values.orphans, discard: values.discard, branches: values.branches, repo: await projectRoot(process.cwd()), dataDir: data }
       const items = await planClean(panes, loopList, o)
       if (!items.length) {
@@ -299,7 +306,7 @@ async function main(argv: string[]): Promise<void> {
       return c.close()
     }
     case 'stop': {
-      const c = await connect({ dataDir: data, script: script(), start: false }).catch(() => null)
+      const c = await connect({ dataDir: data, script: script(), start: false, check: false }).catch(() => null)
       if (!c) return void console.log('sldev is not running')
       await c.request('stop', {})
       return c.close()

@@ -543,8 +543,10 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       'data',
       lineReader((m) => {
         const r = m as Request
-        if (typeof r?.id !== 'number' || typeof r.cmd !== 'string' || !(r.cmd in handlers)) return
+        if (typeof r?.id !== 'number' || typeof r.cmd !== 'string') return
         const reply = (res: Response): void => void (!c.destroyed && c.write(JSON.stringify(res) + '\n'))
+        // a command from a newer sldev gets an answer, never silence: a client waiting on it would hang
+        if (!Object.hasOwn(handlers, r.cmd)) return reply({ id: r.id, ok: false, error: `sldev ${VERSION} doesn't know "${r.cmd}"` })
         Promise.resolve()
           .then(() => (handlers[r.cmd] as (a: unknown, c: Socket) => unknown)(r.args ?? {}, c))
           .then(

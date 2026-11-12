@@ -1,23 +1,52 @@
 import { appendFileSync } from 'fs'
+import { homedir } from 'os'
+import { allAgents, installedBin, setInstalledBins, type AgentDef } from '@shared/agents'
 import type { GhRun } from '@shared/types'
+import { findOnPath } from '../../src/main/launch'
 import type { Client } from './client'
 import { openPane, type OpenResult } from './editor'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
-import type { DaemonEvent, PaneInfo } from './protocol'
-import { at, drawTerm, fit, layout, paneSignal, tabBar, TONE_SGR, type Rect } from './render'
+import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
+import { ACCENT, at, brandMark, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, type PopupRow, type Rect, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
+import { VERSION } from './version'
 
 /**
- * `sldev` with no arguments: every session (an agent or a plain shell) is a tab, with its status as a
- * coloured marker; one or two of them are shown, a sidebar beside them on wide terminals, and the keyboard
- * goes to the tab in focus. Ctrl-b is the prefix (n/p, 1-9, </> move, s split, Tab, c new agent, t new shell,
- * , rename, x close, w workflows, e editor, v changed files in the editor, d detach). Detaching leaves every
- * session running, and the daemon keeps the tabs' order, names, the one in front and the split.
+ * `sldev` with no arguments: every session (an agent or a plain shell) is a tab along the top, numbered
+ * 1, 2, 3 with a + for a new one; on wide terminals a sidebar groups them by project with each one's state.
+ * One or two are shown, and the keyboard goes to the tab in focus. Ctrl-b is the prefix (n/p, 1-9, </> move,
+ * s split, c new tab, t new shell, , rename, x close, w workflows, e editor, v changed files, ? keys,
+ * d detach); tabs, sidebar rows and + take clicks too. Detaching leaves every session running, and the
+ * daemon keeps the tabs' order, names, the one in front and the split.
  */
 
 const PREFIX = '\x02'
-const HELP = 'Ctrl-b then: n/p next/prev · 1-9 pick · t shell · c agent · , rename · x close · </> move · s split · w workflows · e editor · v diff · d detach'
-const RUNS_HELP = '↑↓ pick · Enter open in browser · r rerun failed jobs · u refresh · Esc close'
+/** the hint bar, and what the prefix waits for */
+// the most useful first: a narrow terminal shows only the ones that fit
+const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
+const RUNS_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'open in browser'], ['r', 'rerun failed jobs'], ['u', 'refresh'], ['Esc', 'close']]
+const MENU_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'start'], ['Esc', 'cancel']]
+/** every key, for Ctrl-b ? */
+const HELP_ROWS: PopupRow[] = [
+  { head: true, text: 'Tabs' },
+  { key: 'c', text: 'new tab: an agent or a shell' },
+  { key: 't', text: 'shell in the folder of the tab in focus' },
+  { key: '1-9', text: 'go to tab' },
+  { key: 'n p', text: 'next, previous tab' },
+  { key: '< >', text: 'move the tab left, right' },
+  { key: ',', text: 'rename the tab' },
+  { key: 'x', text: 'close the tab' },
+  { head: true, text: 'View' },
+  { key: 's', text: 'split: the next tab beside this one' },
+  { key: 'w', text: 'workflows: GitHub Actions runs of this repo' },
+  { key: 'e', text: "the tab's folder in your editor" },
+  { key: 'v', text: "the tab's changed files in your editor" },
+  { head: true, text: 'Session' },
+  { key: 'd', text: 'detach: everything keeps running' },
+  { key: '^b', text: 'send Ctrl-b to the tab' }
+]
+/** a spinner frame for working agents; only while one works */
+const SPIN_MS = 100
 /** how often the workflows view asks GitHub again while it's open */
 const RUNS_REFRESH_MS = 15_000
 
@@ -46,6 +75,34 @@ interface View {
   term: Term
   /** size last sent to the daemon */
   size?: string
+  /** the program in the tab hid its cursor (CSI ?25l): don't draw ours over its own */
+  cursorHidden?: boolean
+  /** it asked for SGR mouse reports (CSI ?1006h), the encoding clicks are passed on in */
+  sgrMouse?: boolean
+}
+
+/** What a tab's program switches with CSI ? Pm h/l that the TUI has to know: its cursor and mouse encoding. */
+function trackModes(v: View): void {
+  const set = (on: boolean) => (params: (number | number[])[]): boolean => {
+    for (const p of params.flat()) {
+      if (p === 25) v.cursorHidden = !on
+      if (p === 1006) v.sgrMouse = on
+    }
+    // not handled here: xterm still applies the mode itself
+    return false
+  }
+  v.term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, set(true))
+  v.term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, set(false))
+}
+
+/** a mouse report in SGR form: ESC [ < button ; x ; y M (press) or m (release) */
+const MOUSE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/
+
+/** The New tab popup: a shell, then each agent, installed or not. */
+interface Menu {
+  rows: PopupRow[]
+  pick: Array<() => void>
+  sel: number
 }
 
 /** The terminal the TUI runs in: process.stdin/stdout, or fakes in tests. */
@@ -88,8 +145,18 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let prompt: { label: string; text: string; done: (text: string) => void } | null = null
   let message = ''
   let runsView: RunsView | null = null
+  let menu: Menu | null = null
+  let help = false
+  let loops = new Map<string, LoopInfo>()
   let frame: NodeJS.Timeout | null = null
   let restored = false
+  /** the spinner's frame, and its timer while an agent works */
+  let spin = 0
+  let spinTimer: NodeJS.Timeout | null = null
+  /** what the last frame drew where, for clicks */
+  let bar: TabBar = { text: '', spans: [], plus: null }
+  let side: Sidebar = { lines: [], hits: [] }
+  const home = homedir()
 
   const activeIndex = (): number => Math.max(0, active === null ? 0 : order.indexOf(active))
 
@@ -107,10 +174,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   const addView = async (info: PaneInfo): Promise<void> => {
     if (views.has(info.id)) return
     const view: View = { info, term: createTerm(120, 40) }
+    trackModes(view)
     views.set(info.id, view)
     if (!order.includes(info.id)) order.push(info.id)
     active ??= info.id
-    const { data } = await client.request('screen', { pane: info.id }).catch(() => ({ data: '' }))
+    const { data } = await client.request('screen', { pane: info.id }, 10_000).catch(() => ({ data: '' }))
     // xterm parses a write later: wait for it, or a quiet pane (a shell at its prompt) stays blank until it prints again
     await new Promise<void>((r) => view.term.write(data, r))
   }
@@ -137,70 +205,117 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (!frame && !restored) frame = setTimeout(draw, 33)
   }
 
+  /** the brand, the tab bar, the rule under it and the sidebar: everything but the panes */
+  function chrome(): string {
+    const cols = out.columns || 80
+    const rows = out.rows || 24
+    const l = layout(cols, rows, split)
+    const shown = visible()
+    let s = ''
+    if (l.brand) s += at(0, 0) + fit('', 1) + brandMark() + `\x1b[90m ${fit(VERSION, SIDEBAR_W - 7)}\x1b[0m`
+    bar = tabBarLayout(
+      order.flatMap((id) => {
+        const v = views.get(id)
+        return v ? [{ title: v.info.title, tone: paneSignal(v.info).tone, glyph: glyph(v.info, spin), active: id === shown[0], shown: shown.includes(id) }] : []
+      }),
+      l.tabs.w
+    )
+    s += at(l.tabs.x, l.tabs.y) + bar.text
+    // the rule row: under the sidebar, the junction, then each pane's rule
+    if (l.sidebar) s += at(0, 1) + '\x1b[90m' + '─'.repeat(SIDEBAR_W) + '┬\x1b[0m'
+    l.panes.forEach((r, i) => {
+      const v = shown[i] ? views.get(shown[i]) : undefined
+      if (l.panes.length > 1) {
+        const n = order.indexOf(shown[i]) + 1
+        const info = v ? `${n} ${v.info.title} · ${paneDetails(v.info, home, false)}` : ''
+        s += at(r.x, r.y) + ruleLine(r.w, i === 0 ? { from: -1, to: r.w + 1 } : null, info)
+        if (i === 0) s += at(r.x + r.w, r.y) + '\x1b[90m┬\x1b[0m'
+      } else {
+        const span = bar.spans.find((x) => order[x.index] === shown[0])
+        s += at(r.x, r.y) + ruleLine(r.w, span ?? null, v ? paneDetails(v.info, home) : '')
+      }
+    })
+    if (l.sidebar) {
+      side = sidebar({ panes: [...views.values()].map((v) => v.info), order, active: shown[0] ?? null, shown, loops: [...loops.values()], frame: spin, home }, l.sidebar.w, l.sidebar.h)
+      side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line + '\x1b[90m│\x1b[0m'))
+    }
+    return s
+  }
+
+  /** where the terminal's cursor goes: the prompt, else the tab's own cursor if it shows one */
+  function cursor(): string {
+    const l = layout(out.columns || 80, out.rows || 24, split)
+    if (prompt) return at(3 + prompt.label.length + prompt.text.length, l.status.y) + '\x1b[?25h'
+    const main = visible()[0] && views.get(visible()[0])
+    if (!main || menu || help || runsView || main.cursorHidden) return ''
+    const b = main.term.buffer.active
+    return at(l.panes[0].x + Math.min(b.cursorX, l.panes[0].w - 1), l.panes[0].y + 1 + b.cursorY) + '\x1b[?25h'
+  }
+
   function draw(): void {
     frame = null
     if (restored) return
     const cols = out.columns || 80
     const rows = out.rows || 24
     const l = layout(cols, rows, split)
-    let s = '\x1b[?2026h\x1b[?25l'
-    if (l.sidebar) s += drawSidebar(l.sidebar)
+    let s = '\x1b[?2026h\x1b[?25l' + chrome()
     const shown = visible()
-    s += at(l.tabs.x, l.tabs.y) + tabBar(order.flatMap((id) => {
-      const v = views.get(id)
-      return v ? [{ title: v.info.title, tone: paneSignal(v.info).tone, active: id === shown[0], shown: shown.includes(id) }] : []
-    }), l.tabs.w)
-    if (!shown.length) {
-      const r = l.panes[0]
-      const lines = ['No sessions yet.', '', 'Ctrl-b c starts an agent here, Ctrl-b t a shell, or from another terminal:', '  sldev new --agent claude "fix the failing test"']
-      for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + fit(lines[i - 2] ?? '', r.w)
-    }
-    if (runsView) {
-      const first = l.panes[0]
-      const last = l.panes[l.panes.length - 1]
-      s += drawRuns(runsView, { x: first.x, y: first.y, w: last.x + last.w - first.x, h: first.h })
-      s += at(0, l.status.y) + statusLine(cols)
-      out.write(s + '\x1b[?2026l')
-      return
-    }
-    shown.forEach((id, i) => {
-      const v = views.get(id)
-      const r = l.panes[i]
-      if (!v || !r) return
-      s += at(r.x, r.y) + paneHeader(v.info, r.w, i === 0)
-      s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 })
-      if (i === 0 && l.panes[1]) for (let y = 0; y < r.h; y++) s += at(r.x + r.w, r.y + y) + '\x1b[90m│\x1b[0m'
-    })
+    const area: Rect = { x: l.panes[0].x, y: l.panes[0].y + 1, w: l.panes[l.panes.length - 1].x + l.panes[l.panes.length - 1].w - l.panes[0].x, h: l.panes[0].h - 1 }
+    if (runsView) s += drawRuns(runsView, area)
+    else if (!shown.length) s += welcome(area)
+    else
+      shown.forEach((id, i) => {
+        const v = views.get(id)
+        const r = l.panes[i]
+        if (!v || !r) return
+        s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 })
+        if (i === 0 && l.panes[1]) for (let y = 1; y < r.h; y++) s += at(r.x + r.w, r.y + y) + '\x1b[90m│\x1b[0m'
+      })
+    if (menu) s += popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`)
+    else if (help) s += popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Click tabs, + and the sidebar. Shift+drag selects text.')
     s += at(0, l.status.y) + statusLine(cols)
-    const main = shown[0] && views.get(shown[0])
-    if (prompt) s += at(prompt.label.length + prompt.text.length + 1, l.status.y) + '\x1b[?25h'
-    else if (main) {
-      const b = main.term.buffer.active
-      s += at(l.panes[0].x + Math.min(b.cursorX, l.panes[0].w - 1), l.panes[0].y + 1 + b.cursorY) + '\x1b[?25h'
-    }
-    out.write(s + '\x1b[?2026l')
+    out.write(s + cursor() + '\x1b[?2026l')
+    spinning()
   }
 
-  function drawSidebar(r: Rect): string {
-    let s = at(r.x, r.y) + '\x1b[1m' + fit(' sldev', r.w) + '\x1b[0m'
-    const shown = visible()
-    let y = 2
-    order.forEach((id, i) => {
-      const v = views.get(id)
-      if (!v || y + 1 >= r.h) return
-      const sig = paneSignal(v.info)
-      const mark = shown.includes(id) ? '\x1b[7m' : ''
-      s += at(r.x, r.y + y) + mark + ` \x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${mark} ` + fit(`${i + 1} ${v.info.title}`, r.w - 3) + '\x1b[0m'
-      s += at(r.x, r.y + y + 1) + '\x1b[90m' + fit(`   ${v.info.agentName} · ${sig.label}`, r.w) + '\x1b[0m'
-      y += 2
-    })
-    for (; y < r.h; y++) s += at(r.x, r.y + y) + ' '.repeat(r.w)
-    for (let i = 0; i < r.h; i++) s += at(r.x + r.w, r.y + i) + '\x1b[90m│\x1b[0m'
+  /** nothing open yet: what to do, in the pane area */
+  function welcome(r: Rect): string {
+    const lines = [
+      ` ${brandMark()}  \x1b[90mcoding agents side by side\x1b[0m`,
+      '',
+      ` ${ACCENT}^b c\x1b[0m  new tab: an agent or a shell`,
+      ` ${ACCENT}^b t\x1b[0m  a shell here`,
+      ` ${ACCENT}^b ?\x1b[0m  every key`,
+      '',
+      ' \x1b[90mor from another terminal:\x1b[0m',
+      '   sldev new --agent claude "fix the failing test"'
+    ]
+    const top = r.y + Math.max(0, Math.floor((r.h - lines.length) / 3))
+    let s = ''
+    for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + ' '.repeat(r.w)
+    lines.forEach((line, i) => (s += at(r.x + 2, top + i) + line))
     return s
   }
 
+  /** the spinner runs while an agent works, and redraws only the chrome */
+  function spinning(): void {
+    const busy = [...views.values()].some((v) => {
+      const sig = paneSignal(v.info)
+      return sig.tone === 'working' && sig.pulse
+    })
+    if (busy && !spinTimer && !restored)
+      spinTimer = setInterval(() => {
+        spin++
+        if (!frame && !restored) out.write('\x1b[?2026h\x1b[?25l' + chrome() + cursor() + '\x1b[?2026l')
+      }, SPIN_MS)
+    else if (!busy && spinTimer) {
+      clearInterval(spinTimer)
+      spinTimer = null
+    }
+  }
+
   function drawRuns(v: RunsView, r: Rect): string {
-    let s = at(r.x, r.y) + '\x1b[1m' + fit(` Workflows · ${v.cwd}${v.loading ? ' · loading…' : ''}`, r.w) + '\x1b[0m'
+    let s = at(r.x, r.y) + '\x1b[1m' + fit(` Workflows · ${tilde(v.cwd, home)}${v.loading ? ' · loading…' : ''}`, r.w) + '\x1b[0m'
     const lines: string[] = []
     if (v.error) lines.push(`\x1b[31m ${fit(v.error, r.w - 1)}\x1b[0m`)
     else if (!v.runs.length) lines.push(fit(v.loading ? ' Asking GitHub…' : ' No workflow runs yet in this repository.', r.w))
@@ -210,8 +325,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (!v.error)
       v.runs.slice(start, start + rows).forEach((run, i) => {
         const c = runColumns(run, now)
-        const mark = start + i === v.sel ? '\x1b[7m' : ''
-        lines.push(`${mark} \x1b[${TONE_SGR[c.tone]}m●\x1b[0m${mark} ${fit(`${c.label.padEnd(9)} ${c.text}`, r.w - 3)}\x1b[0m`)
+        const focus = start + i === v.sel
+        lines.push(`${focus ? `${ACCENT}▌\x1b[0m` : ' '}\x1b[${TONE_SGR[c.tone]}m●\x1b[0m ${focus ? '\x1b[1m' : ''}${fit(`${c.label.padEnd(9)} ${c.text}`, r.w - 3)}\x1b[0m`)
       })
     for (let i = 0; i < r.h - 1; i++) s += at(r.x, r.y + 1 + i) + (lines[i] ?? ' '.repeat(r.w))
     return s
@@ -308,21 +423,116 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       .finally(schedule)
   }
 
-  function paneHeader(p: PaneInfo, w: number, focused: boolean): string {
-    const sig = paneSignal(p)
-    if (p.shell) return `\x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${focused ? '\x1b[1m' : '\x1b[90m'}${fit(` #${p.id} ${p.title} · ${p.agentName} · ${p.cwd}`, w - 1)}\x1b[0m`
-    const where = p.worktree ? p.worktree.branch : 'in place'
-    const stats = p.stats ? ` · ${p.stats.files} files +${p.stats.insertions} -${p.stats.deletions}` : ''
-    const note = p.notification ? ` · ${p.notification}` : ''
-    // #id is the pane id sldev send/read/kill take; the tab bar numbers positions, for Ctrl-b 1-9
-    const text = ` #${p.id} ${p.title} · ${p.agentName} · ${where}${stats}${note}`
-    return `\x1b[${TONE_SGR[sig.tone]}m●\x1b[0m${focused ? '\x1b[1m' : '\x1b[90m'}${fit(text, w - 1)}\x1b[0m`
+  function statusLine(cols: number): string {
+    if (prompt) return ` ${ACCENT}›\x1b[0m ` + '\x1b[1m' + fit(prompt.label, Math.min(prompt.label.length, cols - 3)) + '\x1b[0m' + fit(prompt.text, Math.max(0, cols - 3 - prompt.label.length))
+    if (prefix) return hints(HINTS, cols, ' \x1b[1;33m^b\x1b[0m ')
+    if (message) return ` \x1b[90m•\x1b[0m ` + fit(message, cols - 3)
+    if (menu) return hints(MENU_HINTS, cols, ' ')
+    if (help) return hints([['any key', 'close']], cols, ' ')
+    if (runsView) return hints(RUNS_HINTS, cols, ' ')
+    return hints(HINTS, cols, ` ${ACCENT}^b\x1b[0m `)
   }
 
-  function statusLine(cols: number): string {
-    if (prompt) return '\x1b[7m' + fit(`${prompt.label}${prompt.text}`, cols) + '\x1b[0m'
-    const text = prefix ? 'Ctrl-b …' : message || (runsView ? RUNS_HELP : HELP)
-    return '\x1b[90m' + fit(` ${text}`, cols) + '\x1b[0m'
+  /** a new tab works where the tab in focus works (its worktree), else where sldev was attached */
+  const newTabCwd = (): string => {
+    const id = visible()[0]
+    return (id && views.get(id)?.info.cwd) || cwd
+  }
+
+  const newShell = (): void => {
+    client
+      .request('new', { shell: true, brief: '', cwd: newTabCwd(), ...paneSize() })
+      .then((p) => started(p, 'shell'))
+      .catch((err: Error) => ((message = err.message), schedule()))
+  }
+
+  const newAgent = (a: AgentDef): void => {
+    const where = newTabCwd()
+    ask(`${a.name}, brief (Enter alone starts it without one): `, (text) => {
+      client
+        .request('new', { agent: a.id, brief: text.trim(), cwd: where, worktree: false, ...paneSize() })
+        .then((p) => started(p, a.name))
+        .catch((err: Error) => ((message = err.message), schedule()))
+    })
+  }
+
+  /** Ctrl-b c or a click on +: a shell, or one of the agents (the ones not installed say how to get them) */
+  const openMenu = (): void => {
+    const agents = allAgents()
+    setInstalledBins(agents.flatMap((a) => [a.bin, ...(a.aliases ?? [])]).filter((b) => findOnPath(b, process.env)))
+    const rows: PopupRow[] = [{ key: 't', text: 'Shell', note: process.platform === 'win32' ? '' : (process.env.SHELL ?? '').split('/').pop() }]
+    const pick: Array<() => void> = [newShell]
+    agents.forEach((a, i) => {
+      const ok = !!installedBin(a)
+      rows.push({ key: i < 9 ? String(i + 1) : '', text: a.name, note: ok ? '' : 'not installed', off: !ok })
+      pick.push(() => (ok ? newAgent(a) : void (message = a.install ? `${a.name} isn't installed: ${a.install}` : `${a.name} isn't installed`)))
+    })
+    menu = { rows, pick, sel: Math.max(0, rows.findIndex((r, i) => i > 0 && !r.off)) }
+    help = false
+    message = ''
+  }
+
+  /** Keys while the New tab popup is open; returns what is left. */
+  function menuKey(s: string): string {
+    const m = menu!
+    const arrow = /^\x1b\[([AB])/.exec(s) ?? /^\x1bO([AB])/.exec(s)
+    if (arrow || s[0] === 'j' || s[0] === 'k') {
+      const up = arrow ? arrow[1] === 'A' : s[0] === 'k'
+      m.sel = Math.max(0, Math.min(m.rows.length - 1, m.sel + (up ? -1 : 1)))
+      return s.slice(arrow ? arrow[0].length : 1)
+    }
+    const c = s[0]
+    if (c === '\x1b' || c === 'q' || c === '\x03') {
+      menu = null
+      return ''
+    }
+    const i = c === '\r' ? m.sel : m.rows.findIndex((r) => r.key === c)
+    if (i >= 0) {
+      menu = null
+      m.pick[i]()
+    }
+    return s.slice(1)
+  }
+
+  /** A click: on a tab or + in the bar, a row of the sidebar, or inside a tab whose program reads the mouse. */
+  function mouse(button: number, x: number, y: number, down: boolean): void {
+    const l = layout(out.columns || 80, out.rows || 24, split)
+    const wheel = (button & 64) !== 0
+    if (!menu && !help && !runsView) {
+      const shown = visible()
+      for (let i = 0; i < l.panes.length; i++) {
+        const r = l.panes[i]
+        const v = shown[i] ? views.get(shown[i]) : undefined
+        if (!v || x < r.x || x >= r.x + r.w || y <= r.y || y >= r.y + r.h) continue
+        const mode = v.term.modes.mouseTrackingMode
+        // a program that doesn't read the mouse gets nothing: a click isn't a key
+        if (mode === 'none' || (mode === 'x10' && (!down || wheel))) return
+        const [px, py] = [x - r.x + 1, y - r.y]
+        const data = v.sgrMouse ? `\x1b[<${button};${px};${py}${down ? 'M' : 'm'}` : px < 223 && py < 223 ? `\x1b[M${String.fromCharCode(32 + (down ? button : 3), 32 + px, 32 + py)}` : ''
+        if (data) void client.request('input', { pane: v.info.id, data }).catch(() => undefined)
+        return
+      }
+    }
+    if (!down || wheel || (button & 3) !== 0) return
+    if (help) return void (help = false)
+    if (menu) return void (menu = null)
+    if (y === l.tabs.y && x >= l.tabs.x) {
+      const bx = x - l.tabs.x
+      if (bar.plus && bx >= bar.plus.from && bx < bar.plus.to) return openMenu()
+      const hit = bar.spans.find((t) => bx >= t.from && bx < t.to)
+      if (hit && order[hit.index]) {
+        if (runsView) closeRuns()
+        focusTab(order[hit.index])
+      }
+      return
+    }
+    if (l.sidebar && x < l.sidebar.x + l.sidebar.w && y >= l.sidebar.y) {
+      const id = side.hits[y - l.sidebar.y]
+      if (id) {
+        if (runsView) closeRuns()
+        focusTab(id)
+      }
+    }
   }
 
   const onEvent = (e: DaemonEvent): void => {
@@ -344,6 +554,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       // the tab that takes the closed one's place comes to the front, as the daemon does
       if (active === e.pane) active = order[Math.min(Math.max(0, at), order.length - 1)] ?? null
       sizeViews()
+      schedule()
+    } else if (e.event === 'loop') {
+      loops.set(e.loop.id, e.loop)
       schedule()
     } else if (e.event === 'notify' && !visible().includes(e.pane)) {
       message = `${e.title}: ${e.body}`
@@ -407,8 +620,13 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   /** Handles the start of `s` and returns what is left. */
   function key(s: string): string {
-    // a prompt, the prefix's next key and the workflows view read keys themselves: decode an encoded one first
-    const w = (prompt || prefix || runsView) && win32Key(s)
+    const m = MOUSE.exec(s)
+    if (m) {
+      mouse(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - 1, m[4] === 'M')
+      return s.slice(m[0].length)
+    }
+    // a prompt, the prefix's next key and the popups read keys themselves: decode an encoded one first
+    const w = (prompt || prefix || runsView || menu || help) && win32Key(s)
     if (w) {
       // a release, or a modifier on its own, leaves the prefix waiting for its key
       let k = w.text
@@ -429,6 +647,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       else if (!/[\x00-\x1f]/.test(ch)) p.text += ch
       return s.slice(ch.length)
     }
+    if (menu && !prefix) return menuKey(s)
+    if (help && !prefix) {
+      help = false
+      // the key that closes it does nothing else, and a sequence (an arrow) goes with it
+      return s[0] === '\x1b' ? '' : s.slice(1)
+    }
     if (runsView && !prefix) return runsKey(s)
     if (prefix) {
       prefix = false
@@ -440,6 +664,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         return s.slice(1)
       }
       if (runsView) closeRuns()
+      menu = null
+      help = false
+      if (c === '?') {
+        help = true
+        return s.slice(1)
+      }
       if (c === 'e' || c === 'v') {
         openEditor(c === 'v')
         return s.slice(1)
@@ -457,23 +687,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       } else if (c === 'd') {
         detach()
         return ''
-      } else if (c === 'c')
-        ask('New pane (agent, then the brief): ', (text) => {
-          const [agent, ...words] = text.trim().split(/\s+/)
-          if (!agent) return
-          client
-            .request('new', { agent, brief: words.join(' '), cwd, worktree: false, ...paneSize() })
-            .then((p) => started(p, 'pane'))
-            .catch((err: Error) => ((message = err.message), schedule()))
-        })
-      else if (c === 't') {
-        // a shell where the tab in focus works (its worktree), else where sldev was attached
-        const where = (id && views.get(id)?.info.cwd) || cwd
-        client
-          .request('new', { shell: true, brief: '', cwd: where, ...paneSize() })
-          .then((p) => started(p, 'shell'))
-          .catch((err: Error) => ((message = err.message), schedule()))
-      } else if (c === ',' && id) {
+      } else if (c === 'c' || c === '+') openMenu()
+      else if (c === 't') newShell()
+      else if (c === ',' && id) {
         const info = views.get(id)?.info
         ask(
           `Rename tab ${id}: `,
@@ -500,10 +716,14 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const enc = WIN32_PREFIX.exec(s)
     const useEnc = !!enc && (plain < 0 || enc.index < plain)
     const at = useEnc ? enc!.index : plain
-    const typed = at < 0 ? s : s.slice(0, at)
+    // a mouse report before the prefix: what comes before it goes to the tab, the report is read next
+    const click = s.indexOf('\x1b[<')
+    const cut = click >= 0 && (at < 0 || click < at) ? click : at
+    const typed = cut < 0 ? s : s.slice(0, cut)
     const id = visible()[0]
     if (typed && id) void client.request('input', { pane: id, data: typed }).catch(() => undefined)
-    if (at < 0) return ''
+    if (cut < 0) return ''
+    if (cut === click) return s.slice(click)
     prefix = true
     return s.slice(at + (useEnc ? enc![0].length : 1))
   }
@@ -512,11 +732,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (restored) return
     restored = true
     if (frame) clearTimeout(frame)
+    if (spinTimer) clearInterval(spinTimer)
     if (runsView) clearTimeout(runsView.timer)
     input.off('data', onKey)
     if (input.isTTY) input.setRawMode?.(false)
     input.pause()
-    out.write('\x1b[0m\x1b[?25h\x1b[?1049l')
+    out.write('\x1b[?1006l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l')
   }
 
   function detach(): void {
@@ -532,8 +753,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     return { cols: Math.max(20, r.w), rows: Math.max(5, r.h - 1) }
   }
 
-  const panes = await client.request('attach', { cols: out.columns || 80, rows: out.rows || 24 })
-  const saved = await client.request('tabs', {}).catch(() => null)
+  // a daemon that doesn't answer is an error, never a blank screen that waits forever
+  const panes = await client.request('attach', { cols: out.columns || 80, rows: out.rows || 24 }, 10_000)
+  const saved = await client.request('tabs', {}, 10_000).catch(() => null)
+  for (const l of await client.request('loops', {}, 10_000).catch(() => [])) loops.set(l.id, l)
   if (saved) {
     order = saved.order.filter((id) => panes.some((p) => p.id === id))
     active = saved.active
@@ -548,7 +771,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     out.write('The sldev daemon stopped.\n')
     resolveExit()
   })
-  out.write('\x1b[?1049h\x1b[2J')
+  // the alternate screen, and clicks reported (press and release, SGR form); Shift+drag still selects text
+  out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1006h')
   if (input.isTTY) input.setRawMode?.(true)
   input.resume()
   input.on('data', onKey)

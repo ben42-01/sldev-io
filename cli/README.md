@@ -71,30 +71,45 @@ sldev stop                # stops the daemon and every agent in it
 
 ### Tabs
 
-Attached, every session (an agent or a plain shell) is a tab in the bar at the top. Its marker has the
-agent's status colour: green working, amber needs you, blue/teal ready or done, red failed, grey for a
-shell, so a tab in the background that needs you shows. On terminals 110 columns or wider a sidebar also
-lists each session's agent and status in words. Keys go to the tab in front; Ctrl-b is the prefix:
+Attached, every session (an agent or a plain shell) is a tab along the top, numbered `1 2 3` with a `+` at the
+end for a new one. Each tab's marker is its state: a spinner while the agent works, an amber dot when it needs you,
+blue when it's ready for you, `✓` done, `✕` failed, `›` a shell. A tab in the background that needs you stands out.
+The line under the tabs marks the one in front and says who runs it, where (its branch) and its diff stat.
+
+On terminals 100 columns or wider a sidebar groups the tabs by project (the repo they work in), each group with its
+most urgent state, and each tab with its agent and state in words, or a shell's folder. Its foot counts the agents
+by state and shows any repeat loops. Nothing is drawn in reverse video: the tab in front is bold with an accent bar.
+
+Keys go to the tab in front; Ctrl-b is the prefix:
 
 | Ctrl-b then | does |
 | --- | --- |
-| `n` / `p` (or Tab, `o`) | next / previous tab |
-| `1`–`9` | that tab |
+| `c` | a new tab: pick a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one |
 | `t` | a new shell tab (`$SHELL`; PowerShell on Windows) in the folder of the tab in front |
-| `c` | a new agent tab: type the agent, then the brief (`codex fix the flaky test`) |
+| `1`–`9` | that tab |
+| `n` / `p` (or Tab, `o`) | next / previous tab |
+| `<` / `>` | move the tab left / right |
 | `,` | rename the tab |
 | `x` | close the tab (asks first while its agent or shell still runs) |
-| `<` / `>` | move the tab left / right |
 | `s` | split: the tab in front and the next one side by side (needs 60 columns) |
 | `w` / `e` / `v` | workflows, the tab's folder in your editor, its changed files |
+| `?` | every key |
 | `d` | detach; everything keeps running |
 | Ctrl-b | send a Ctrl-b to the tab |
+
+Tabs, `+` and the sidebar's rows take clicks. A program in a tab that reads the mouse gets its clicks and wheel;
+hold Shift while dragging to select text.
 
 The daemon keeps the tabs: `sldev` attaches again to the same order, names, tab in front and split, and
 every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell tabs show in `sldev ls`
 and take `send`, `read` and `kill` like agents, but they aren't missions: the sldev MCP tools don't list
-them, and `sldev wait` without a pane waits for agents only. Tabs can't be clicked: the TUI reads only
-the keyboard.
+them, and `sldev wait` without a pane waits for agents only.
+
+### After an upgrade
+
+The daemon from the sldev you had before may still be running. `sldev` checks its version: one with nothing
+running in it is replaced on the spot; one still running agents is left alone (stopping it would stop them), and
+`sldev` says so. Let them finish, then `sldev stop` and `sldev` again.
 
 If a key does nothing, start `sldev` with `SLDEV_DEBUG_KEYS=<file>` set: each chunk the terminal sends is logged
 there (with the tab in front), which shows how your terminal encodes it. Windows Terminal's win32-input-mode
