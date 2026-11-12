@@ -98,9 +98,7 @@ model Post {
   await h.until(() => h.js(`!!document.querySelector('.diagram-side')`), 3000)
   const side = await h.js(`document.querySelector('.diagram-side').innerText`)
   h.expect(/Imports from[\s\S]*src\/lib/i.test(side) && /Used by[\s\S]*src\/ui/i.test(side), 'side panel lists what src/api imports and who uses it')
-  for (let i = 0; i < 5; i++) { h.log('DBG', await h.js(`!!document.querySelector('.diagram-side') + ' ' + document.querySelectorAll('.dg-node').length + ' ' + document.querySelector('.board-title .small').textContent`)); await h.wait(100) }
-  await h.wait(300)
-  const fitted = await h.js(`(() => { const c = document.querySelector('.diagram-canvas').getBoundingClientRect(); return [...document.querySelectorAll('.dg-node')].every(n => n.getBoundingClientRect().right <= c.right + 1) })()`)
+  const fitted = await h.until(() => h.js(`(() => { const c = document.querySelector('.diagram-canvas').getBoundingClientRect(); return !!document.querySelector('.diagram-side') && [...document.querySelectorAll('.dg-node')].every(n => n.getBoundingClientRect().right <= c.right + 1) })()`), 3000)
   h.expect(fitted, 'the map refits when the side panel narrows the canvas')
   await h.shot('02-code-selected')
 
