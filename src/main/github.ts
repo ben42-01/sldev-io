@@ -1,8 +1,9 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
-import type { GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoRelease, RepoStats, StatsPart } from '@shared/types'
-import { run, status as gitStatus } from './git'
+import { prSearch, rangeFrom } from '@shared/gitStats'
+import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
+import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
 
@@ -206,4 +207,19 @@ export async function repoStats(cwd: string): Promise<RepoStats> {
     )
   ])
   return { ...local, github, release, runs, branchPrs }
+}
+
+/**
+ * The activity charts' data for the last `days` days: commits from git (always tried) and pull requests through
+ * gh (read-only `pr list`; fails on its own, with the reason, when gh is missing or logged out).
+ */
+export async function repoActivity(cwd: string, days: number): Promise<RepoActivity> {
+  const from = rangeFrom(days, Date.now())
+  const commitsP = part(() => activityCommits(cwd, from))
+  const prs = await part<ActivityPr[]>(async () => {
+    const problem = await ghProblem(cwd)
+    if (problem) throw new Error(problem)
+    return ghJson(['pr', 'list', '--state', 'all', '--limit', '1000', '--search', prSearch(from), '--json', 'number,createdAt,mergedAt,closedAt'], cwd, [])
+  })
+  return { days, from, commits: await commitsP, prs }
 }

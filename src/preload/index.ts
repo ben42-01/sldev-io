@@ -34,6 +34,7 @@ import type {
   PtyCreateOptions,
   PtyInfo,
   RemoteEntry,
+  RepoActivity,
   RepoStats,
   RuntimeDef,
   SetupReport,
@@ -207,7 +208,9 @@ const api = {
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
-    stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd)
+    stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),
+    /** commits (git) and pull requests (gh) of the last `days` days, for the stats panel's charts */
+    activity: (cwd: string, days: number): Promise<RepoActivity> => ipcRenderer.invoke('gh:activity', cwd, days)
   },
   notes: {
     list: (scope: string | null): Promise<NoteMeta[]> => ipcRenderer.invoke('notes:list', scope),

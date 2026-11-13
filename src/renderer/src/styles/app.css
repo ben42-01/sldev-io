@@ -8381,3 +8381,105 @@ select:disabled {
   font-size: 10.5px;
   color: var(--fg-muted);
 }
+
+/* Activity charts in the GitHub stats panel (dock/ActivityCharts.tsx): neutral bars, merges in the review tone */
+.ghs-activity {
+  margin-top: 8px;
+}
+.ghs-activity-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.ghs-activity-head h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+.ghs-activity .dash-card-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.ghs-legend {
+  margin-left: auto;
+}
+.ghs-sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-xs);
+}
+.ghs-sw.commit,
+.ghs-sw.opened,
+.ghs-bar.commit,
+.ghs-bar.opened {
+  background: var(--fg-subtle);
+  fill: var(--fg-subtle);
+}
+.ghs-sw.merge,
+.ghs-sw.merged,
+.ghs-bar.merge,
+.ghs-bar.merged {
+  background: var(--status-review);
+  fill: var(--status-review);
+}
+.ghs-chart {
+  min-width: 0;
+  overflow: hidden;
+}
+.ghs-chart svg {
+  display: block;
+}
+.ghs-readout {
+  min-height: 18px;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.ghs-readout b {
+  color: var(--fg);
+  font-weight: 500;
+  margin-right: 4px;
+}
+.ghs-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.ghs-tick {
+  fill: var(--fg-subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ghs-col {
+  fill: var(--tint);
+}
+.ghs-hit {
+  fill: transparent;
+}
+.ghs-authors {
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghs-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.ghs-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+.ghs-activity .seg {
+  flex: none;
+}
+.ghs-activity .seg button {
+  white-space: nowrap;
+}

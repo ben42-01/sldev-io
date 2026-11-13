@@ -171,6 +171,12 @@ const privacy: LegalPage = {
         to GitHub (or wherever your remote is), signed in as you; nothing goes to us.
       </p>
       <p>
+        The GitHub stats panel asks GitHub through your GitHub CLI for your repository's open pull requests and issues, latest release,
+        recent CI runs and the pull requests opened or merged in the range its activity chart shows. It asks when the panel is on screen,
+        again every minute while it stays there, and when you press Refresh or change the range; never while it is hidden. That goes from
+        your computer to GitHub, signed in as you; nothing goes to us.
+      </p>
+      <p>
         The free sldev CLI makes no network requests of its own. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
         attached) asks GitHub for your repository's recent workflow runs through your GitHub CLI when you open it, and every 15 seconds
         while it stays open; rerunning a run or opening it in the browser goes the same way. Nothing goes to us.

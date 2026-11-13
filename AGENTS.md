@@ -70,6 +70,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
                   review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing),
+                  gitStats.ts (the GitHub stats panel's activity charts: commits and PRs per local day/week),
                   sldevSkills.ts (sldev's own skills: their SKILL.md texts and versions, and the mission/story drafts agents leave in .sldev/drafts),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
                   theme.ts (Settings → Appearance: theme resolution, window colours, interface zoom)
