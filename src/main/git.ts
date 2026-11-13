@@ -104,6 +104,30 @@ export async function remoteBranches(cwd: string): Promise<string[]> {
   return parseRemoteBranches(await ok(['for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/remotes'], cwd))
 }
 
+/**
+ * Where new work on `branch` starts: its upstream ("origin/master") when the local branch is only behind
+ * it, after fetching that remote, so a story started after an earlier one's PR merged on GitHub builds on
+ * that work instead of on a stale local branch. A branch with commits of its own (ahead or diverged), one
+ * without an upstream, or a fetch that fails (offline) stays as it is. The user's checkout is never touched.
+ */
+export async function freshBase(cwd: string, branch: string): Promise<string> {
+  if (!branch || branch.startsWith('-')) return branch
+  const upstream = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`], cwd)).stdout.trim()
+  if (!upstream) return branch
+  const remote = (await git(['config', '--get', `branch.${branch}.remote`], cwd)).stdout.trim()
+  if (remote && remote !== '.') await git(['fetch', '--quiet', '--prune', remote], cwd, 60000)
+  const [local, up] = await Promise.all([git(['rev-parse', branch], cwd), git(['rev-parse', upstream], cwd)])
+  if (local.code !== 0 || up.code !== 0 || local.stdout.trim() === up.stdout.trim()) return branch
+  return (await git(['merge-base', '--is-ancestor', branch, upstream], cwd)).code === 0 ? upstream : branch
+}
+
+/** A pull request goes into a branch on GitHub: "origin/master" (work started from the upstream) is "master" there. */
+async function prBase(cwd: string, base: string): Promise<string> {
+  const slash = base.indexOf('/')
+  if (slash < 0 || (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${base}`], cwd)).code === 0) return base
+  return (await git(['rev-parse', '--verify', '--quiet', `refs/remotes/${base}`], cwd)).code === 0 ? base.slice(slash + 1) : base
+}
+
 /** Create an isolated worktree for a mission next to the repo: ../.sldev-worktrees/<repo>/<slug> */
 /**
  * `name` is the branch: "feature/dark-mode" as it is, or a bare slug, which goes under sldev/ as before.
@@ -186,7 +210,7 @@ export async function merge(repo: string, branch: string): Promise<string> {
 
 export async function pushAndCreatePr(cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> {
   await ok(['push', '-u', 'origin', branch], cwd)
-  const r = await run('gh', ['pr', 'create', '--head', branch, '--base', base, '--title', title, ...(body ? ['--body', body] : ['--fill'])], cwd, 60000)
+  const r = await run('gh', ['pr', 'create', '--head', branch, '--base', await prBase(cwd, base), '--title', title, ...(body ? ['--body', body] : ['--fill'])], cwd, 60000)
   if (r.code !== 0) throw new Error(r.stderr.trim() || 'gh pr create failed')
   return r.stdout.trim().split('\n').pop() ?? ''
 }

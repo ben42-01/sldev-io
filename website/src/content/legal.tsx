@@ -166,8 +166,9 @@ const privacy: LegalPage = {
       </p>
       <p>
         The work board asks GitHub through your GitHub CLI for your open issues when you import them, and, while the app is open, about
-        every five minutes whether the pull request of a card waiting for review was merged. That goes from your computer to GitHub,
-        signed in as you; nothing goes to us.
+        every five minutes whether the pull request of a card waiting for review was merged. Before a card's work starts, it runs git
+        fetch against your branch's remote, so the work builds on pull requests that were already merged. That goes from your computer
+        to GitHub (or wherever your remote is), signed in as you; nothing goes to us.
       </p>
       <p>
         The free sldev CLI makes no network requests of its own. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when

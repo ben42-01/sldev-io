@@ -377,7 +377,10 @@ export async function startItem(id: string): Promise<void> {
   updateItem(id, { column: 'progress', order: now(), state: 'working', note: undefined, started: { type: work.type === 'recipe' ? 'run' : 'mission', id: '', at: now() } })
   // an item that can't start goes back to Backlog with the reason, or pick-up would retry it every tick
   try {
-    const started = await startAction(i.root, work, { intent: (text) => [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n'), title: `#${i.key} ${i.title}`, issue: i.issue?.number })
+    // cards build on each other: start from the upstream when an earlier card's PR merged there and the local branch is behind
+    const branch = await window.api.git.branch(i.root).catch(() => null)
+    const base = branch ? await window.api.git.freshBase(i.root, branch).catch(() => branch) : undefined
+    const started = await startAction(i.root, work, { intent: (text) => [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n'), title: `#${i.key} ${i.title}`, issue: i.issue?.number, base })
     if ('error' in started) updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: started.error })
     else updateItem(id, { started: { type: started.type, id: started.id, at: now() }, note: undefined })
   } catch (e) {

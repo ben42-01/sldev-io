@@ -239,6 +239,7 @@ function registerIpc(): void {
 
   // git
   ipcMain.handle('git:branch', (_e, cwd: string) => git.gitBranch(cwd))
+  ipcMain.handle('git:freshBase', (_e, cwd: string, branch: string) => git.freshBase(cwd, branch))
   ipcMain.handle('git:head', (_e, cwd: string) => git.head(cwd))
   ipcMain.handle('git:isRepo', (_e, cwd: string) => git.isRepo(cwd))
   ipcMain.handle('git:branches', (_e, cwd: string) => git.branches(cwd))

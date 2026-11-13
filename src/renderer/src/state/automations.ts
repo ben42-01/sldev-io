@@ -200,6 +200,7 @@ export async function startAction(root: string, action: Action, ctx: StartContex
     root,
     options: { agent: agent.id, permissionMode: kind.readOnly ? agent.readOnlyMode : undefined },
     worktree: kind.worktree && repo,
+    base: ctx.base,
     kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly }
   })
   return { type: 'mission', id: m.id, note: `Started a mission (${kind.name})` }
