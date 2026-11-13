@@ -3,6 +3,8 @@
 // Branches: create (an invalid name gets a hint), switch, a dirty tree refuses to switch and changes nothing.
 // Worktrees: listed with the main checkout marked, created by hand (new and existing branch), blocked from
 // removal while a mission runs in one, removed through the confirm flow, and a gone folder pruned.
+// GitHub stats panel: from the palette with gh logged out and missing (local tiles + Set up gh), then from the
+// Git view header with gh logged in (every tile, CI runs in status tones); it reads only while it's on screen.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -272,4 +274,59 @@ async function worktrees(h, git, tmp) {
   h.expect(!git(h.fixture, 'worktree', 'list').includes('already-there'), 'and from git')
   list = await rows()
   h.expect(list.length === 1 && list[0].main, 'back to the main checkout only')
+
+  // ── GitHub stats panel ──
+  const stats = (sel) => h.js(`document.querySelector('[data-testid="github-stats"] ${sel}')?.textContent ?? ''`)
+  const ghLog = path.join(tmp, 'gh-calls.log')
+  const ghCalls = () => (fs.existsSync(ghLog) ? fs.readFileSync(ghLog, 'utf8') : '')
+
+  // gh installed but logged out (the fake's default): local tiles, and a hint to set gh up
+  h.key('P', ['control', 'shift'])
+  await h.wait(400)
+  h.type('github stats')
+  await h.wait(300)
+  h.expect(await h.js(`document.querySelector('.palette .palette-item')?.textContent.includes('GitHub stats')`), 'the palette offers Git: GitHub stats')
+  h.key('Enter')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-testid="ghs-branch"]')`), 10000), 'the stats panel opens from the palette')
+  h.expect((await stats('[data-testid="ghs-setup"]')).includes('gh auth login'), `logged out: asks to log in (${await stats('[data-testid="ghs-setup"]')})`)
+  h.expect((await stats('[data-testid="ghs-branch"] b')) === 'main', 'the branch tile reads git')
+  h.expect((await stats('[data-testid="ghs-commit"]')).includes('local work'), 'the last commit reads git')
+  h.expect(!(await h.js(`!!document.querySelector('[data-testid="ghs-prs"], [data-testid="ghs-runs"]')`)), 'no GitHub tiles without gh')
+  await h.wait(300)
+  await h.shot('10-stats-logged-out')
+
+  // gh not installed: same local tiles, the hint says so
+  process.env.FAKE_GH_MISSING = '1'
+  await h.click('[data-testid="github-stats"] .ghs-head [aria-label="Refresh"]')
+  h.expect(await h.until(async () => (await stats('[data-testid="ghs-setup"]')).includes('not installed'), 8000), `gh missing: says it isn't installed (${await stats('[data-testid="ghs-setup"]')})`)
+  h.expect((await stats('[data-testid="ghs-branch"] b')) === 'main', 'and still shows the branch')
+  await h.shot('11-stats-no-gh')
+
+  // Set up gh opens the setup check; the stats tab is hidden behind it and reads nothing
+  await h.click('[data-testid="ghs-setup"] .btn', 'Set up gh')
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.dv-tab.dv-active-tab')].some(t => t.textContent.includes('Setup'))`), 5000), 'Set up gh opens the setup check')
+  delete process.env.FAKE_GH_MISSING
+  process.env.FAKE_GH_AUTHED = '1'
+  process.env.FAKE_GH_LOG = ghLog
+  await h.wait(2500)
+  h.expect(!ghCalls().includes('release list'), 'a hidden stats tab asks GitHub nothing')
+
+  // logged in, opened from the Git view header: every tile, and it reads again on show
+  if (!(await h.js(`!!document.querySelector('[data-testid="git-view"]')`))) await h.click('.activity-btn[aria-label="Git"]')
+  await h.until(() => h.js(`!!document.querySelector('[data-testid="git-view"]')`), 5000)
+  h.expect(await h.click('.sidebar-actions [aria-label="GitHub stats"]'), 'the Git view header has a GitHub stats button')
+  h.expect(await h.until(async () => (await stats('[data-testid="ghs-prs"] b')) === '4', 10000), `open PRs tile (${await stats('[data-testid="ghs-prs"]')})`)
+  h.expect(ghCalls().includes('release list'), 'showing the tab read GitHub again')
+  h.expect((await stats('[data-testid="ghs-issues"] b')) === '17', 'open issues tile')
+  h.expect((await stats('[data-testid="ghs-release"] b')) === 'v2.3.0', 'latest release tile')
+  h.expect((await stats('[data-testid="ghs-prs"]')).includes('2 PRs for main'), "counts this branch's PRs")
+  h.expect((await stats('.ghs-repo')).includes('acme/shop'), 'names the repo')
+  h.expect(!(await h.js(`!!document.querySelector('[data-testid="ghs-setup"]')`)), 'no setup hint once gh works')
+  const tones = await h.js(`[...document.querySelectorAll('[data-testid="ghs-runs"] .ghs-run > .sdot')].map(d => [...d.classList].find(c => c.startsWith('tone-')))`)
+  h.expect(JSON.stringify(tones) === JSON.stringify(['tone-working', 'tone-error', 'tone-done']), `CI runs in status tones (${tones})`)
+  h.expect((await stats('[data-testid="ghs-branch-prs"]')).includes('Draft'), 'a draft PR is marked')
+  await h.wait(300)
+  await h.shot('12-stats')
+  delete process.env.FAKE_GH_AUTHED
+  delete process.env.FAKE_GH_LOG
 }

@@ -2,6 +2,9 @@
 # Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
 # FAKE_GH_AUTHED=1 (a scenario's env) logs it in, with a repo, workflows and runs for the Workflows view.
 # FAKE_GH_NO_WORKFLOWS=1 adds a repo without Actions: real gh prints nothing for `workflow list --json`, and [] for runs.
+# FAKE_GH_MISSING=1 acts like gh isn't installed. FAKE_GH_LOG=<file> appends every call (one per line).
+[ -n "$FAKE_GH_LOG" ] && echo "$*" >> "$FAKE_GH_LOG"
+if [ -n "$FAKE_GH_MISSING" ]; then echo "sh: 1: gh: not found" >&2; exit 127; fi
 if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
   case "$1 $2" in
     "workflow list") exit 0 ;;
@@ -11,13 +14,20 @@ fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;
-    "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"}}'; exit 0 ;;
+    "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"},"stargazerCount":128,"forkCount":9,"issues":{"totalCount":17},"pullRequests":{"totalCount":4}}'; exit 0 ;;
+    "release list") echo '[{"tagName":"v2.3.0","name":"Spring","publishedAt":"2026-11-01T09:00:00Z","isPrerelease":false}]'; exit 0 ;;
+    "pr list") echo '[{"number":128,"title":"Rate limit the API","url":"https://github.com/acme/shop/pull/128","isDraft":false},{"number":131,"title":"Try a new cache","url":"https://github.com/acme/shop/pull/131","isDraft":true}]'; exit 0 ;;
     "workflow list")
       printf '['
       for i in $(seq 1 24); do printf '{"id":%d,"name":"Job %02d","path":".github/workflows/job%d.yml","state":"active"},' "$((100 + i))" "$i" "$i"; done
       echo '{"id":1,"name":"Deploy","path":".github/workflows/deploy.yml","state":"active"}]'
       exit 0 ;;
     "run list")
+      # the stats panel asks for the last 3 runs on one branch: one of each tone
+      case " $* " in *" --branch "*)
+        echo '[{"databaseId":701,"displayTitle":"Rate limit the API","workflowName":"CI","status":"in_progress","conclusion":"","headBranch":"main","event":"push","createdAt":"2026-11-13T10:00:00Z","url":"https://github.com/acme/shop/actions/runs/701","number":88},{"databaseId":700,"displayTitle":"Fix flaky login test","workflowName":"CI","status":"completed","conclusion":"failure","headBranch":"main","event":"push","createdAt":"2026-11-12T16:00:00Z","url":"https://github.com/acme/shop/actions/runs/700","number":87},{"databaseId":699,"displayTitle":"Bump deps","workflowName":"CI","status":"completed","conclusion":"success","headBranch":"main","event":"push","createdAt":"2026-11-12T09:00:00Z","url":"https://github.com/acme/shop/actions/runs/699","number":86}]'
+        exit 0 ;;
+      esac
       printf '['
       for i in $(seq 1 29); do printf '{"databaseId":%d,"displayTitle":"Commit %d","workflowName":"CI","status":"completed","conclusion":"%s","headBranch":"main","event":"push","createdAt":"2026-01-02T10:00:00Z","url":"https://github.com/acme/shop/actions/runs/%d","number":%d},' "$((500 + i))" "$i" "$([ $((i % 5)) -eq 0 ] && echo failure || echo success)" "$((500 + i))" "$i"; done
       echo '{"databaseId":999,"displayTitle":"Deploy to staging","workflowName":"Deploy","status":"in_progress","conclusion":"","headBranch":"main","event":"workflow_dispatch","createdAt":"2026-01-02T11:00:00Z","url":"https://github.com/acme/shop/actions/runs/999","number":212}]'

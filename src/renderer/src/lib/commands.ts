@@ -21,6 +21,7 @@ import { openNewMission } from '../components/MissionsView'
 import { openNewRun } from '../components/FactoryView'
 import { openRecipes } from '../dock/RecipesPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
+import { openGitHubStats } from '../dock/GitHubStatsPanel'
 import { openRecap } from '../components/RecapDialog'
 import { gitFetch, gitPull } from '../state/git'
 
@@ -233,6 +234,7 @@ export function staticCommands(): Command[] {
     { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
     { id: 'git.fetch', category: 'Git', title: 'Fetch (all remotes)', run: () => (showView('git'), void gitFetch()) },
+    { id: 'git.stats', category: 'Git', title: 'GitHub stats (PRs, issues, releases, CI)', run: openGitHubStats },
     { id: 'git.pull', category: 'Git', title: 'Pull (fast-forward only)', run: () => (showView('git'), void gitPull()) },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },

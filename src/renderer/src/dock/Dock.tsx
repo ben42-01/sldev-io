@@ -16,6 +16,7 @@ import { DashboardPanel } from './DashboardPanel'
 import { WhatsNewPanel } from './WhatsNewPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { DiagramPanel } from './DiagramPanel'
+import { GitHubStatsPanel } from './GitHubStatsPanel'
 import { missions } from '../state/missions'
 import { Welcome } from './Welcome'
 import { applyTabLayout, onPanelRemoved, openTerminal, setDockApi } from './dockApi'
@@ -32,7 +33,7 @@ const DOCK_THEMES: Record<'dark' | 'light', DockviewTheme> = {
   dark: { name: 'sldev', className: 'dockview-theme-sldev', colorScheme: 'dark', gap: 0 },
   light: { name: 'sldev-light', className: 'dockview-theme-sldev', colorScheme: 'light', gap: 0 }
 }
-const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel, board: BoardPanel }
+const components = { terminal: TerminalPanel, diff: DiffPanel, note: NotePanel, missions: MissionControlPanel, preview: PreviewPanel, settings: SettingsPanel, setup: SetupPanel, pipeline: PipelinePanel, recipes: RecipesPanel, dashboard: DashboardPanel, 'whats-new': WhatsNewPanel, agents: AgentsPanel, diagram: DiagramPanel, board: BoardPanel, 'github-stats': GitHubStatsPanel }
 
 /** Default tab plus a status dot for panels running a runtime, task or mission. */
 function Tab(props: IDockviewPanelHeaderProps): React.JSX.Element {
