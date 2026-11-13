@@ -486,6 +486,61 @@ export interface GhRun {
   number: number
 }
 
+/** One part of RepoStats: its value, or why it couldn't be read. Parts fail on their own. */
+export interface StatsPart<T> {
+  /** null when the part failed (see error) or there is nothing (no commits, no releases) */
+  value: T | null
+  error?: string
+}
+
+export interface RepoCommit {
+  sha: string
+  short: string
+  subject: string
+  author: string
+  /** ISO 8601, author date */
+  date: string
+}
+
+export interface RepoGithub {
+  /** owner/name */
+  repo: string
+  url: string
+  defaultBranch: string | null
+  stars: number
+  forks: number
+  openIssues: number
+  openPrs: number
+}
+
+export interface RepoRelease {
+  tag: string
+  name: string
+  publishedAt: string
+  prerelease: boolean
+}
+
+export interface RepoBranchPr {
+  number: number
+  title: string
+  url: string
+  isDraft: boolean
+}
+
+/** What scripts/gh-stats.sh shows, as data: local git parts and GitHub parts read through gh (read-only). */
+export interface RepoStats {
+  status: StatsPart<GitStatus>
+  lastCommit: StatsPart<RepoCommit>
+  /** gh can't be used at all (not installed, not logged in); every GitHub part then carries the same error */
+  githubError?: string
+  github: StatsPart<RepoGithub>
+  release: StatsPart<RepoRelease>
+  /** the last workflow runs on the current branch (all branches when HEAD is detached) */
+  runs: StatsPart<GhRun[]>
+  /** open pull requests whose head is the current branch; [] when detached */
+  branchPrs: StatsPart<RepoBranchPr[]>
+}
+
 export interface GhIssue {
   number: number
   title: string

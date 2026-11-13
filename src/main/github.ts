@@ -1,8 +1,8 @@
 import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
-import type { GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
-import { run } from './git'
+import type { GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoRelease, RepoStats, StatsPart } from '@shared/types'
+import { run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
 
@@ -18,12 +18,16 @@ async function ghJson<T>(args: string[], cwd: string, empty?: T): Promise<T> {
   }
 }
 
-export async function repoInfo(cwd: string): Promise<GhRepoInfo> {
+/** Why gh can't be used at all, or null when it is installed and logged in. */
+async function ghProblem(cwd: string): Promise<string | null> {
   const auth = await gh(['auth', 'status'], cwd)
-  if (auth.code !== 0) {
-    const missing = /ENOENT|not found/i.test(auth.stderr)
-    return { authed: false, repo: null, url: null, defaultBranch: null, error: missing ? 'The GitHub CLI (gh) is not installed.' : 'Not logged in to GitHub. Run `gh auth login`.' }
-  }
+  if (auth.code === 0) return null
+  return /ENOENT|not found/i.test(auth.stderr) ? 'The GitHub CLI (gh) is not installed.' : 'Not logged in to GitHub. Run `gh auth login`.'
+}
+
+export async function repoInfo(cwd: string): Promise<GhRepoInfo> {
+  const problem = await ghProblem(cwd)
+  if (problem) return { authed: false, repo: null, url: null, defaultBranch: null, error: problem }
   try {
     const r = await ghJson<{ nameWithOwner: string; url: string; defaultBranchRef: { name: string } | null }>(['repo', 'view', '--json', 'nameWithOwner,url,defaultBranchRef'], cwd)
     return { authed: true, repo: r.nameWithOwner, url: r.url, defaultBranch: r.defaultBranchRef?.name ?? null }
@@ -34,8 +38,10 @@ export async function repoInfo(cwd: string): Promise<GhRepoInfo> {
 
 export const listWorkflows = (cwd: string): Promise<GhWorkflow[]> => ghJson(['workflow', 'list', '--all', '--json', 'id,name,path,state'], cwd, [])
 
+const RUN_FIELDS = 'databaseId,displayTitle,workflowName,status,conclusion,headBranch,event,createdAt,url,number'
+
 export const listRuns = (cwd: string, workflow?: string): Promise<GhRun[]> =>
-  ghJson(['run', 'list', '--limit', '30', ...(workflow ? ['--workflow', workflow] : []), '--json', 'databaseId,displayTitle,workflowName,status,conclusion,headBranch,event,createdAt,url,number'], cwd, [])
+  ghJson(['run', 'list', '--limit', '30', ...(workflow ? ['--workflow', workflow] : []), '--json', RUN_FIELDS], cwd, [])
 
 /** Inputs declared under `on.workflow_dispatch.inputs` in the local workflow file. null = not dispatchable. */
 export async function workflowInputs(cwd: string, path: string): Promise<GhWorkflowInput[] | null> {
@@ -132,4 +138,72 @@ export async function prComments(cwd: string, n: number): Promise<GhPrComment[]>
     ...view.comments.map((c) => ({ id: `comment-${c.id}`, author: who(c.author), body: c.body, createdAt: c.createdAt, url: c.url })),
     ...lines.map((c) => ({ id: `line-${c.id}`, author: who(c.user), body: c.body, createdAt: c.created_at, url: c.html_url, path: c.path, line: c.line ?? c.original_line ?? undefined }))
   ]
+}
+
+async function part<T>(work: () => Promise<T | null>): Promise<StatsPart<T>> {
+  try {
+    return { value: await work() }
+  } catch (e) {
+    return { value: null, error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+async function lastCommit(cwd: string): Promise<RepoCommit | null> {
+  const r = await run('git', ['log', '-1', '--format=%H%x00%h%x00%s%x00%an%x00%aI'], cwd)
+  // a repository without commits has nothing to show, which isn't an error
+  if (r.code !== 0) {
+    if (/does not have any commits|bad default revision/i.test(r.stderr)) return null
+    throw new Error(r.stderr.trim() || 'git log failed')
+  }
+  const [sha, short, subject, author, date] = r.stdout.replace(/\n$/, '').split('\0')
+  return sha ? { sha, short, subject, author, date } : null
+}
+
+/**
+ * The data of scripts/gh-stats.sh as JSON. Local parts come from git and are always tried; the GitHub
+ * parts run in parallel through gh, each failing on its own. Only read-only gh commands: auth status,
+ * repo view, release list, run list, pr list.
+ */
+export async function repoStats(cwd: string): Promise<RepoStats> {
+  const statusP = part(() => gitStatus(cwd))
+  const commitP = part(() => lastCommit(cwd))
+  const problem = await ghProblem(cwd)
+  const status = await statusP
+  const branch = status.value?.branch ?? null
+  const local = { status, lastCommit: await commitP }
+  if (problem) {
+    const failed = { value: null, error: problem }
+    return { ...local, githubError: problem, github: failed, release: failed, runs: failed, branchPrs: failed }
+  }
+  const [github, release, runs, branchPrs] = await Promise.all([
+    part<RepoGithub>(async () => {
+      const r = await ghJson<{ nameWithOwner: string; url: string; defaultBranchRef: { name: string } | null; stargazerCount: number; forkCount: number; issues: { totalCount: number }; pullRequests: { totalCount: number } }>(
+        ['repo', 'view', '--json', 'nameWithOwner,url,defaultBranchRef,stargazerCount,forkCount,issues,pullRequests'],
+        cwd
+      )
+      return {
+        repo: r.nameWithOwner,
+        url: r.url,
+        defaultBranch: r.defaultBranchRef?.name ?? null,
+        stars: r.stargazerCount ?? 0,
+        forks: r.forkCount ?? 0,
+        openIssues: r.issues?.totalCount ?? 0,
+        openPrs: r.pullRequests?.totalCount ?? 0
+      }
+    }),
+    part<RepoRelease>(async () => {
+      const list = await ghJson<{ tagName: string; name: string | null; publishedAt: string | null; isPrerelease: boolean }[]>(
+        ['release', 'list', '--limit', '1', '--exclude-drafts', '--json', 'tagName,name,publishedAt,isPrerelease'],
+        cwd,
+        []
+      )
+      const r = list[0]
+      return r ? { tag: r.tagName, name: r.name || r.tagName, publishedAt: r.publishedAt ?? '', prerelease: !!r.isPrerelease } : null
+    }),
+    part<GhRun[]>(() => ghJson(['run', 'list', '--limit', '3', ...(branch ? ['--branch', branch] : []), '--json', RUN_FIELDS], cwd, [])),
+    part<RepoBranchPr[]>(async () =>
+      branch ? ghJson(['pr', 'list', '--head', branch, '--state', 'open', '--limit', '10', '--json', 'number,title,url,isDraft'], cwd, []) : []
+    )
+  ])
+  return { ...local, github, release, runs, branchPrs }
 }
