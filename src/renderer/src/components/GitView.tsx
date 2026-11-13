@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ArrowDown, ArrowDownToLine, ArrowUp, ChartColumn, CloudDownload, GitBranch, LoaderCircle, RefreshCw } from 'lucide-react'
+import { ArrowDown, ArrowDownToLine, ArrowUp, ChartColumn, CloudDownload, GitBranch, GitGraph, LoaderCircle, RefreshCw } from 'lucide-react'
 import { gitFetch, gitPull, gitState, refreshGit } from '../state/git'
 import { changeSummary, gitErrorLine } from '../lib/git'
 import { useStore } from '../state/store'
@@ -8,7 +8,7 @@ import { ViewShell } from './RuntimesView'
 import { Empty, ErrorBanner, Loading } from './States'
 import { GitBranches } from './GitBranches'
 import { WorktreesSection } from './GitWorktrees'
-import { openGitHubStats } from '../dock/GitHubStatsPanel'
+import { openCommitGraph, openGitHubStats } from '../dock/GitHubStatsPanel'
 
 /** Everyday git for the open folder: where the branch stands, Fetch and Pull (fast-forward only), branches to switch and create. */
 export function GitView(): React.JSX.Element {
@@ -24,8 +24,11 @@ export function GitView(): React.JSX.Element {
 
   const refresh = (
     <>
-      <button className="icon-btn" title="GitHub stats: PRs, issues, releases and CI" aria-label="GitHub stats" onClick={openGitHubStats}>
+      <button className="icon-btn" title="GitHub stats: PRs, issues, releases and CI" aria-label="GitHub stats" onClick={() => openGitHubStats('overview')}>
         <ChartColumn size={14} />
+      </button>
+      <button className="icon-btn" title="Commit graph: branches, merges and PRs" aria-label="Commit graph" onClick={openCommitGraph}>
+        <GitGraph size={14} />
       </button>
       <button className="icon-btn" title="Refresh" aria-label="Refresh" onClick={() => void refreshGit()}>
         <RefreshCw size={14} className={g.loading ? 'spin' : ''} />

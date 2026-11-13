@@ -7,6 +7,8 @@
 // Git view header with gh logged in (every tile, CI runs in status tones); it reads only while it's on screen.
 // Activity charts: commits per day/week with merges, matching `git log --since` for 7, 30 and 90 days; the PR chart
 // hides with a note without gh and shows opened vs merged with it.
+// Commit graph: a merged PR branch and a tag in their own lanes with chips, PR links, paging through 650+ commits
+// with only the rows in view drawn, and a row opening its commit diff.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -393,6 +395,121 @@ async function worktrees(h, git, tmp) {
   await h.wait(800)
   await h.shot('14-activity-hover')
   delete process.env.FAKE_GH_ACTIVITY
+  // ── Commit graph ──
+  // a branch merged as PR #7 and a tag, made in a worktree of their own so the fixture's checkout is left alone,
+  // plus 650 old commits on an unrelated branch (one fast-import) to page through
+  const gwt = path.join(tmp, 'graph-wt')
+  git(h.fixture, 'worktree', 'add', '-q', '-b', 'release/graph', gwt, 'HEAD')
+  const commitIn = (file, msg) => {
+    fs.writeFileSync(path.join(gwt, file), `${file}\n`)
+    git(gwt, 'add', file)
+    git(gwt, ...ID, 'commit', '-qm', msg)
+  }
+  git(gwt, 'switch', '-qc', 'feature/graph')
+  commitIn('graph.txt', 'draw the graph')
+  git(gwt, 'switch', '-q', 'release/graph')
+  commitIn('other.txt', 'meanwhile on release')
+  git(gwt, ...ID, 'merge', '-q', '--no-ff', '-m', 'Merge pull request #7 from acme/feature-graph', 'feature/graph')
+  git(gwt, 'tag', 'v-e2e')
+  let stream = ''
+  for (let i = 1; i <= 650; i++) {
+    const msg = `old commit ${i}`
+    stream += `commit refs/heads/long-history\nmark :${i}\ncommitter e2e <e2e@example.com> ${1600000000 + i * 60} +0000\ndata ${msg.length}\n${msg}\n${i > 1 ? `from :${i - 1}\n` : ''}\n`
+  }
+  execFileSync('git', ['fast-import', '--quiet'], { cwd: h.fixture, input: stream })
+
+  const opened = []
+  const { shell } = require('electron')
+  const realOpen = shell.openExternal
+  shell.openExternal = async (url) => void opened.push(url)
+
+  if (!(await h.js(`!!document.querySelector('[data-testid="git-view"]')`))) await h.click('.activity-btn[aria-label="Git"]')
+  await h.until(() => h.js(`!!document.querySelector('[data-testid="git-view"]')`), 5000)
+  h.expect(await h.click('.sidebar-actions [aria-label="Commit graph"]'), 'the Git view header has a Commit graph button')
+  h.expect(await h.until(() => h.js(`document.querySelectorAll('[data-testid="commit-graph"] .cg-row').length > 5`), 10000), 'the graph tab opens with commits')
+  const graphRow = (subject) =>
+    h.js(`(() => { const r = [...document.querySelectorAll('.cg-row')].find(r => r.querySelector('.cg-subject')?.textContent === ${JSON.stringify(subject)}); if (!r) return null
+      const n = r.querySelector('circle.cg-node'); return { refs: [...r.querySelectorAll('.cg-ref')].map(c => c.textContent), pr: r.querySelector('.cg-pr')?.textContent ?? '', cx: Number(n.getAttribute('cx')), merge: n.classList.contains('merge'), sha: r.dataset.sha } })()`)
+  const merge = await graphRow('Merge pull request #7 from acme/feature-graph')
+  const feature = await graphRow('draw the graph')
+  const release = await graphRow('meanwhile on release')
+  h.expect(!!merge && merge.refs.includes('release/graph') && merge.refs.includes('v-e2e'), `the merge carries its branch and tag chips (${JSON.stringify(merge?.refs)})`)
+  h.expect(merge?.merge && merge.pr === '#7', `a merge is a ring with its PR (${JSON.stringify(merge)})`)
+  h.expect(!!feature && feature.refs.includes('feature/graph'), `the feature branch has its chip (${JSON.stringify(feature?.refs)})`)
+  h.expect(!!feature && !!release && feature.cx !== release.cx && release.cx === merge.cx, `the merged branch runs in its own lane (${feature?.cx}, ${release?.cx}, ${merge?.cx})`)
+  h.expect(await h.js(`[...document.querySelectorAll('.cg-ref.head')].some(c => c.textContent === ${JSON.stringify(git(h.fixture, 'rev-parse', '--abbrev-ref', 'HEAD'))})`), 'the checked-out branch is marked')
+  const textOf = (sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? ''`)
+  const foot = () => textOf('[data-testid="commit-graph"] .cg-foot')
+  h.expect((await foot()).startsWith('300 commits') && (await foot()).includes('more load'), `the first page is 300 commits (${await foot()})`)
+  const drawn = await h.js(`document.querySelectorAll('.cg-row').length`)
+  h.expect(drawn < 120, `only the rows in view are drawn (${drawn} of 300)`)
+  await h.wait(600)
+  await h.shot('13-graph')
+
+  // the PR opens on GitHub; a row opens the commit's diff
+  await h.click('.cg-row .cg-pr', '#7')
+  h.expect(await h.until(() => opened.includes('https://github.com/acme/shop/pull/7'), 3000), `#7 opens the PR on GitHub (${opened})`)
+  await h.click('.cg-row .cg-sha')
+  h.expect(await h.until(() => h.js(`document.querySelector('.toast')?.textContent.includes('Copied')`), 3000), `the sha is copied (${await textOf('.toast')})`)
+
+  // scrolling to the end loads the next page, then the rest
+  for (let i = 0; i < 6; i++) {
+    await h.js(`(() => { const s = document.querySelector('.cg-scroll'); s.scrollTop = s.scrollHeight })()`)
+    await h.wait(500)
+  }
+  h.expect(await h.until(async () => (await foot()).includes('all of them'), 8000), `scrolling loads every page (${await foot()})`)
+  const total = Number(git(h.fixture, 'rev-list', '--all', '--count'))
+  h.expect((await foot()).startsWith(`${total} commits`), `all ${total} commits listed (${await foot()})`)
+  h.expect((await h.js(`document.querySelectorAll('.cg-row').length`)) < 120, 'still only the rows in view are drawn')
+  h.expect(await h.js(`[...document.querySelectorAll('.cg-row .cg-subject')].some(s => s.textContent === 'old commit 1')`), 'the oldest commit is at the bottom')
+  await h.wait(400)
+  await h.shot('14-graph-end')
+
+  await h.js(`document.querySelector('.cg-scroll').scrollTop = 0`)
+  await h.wait(400)
+  await h.js(`[...document.querySelectorAll('.cg-row')].find(r => r.dataset.sha === ${JSON.stringify(feature?.sha)})?.click()`)
+  h.expect(await h.until(() => h.js(`document.querySelector('[data-testid="commit-panel"] .diff-file-path')?.textContent === 'graph.txt'`), 8000), 'a row opens its commit diff')
+  h.expect((await textOf('[data-testid="commit-panel"] .commit-panel-subject')) === 'draw the graph', 'the diff names the commit')
+  await h.wait(600)
+  await h.shot('15-commit-diff')
+  shell.openExternal = realOpen
+
+  // ── Long branch lists: local and remote folds, the 25 most recent, search for the rest; Worktrees folds too ──
+  for (let i = 1; i <= 30; i++) git(h.fixture, 'branch', `bulk/b${String(i).padStart(2, '0')}`)
+  if (!(await h.js(`!!document.querySelector('[data-testid="git-view"]')`))) await h.click('.activity-btn[aria-label="Git"]')
+  await h.until(() => h.js(`!!document.querySelector('[data-testid="git-view"]')`), 5000)
+  await h.click('.sidebar-actions [aria-label="Refresh"]')
+  const localRows = () => h.js(`document.querySelectorAll('[data-group="local"] .git-branch-row').length`)
+  const localTotal = git(h.fixture, 'for-each-ref', '--format=%(refname)', 'refs/heads').split('\n').length
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-branch="bulk/b30"]') || !!document.querySelector('[data-branch="bulk/b01"]')`), 8000), 'the new branches are listed')
+  h.expect((await localRows()) <= 26, `only the 25 most recent (+ the current one) are drawn (${await localRows()} of ${localTotal})`)
+  h.expect(await h.js(`/older branch.*hidden/.test(document.querySelector('[data-group="local"] .git-more')?.textContent ?? '')`), 'says older ones are hidden')
+  h.expect(await h.js(`!!document.querySelector('[data-group="local"] .git-branch-row.current')`), 'the current branch is always there')
+  await h.wait(400)
+  await h.shot('16-branches-capped')
+
+  await h.setValue('[data-testid="git-branch-search"]', 'b07')
+  h.expect(await h.until(async () => (await localRows()) === 1, 3000), `search finds an older branch (${await localRows()})`)
+  h.expect(await h.js(`!!document.querySelector('[data-branch="bulk/b07"]')`), 'the one asked for')
+  h.expect(await h.js(`!document.querySelector('[data-group="remote"] .git-branch-row')`), 'a remote group without matches stays shut')
+  await h.setValue('[data-testid="git-branch-search"]', 'origin main')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-remote-branch="origin/main"]')`), 3000), 'searching opens the remote group for a match')
+  await h.wait(400)
+  await h.shot('17-branches-search')
+  await h.setValue('[data-testid="git-branch-search"]', '')
+
+  await h.click('[data-testid="git-local-all"]')
+  h.expect(await h.until(async () => (await localRows()) === localTotal, 3000), `Show all lists every local branch (${await localRows()} of ${localTotal})`)
+  await h.click('[data-testid="git-local-toggle"]')
+  h.expect(await h.until(async () => (await localRows()) === 0, 3000), 'Local folds shut')
+  await h.click('[data-testid="git-worktrees-toggle"]')
+  h.expect(await h.until(() => h.js(`!document.querySelector('.git-wt-row') && document.querySelector('[data-testid="git-worktrees-toggle"]').getAttribute('aria-expanded') === 'false'`), 3000), 'Worktrees fold shut')
+  h.expect(/\d/.test(await textOf('[data-testid="git-worktrees-toggle"] .git-count')), 'and still says how many there are')
+  await h.wait(400)
+  await h.shot('18-folded')
+  await h.click('[data-testid="git-local-toggle"]')
+  await h.click('[data-testid="git-worktrees-toggle"]')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.git-wt-row')`), 3000), 'Worktrees open again')
   delete process.env.FAKE_GH_AUTHED
   delete process.env.FAKE_GH_LOG
 }

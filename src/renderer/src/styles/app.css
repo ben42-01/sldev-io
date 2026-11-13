@@ -43,6 +43,13 @@
   --brand-blue: oklch(0.68 0.17 250);
   --brand-green: oklch(0.76 0.16 165);
   --brand-purple: oklch(0.66 0.21 305);
+  /* commit graph lanes: identity, not state, so softer than the status tones */
+  --lane-0: oklch(0.7 0.13 250);
+  --lane-1: oklch(0.74 0.12 165);
+  --lane-2: oklch(0.7 0.15 305);
+  --lane-3: oklch(0.76 0.1 210);
+  --lane-4: oklch(0.76 0.11 120);
+  --lane-5: oklch(0.72 0.12 350);
   --brand: linear-gradient(90deg, var(--brand-blue), var(--brand-green), var(--brand-purple));
   --brand-v: linear-gradient(180deg, var(--brand-blue), var(--brand-green), var(--brand-purple));
 
@@ -94,6 +101,12 @@
   --brand-blue: oklch(0.58 0.18 250);
   --brand-green: oklch(0.64 0.15 165);
   --brand-purple: oklch(0.55 0.22 305);
+  --lane-0: oklch(0.55 0.15 250);
+  --lane-1: oklch(0.58 0.13 165);
+  --lane-2: oklch(0.54 0.17 305);
+  --lane-3: oklch(0.58 0.11 210);
+  --lane-4: oklch(0.58 0.12 125);
+  --lane-5: oklch(0.56 0.15 350);
   color-scheme: light;
 }
 
@@ -8074,6 +8087,52 @@ select:disabled {
   margin-top: 4px;
   font-size: 11px;
 }
+.git-fold:disabled {
+  cursor: default;
+}
+/* the Worktrees header is its own fold, styled like the section labels */
+.git-fold.git-wt-fold {
+  width: auto;
+  flex: 1;
+  margin: 0 0 0 -8px;
+}
+.git-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 2px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--fg-subtle);
+}
+.git-search:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.git-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  outline: none;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.git-search .icon-btn {
+  width: 20px;
+  height: 20px;
+}
+.git-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 0 28px;
+}
 .git-new-branch {
   display: flex;
   flex-direction: column;
@@ -8373,6 +8432,209 @@ select:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--fg);
+}
+/* GitHub stats → Graph: the commit graph fills the tab and scrolls itself (rows are virtualised) */
+.ghs-tabs {
+  margin-left: 4px;
+}
+.panel-page.ghs-graph-on {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+.ghs-graph-on .ghs-head {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+.cg {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+.cg-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+.cg-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+.cg-inner {
+  position: relative;
+  min-width: 100%;
+}
+.cg-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cg-row:hover {
+  background: var(--tint);
+}
+.cg-row.on {
+  background: var(--selection);
+}
+.cg-lanes {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.cg-lanes line,
+.cg-lanes path {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.cg-l0 { stroke: var(--lane-0); }
+.cg-l1 { stroke: var(--lane-1); }
+.cg-l2 { stroke: var(--lane-2); }
+.cg-l3 { stroke: var(--lane-3); }
+.cg-l4 { stroke: var(--lane-4); }
+.cg-l5 { stroke: var(--lane-5); }
+.cg-n0 { fill: var(--lane-0); stroke: var(--lane-0); }
+.cg-n1 { fill: var(--lane-1); stroke: var(--lane-1); }
+.cg-n2 { fill: var(--lane-2); stroke: var(--lane-2); }
+.cg-n3 { fill: var(--lane-3); stroke: var(--lane-3); }
+.cg-n4 { fill: var(--lane-4); stroke: var(--lane-4); }
+.cg-n5 { fill: var(--lane-5); stroke: var(--lane-5); }
+.cg-node {
+  stroke-width: 1.75;
+}
+/* a merge is a hollow ring: it adds no work of its own */
+.cg-node.merge {
+  fill: var(--surface);
+}
+.cg-sha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--fg-subtle);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.cg-sha svg {
+  opacity: 0;
+}
+.cg-sha:hover,
+.cg-sha:focus-visible {
+  background: var(--tint-strong);
+  color: var(--fg);
+}
+.cg-sha:hover svg,
+.cg-sha:focus-visible svg {
+  opacity: 1;
+}
+.cg-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.cg-ref.head {
+  border-color: var(--fg-muted);
+  background: var(--muted);
+  color: var(--fg);
+  font-weight: 600;
+}
+.cg-ref.remote {
+  border-style: dashed;
+  color: var(--fg-subtle);
+}
+.cg-ref.tag {
+  background: var(--tint);
+}
+.cg-subject {
+  flex: 1;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+}
+.cg-subject.muted {
+  color: var(--fg-muted);
+}
+.cg-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+button.cg-pr {
+  cursor: pointer;
+}
+button.cg-pr:hover,
+button.cg-pr:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--tint-strong);
+  color: var(--fg);
+}
+.cg-author {
+  flex-shrink: 0;
+  width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.cg-time {
+  flex-shrink: 0;
+  width: 64px;
+  text-align: right;
+  color: var(--fg-subtle);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cg-more {
+  position: absolute;
+  left: 16px;
+  line-height: 26px;
+}
+.cg-foot {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+}
+.commit-panel-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
 }
 .ghs-chip {
   padding: 1px 6px;

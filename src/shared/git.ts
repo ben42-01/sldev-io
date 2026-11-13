@@ -144,3 +144,20 @@ export function branchNameProblem(name: string, existing: string[] = []): string
   if (clash) return `Clashes with the branch ${clash}: a branch can't also be a folder of branches.`
   return null
 }
+
+/** How many branches a group of the Git view lists before "Show all"; older ones are a search away. */
+export const BRANCH_LIMIT = 25
+
+/**
+ * What a branch group shows: with a query, the branches whose name has every word of it (any case); without,
+ * the first `limit` (git lists the most recent first), plus the current branch wherever it is. `matched`
+ * counts everything that fits the query, so the view can say how many are left out.
+ */
+export function branchSlice(list: GitBranchRef[], query: string, limit = BRANCH_LIMIT): { shown: GitBranchRef[]; matched: number } {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const matches = words.length ? list.filter((b) => words.every((w) => b.name.toLowerCase().includes(w))) : list
+  const shown = matches.slice(0, limit)
+  const current = matches.find((b) => b.current)
+  if (current && !shown.includes(current)) shown.push(current)
+  return { shown, matched: matches.length }
+}
