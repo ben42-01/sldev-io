@@ -291,6 +291,43 @@ export interface WorktreeStatus {
   unmerged: number
 }
 
+/** `git status --porcelain=v2 --branch` of one working tree (parsed in src/shared/git.ts) */
+export interface GitStatus {
+  /** short branch name; null when HEAD is detached */
+  branch: string | null
+  /** commit HEAD points at; null in a repository with no commits yet */
+  head: string | null
+  detached: boolean
+  /** e.g. "origin/master"; null when the branch tracks nothing */
+  upstream: string | null
+  /** commits the upstream lacks / commits it has that we don't; 0 without an upstream */
+  ahead: number
+  behind: number
+  /** files with staged changes, changes not staged, untracked files, and merge conflicts */
+  staged: number
+  unstaged: number
+  untracked: number
+  conflicted: number
+}
+
+/** One entry of `git worktree list --porcelain` */
+export interface GitWorktree {
+  path: string
+  /** commit checked out; null for a bare repository */
+  head: string | null
+  /** short branch name; null when detached or bare */
+  branch: string | null
+  detached: boolean
+  bare: boolean
+  locked: boolean
+  lockReason?: string
+  /** its folder is gone; `git worktree prune` would drop it */
+  prunable: boolean
+  prunableReason?: string
+  /** the repository's main working tree (listed first by git) */
+  isMain: boolean
+}
+
 export interface DiffStat {
   files: number
   insertions: number
