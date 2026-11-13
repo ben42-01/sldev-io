@@ -300,6 +300,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
+  ipcMain.handle('gh:stats', (_e, cwd: string) => gh.repoStats(cwd))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
   ipcMain.handle('gh:prState', (_e, cwd: string, n: number) => gh.prState(cwd, Number(n)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
