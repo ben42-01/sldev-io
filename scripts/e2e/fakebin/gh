@@ -16,7 +16,10 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;
     "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"},"stargazerCount":128,"forkCount":9,"issues":{"totalCount":17},"pullRequests":{"totalCount":4}}'; exit 0 ;;
     "release list") echo '[{"tagName":"v2.3.0","name":"Spring","publishedAt":"2026-11-01T09:00:00Z","isPrerelease":false}]'; exit 0 ;;
-    "pr list") echo '[{"number":128,"title":"Rate limit the API","url":"https://github.com/acme/shop/pull/128","isDraft":false},{"number":131,"title":"Try a new cache","url":"https://github.com/acme/shop/pull/131","isDraft":true}]'; exit 0 ;;
+    "pr list")
+      # the stats panel's activity chart asks for every state; FAKE_GH_ACTIVITY is the scenario's PR history
+      case " $* " in *" --state all "*) echo "${FAKE_GH_ACTIVITY:-[]}"; exit 0 ;; esac
+      echo '[{"number":128,"title":"Rate limit the API","url":"https://github.com/acme/shop/pull/128","isDraft":false},{"number":131,"title":"Try a new cache","url":"https://github.com/acme/shop/pull/131","isDraft":true}]'; exit 0 ;;
     "workflow list")
       printf '['
       for i in $(seq 1 24); do printf '{"id":%d,"name":"Job %02d","path":".github/workflows/job%d.yml","state":"active"},' "$((100 + i))" "$i" "$i"; done

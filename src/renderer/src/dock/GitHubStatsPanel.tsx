@@ -12,6 +12,7 @@ import { Empty, ErrorBanner, Loading } from '../components/States'
 import { StatusDot, StatusPill } from '../components/StatusDot'
 import { TimeAgo } from '../components/TimeAgo'
 import { showNotice } from '../components/Modal'
+import { ActivityCharts } from './ActivityCharts'
 
 export function openGitHubStats(): void {
   if (!workspace.get().rootFolder) return void showNotice('No folder open', 'Open a git repository to see its GitHub stats.')
@@ -31,6 +32,8 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
   const [busy, setBusy] = useState(false)
   const [visible, setVisible] = useState(props.api.isVisible)
   const inflight = useRef(false)
+  // bumped by the Refresh button: the charts read again too (they don't follow the one-minute timer)
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     const d = props.api.onDidVisibilityChange((e) => setVisible(e.isVisible))
@@ -64,7 +67,10 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
   }, [visible, root, refresh])
 
   const refreshBtn = (
-    <button className="icon-btn" title="Refresh" aria-label="Refresh" disabled={busy || !root} onClick={() => void refresh()}>
+    <button className="icon-btn" title="Refresh" aria-label="Refresh" disabled={busy || !root} onClick={() => {
+        setReload((n) => n + 1)
+        void refresh()
+      }}>
       <RefreshCw size={14} className={busy ? 'spin' : ''} />
     </button>
   )
@@ -108,6 +114,9 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
         <ErrorBanner onRetry={() => void refresh()}>Couldn't read the stats: {current.message}</ErrorBanner>
       ) : (
         <Stats s={current.data} />
+      )}
+      {current?.state === 'ready' && !(current.data.status.error && current.data.lastCommit.error && !current.data.github.value) && (
+        <ActivityCharts root={root} visible={visible} reload={reload} />
       )}
     </div>
   )

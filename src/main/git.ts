@@ -2,7 +2,8 @@ import { execFile } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
-import type { DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
+import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
+import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
   code: number
@@ -276,4 +277,17 @@ export async function push(cwd: string, branch: string): Promise<void> {
 export async function listFiles(cwd: string): Promise<string[]> {
   const r = await git(['ls-files', '--cached', '--others', '--exclude-standard'], cwd)
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean).slice(0, 50000) : []
+}
+
+/**
+ * Commits on HEAD since midnight of day `from` (YYYY-MM-DD, local time), for the activity charts: exactly
+ * what `git log --since` lists. A repository without commits has none, which isn't an error.
+ */
+export async function activityCommits(cwd: string, from: string): Promise<ActivityCommit[]> {
+  const r = await git(['log', `--since=${sinceArg(from)}`, `--format=${COMMIT_LOG_FORMAT}`], cwd, 60000)
+  if (r.code !== 0) {
+    if (/does not have any commits|bad default revision/i.test(r.stderr)) return []
+    throw new Error(r.stderr.trim() || 'git log failed')
+  }
+  return parseCommitLog(r.stdout)
 }

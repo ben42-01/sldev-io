@@ -5,6 +5,8 @@
 // removal while a mission runs in one, removed through the confirm flow, and a gone folder pruned.
 // GitHub stats panel: from the palette with gh logged out and missing (local tiles + Set up gh), then from the
 // Git view header with gh logged in (every tile, CI runs in status tones); it reads only while it's on screen.
+// Activity charts: commits per day/week with merges, matching `git log --since` for 7, 30 and 90 days; the PR chart
+// hides with a note without gh and shows opened vs merged with it.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -292,6 +294,9 @@ async function worktrees(h, git, tmp) {
   h.expect((await stats('[data-testid="ghs-branch"] b')) === 'main', 'the branch tile reads git')
   h.expect((await stats('[data-testid="ghs-commit"]')).includes('local work'), 'the last commit reads git')
   h.expect(!(await h.js(`!!document.querySelector('[data-testid="ghs-prs"], [data-testid="ghs-runs"]')`)), 'no GitHub tiles without gh')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-testid="ghs-commits-chart"] .ghs-chart svg')`), 8000), 'the commit chart shows without gh')
+  h.expect((await stats('[data-testid="ghs-prs-note"]')).includes('gh auth login'), `the PR chart is a note without gh (${await stats('[data-testid="ghs-prs-chart"]')})`)
+  h.expect(!(await h.js(`!!document.querySelector('[data-testid="ghs-prs-chart"] .ghs-chart svg')`)), 'and draws no PR bars')
   await h.wait(300)
   await h.shot('10-stats-logged-out')
 
@@ -327,6 +332,67 @@ async function worktrees(h, git, tmp) {
   h.expect((await stats('[data-testid="ghs-branch-prs"]')).includes('Draft'), 'a draft PR is marked')
   await h.wait(300)
   await h.shot('12-stats')
+
+  // ── Activity charts ──
+  // backdated commits (3, 20 and 60 days ago) and a merge today, then a PR history for the fake gh
+  const day = 86_400_000
+  const backdated = (file, ago) => {
+    const when = new Date(Date.now() - ago * day).toISOString()
+    fs.writeFileSync(path.join(h.fixture, file), `${file}\n`)
+    git(h.fixture, 'add', file)
+    execFileSync('git', [...ID, 'commit', '-qm', `add ${file}`], { cwd: h.fixture, env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } })
+  }
+  const head = git(h.fixture, 'rev-parse', '--abbrev-ref', 'HEAD')
+  backdated('old-60.txt', 60)
+  backdated('old-20.txt', 20)
+  backdated('old-3.txt', 3)
+  git(h.fixture, 'checkout', '-qb', 'e2e-side')
+  backdated('side.txt', 0)
+  git(h.fixture, 'checkout', '-q', head)
+  git(h.fixture, ...ID, 'merge', '-q', '--no-ff', '-m', 'Merge e2e-side', 'e2e-side')
+  const iso = (ago) => new Date(Date.now() - ago * day).toISOString()
+  process.env.FAKE_GH_ACTIVITY = JSON.stringify([
+    { number: 140, createdAt: iso(2), mergedAt: iso(1), closedAt: iso(1) },
+    { number: 141, createdAt: iso(1), mergedAt: null, closedAt: null },
+    { number: 142, createdAt: iso(0), mergedAt: iso(0), closedAt: iso(0) },
+    { number: 120, createdAt: iso(40), mergedAt: iso(25), closedAt: iso(25) }
+  ])
+  await h.click('[data-testid="github-stats"] .ghs-head [aria-label="Refresh"]')
+
+  const localDay = (ago) => {
+    const d = new Date(Date.now() - ago * day)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const chart = (sel) => h.js(`[...document.querySelectorAll('[data-testid="${sel}"] svg g[data-key]')].map(g => g.dataset.values.split(',').map(Number))`)
+  for (const days of [7, 30, 90]) {
+    await h.click(`[data-testid="ghs-activity"] [data-days="${days}"]`)
+    const since = `--since=${localDay(days - 1)} 00:00:00`
+    const want = Number(git(h.fixture, 'rev-list', '--count', since, 'HEAD'))
+    const wantMerges = Number(git(h.fixture, 'rev-list', '--count', '--merges', since, 'HEAD'))
+    const ok = await h.until(async () => (await stats('[data-testid="ghs-commits-total"]')).startsWith(`${want} commit`), 8000)
+    h.expect(ok, `${days} days: ${want} commits like git log (${await stats('[data-testid="ghs-commits-total"]')})`)
+    const bars = await chart('ghs-commits-chart')
+    h.expect(bars.length === (days === 90 ? 13 : days) || (days === 90 && bars.length === 14), `${days} days: one bar per ${days === 90 ? 'week' : 'day'} (${bars.length})`)
+    h.expect(bars.reduce((t, [c, m]) => t + c + m, 0) === want, `${days} days: the bars add up to git's count`)
+    h.expect(bars.reduce((t, [, m]) => t + m, 0) === wantMerges, `${days} days: ${wantMerges} merge(s) highlighted`)
+    h.expect(await h.js(`!!document.querySelector('[data-testid="ghs-commits-chart"] .ghs-bar.merge')`), `${days} days: the merge bar is drawn`)
+    const prs = await chart('ghs-prs-chart')
+    const opened = prs.reduce((t, [o]) => t + o, 0)
+    const merged = prs.reduce((t, [, m]) => t + m, 0)
+    const wantOpened = days === 90 ? 4 : 3
+    const wantMergedPrs = days === 90 || days === 30 ? 3 : 2
+    h.expect(opened === wantOpened && merged === wantMergedPrs, `${days} days: PRs ${opened} opened / ${merged} merged (want ${wantOpened}/${wantMergedPrs})`)
+    await h.js(`document.querySelector('[data-testid="ghs-activity"]').scrollIntoView({ block: 'start' })`)
+    await h.wait(800)
+    await h.shot(`13-activity-${days}`)
+  }
+  h.expect(!(await h.js(`!!document.querySelector('[data-testid="ghs-prs-note"]')`)), 'no gh note once gh works')
+  // hover a column: its numbers in the readout
+  await h.js(`document.querySelector('[data-testid="ghs-commits-chart"] svg g[data-key]:last-of-type .ghs-hit').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`)
+  h.expect(await h.until(async () => /merge/.test(await stats('[data-testid="ghs-commits-chart"] .ghs-readout')), 3000), `hover shows a week's numbers (${await stats('[data-testid="ghs-commits-chart"] .ghs-readout')})`)
+  await h.wait(800)
+  await h.shot('14-activity-hover')
+  delete process.env.FAKE_GH_ACTIVITY
   delete process.env.FAKE_GH_AUTHED
   delete process.env.FAKE_GH_LOG
 }

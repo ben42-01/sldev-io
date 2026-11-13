@@ -563,6 +563,33 @@ export interface RepoStats {
   branchPrs: StatsPart<RepoBranchPr[]>
 }
 
+/** One commit of the activity charts (git log --since on HEAD). */
+export interface ActivityCommit {
+  /** ISO 8601 committer date: the date `git log --since` filters on, so the counts match git's */
+  date: string
+  /** has more than one parent */
+  merge: boolean
+  author: string
+}
+
+/** One pull request of the activity charts (gh pr list --state all). */
+export interface ActivityPr {
+  number: number
+  createdAt: string
+  mergedAt: string | null
+  closedAt: string | null
+}
+
+/** The data behind the stats panel's activity charts for the last `days` days. */
+export interface RepoActivity {
+  days: number
+  /** the first day of the range (YYYY-MM-DD, local time), what --since was given */
+  from: string
+  commits: StatsPart<ActivityCommit[]>
+  /** fails with the reason when gh is missing or logged out; the commit chart still shows */
+  prs: StatsPart<ActivityPr[]>
+}
+
 export interface GhIssue {
   number: number
   title: string
