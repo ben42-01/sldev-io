@@ -1,7 +1,7 @@
 /**
  * Parsers for git's porcelain output, kept pure so they are unit-tested; src/main/git.ts runs the commands.
  */
-import type { GitStatus, GitWorktree } from './types'
+import type { GitBranchList, GitBranchRef, GitStatus, GitWorktree } from './types'
 
 /** `git status --porcelain=v2 --branch` (without -z): branch headers, then one line per changed path. */
 export function parseStatus(out: string): GitStatus {
@@ -83,4 +83,64 @@ export function parseRemoteBranches(out: string): string[] {
     .split('\n')
     .map((l) => l.trim().replace(/^refs\/remotes\//, ''))
     .filter((l) => l && !l.endsWith('/HEAD'))
+}
+
+/** The format `parseBranchList` reads: one line per ref, fields separated by NUL (%00). */
+export const BRANCH_LIST_FORMAT = ['%(refname)', '%(HEAD)', '%(committerdate:unix)', '%(upstream:short)', '%(worktreepath)', '%(contents:subject)'].join('%00')
+
+/**
+ * `git for-each-ref --sort=-committerdate --format=<BRANCH_LIST_FORMAT> refs/heads refs/remotes` → local
+ * and remote branches, in git's order. `root` is this working tree, so a branch checked out here isn't
+ * reported as living in another worktree. Remote HEAD aliases ("origin/HEAD") are left out.
+ */
+export function parseBranchList(out: string, root?: string): GitBranchList {
+  const list: GitBranchList = { local: [], remote: [] }
+  const same = (a: string, b?: string): boolean => !!b && a.replace(/[\\/]+$/, '') === b.replace(/[\\/]+$/, '')
+  for (const line of out.split('\n')) {
+    if (!line.trim()) continue
+    const [ref = '', head = '', date = '', upstream = '', worktree = '', subject = ''] = line.split('\0')
+    const local = ref.startsWith('refs/heads/')
+    if (!local && !ref.startsWith('refs/remotes/')) continue
+    const name = ref.replace(/^refs\/(heads|remotes)\//, '')
+    if (!local && name.endsWith('/HEAD')) continue
+    const current = head.trim() === '*'
+    const b: GitBranchRef = {
+      name,
+      current,
+      committedAt: Number(date) > 0 ? Number(date) * 1000 : 0,
+      subject: subject.trim(),
+      upstream: local && upstream ? upstream : null,
+      worktree: local && worktree && !current && !same(worktree, root) ? worktree : null
+    }
+    ;(local ? list.local : list.remote).push(b)
+  }
+  return list
+}
+
+/**
+ * Why `name` can't be a new branch, or null when it can. Mirrors `git check-ref-format --branch` closely
+ * enough to say what is wrong under the field; main still has git check the name before creating it.
+ */
+export function branchNameProblem(name: string, existing: string[] = []): string | null {
+  const n = name.trim()
+  if (!n) return 'Enter a name, like feature/login-form.'
+  if (/\s/.test(n)) return 'No spaces: use - or / instead, like fix/login-form.'
+  if (n.startsWith('-')) return "Can't start with a dash."
+  if (n === '@' || n === 'HEAD') return `"${n}" is reserved by git.`
+  if (n.includes('..')) return 'No ".." in a name.'
+  if (n.includes('@{')) return 'No "@{" in a name.'
+  // eslint-disable-next-line no-control-regex
+  const bad = /[~^:?*[\\\x00-\x1f\x7f]/.exec(n)
+  if (bad) return bad[0] < ' ' || bad[0] === '\x7f' ? 'No control characters.' : `"${bad[0]}" isn't allowed in a branch name.`
+  if (n.startsWith('/') || n.endsWith('/') || n.includes('//')) return 'Slashes separate parts: no slash at the start, the end or twice in a row.'
+  if (n.endsWith('.')) return "Can't end with a dot."
+  for (const part of n.split('/')) {
+    if (part.startsWith('.')) return `No part can start with a dot ("${part}").`
+    if (part.endsWith('.lock')) return `No part can end with ".lock" ("${part}").`
+  }
+  if (existing.includes(n)) return `A branch called ${n} already exists.`
+  // git can't hold both a/b and a/b/c: refs are files and folders
+  const clash = existing.find((e) => e.startsWith(n + '/') || n.startsWith(e + '/'))
+  if (clash) return `Clashes with the branch ${clash}: a branch can't also be a folder of branches.`
+  return null
 }

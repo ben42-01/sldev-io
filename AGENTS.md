@@ -86,7 +86,7 @@ src/renderer/src/
                   the top of the left ActivityBar), Pipeline, Recipes (recipe library, step-by-step builder, import/export),
                   Dashboard, Agents, Board (the work board in its own tab), Diagram (code map, Files and schema, local parsing, opened from the Explorer header), Preview, Settings
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
-                  notes, remote, git: status, fetch, pull in state/git.ts), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
+                  notes, remote, git: status, fetch, pull, branches (GitBranches.tsx) and the worktrees list (GitWorktrees.tsx) in state/git.ts), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
                   src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,

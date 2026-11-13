@@ -310,6 +310,28 @@ export interface GitStatus {
   conflicted: number
 }
 
+/** A local or remote-tracking branch, as the Git view lists it */
+export interface GitBranchRef {
+  /** "feature/x", or "origin/feature/x" for a remote-tracking branch */
+  name: string
+  /** the branch checked out in this working tree */
+  current: boolean
+  /** committer date of its last commit, ms since epoch (0 when unknown) */
+  committedAt: number
+  /** subject line of its last commit */
+  subject: string
+  /** upstream of a local branch ("origin/x"), or null */
+  upstream: string | null
+  /** folder of another worktree that has it checked out (git won't switch to it here), or null */
+  worktree: string | null
+}
+
+/** `git:branchList`: local branches and remote-tracking branches, most recent commit first */
+export interface GitBranchList {
+  local: GitBranchRef[]
+  remote: GitBranchRef[]
+}
+
 /** One entry of `git worktree list --porcelain` */
 export interface GitWorktree {
   path: string

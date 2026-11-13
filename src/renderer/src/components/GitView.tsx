@@ -6,8 +6,10 @@ import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { ViewShell } from './RuntimesView'
 import { Empty, ErrorBanner, Loading } from './States'
+import { GitBranches } from './GitBranches'
+import { WorktreesSection } from './GitWorktrees'
 
-/** Everyday git for the open folder: where the branch stands, Fetch and Pull (fast-forward only). */
+/** Everyday git for the open folder: where the branch stands, Fetch and Pull (fast-forward only), branches to switch and create. */
 export function GitView(): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
   const g = useStore(gitState, (s) => s)
@@ -90,11 +92,17 @@ export function GitView(): React.JSX.Element {
 
           {g.actionError && (
             <ErrorBanner>
-              <strong>{g.actionError.action === 'fetch' ? 'Fetch failed' : 'Pull failed'}: {gitErrorLine(g.actionError.message)}</strong>
+              <strong>
+                {g.actionError.action === 'switch' ? `Couldn't switch to ${g.actionError.branch}` : g.actionError.action === 'fetch' ? 'Fetch failed' : 'Pull failed'}: {gitErrorLine(g.actionError.message)}
+              </strong>
+              {g.actionError.action === 'switch' && <div className="git-hint">Nothing changed: you are still on {s.branch ?? 'the same commit'}.</div>}
               <pre className="git-error">{g.actionError.message}</pre>
             </ErrorBanner>
           )}
           {g.error && <ErrorBanner onRetry={() => void refreshGit()}>Couldn't refresh the git status: {g.error}</ErrorBanner>}
+          {g.branches && <GitBranches branches={g.branches} />}
+
+          <WorktreesSection root={root} />
         </div>
       )}
     </ViewShell>

@@ -1,10 +1,10 @@
 import { execFileSync } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync, realpathSync } from 'fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync, realpathSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
-import { createBranch, fetch, listWorktrees, pull, remoteBranches, status } from '../src/main/git'
+import { branchNameProblem, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
+import { addWorktree, branchList, createBranch, fetch, listWorktrees, pruneWorktrees, pull, remoteBranches, removeWorktree, status, switchBranch, worktreeStatus } from '../src/main/git'
 
 describe('parseStatus', () => {
   it('reads branch, upstream, ahead/behind and counts', () => {
@@ -109,6 +109,72 @@ describe('parseRemoteBranches', () => {
   })
 })
 
+describe('parseBranchList', () => {
+  it('splits local and remote branches, marks the current one and other worktrees', () => {
+    const line = (...f: string[]): string => f.join('\0')
+    const out = [
+      line('refs/heads/main', '*', '1700000000', 'origin/main', '/repo', 'Fix: the thing'),
+      line('refs/heads/feature/x', ' ', '1690000000', '', '/repo-wt/x', 'wip'),
+      line('refs/heads/old', ' ', '', '', '', ''),
+      line('refs/remotes/origin/HEAD', ' ', '1700000000', '', '', ''),
+      line('refs/remotes/origin/main', ' ', '1700000000', '', '', 'Fix: the thing'),
+      ''
+    ].join('\n')
+    const list = parseBranchList(out, '/repo/')
+    expect(list.local).toEqual([
+      { name: 'main', current: true, committedAt: 1700000000000, subject: 'Fix: the thing', upstream: 'origin/main', worktree: null },
+      { name: 'feature/x', current: false, committedAt: 1690000000000, subject: 'wip', upstream: null, worktree: '/repo-wt/x' },
+      { name: 'old', current: false, committedAt: 0, subject: '', upstream: null, worktree: null }
+    ])
+    expect(list.remote.map((b) => b.name)).toEqual(['origin/main'])
+    expect(list.remote[0]).toMatchObject({ current: false, upstream: null, worktree: null })
+  })
+})
+
+describe('branchNameProblem', () => {
+  it('accepts ordinary names', () => {
+    for (const n of ['main', 'feature/login-form', 'fix/issue-12', 'release/1.2.3', 'a.b', 'üñî']) expect(branchNameProblem(n), n).toBeNull()
+  })
+
+  it('says what is wrong with names git rejects', () => {
+    const cases: [string, RegExp][] = [
+      ['', /Enter a name/],
+      ['   ', /Enter a name/],
+      ['my branch', /No spaces/],
+      ['-f', /dash/],
+      ['HEAD', /reserved/],
+      ['@', /reserved/],
+      ['a..b', /"\.\."/],
+      ['a@{1}', /@\{/],
+      ['a~1', /"~"/],
+      ['a^', /"\^"/],
+      ['a:b', /":"/],
+      ['a?', /"\?"/],
+      ['a*', /"\*"/],
+      ['a[b', /"\["/],
+      ['a\\b', /"\\"/],
+      ['a\x01b', /control/],
+      ['/a', /Slashes/],
+      ['a/', /Slashes/],
+      ['a//b', /Slashes/],
+      ['a.', /dot/],
+      ['.a', /dot/],
+      ['a/.b', /dot/],
+      ['a.lock', /\.lock/],
+      ['a/b.lock/c', /\.lock/]
+    ]
+    for (const [n, re] of cases) expect(branchNameProblem(n), JSON.stringify(n)).toMatch(re)
+  })
+
+  it('refuses existing names and folder clashes', () => {
+    const existing = ['main', 'feature/x']
+    expect(branchNameProblem('main', existing)).toMatch(/already exists/)
+    expect(branchNameProblem('feature', existing)).toMatch(/Clashes with the branch feature\/x/)
+    expect(branchNameProblem('main/sub', existing)).toMatch(/Clashes with the branch main/)
+    expect(branchNameProblem('feature/y', existing)).toBeNull()
+  })
+})
+
 describe('git operations against temp repos', () => {
   let tmp: string
   let origin: string
@@ -203,5 +269,83 @@ describe('git operations against temp repos', () => {
     expect(at(gone)).toMatchObject({ isMain: false, detached: true, branch: null, prunable: true })
     // asked from inside a linked worktree, the main one still comes first
     expect((await listWorktrees(spaced))[0].path).toBe(work)
+  })
+
+  it('branchList lists local and remote branches, and the worktree a branch is checked out in', async () => {
+    const list = await branchList(work)
+    const local = (n: string) => list.local.find((b) => b.name === n)
+    expect(local('master')).toMatchObject({ current: true, upstream: 'origin/master', worktree: null })
+    expect(local('master')!.committedAt).toBeGreaterThan(Date.now() - 3600_000)
+    expect(local('master')!.subject).toBe('edit d.txt')
+    expect(local('wt-branch')).toMatchObject({ current: false, worktree: join(tmp, 'wt with spaces') })
+    expect(local('feature/kept')).toMatchObject({ current: false, worktree: null, upstream: null })
+    expect(list.remote.map((b) => b.name)).toEqual(['origin/master'])
+    // from inside the linked worktree, its own branch is the current one there
+    const inWt = await branchList(join(tmp, 'wt with spaces'))
+    expect(inWt.local.find((b) => b.name === 'wt-branch')).toMatchObject({ current: true, worktree: null })
+    expect(inWt.local.find((b) => b.name === 'master')).toMatchObject({ current: false, worktree: work })
+  })
+
+  it('switchBranch refuses while tracked files have uncommitted changes, and changes nothing', async () => {
+    const head = g(work, 'rev-parse', 'HEAD')
+    writeFileSync(join(work, 'a.txt'), 'not committed\n')
+    await expect(switchBranch(work, 'feature/kept')).rejects.toThrow(/local changes[\s\S]*a\.txt[\s\S]*commit or stash/)
+    expect((await status(work)).branch).toBe('master')
+    expect(g(work, 'rev-parse', 'HEAD')).toBe(head)
+    expect(g(work, 'status', '--porcelain')).toBe(' M a.txt\n')
+    g(work, 'checkout', '-q', '--', 'a.txt')
+
+    // an untracked file doesn't block a switch; a branch checked out elsewhere is refused by git itself
+    writeFileSync(join(work, 'scratch.txt'), 'x\n')
+    await switchBranch(work, 'feature/kept')
+    expect((await status(work)).branch).toBe('feature/kept')
+    await expect(switchBranch(work, 'wt-branch')).rejects.toThrow(/already (checked out|used by worktree)/)
+    await expect(switchBranch(work, '--detach')).rejects.toThrow(/Not a branch/)
+    await switchBranch(work, 'master')
+    rmSync(join(work, 'scratch.txt'))
+  })
+
+  it('pruneWorktrees forgets worktrees whose folder is gone, and keeps the rest', async () => {
+    expect((await listWorktrees(work)).some((w) => w.prunable)).toBe(true)
+    await pruneWorktrees(work)
+    const list = await listWorktrees(work)
+    expect(list.some((w) => w.prunable)).toBe(false)
+    expect(list.some((w) => w.branch === 'wt-branch')).toBe(true)
+  })
+
+  it('addWorktree by hand: a new branch as typed, or an existing one, in .sldev-worktrees', async () => {
+    const dir = join(tmp, '.sldev-worktrees', 'work')
+    await expect(addWorktree(work, 'bad..name', '', { exact: true })).rejects.toThrow(/valid branch name/)
+    await expect(addWorktree(work, 'x', '--orphan', { exact: true })).rejects.toThrow(/valid base/)
+    await expect(addWorktree(work, 'master', '', { exact: true })).rejects.toThrow(/already exists/)
+    await expect(addWorktree(work, 'nope', '', { existing: true })).rejects.toThrow(/no branch/)
+
+    const fresh = await addWorktree(work, 'feature/by-hand', '')
+    // missions (no options) keep their -2 and sldev/ behaviour; this is just a slashed name
+    expect(fresh).toMatchObject({ path: join(dir, 'feature-by-hand'), branch: 'feature/by-hand', base: 'master', repo: work })
+    rmSync(fresh.path, { recursive: true, force: true })
+    await pruneWorktrees(work)
+
+    const typed = await addWorktree(work, 'plain', 'origin/master', { exact: true })
+    expect(typed).toMatchObject({ path: join(dir, 'plain'), branch: 'plain', base: 'origin/master' })
+    expect(g(typed.path, 'rev-parse', 'HEAD')).toBe(g(work, 'rev-parse', 'origin/master'))
+
+    await createBranch(work, 'feature/kept-2', 'master', false)
+    const ex = await addWorktree(work, 'feature/kept-2', 'master', { existing: true })
+    expect(ex).toMatchObject({ path: join(dir, 'feature-kept-2'), branch: 'feature/kept-2', base: 'master' })
+    expect((await status(ex.path)).branch).toBe('feature/kept-2')
+    // git checks a branch out in one place only
+    await expect(addWorktree(work, 'feature/kept-2', 'master', { existing: true })).rejects.toThrow()
+
+    // removing without discard refuses uncommitted files; the branch stays unless asked
+    writeFileSync(join(typed.path, 'wip.txt'), 'wip\n')
+    expect(await worktreeStatus(typed)).toMatchObject({ exists: true, untracked: 1 })
+    await expect(removeWorktree(typed, { deleteBranch: false, discard: false })).rejects.toThrow()
+    expect(existsSync(typed.path)).toBe(true)
+    await removeWorktree(typed, { deleteBranch: false, discard: true })
+    expect(existsSync(typed.path)).toBe(false)
+    expect(g(work, 'branch', '--list', 'plain').trim()).not.toBe('')
+    await removeWorktree(ex, { deleteBranch: true, discard: false })
+    expect(g(work, 'branch', '--list', 'feature/kept-2').trim()).toBe('')
   })
 })

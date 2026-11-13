@@ -1,8 +1,8 @@
 import { execFile } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
-import { parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
-import type { DiffStat, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
+import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
+import type { DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
   code: number
@@ -47,8 +47,26 @@ export async function branches(cwd: string): Promise<string[]> {
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : []
 }
 
+/**
+ * Check out `branch`, only from a working tree without uncommitted changes to tracked files: git itself
+ * would carry them over to the other branch, or refuse when they'd be overwritten. Either way nothing
+ * changes until the tree is clean, and the error lists the files. Untracked files are left to git.
+ */
 export async function switchBranch(cwd: string, branch: string): Promise<void> {
+  if (!branch || branch.startsWith('-')) throw new Error(`Not a branch: "${branch}"`)
+  const dirty = (await ok(['status', '--porcelain', '--untracked-files=no'], cwd)).split('\n').filter(Boolean)
+  if (dirty.length) {
+    const files = dirty.slice(0, 20).map((l) => `\t${l.slice(3)}`)
+    if (dirty.length > 20) files.push(`\t… and ${dirty.length - 20} more`)
+    throw new Error(`error: Your local changes would be carried over to ${branch}:\n${files.join('\n')}\nPlease commit or stash them before you switch branches.\nAborting`)
+  }
   await ok(['switch', branch], cwd)
+}
+
+/** Local and remote-tracking branches with their last commit, most recent first. */
+export async function branchList(cwd: string): Promise<GitBranchList> {
+  const root = (await git(['rev-parse', '--show-toplevel'], cwd)).stdout.trim()
+  return parseBranchList(await ok(['for-each-ref', '--sort=-committerdate', `--format=${BRANCH_LIST_FORMAT}`, 'refs/heads', 'refs/remotes'], cwd), root || cwd)
 }
 
 /** Branch, upstream, ahead/behind and counts of staged, unstaged, untracked and conflicted files. */
@@ -79,18 +97,32 @@ export async function pull(cwd: string): Promise<string> {
  * through `git check-ref-format --branch` first, so git never sees a name it would reject or reinterpret.
  */
 export async function createBranch(cwd: string, name: string, base: string, switchTo: boolean): Promise<string> {
-  const branch = name.trim()
-  // a leading dash would be read as an option by the commands below
-  if (!branch || branch.startsWith('-')) throw new Error(`Not a valid branch name: "${name}"`)
+  const branch = await checkBranchName(cwd, name)
   if (base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
-  const check = await git(['check-ref-format', '--branch', branch], cwd)
-  // check-ref-format expands "@{-1}" and the like into another branch's name; only take names as written
-  if (check.code !== 0 || check.stdout.trim() !== branch) throw new Error(`Not a valid branch name: "${name}"`)
   const start = base.trim() ? [base.trim()] : []
   if (switchTo) await ok(['switch', '--no-track', '-c', branch, ...start], cwd)
   else await ok(['branch', '--no-track', branch, ...start], cwd)
   return branch
 }
+
+/** The trimmed name when git would take it as a branch exactly as written; throws otherwise. */
+async function checkBranchName(cwd: string, name: string): Promise<string> {
+  const branch = name.trim()
+  // a leading dash would be read as an option by the commands that follow
+  if (!branch || branch.startsWith('-')) throw new Error(`Not a valid branch name: "${name}"`)
+  const check = await git(['check-ref-format', '--branch', branch], cwd)
+  // check-ref-format expands "@{-1}" and the like into another branch's name; only take names as written
+  if (check.code !== 0 || check.stdout.trim() !== branch) throw new Error(`Not a valid branch name: "${name}"`)
+  return branch
+}
+
+/** The checked-out branch, or the commit when HEAD is detached. */
+async function currentRef(cwd: string): Promise<string> {
+  const b = await gitBranch(cwd)
+  return (b && b !== 'HEAD' ? b : await head(cwd)) || 'HEAD'
+}
+
+const branchExists = async (repo: string, branch: string): Promise<boolean> => (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], repo)).code === 0
 
 /** Every worktree of the repository `cwd` belongs to, the main one first. */
 export async function listWorktrees(cwd: string): Promise<GitWorktree[]> {
@@ -128,25 +160,46 @@ async function prBase(cwd: string, base: string): Promise<string> {
   return (await git(['rev-parse', '--verify', '--quiet', `refs/remotes/${base}`], cwd)).code === 0 ? base.slice(slash + 1) : base
 }
 
-/** Create an isolated worktree for a mission next to the repo: ../.sldev-worktrees/<repo>/<slug> */
+export interface AddWorktreeOptions {
+  /** check out this branch, which must exist, instead of creating one; `base` is only recorded (what "ahead" counts from) */
+  existing?: boolean
+  /** a branch typed by hand: taken as written (no sldev/ prefix), and an error rather than -2 when it is taken */
+  exact?: boolean
+}
+
 /**
- * `name` is the branch: "feature/dark-mode" as it is, or a bare slug, which goes under sldev/ as before.
- * The folder is the name with its slashes turned into dashes; both get -2, -3… when taken.
+ * Create an isolated worktree next to the repo: ../.sldev-worktrees/<repo>/<folder>, for missions and
+ * by hand from the Git view. For missions, `name` is the branch: "feature/dark-mode" as it is, or a
+ * bare slug, which goes under sldev/ as before, and both branch and folder get -2, -3… when taken.
+ * The folder is the name with its slashes turned into dashes. `base` '' is the current branch.
  */
-export async function addWorktree(root: string, name: string, base: string): Promise<WorktreeInfo> {
+export async function addWorktree(root: string, name: string, base: string, opts: AddWorktreeOptions = {}): Promise<WorktreeInfo> {
   const top = (await ok(['rev-parse', '--show-toplevel'], root)).trim()
+  if (base.trim().startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  // record a name or commit as the base, never "HEAD", which moves on
+  const start = base.trim() || (await currentRef(top))
+  const byHand = !!(opts.existing || opts.exact)
+  const wanted = byHand ? await checkBranchName(top, name) : name.includes('/') ? name : `sldev/${name}`
+  const taken = await branchExists(top, wanted)
+  if (opts.existing && !taken) throw new Error(`There is no branch "${wanted}"`)
+  if (opts.exact && !opts.existing && taken) throw new Error(`A branch "${wanted}" already exists. Pick it as an existing branch, or choose another name.`)
   const dir = join(dirname(top), '.sldev-worktrees', basename(top))
   mkdirSync(dir, { recursive: true })
-  const wanted = name.includes('/') ? name : `sldev/${name}`
-  const folder = name.replace(/\//g, '-')
+  const folder = (byHand ? wanted : name).replace(/\//g, '-')
   let path = join(dir, folder)
   let branch = wanted
-  for (let i = 2; existsSync(path) || (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], top)).code === 0; i++) {
+  for (let i = 2; existsSync(path) || (!byHand && (await branchExists(top, branch))); i++) {
     path = join(dir, `${folder}-${i}`)
-    branch = `${wanted}-${i}`
+    if (!byHand) branch = `${wanted}-${i}`
   }
-  await ok(['worktree', 'add', '-b', branch, path, base], top)
-  return { path, branch, base, repo: top }
+  if (opts.existing) await ok(['worktree', 'add', path, branch], top)
+  else await ok(['worktree', 'add', '-b', branch, path, start], top)
+  return { path, branch, base: start, repo: top }
+}
+
+/** Drop git's records of worktrees whose folders are gone. Their branches stay. */
+export async function pruneWorktrees(cwd: string): Promise<void> {
+  await ok(['worktree', 'prune'], cwd)
 }
 
 /** What removing a worktree would lose: uncommitted files, and commits only its branch has. */
