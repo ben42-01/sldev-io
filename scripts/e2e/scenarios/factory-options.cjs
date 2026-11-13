@@ -11,7 +11,7 @@ const RECIPE = `name: E2E options
 stages:
   - id: spec
     agent: claude
-    prompt: Write a spec for {intent}.
+    prompt: Write a spec for {intent}. SLOW_STEP
     gate: approve
   - id: build
     agent: claude
@@ -43,8 +43,16 @@ module.exports = async (h) => {
   await h.setValue('.factory-form [aria-label="Model for spec"]', 'opus')
   await h.click('.factory-form input[aria-label="Interactive build"]')
   await h.wait(200)
+  h.expect(await h.js(`(() => { const c = document.querySelector('.factory-form .stage-all'); return !!c && !c.closest('details') && c.getBoundingClientRect().height > 0 })()`), 'the "run every stage interactively" switch is visible without opening Stages')
   await h.shot('0-form')
   await h.click('.factory-form .btn.primary', 'Start')
+
+  // a running print-mode stage's terminal says why it is quiet and shows what the agent is doing
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.pipeline-node[data-node="spec"].running button[title="Open its terminal"]')`), 15000), 'spec runs in print mode')
+  await h.click('.pipeline-node[data-node="spec"] button[title="Open its terminal"]')
+  h.expect(await h.until(() => h.js(`document.querySelector('.terminal-print-strip')?.textContent.includes('Print mode')`), 5000), 'its terminal explains print mode')
+  h.expect(await h.until(() => h.js(`document.querySelector('.terminal-print-activity')?.textContent.includes('npm test') || document.querySelector('.terminal-print-activity')?.textContent.includes('test suite')`), 5000), 'and shows the current step')
+  await h.shot('0-print-terminal')
 
   const runs = () => h.js(`window.api.store.get('factoryRuns').then(s => s.runs)`)
   const missions = async () => (await h.js(`window.api.store.get('missions')`)).missions

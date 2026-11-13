@@ -387,12 +387,14 @@ function StageChoices({ recipe, root, value, onChange, onSave }: { recipe: Recip
   const allLive = stages.every(isInteractive)
   const setAllLive = (on: boolean): void => onChange(Object.fromEntries(stages.map((n) => [n.id, { ...value[n.id], interactive: on }])))
   return (
+    <>
+    {/* outside the fold: how a stage runs decides whether you can watch it, and people missed it in there */}
+    {stages.length > 0 && <label className="check stage-all">
+      <input type="checkbox" checked={allLive} onChange={(e) => setAllLive(e.target.checked)} />
+      <span>Run every agent stage interactively: you see the session, can answer and steer it, and click Done to move on. Off, stages run unattended in print mode and their terminal stays quiet until they end.</span>
+    </label>}
     <details className="stage-choices">
       <summary>Stages: agent, model, skill and how each one runs{changed ? ' · changed' : ''}</summary>
-      {stages.length > 0 && <label className="check stage-all">
-        <input type="checkbox" checked={allLive} onChange={(e) => setAllLive(e.target.checked)} />
-        <span>Run every agent stage interactively: you see the session, can answer and steer it, and click Done to move on</span>
-      </label>}
       {stages.length > 1 && <AllStages stages={stages} value={value} onChange={onChange} />}
       {stages.map((n) => {
         const o = value[n.id] ?? {}
@@ -465,6 +467,7 @@ function StageChoices({ recipe, root, value, onChange, onSave }: { recipe: Recip
         {changed && <span className="link" onClick={onSave}>Save as a project recipe</span>}
       </div>
     </details>
+    </>
   )
 }
 

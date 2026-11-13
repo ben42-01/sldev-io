@@ -81,7 +81,8 @@ const recipes: DocPage = {
           <ul>
             <li>
               <b>Agent stages</b> give a prompt to a coding agent (Claude Code, Codex, Gemini CLI, Cursor, Copilot, OpenCode or your own CLI). The
-              agent runs unattended and writes a short report.
+              agent runs unattended and writes a short report, or, if you make the stage interactive, in a session you watch and type into
+              (see <b>Watching and talking to a stage</b> below).
             </li>
             <li>
               <b>Run stages</b> run commands, usually your checks. Exit code 0 means pass.
@@ -458,13 +459,29 @@ stages:
     },
     {
       id: 'interactive',
-      title: 'Talking to a stage',
+      title: 'Watching and talking to a stage',
       body: (
         <>
-          <p>
-            Agent stages run unattended: the agent gets its prompt, works, and exits. When you want to steer an agent while it works, make the
-            stage interactive:
-          </p>
+          <p>An agent stage runs in one of two ways, and which one decides what you see when you open its terminal:</p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><b>Print mode</b> (the default)</td><td>The agent gets its prompt, works on its own and exits. Its terminal stays quiet until it ends, then shows its answer. Nobody needs to be there, so it uses the unattended permission mode from Settings → Software Factory. The stage card in the Pipeline shows what the agent is doing right now (each tool call for Claude Code, the last line of output for the others)</td></tr>
+              <tr><td><b>Interactive</b></td><td>A normal agent session in a terminal, like a mission: you watch it work, answer its questions and steer it. You click <b>Done</b> on the stage when you're finished; Claude Code and Codex can also mark it done themselves</td></tr>
+            </tbody>
+          </table>
+          <p>Print mode suits stages you trust to run alone (build, test fixes, reviews). Make a stage interactive when you want to be part of it, for a spec you shape together or a tricky change you'd like to watch. There are three places to set it:</p>
+          <ul>
+            <li>
+              <b>For one run:</b> in <b>New factory run</b>, tick <b>Run every agent stage interactively</b>, or open <b>Stages</b> below it to choose
+              per stage.
+            </li>
+            <li>
+              <b>In the recipe builder:</b> tick <b>Interactive</b> on the stage (Recipes → New recipe, or edit a project recipe).
+            </li>
+            <li>
+              <b>In the YAML:</b> add <code>interactive: true</code> to the stage:
+            </li>
+          </ul>
           <Code>{`
   - id: design
     agent: Spec writer
@@ -472,13 +489,18 @@ stages:
     prompt: Let's design {intent} together. Save the result to {out}.
 `}</Code>
           <p>
-            An interactive stage is a normal session in a terminal: you type into it, and you click <b>Done</b> on the stage when you're
-            finished. Claude Code and Codex can also mark it done themselves.
+            To get to a stage's agent, use the buttons on its card in the Pipeline panel: the terminal button opens a running stage's terminal,
+            and the scroll button shows the exact prompt it got and the output it wrote.
           </p>
           <p>
-            Any finished agent stage can also be continued: the speech-bubble button on the stage resumes that agent's session in a terminal, so
-            you can ask a follow-up or a small fix. What it changes is committed before the next stage starts.
+            Any finished agent stage can also be continued, print mode or not: <b>Talk to it</b> (the speech-bubble button) resumes that agent's
+            session in a terminal you type into, so you can ask a follow-up or a small fix. What it changes is committed before the next stage
+            starts. A stage waiting at a gate has the same button, so you can question the agent before you approve.
           </p>
+          <Note>
+            A print-mode stage can't be switched to interactive while it runs. If you want to step in, let it finish and use Talk to it, or make
+            the stage interactive in the recipe (or in the run form) for next time.
+          </Note>
         </>
       )
     },

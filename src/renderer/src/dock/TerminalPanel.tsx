@@ -17,7 +17,8 @@ import {
 import { showContextMenu, type MenuItem } from '../components/ContextMenu'
 import { consumeFresh, type TerminalPanelParams } from './dockApi'
 import { linkPanel } from '../state/runs'
-import { linkMissionPanel, missionEnv, missionResumeCommand } from '../state/missions'
+import { isLive, linkMissionPanel, missionEnv, missionResumeCommand, useMission } from '../state/missions'
+import { StageActivity } from '../components/StageActivity'
 import { TerminalSearch } from './TerminalSearch'
 import { basename } from '../lib/paths'
 
@@ -50,7 +51,26 @@ export function TerminalPanel(props: IDockviewPanelProps<TerminalPanelParams>): 
   return (
     <div className="terminal-panel">
       <TerminalSearch id={id} panelApi={props.api} />
+      {props.params.missionId && <PrintModeStrip missionId={props.params.missionId} />}
       <div className="terminal-mount" ref={ref} onContextMenu={(e) => showContextMenu(e, terminalMenu(id))} />
+    </div>
+  )
+}
+
+/**
+ * A print-mode agent writes nothing to its terminal until it exits, so an opened stage looked like
+ * nothing was happening. Say why, show what it is doing, and how to get a session you can watch.
+ */
+function PrintModeStrip({ missionId }: { missionId: string }): React.JSX.Element | null {
+  const m = useMission(missionId)
+  if (!m?.options.print || !isLive(m.status)) return null
+  return (
+    <div className="terminal-print-strip" role="status">
+      <div>
+        <b>Print mode:</b> the agent works unattended and prints its answer when it ends, so this terminal stays quiet until then.
+        {m.factory && ' To watch and steer a stage live, run it interactively (New factory run → "Run every agent stage interactively", or interactive: true in the recipe).'}
+      </div>
+      <StageActivity missionId={missionId} className="terminal-print-activity" />
     </div>
   )
 }
