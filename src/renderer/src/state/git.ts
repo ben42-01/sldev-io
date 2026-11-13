@@ -36,6 +36,9 @@ export interface GitState {
   wtStatus: Record<string, WorktreeStatus>
 }
 
+/** Which Git view sections are open, and the branch search; kept while the app runs, so switching views keeps them. */
+export const gitFolds = createStore({ local: true, remote: false, worktrees: true, query: '' })
+
 export const gitState = createStore<GitState>({
   root: null,
   repo: null,

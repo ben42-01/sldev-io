@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Code2, Eraser, FolderGit2, FolderOpen, Lock, Plus, SquareTerminal, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Code2, Eraser, FolderGit2, FolderOpen, Lock, Plus, SquareTerminal, Trash2 } from 'lucide-react'
 import type { GitWorktree } from '@shared/types'
-import { gitState, pruneWorktrees, refreshGit, usersOf, worktreeInfo } from '../state/git'
+import { gitFolds, gitState, pruneWorktrees, refreshGit, usersOf, worktreeInfo } from '../state/git'
 import { missions } from '../state/missions'
 import { factory, runWorktrees } from '../state/factory'
 import { evals } from '../state/evals'
@@ -29,6 +29,7 @@ export function WorktreesSection({ root }: { root: string }): React.JSX.Element 
   const runs = useStore(factory, (s) => s.runs)
   const evalRuns = useStore(evals, (s) => s.runs)
   const [creating, setCreating] = useState(false)
+  const open = useStore(gitFolds, (s) => s.worktrees)
   // a mission, run or eval that makes (or drops) a worktree while this is open: list again
   const owned = [...ms.map((m) => m.worktree?.path), ...runs.flatMap((r) => runWorktrees(r).map((w) => w.path)), ...evalRuns.flatMap((r) => r.attempts.map((a) => a.worktree?.path))]
     .filter(Boolean)
@@ -44,19 +45,23 @@ export function WorktreesSection({ root }: { root: string }): React.JSX.Element 
   return (
     <section className="git-wt" data-testid="git-worktrees">
       <div className="git-wt-head">
-        <span className="label">Worktrees{list ? ` · ${list.length}` : ''}</span>
+        <button type="button" className="git-fold git-wt-fold" aria-expanded={open} data-testid="git-worktrees-toggle" onClick={() => gitFolds.set({ worktrees: !open })}>
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <span className="label">Worktrees</span>
+          {list && <span className="git-muted git-count">{list.length}</span>}
+        </button>
         <div className="git-wt-head-actions">
           {prunable && (
             <button className="icon-btn" title="Prune: forget worktrees whose folders are gone (their branches stay)" aria-label="Prune worktrees" onClick={() => void pruneWorktrees()}>
               <Eraser size={14} />
             </button>
           )}
-          <button className="icon-btn" title="New worktree" aria-label="New worktree" onClick={() => setCreating(true)}>
+          <button className="icon-btn" title="New worktree" aria-label="New worktree" onClick={() => (gitFolds.set({ worktrees: true }), setCreating(true))}>
             <Plus size={14} />
           </button>
         </div>
       </div>
-      {error ? (
+      {!open ? null : error ? (
         <ErrorBanner onRetry={() => void refreshGit()}>Couldn't list the worktrees: {error}</ErrorBanner>
       ) : !list ? (
         <div className="git-muted git-wt-loading">Reading worktrees…</div>
@@ -67,7 +72,7 @@ export function WorktreesSection({ root }: { root: string }): React.JSX.Element 
           ))}
         </ul>
       )}
-      {list && list.length === 1 && !error && <div className="git-hint">Only the main checkout. A worktree is a second folder on another branch, so an agent can work there while you work here.</div>}
+      {open && list && list.length === 1 && !error && <div className="git-hint">Only the main checkout. A worktree is a second folder on another branch, so an agent can work there while you work here.</div>}
       {creating && <NewWorktreeDialog root={root} list={list ?? []} onClose={() => setCreating(false)} />}
     </section>
   )

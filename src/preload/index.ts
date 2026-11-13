@@ -6,6 +6,7 @@ import type { MissionKind } from '@shared/missionKinds'
 import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
+import type { GraphLog } from '@shared/gitGraph'
 import type {
   AgentProfile,
   RulesState,
@@ -165,6 +166,10 @@ const api = {
     pruneWorktrees: (cwd: string): Promise<void> => ipcRenderer.invoke('git:pruneWorktrees', cwd),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
+    /** every ref's last `limit` commits in topo order, for the commit graph */
+    graphLog: (cwd: string, limit: number): Promise<GraphLog> => ipcRenderer.invoke('git:graphLog', cwd, limit),
+    /** one commit's own diff (a merge against its first parent) */
+    showCommit: (cwd: string, sha: string): Promise<string> => ipcRenderer.invoke('git:showCommit', cwd, sha),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),

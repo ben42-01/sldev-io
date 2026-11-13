@@ -255,6 +255,8 @@ function registerIpc(): void {
   ipcMain.handle('git:pruneWorktrees', (_e, cwd: string) => git.pruneWorktrees(cwd))
   ipcMain.handle('git:worktreeStatus', (_e, wt: WorktreeInfo) => git.worktreeStatus(wt))
   ipcMain.handle('git:removeWorktree', (_e, wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }) => git.removeWorktree(wt, opts))
+  ipcMain.handle('git:graphLog', (_e, cwd: string, limit: number) => git.graphLog(cwd, limit))
+  ipcMain.handle('git:showCommit', (_e, cwd: string, sha: string) => git.showCommit(cwd, sha))
   ipcMain.handle('git:diff', (_e, cwd: string, base: string) => git.diff(cwd, base))
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))

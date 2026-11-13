@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatus } from '@shared/types'
+import type { GitBranchRef, GitStatus } from '@shared/types'
+import { branchSlice } from '@shared/git'
 import { changeSummary, fetchOutcome, gitErrorLine, pullOutcome, worktreeSummary, worktreeUsers, type WorktreeOwners } from '../src/renderer/src/lib/git'
 
 const status = (p: Partial<GitStatus> = {}): GitStatus => ({ branch: 'main', head: 'abc', detached: false, upstream: 'origin/main', ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, conflicted: 0, ...p })
@@ -77,5 +78,38 @@ describe('who uses a worktree', () => {
     expect(worktreeSummary(null)).toBeNull()
     expect(worktreeSummary({ modified: 0, untracked: 0, unmerged: 0 }, 'main')).toBeNull()
     expect(worktreeSummary({ modified: 2, untracked: 1, unmerged: 3 }, 'main')).toBe('2 modified · 1 untracked · 3 ahead of main')
+  })
+})
+
+describe('branchSlice', () => {
+  const ref = (name: string, current = false): GitBranchRef => ({ name, current, committedAt: 0, subject: '', upstream: null, worktree: null })
+  const many = Array.from({ length: 40 }, (_, i) => ref(`feature/b${i}`))
+
+  it('shows the most recent ones up to the limit', () => {
+    const s = branchSlice(many, '')
+    expect(s.shown.map((b) => b.name)).toEqual(many.slice(0, 25).map((b) => b.name))
+    expect(s.matched).toBe(40)
+  })
+
+  it('keeps the current branch even when it is older than the limit', () => {
+    const list = [...many.slice(0, 30), ref('main', true)]
+    const s = branchSlice(list, '', 25)
+    expect(s.shown).toHaveLength(26)
+    expect(s.shown.at(-1)?.name).toBe('main')
+  })
+
+  it('finds older branches by every word of the query, any case', () => {
+    expect(branchSlice(many, 'B39').shown.map((b) => b.name)).toEqual(['feature/b39'])
+    expect(branchSlice(many, 'feat 3').shown.map((b) => b.name)).toEqual(many.map((b) => b.name).filter((n) => n.includes('3')))
+    expect(branchSlice(many, 'b3 feat').matched).toBe(11)
+    expect(branchSlice(many, 'nope')).toEqual({ shown: [], matched: 0 })
+    // the current branch only shows when it matches
+    expect(branchSlice([ref('main', true), ...many], 'b1').shown.some((b) => b.name === 'main')).toBe(false)
+  })
+
+  it('caps matches at the limit too', () => {
+    const s = branchSlice(many, 'feature', 10)
+    expect(s.shown).toHaveLength(10)
+    expect(s.matched).toBe(40)
   })
 })

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, Cloud, Copy, GitBranch, GitBranchPlus, LoaderCircle, SquareTerminal } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Cloud, Copy, GitBranch, GitBranchPlus, LoaderCircle, Search, SquareTerminal, X } from 'lucide-react'
 import type { GitBranchList, GitBranchRef } from '@shared/types'
-import { branchNameProblem } from '@shared/git'
-import { gitCreateBranch, gitSwitch, gitState } from '../state/git'
+import { BRANCH_LIMIT, branchNameProblem, branchSlice } from '@shared/git'
+import { gitCreateBranch, gitFolds, gitState, gitSwitch } from '../state/git'
 import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { openTerminal } from '../dock/dockApi'
@@ -26,7 +26,8 @@ function checkedOutAt(b: GitBranchRef, root: string): string | null {
 export function GitBranches({ branches }: { branches: GitBranchList }): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder) ?? ''
   const busy = useStore(gitState, (s) => s.busy)
-  const [showRemote, setShowRemote] = useState(false)
+  const folds = useStore(gitFolds, (s) => s)
+  const [all, setAll] = useState({ local: false, remote: false })
   const [switching, setSwitching] = useState<string | null>(null)
   const [create, setCreate] = useState<{ base: string; name: string } | null>(null)
 
@@ -62,69 +63,133 @@ export function GitBranches({ branches }: { branches: GitBranchList }): React.JS
     <section className="git-branches" data-testid="git-branches">
       <div className="git-section-head">
         <span className="label">Branches</span>
-        <span className="git-muted git-count">{branches.local.length}</span>
+        <span className="git-muted git-count">{branches.local.length + branches.remote.length}</span>
         <button type="button" className="icon-btn" title="New branch" aria-label="New branch" data-testid="git-new-branch" onClick={() => setCreate({ base: '', name: '' })}>
           <GitBranchPlus size={14} />
         </button>
       </div>
+      {branches.local.length + branches.remote.length > 0 && (
+        <label className="git-search">
+          <Search size={12} />
+          <input
+            value={folds.query}
+            placeholder="Find a branch"
+            spellCheck={false}
+            aria-label="Find a branch"
+            data-testid="git-branch-search"
+            onChange={(e) => gitFolds.set({ query: e.target.value })}
+            onKeyDown={(e) => e.key === 'Escape' && folds.query && (e.stopPropagation(), gitFolds.set({ query: '' }))}
+          />
+          {folds.query && (
+            <button type="button" className="icon-btn" title="Clear the search" aria-label="Clear the search" onClick={() => gitFolds.set({ query: '' })}>
+              <X size={12} />
+            </button>
+          )}
+        </label>
+      )}
       {branches.local.length === 0 ? (
         <div className="git-hint">No branches yet: make a first commit, then branches show here.</div>
       ) : (
-        <ul className="git-branch-list" aria-label="Local branches">
-          {branches.local.map((b) => (
-            <li key={b.name}>
-              <button
-                type="button"
-                className={`git-branch-row${b.current ? ' current' : ''}`}
-                data-branch={b.name}
-                aria-current={b.current || undefined}
-                disabled={!!busy && !b.current}
-                title={b.current ? `${b.name} (checked out)${b.subject ? `\n${b.subject}` : ''}` : `Switch to ${b.name}${b.worktree ? `\nChecked out in ${b.worktree}` : ''}${b.subject ? `\n${b.subject}` : ''}`}
-                onClick={() => switchTo(b)}
-                onContextMenu={(e) => showContextMenu(e, localMenu(b))}
-              >
-                {switching === b.name ? <LoaderCircle size={13} className="spin" /> : b.current ? <Check size={13} className="git-current-mark" /> : <GitBranch size={13} />}
-                <span className="git-row-name">{b.name}</span>
-                {b.worktree && <span className="chip git-wt-chip" title={`Checked out in ${b.worktree}`}>worktree</span>}
-                {b.committedAt > 0 && <TimeAgo t={b.committedAt} className="git-row-time" />}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <BranchGroup
+          kind="local"
+          list={branches.local}
+          query={folds.query}
+          open={folds.local}
+          showAll={all.local}
+          onShowAll={() => setAll((a) => ({ ...a, local: true }))}
+          render={(b) => (
+            <button
+              type="button"
+              className={`git-branch-row${b.current ? ' current' : ''}`}
+              data-branch={b.name}
+              aria-current={b.current || undefined}
+              disabled={!!busy && !b.current}
+              title={b.current ? `${b.name} (checked out)${b.subject ? `\n${b.subject}` : ''}` : `Switch to ${b.name}${b.worktree ? `\nChecked out in ${b.worktree}` : ''}${b.subject ? `\n${b.subject}` : ''}`}
+              onClick={() => switchTo(b)}
+              onContextMenu={(e) => showContextMenu(e, localMenu(b))}
+            >
+              {switching === b.name ? <LoaderCircle size={13} className="spin" /> : b.current ? <Check size={13} className="git-current-mark" /> : <GitBranch size={13} />}
+              <span className="git-row-name">{b.name}</span>
+              {b.worktree && <span className="chip git-wt-chip" title={`Checked out in ${b.worktree}`}>worktree</span>}
+              {b.committedAt > 0 && <TimeAgo t={b.committedAt} className="git-row-time" />}
+            </button>
+          )}
+        />
       )}
 
       {branches.remote.length > 0 && (
-        <>
-          <button type="button" className="git-fold" aria-expanded={showRemote} data-testid="git-remote-toggle" onClick={() => setShowRemote((v) => !v)}>
-            {showRemote ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            <span>Remote branches</span>
-            <span className="git-muted git-count">{branches.remote.length}</span>
-          </button>
-          {showRemote && (
-            <ul className="git-branch-list" aria-label="Remote branches">
-              {branches.remote.map((b) => (
-                <li key={b.name}>
-                  <button
-                    type="button"
-                    className="git-branch-row"
-                    data-remote-branch={b.name}
-                    title={`New branch from ${b.name}${b.subject ? `\n${b.subject}` : ''}`}
-                    onClick={() => setCreate({ base: b.name, name: localName(b.name) })}
-                    onContextMenu={(e) => showContextMenu(e, remoteMenu(b))}
-                  >
-                    <Cloud size={13} />
-                    <span className="git-row-name">{b.name}</span>
-                    {b.committedAt > 0 && <TimeAgo t={b.committedAt} className="git-row-time" />}
-                  </button>
-                </li>
-              ))}
-            </ul>
+        <BranchGroup
+          kind="remote"
+          list={branches.remote}
+          query={folds.query}
+          open={folds.remote}
+          showAll={all.remote}
+          onShowAll={() => setAll((a) => ({ ...a, remote: true }))}
+          render={(b) => (
+            <button
+              type="button"
+              className="git-branch-row"
+              data-remote-branch={b.name}
+              title={`New branch from ${b.name}${b.subject ? `\n${b.subject}` : ''}`}
+              onClick={() => setCreate({ base: b.name, name: localName(b.name) })}
+              onContextMenu={(e) => showContextMenu(e, remoteMenu(b))}
+            >
+              <Cloud size={13} />
+              <span className="git-row-name">{b.name}</span>
+              {b.committedAt > 0 && <TimeAgo t={b.committedAt} className="git-row-time" />}
+            </button>
           )}
-        </>
+        />
       )}
 
       {create && <NewBranchDialog branches={branches} initialBase={create.base} initialName={create.name} onClose={() => setCreate(null)} />}
     </section>
+  )
+}
+
+/**
+ * Local or remote branches under a fold: the BRANCH_LIMIT most recent (Show all for the rest), or, while
+ * searching, the matches, opened whatever the fold says so a search never comes up empty behind it.
+ */
+function BranchGroup(p: {
+  kind: 'local' | 'remote'
+  list: GitBranchRef[]
+  query: string
+  open: boolean
+  showAll: boolean
+  onShowAll: () => void
+  render: (b: GitBranchRef) => React.JSX.Element
+}): React.JSX.Element {
+  const searching = !!p.query.trim()
+  const { shown, matched } = branchSlice(p.list, p.query, p.showAll ? Infinity : BRANCH_LIMIT)
+  const open = searching ? matched > 0 : p.open
+  const label = p.kind === 'local' ? 'Local' : 'Remote'
+  const left = matched - shown.length
+  return (
+    <div className="git-branch-group" data-group={p.kind}>
+      <button type="button" className="git-fold" aria-expanded={open} data-testid={`git-${p.kind}-toggle`} disabled={searching} onClick={() => gitFolds.set({ [p.kind]: !p.open })}>
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <span>{label}</span>
+        <span className="git-muted git-count">{searching ? `${matched} of ${p.list.length}` : p.list.length}</span>
+      </button>
+      {open && (
+        <>
+          <ul className="git-branch-list" aria-label={`${label} branches`}>
+            {shown.map((b) => (
+              <li key={b.name}>{p.render(b)}</li>
+            ))}
+          </ul>
+          {left > 0 && (
+            <div className="git-more">
+              <span className="git-hint">{left} older {searching ? 'matches' : `branch${left === 1 ? '' : 'es'}`} hidden{searching ? '' : ', search to find one'}</span>
+              <button type="button" className="btn sm ghost" data-testid={`git-${p.kind}-all`} onClick={p.onShowAll}>
+                Show all
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 

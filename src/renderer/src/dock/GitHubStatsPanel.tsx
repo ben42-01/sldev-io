@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { ExternalLink, GitBranch, GitCommitHorizontal, ChartColumn, RefreshCw, Star, GitFork, Wrench } from 'lucide-react'
+import { ExternalLink, GitBranch, GitCommitHorizontal, ChartColumn, RefreshCw, Star, GitFork, GitGraph, Wrench } from 'lucide-react'
 import type { RepoStats } from '@shared/types'
 import { ghRunSignal } from '@shared/status'
 import { openPanel } from './dockApi'
@@ -13,11 +13,17 @@ import { StatusDot, StatusPill } from '../components/StatusDot'
 import { TimeAgo } from '../components/TimeAgo'
 import { showNotice } from '../components/Modal'
 import { ActivityCharts } from './ActivityCharts'
+import { CommitGraph } from './CommitGraph'
 
-export function openGitHubStats(): void {
+export type StatsTab = 'overview' | 'graph'
+
+/** Opens (or brings forward) the stats tab; `tab` switches it to the overview or the commit graph. */
+export function openGitHubStats(tab?: StatsTab): void {
   if (!workspace.get().rootFolder) return void showNotice('No folder open', 'Open a git repository to see its GitHub stats.')
-  openPanel('github-stats', 'github-stats', 'GitHub stats')
+  openPanel('github-stats', 'github-stats', 'GitHub stats', tab ? { tab, at: Date.now() } : {})
 }
+
+export const openCommitGraph = (): void => openGitHubStats('graph')
 
 const open = (url: string | null | undefined): void => {
   if (url) void window.api.shell.openExternal(url)
@@ -26,8 +32,10 @@ const open = (url: string | null | undefined): void => {
 type Load = { root: string; state: 'loading' } | { root: string; state: 'error'; message: string } | { root: string; state: 'ready'; data: RepoStats; at: number }
 
 /** Repo health at a glance (what scripts/gh-stats.sh prints), as tiles. Reads only while the tab is on screen. */
-export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element {
+export function GitHubStatsPanel(props: IDockviewPanelProps<{ tab?: StatsTab; at?: number }>): React.JSX.Element {
   const root = useStore(workspace, (w) => w.rootFolder)
+  const [tab, setTab] = useState<StatsTab>(props.params.tab ?? 'overview')
+  const [graphKey, setGraphKey] = useState(0)
   const [load, setLoad] = useState<Load | null>(null)
   const [busy, setBusy] = useState(false)
   const [visible, setVisible] = useState(props.api.isVisible)
@@ -39,6 +47,11 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
     const d = props.api.onDidVisibilityChange((e) => setVisible(e.isVisible))
     return () => d.dispose()
   }, [props.api])
+
+  // opened again with a tab asked for (the Git view's graph button, the palette)
+  useEffect(() => {
+    if (props.params.tab) setTab(props.params.tab)
+  }, [props.params.tab, props.params.at])
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!root || inflight.current) return
@@ -56,22 +69,34 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
     }
   }, [root])
 
-  // read on show, then every minute while shown; a hidden tab (or a minimised window) asks nothing
+  // read on show, then every minute while shown; a hidden tab (or a minimised window) asks nothing.
+  // The first read also happens on the graph tab, for the repo link and PR links; after that, only the overview polls.
+  const overview = tab === 'overview'
+  const loadedFor = useRef<string | null>(null)
+  if (load?.state === 'ready') loadedFor.current = load.root
   useEffect(() => {
-    if (!visible || !root) return
+    if (!visible || !root || (!overview && loadedFor.current === root)) return
     void refresh()
+    if (!overview) return
     const timer = setInterval(() => {
       if (!document.hidden) void refresh()
     }, STATS_REFRESH_MS)
     return () => clearInterval(timer)
-  }, [visible, root, refresh])
+  }, [visible, root, refresh, overview])
 
   const refreshBtn = (
-    <button className="icon-btn" title="Refresh" aria-label="Refresh" disabled={busy || !root} onClick={() => {
+    <button
+      className="icon-btn"
+      title="Refresh"
+      aria-label="Refresh"
+      disabled={(overview && busy) || !root}
+      onClick={() => {
+        if (!overview) return setGraphKey((k) => k + 1)
         setReload((n) => n + 1)
         void refresh()
-      }}>
-      <RefreshCw size={14} className={busy ? 'spin' : ''} />
+      }}
+    >
+      <RefreshCw size={14} className={overview && busy ? 'spin' : ''} />
     </button>
   )
 
@@ -85,7 +110,7 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
   const current = load?.root === root ? load : null
 
   return (
-    <div className="panel-page ghs" data-testid="github-stats">
+    <div className={`panel-page ghs${overview ? '' : ' ghs-graph-on'}`} data-testid="github-stats">
       <div className="panel-page-head ghs-head">
         <h2>GitHub stats</h2>
         {current?.state === 'ready' && current.data.github.value && (
@@ -100,7 +125,15 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
           </span>
         )}
         <span className="ghs-spacer" />
-        {current?.state === 'ready' && (
+        <div className="seg sm ghs-tabs" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={overview} className={overview ? 'on' : ''} onClick={() => setTab('overview')}>
+            <ChartColumn size={12} /> Overview
+          </button>
+          <button role="tab" aria-selected={!overview} className={overview ? '' : 'on'} onClick={() => setTab('graph')}>
+            <GitGraph size={12} /> Graph
+          </button>
+        </div>
+        {overview && current?.state === 'ready' && (
           <span className="ghs-updated">
             Updated <TimeAgo t={current.at} className="" />
           </span>
@@ -108,14 +141,16 @@ export function GitHubStatsPanel(props: IDockviewPanelProps): React.JSX.Element 
         {refreshBtn}
       </div>
 
-      {!current || current.state === 'loading' ? (
+      {!overview ? (
+        <CommitGraph root={root} visible={visible} githubUrl={current?.state === 'ready' ? (current.data.github.value?.url ?? null) : null} reloadKey={graphKey} />
+      ) : !current || current.state === 'loading' ? (
         <Loading what="Reading git and GitHub…" />
       ) : current.state === 'error' ? (
         <ErrorBanner onRetry={() => void refresh()}>Couldn't read the stats: {current.message}</ErrorBanner>
       ) : (
         <Stats s={current.data} />
       )}
-      {current?.state === 'ready' && !(current.data.status.error && current.data.lastCommit.error && !current.data.github.value) && (
+      {overview && current?.state === 'ready' && !(current.data.status.error && current.data.lastCommit.error && !current.data.github.value) && (
         <ActivityCharts root={root} visible={visible} reload={reload} />
       )}
     </div>

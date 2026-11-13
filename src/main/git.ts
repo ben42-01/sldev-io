@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
+import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
@@ -290,4 +291,27 @@ export async function activityCommits(cwd: string, from: string): Promise<Activi
     throw new Error(r.stderr.trim() || 'git log failed')
   }
   return parseCommitLog(r.stdout)
+}
+
+/**
+ * The last `limit` commits of every branch, tag and remote, children before parents, for the commit graph.
+ * One more than asked is read to know whether there are more.
+ */
+export async function graphLog(cwd: string, limit = 300): Promise<GraphLog> {
+  const n = Math.max(1, Math.min(Math.floor(limit), 20000))
+  const [log, remotes, origin] = await Promise.all([
+    git(['log', '--all', '--topo-order', '--no-color', `--max-count=${n + 1}`, `--format=${GRAPH_LOG_FORMAT}`], cwd),
+    git(['remote'], cwd),
+    git(['remote', 'get-url', 'origin'], cwd)
+  ])
+  // a repo without commits has nothing to draw, which isn't an error
+  if (log.code !== 0 && !/does not have any commits|unknown revision/.test(log.stderr)) throw new Error(log.stderr.trim() || 'git log failed')
+  const commits = parseGraphLog(log.code === 0 ? log.stdout : '', remotes.stdout.split('\n').filter(Boolean))
+  return { commits: commits.slice(0, n), more: commits.length > n, githubUrl: origin.code === 0 ? githubWebUrl(origin.stdout) : null }
+}
+
+/** One commit's own changes, as a unified diff (a merge against its first parent). */
+export async function showCommit(cwd: string, sha: string): Promise<string> {
+  if (!/^[0-9a-f]{7,64}$/.test(sha)) throw new Error(`Not a commit: "${sha}"`)
+  return ok(['show', '--no-color', '--no-ext-diff', '--format=', '--first-parent', '-m', sha], cwd)
 }
