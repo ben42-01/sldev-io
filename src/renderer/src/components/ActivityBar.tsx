@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Factory, Files, ListChecks, Network, NotebookPen, Play, Satellite, Server, SquareKanban } from 'lucide-react'
+import { Factory, Files, GitBranch, ListChecks, Network, NotebookPen, Play, Satellite, Server, SquareKanban } from 'lucide-react'
 import { whenDockReady } from '../dock/dockApi'
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
@@ -18,7 +18,8 @@ export const VIEW_META: Array<{ id: ViewId; label: string; icon: React.Component
   { id: 'factory', label: 'Factory', icon: Factory },
   { id: 'tasks', label: 'Tasks', icon: ListChecks },
   { id: 'notes', label: 'Notes', icon: NotebookPen },
-  { id: 'remote', label: 'Remote', icon: Server }
+  { id: 'remote', label: 'Remote', icon: Server },
+  { id: 'git', label: 'Git', icon: GitBranch }
 ]
 
 export function ActivityBar(): React.JSX.Element {
