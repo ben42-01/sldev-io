@@ -1,4 +1,4 @@
-import { ChevronDown, CheckCheck, CircleDot, GitBranch, Plus, RefreshCw, Settings2, Sparkles, SquareKanban, Tag } from 'lucide-react'
+import { ChevronDown, CheckCheck, CircleDot, GitBranch, Plus, RefreshCw, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
 import { BoardView, openBoardDialog } from '../components/BoardView'
 import { showContextMenu, type MenuItem } from '../components/ContextMenu'
 import { approve, refreshPrs, setBoardSync, syncBoardFiles, useBoardItems, useBoardSettings, useStoryJobs } from '../state/board'
@@ -8,6 +8,7 @@ import { useStore } from '../state/store'
 import { workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
 import { openPanel } from './dockApi'
+import { clearColumnFlow } from '../lib/removals'
 
 /** The work board in its own tab: agents write stories, you approve them, the factory picks them up. */
 export function openBoard(then?: 'stories' | 'release'): void {
@@ -52,6 +53,8 @@ export function BoardPanel(): React.JSX.Element {
     { label: `Approve all proposed${proposed.length ? ` (${proposed.length})` : ''}`, icon: <CheckCheck size={13} />, disabled: !proposed.length, run: () => approve(proposed.map((i) => i.id)) },
     { label: 'Check pull requests now', icon: <RefreshCw size={13} />, run: refreshPrs },
     { label: `Release notes from Done${unreleased(items).length ? ` (${unreleased(items).length})` : ''}…`, icon: <Tag size={13} />, run: () => openBoardDialog({ type: 'release' }) },
+    { label: `Clear Done${count('done') ? ` (${count('done')})` : ''}…`, icon: <Trash2 size={13} />, disabled: !count('done'), run: () => root && void clearColumnFlow(root, 'done') },
+    { label: 'Clear Backlog…', icon: <Trash2 size={13} />, disabled: !count('backlog'), run: () => root && void clearColumnFlow(root, 'backlog') },
     { label: 'Pick-up settings…', icon: <Settings2 size={13} />, run: () => openBoardDialog({ type: 'pickup' }) },
     { type: 'separator' },
     settings.sync

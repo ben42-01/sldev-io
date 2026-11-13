@@ -306,6 +306,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:activity', (_e, cwd: string, days: number) => gh.repoActivity(cwd, days))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
   ipcMain.handle('gh:prState', (_e, cwd: string, n: number) => gh.prState(cwd, Number(n)))
+  ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes

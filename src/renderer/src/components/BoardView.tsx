@@ -1,3 +1,4 @@
+import { clearColumnFlow } from '../lib/removals'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SkillsHint } from './SkillsHint'
 import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
@@ -126,6 +127,11 @@ function Column({ column, items, all, total, root, pickup, onOpen, jobs }: { col
         {column.id === 'done' && items.length > 0 && (
           <button type="button" className="icon-btn board-approve-all" title={`Release notes from Done${(() => { const t = spentTotal(items); return t ? ` · all of it took ${spentText(t)}` : '' })()}`} aria-label="Release notes" onClick={() => openBoardDialog({ type: 'release' })}>
             <Tag size={13} />
+          </button>
+        )}
+        {column.id === 'done' && total > 0 && (
+          <button type="button" className="icon-btn board-approve-all" title={`Clear Done: delete all ${total} cards and their worktrees`} aria-label="Clear Done" onClick={() => void clearColumnFlow(root, 'done')}>
+            <Trash2 size={13} />
           </button>
         )}
         {column.id === 'proposed' && items.length > 1 && (

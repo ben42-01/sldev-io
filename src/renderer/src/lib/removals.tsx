@@ -5,6 +5,8 @@ import { getMission, isLive, missions, removeMission } from '../state/missions'
 import { removeRun, runWorktrees } from '../state/factory'
 import { runningTerminalsIn } from './terminals'
 import type { WorktreeUser } from './git'
+import { BOARD_COLUMNS, type BoardColumn } from '@shared/board'
+import { board, missionsOf, removeItem, workOf } from '../state/board'
 
 /**
  * Every destructive action asks first, in the app, and says what is removed and what is kept.
@@ -167,6 +169,79 @@ export async function confirmDelete(what: string, name: string, opts: { keeps?: 
     danger: true
   })
   return !!ok
+}
+
+/**
+ * Clear a whole board column: every card in it, with the worktrees its missions or run worked in.
+ * Nothing runs while it happens (live work blocks it), uncommitted files go only with "discard"
+ * ticked, local branches only with their box ticked, and remote branches and pull requests stay.
+ * A card whose worktree can't be removed stays on the board, so nothing is lost silently.
+ */
+export async function clearColumnFlow(root: string, column: BoardColumn): Promise<void> {
+  const title = BOARD_COLUMNS.find((c) => c.id === column)?.title ?? column
+  const cards = board.get().items.filter((i) => i.root === root && i.column === column)
+  if (!cards.length) return
+  const work = cards.map((i) => {
+    const w = workOf(i)
+    return { card: i, run: w?.run, missions: w?.run ? [] : missionsOf(i) }
+  })
+  // one worktree can serve a mission and its follow-ups: remove it once
+  const trees = new Map<string, WorktreeInfo>()
+  for (const w of work) {
+    for (const t of w.run ? runWorktrees(w.run) : w.missions.flatMap((m) => (m.worktree ? [m.worktree] : []))) trees.set(t.path, t)
+  }
+  const list = [...trees.values()]
+  const statuses = await Promise.all(list.map((t) => window.api.git.worktreeStatus(t).catch(() => null)))
+  const there = list.filter((_, n) => statuses[n]?.exists !== false)
+  const dirty = list.map((t, n) => [t, statuses[n] && lossText(statuses[n]!)] as const).filter(([, l]) => l)
+  const blockers: React.ReactNode[] = []
+  // an agent at work blocks; one idle at its prompt (finished, waiting for a reply nobody will give) is ended
+  const panels = missions.get().panels
+  const live = work.filter((w) => (w.run ? w.run.status === 'running' : w.missions.some((m) => (m.status === 'working' || m.status === 'starting') && panels[m.id])))
+  const idle = work.flatMap((w) => w.missions).filter((m) => isLive(m.status) && panels[m.id]).length
+  if (live.length) blockers.push(`Still working: ${live.map((w) => `#${w.card.key}`).join(', ')}. Stop ${live.length === 1 ? 'it' : 'them'} first, or move ${live.length === 1 ? 'it' : 'them'} out of ${title}.`)
+  // a mission's own terminal closes with it; anything else running there is someone's work
+  const own = Object.values(panels)
+  const busy = list.flatMap((t) => runningTerminalsIn(t.path)).filter((p) => !own.includes(p))
+  if (busy.length) blockers.push(`${plural(busy.length, 'terminal')} still running in these worktrees. Stop or close ${busy.length === 1 ? 'it' : 'them'} first.`)
+  const branches = list.filter((t) => !work.some((w) => w.run?.worktree.path === t.path)).map((t) => t.branch)
+  const ok = await confirmAction({
+    title: `Clear ${title}?`,
+    message: `${plural(cards.length, 'card')} in ${title} ${cards.length === 1 ? 'is' : 'are'} deleted, with the work behind ${cards.length === 1 ? 'it' : 'them'}.`,
+    removes: [
+      `${plural(cards.length, 'card')}: ${cards.map((i) => `#${i.key}`).join(', ')}`,
+      ...(there.length ? [`${plural(there.length, 'worktree folder')}${there.length <= 4 ? '' : ', e.g.'} ${there.slice(0, 4).map((t) => t.path).join(', ')}`] : []),
+      ...(work.some((w) => w.run || w.missions.length) ? ['Their missions and factory runs from the lists'] : []),
+      ...(idle ? [`${plural(idle, 'idle agent session')} waiting at ${idle === 1 ? 'its' : 'their'} prompt: ${idle === 1 ? 'it is' : 'they are'} ended`] : [])
+    ],
+    keeps: ['Pull requests and branches on GitHub', 'Your main checkout', ...(work.some((w) => w.run) ? ["Each factory run's own branch (it holds the PR)"] : [])],
+    blockers,
+    checks: [
+      ...(dirty.length ? [{ id: 'discard', required: true, label: <>Discard uncommitted work: {dirty.map(([t, l]) => `${l} in ${t.branch}`).join('; ')}</> }] : []),
+      ...(branches.length ? [{ id: 'branch', initial: column === 'done', label: <>Also delete the local {branches.length === 1 ? 'branch' : 'branches'} {branches.slice(0, 3).map((b, n) => <span key={b}>{n ? ', ' : ''}{code(b)}</span>)}{branches.length > 3 ? ` and ${branches.length - 3} more` : ''}</> }] : [])
+    ],
+    confirmLabel: `Clear ${plural(cards.length, 'card')}`,
+    cancelLabel: 'Keep them',
+    danger: true
+  })
+  if (!ok) return
+  const failed: string[] = []
+  const removed = new Set<string>()
+  for (const w of work) {
+    try {
+      if (w.run) await removeRun(w.run.id, { worktrees: true, discard: !!ok.discard })
+      for (const m of w.missions) {
+        const wt = m.worktree && !removed.has(m.worktree.path) && there.some((t) => t.path === m.worktree!.path)
+        // a worktree already gone needs no removing (git prunes it), only the mission leaves the list
+        await removeMission(m.id, { removeWorktree: !!wt, deleteBranch: !!wt && !!ok.branch, discard: !!ok.discard })
+        if (m.worktree) removed.add(m.worktree.path)
+      }
+      removeItem(w.card.id)
+    } catch (e) {
+      failed.push(`#${w.card.key}: ${errText(e)}`)
+    }
+  }
+  if (failed.length) await showNotice(`${plural(failed.length, 'card')} stayed on the board`, failed.join('\n'))
 }
 
 export { errText, showNotice }

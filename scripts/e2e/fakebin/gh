@@ -11,6 +11,10 @@ if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
     "run list") echo '[]'; exit 0 ;;
   esac
 fi
+# a mission card's PR, found by the branch it was pushed from: #21, in the state pr-state.txt says
+if [ "$1 $2 $3" = "pr list --head" ]; then
+  echo "[{\"number\":21,\"state\":\"$(cat pr-state.txt 2>/dev/null || echo OPEN)\"}]"; exit 0
+fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;

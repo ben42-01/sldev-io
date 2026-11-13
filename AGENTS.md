@@ -180,7 +180,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Cards an agent files or rewrites (`sldev_board_add`, `sldev_board_update`, the story-writing missions of Write stories and Refine)
   always land in Proposed, and only a person approves them into Agent ready, so agents can't feed pick-up themselves.
   Story missions are read-only; agents without the sldev tools write their stories to a JSON file under `.sldev/runs/`. A merged PR
-  (asked through gh every 5 minutes for cards in Review) moves its card to Done; imported issues are closed by their run's PR.
+  (asked through gh every 5 minutes for cards in Review, and on window focus at most every 30 s; a run's PR is recorded, a mission's
+  is found by its worktree branch) moves its card to Done; Clear Done/Backlog (`clearColumnFlow`) deletes a column's cards with their
+  worktrees after asking, and never while an agent is at work in one; imported issues are closed by their run's PR.
   A card with `blockedBy` (card numbers; agents set it with `after`) isn't picked up until those are Done; manual Start can
   override from the menu. `spent` (time, agents, tokens from local logs) is measured once its work finishes and is not a change
   to the card (no `updatedAt` bump). Retros are read-only missions whose lessons go to `.sldev/memory.md` (sldev_remember, or a

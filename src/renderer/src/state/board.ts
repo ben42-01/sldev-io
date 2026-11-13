@@ -73,6 +73,8 @@ export async function loadBoard(): Promise<void> {
   unsub = [missions.subscribe(scheduleSync), factory.subscribe(scheduleSync)]
   clearInterval(timer)
   timer = setInterval(() => void tick(), TICK_MS)
+  window.removeEventListener('focus', onFocus)
+  window.addEventListener('focus', onFocus)
   // like automations: give runs and missions a moment to load before anything is picked up
   setTimeout(() => void tick(), 4000)
 }
@@ -341,19 +343,25 @@ async function tick(): Promise<void> {
 const prChecked = new Map<string, number>()
 
 /**
- * Cards waiting in Review or In progress whose run opened a pull request: ask GitHub (through gh)
- * at most every few minutes whether it was merged. Merged moves the card to Done.
+ * Cards waiting in Review or In progress whose work opened a pull request: ask GitHub (through gh)
+ * at most every few minutes whether it was merged. Merged moves the card to Done. A factory run
+ * records its PR; a mission doesn't, so its PR is found by the worktree branch it was pushed from.
  */
 async function checkPrs(): Promise<void> {
   const t = now()
   for (const i of board.get().items) {
-    if ((i.column !== 'review' && i.column !== 'progress') || i.started?.type !== 'run') continue
-    const pr = factory.get().runs.find((r) => r.id === i.started!.id)?.pr
-    if (!pr || t - (prChecked.get(i.id) ?? 0) < PR_POLL_MS) continue
+    if ((i.column !== 'review' && i.column !== 'progress') || !i.started?.id) continue
+    if (t - (prChecked.get(i.id) ?? 0) < PR_POLL_MS) continue
+    const w = workOf(i)
+    const number = w?.run?.pr?.number
+    const branch = w?.mission?.worktree?.branch
+    if (!number && !branch) continue
     prChecked.set(i.id, t)
-    const state = await window.api.gh.prState(i.root, pr.number).catch(() => null)
+    const pr = number
+      ? await window.api.gh.prState(i.root, number).then((state) => (state ? { number, state } : null), () => null)
+      : await window.api.gh.prForBranch(i.root, branch!).catch(() => null)
     const cur = getItem(i.id)
-    const next = state && cur ? followPr(cur, { number: pr.number, state }, now()) : null
+    const next = pr && cur ? followPr(cur, pr, now()) : null
     if (next) setItems((items) => items.map((x) => (x.id === i.id ? next : x)))
   }
 }
@@ -362,6 +370,14 @@ async function checkPrs(): Promise<void> {
 export function refreshPrs(): void {
   prChecked.clear()
   scheduleTick()
+}
+
+/** Coming back to the app (after merging on GitHub, most likely) asks again, at most every 30 s. */
+let focusChecked = 0
+function onFocus(): void {
+  if (now() - focusChecked < 30_000) return
+  focusChecked = now()
+  refreshPrs()
 }
 
 /** Starts an item's work now: its own recipe or mission, or the board's. Behind pick-up and the Start button. */

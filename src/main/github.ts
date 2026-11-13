@@ -117,6 +117,17 @@ export async function prState(cwd: string, n: number): Promise<'OPEN' | 'MERGED'
   return s === 'OPEN' || s === 'MERGED' || s === 'CLOSED' ? s : null
 }
 
+/**
+ * The newest pull request opened from `branch`, in any state: how the board finds the PR of a card
+ * that ran as a mission (its Pull request button pushes the worktree branch). Null when there is none.
+ */
+export async function prForBranch(cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> {
+  const list = await ghJson<Array<{ number?: number; state?: string }>>(['pr', 'list', '--head', branch, '--state', 'all', '--limit', '1', '--json', 'number,state'], cwd, [])
+  const pr = list[0]
+  const s = pr?.state?.toUpperCase()
+  return pr?.number && (s === 'OPEN' || s === 'MERGED' || s === 'CLOSED') ? { number: pr.number, state: s } : null
+}
+
 interface Author { login?: string }
 
 /** Everything reviewers wrote on PR `n`: reviews, conversation comments and line comments. */

@@ -6484,23 +6484,44 @@ a {
   gap: 6px;
   padding-bottom: 12px;
 }
-/* six columns side by side; a narrow dock scrolls them sideways instead of squeezing the cards */
+/* the board fills its tab: the columns take the height left under the filters, each column scrolls its
+   own cards, and a narrow dock scrolls them sideways with the scrollbar always at the bottom of the tab */
+.board-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+.board-page > * {
+  flex-shrink: 0;
+}
 .board-columns {
+  flex: 1 1 0;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(6, minmax(156px, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
-  overflow-x: auto;
+  overflow: auto hidden;
   padding-bottom: 6px;
+}
+.board-page > .board-columns {
+  flex-shrink: 1;
 }
 .board-column {
   min-width: 0;
+  max-height: 100%;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   display: flex;
   flex-direction: column;
   transition: border-color 120ms, background-color 120ms;
+}
+.board-column > .mc-column-head {
+  flex-shrink: 0;
 }
 .board-column.over {
   border-color: var(--fg-subtle);
@@ -6512,6 +6533,11 @@ a {
   gap: 6px;
   padding: 8px;
   min-height: 60px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.board-column-body > * {
+  flex-shrink: 0;
 }
 .board-pickup {
   padding: 0 5px;

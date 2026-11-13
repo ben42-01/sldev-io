@@ -211,6 +211,7 @@ const api = {
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
+    prForBranch: (cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> => ipcRenderer.invoke('gh:prForBranch', cwd, branch),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),
