@@ -8082,3 +8082,142 @@ select:disabled {
 .git-new-branch .field-hint.tone-error {
   color: var(--status-error);
 }
+
+/* ── Git view: worktrees ─────────────────────── */
+.git-wt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.git-wt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.git-wt-head-actions {
+  display: flex;
+  gap: 1px;
+}
+.git-wt-loading {
+  font-size: 11.5px;
+}
+.git-wt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.git-wt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.git-wt-row.gone {
+  border-style: dashed;
+}
+.git-wt-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.git-wt-icon {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+}
+.git-wt-branch {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.git-wt-row.gone .git-wt-branch {
+  color: var(--fg-muted);
+}
+.git-wt-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--fg-muted);
+}
+.git-wt-tag.warn {
+  border-color: color-mix(in oklch, var(--status-attention) 45%, transparent);
+  color: var(--status-attention);
+}
+.git-wt-row .row-actions {
+  flex-shrink: 0;
+  opacity: 1;
+}
+.git-wt-row .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.git-wt-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+}
+.git-wt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.git-wt-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--tint);
+  line-height: 18px;
+}
+.git-wt-user .dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--status-working);
+}
+.git-wt-user.live {
+  color: var(--fg);
+}
+.git-wt-why {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--status-attention);
+}
+.git-wt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.git-wt-where code {
+  word-break: break-all;
+}

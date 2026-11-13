@@ -156,7 +156,11 @@ const api = {
     /** local and remote branches with their last commit, for the Git view */
     branchList: (cwd: string): Promise<GitBranchList> => ipcRenderer.invoke('git:branchList', cwd),
     remoteBranches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:remoteBranches', cwd),
-    addWorktree: (root: string, slug: string, base: string): Promise<WorktreeInfo> => ipcRenderer.invoke('git:addWorktree', root, slug, base),
+    /** `existing`: check out that branch; `exact`: a new branch named as typed (no sldev/ prefix, no -2) */
+    addWorktree: (root: string, slug: string, base: string, opts?: { existing?: boolean; exact?: boolean }): Promise<WorktreeInfo> =>
+      ipcRenderer.invoke('git:addWorktree', root, slug, base, opts),
+    /** git worktree prune: forget worktrees whose folders are gone */
+    pruneWorktrees: (cwd: string): Promise<void> => ipcRenderer.invoke('git:pruneWorktrees', cwd),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),

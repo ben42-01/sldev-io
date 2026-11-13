@@ -1,6 +1,8 @@
 // Git view in the left activity bar: status, Fetch and Pull (fast-forward only) against a bare remote in the temp dir.
 // A diverged branch shows git's message and nothing is merged; a folder outside git gets an empty state.
 // Branches: create (an invalid name gets a hint), switch, a dirty tree refuses to switch and changes nothing.
+// Worktrees: listed with the main checkout marked, created by hand (new and existing branch), blocked from
+// removal while a mission runs in one, removed through the confirm flow, and a gone folder pruned.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -153,6 +155,7 @@ module.exports = async (h) => {
   await h.click('.ctx-item', 'Open terminal here')
   h.expect(await h.until(async () => (await h.js(`document.querySelectorAll('.terminal-mount').length`)) > terminalsBefore, 5000), 'Open terminal here opens a terminal')
   await h.shot('10-branches')
+  await worktrees(h, git, tmp)
 
   // a folder outside git: an empty state, not an error
   const plain = path.join(tmp, 'plain')
@@ -163,4 +166,110 @@ module.exports = async (h) => {
   h.expect(await h.until(() => h.js(`document.querySelector('.sidebar .empty-title')?.textContent === 'Not a git repository'`), 5000), 'non-repo folder shows the empty state')
   h.expect(await h.js(`!document.querySelector('.sidebar .error-banner')`), 'and no error')
   await h.shot('5-not-a-repo')
+}
+
+async function worktrees(h, git, tmp) {
+  const wtDir = path.join(tmp, '.sldev-worktrees', path.basename(h.fixture))
+  const rows = () => h.js(`[...document.querySelectorAll('.git-wt-row')].map(r => ({ path: r.dataset.path, main: !!r.dataset.main, text: r.textContent, removeDisabled: r.querySelector('[aria-label="Remove worktree"]')?.disabled ?? null }))`)
+  const row = async (p) => (await rows()).find((r) => r.path === p)
+  const dialog = () => h.js(`document.querySelector('dialog[open]')?.textContent ?? ''`)
+  const confirmDisabled = () => h.js(`[...document.querySelectorAll('dialog[open] .btn')].find(b => b.textContent.includes('Confirm remove'))?.disabled`)
+  const clickRemove = (p) => h.js(`[...document.querySelectorAll('.git-wt-row')].find(r => r.dataset.path === ${JSON.stringify(p)})?.querySelector('[aria-label="Remove worktree"]')?.click()`)
+  const tick = (label) => h.js(`[...document.querySelectorAll('dialog[open] label.check')].find(l => l.textContent.includes(${JSON.stringify(label)}))?.querySelector('input').click()`)
+  const openGit = async () => {
+    // the activity button toggles: only click when the view isn't showing
+    if (!(await h.js(`!!document.querySelector('[data-testid="git-view"]')`))) await h.click('.activity-btn[aria-label="Git"]')
+    await h.until(() => h.js(`!!document.querySelector('.git-wt-row')`), 8000)
+  }
+
+  await openGit()
+  let list = await rows()
+  h.expect(list.length === 1 && list[0].main && list[0].path === h.fixture, `only the main checkout, marked main (${JSON.stringify(list.map((r) => r.path))})`)
+  h.expect(list[0].removeDisabled === null, 'the main checkout has no Remove')
+
+  // New worktree: a new branch as typed, from main
+  await h.click('[aria-label="New worktree"]')
+  h.expect(await h.until(async () => (await dialog()).includes('New worktree'), 3000), 'the New worktree dialog opens')
+  await h.setValue('dialog[open] input[name=branch]', 'feature/by-hand')
+  await h.wait(200)
+  h.expect((await dialog()).includes(path.join('.sldev-worktrees', path.basename(h.fixture), 'feature-by-hand')), 'it says where the folder goes')
+  await h.wait(400)
+  await h.shot('6-new-worktree')
+  await h.click('dialog[open] .btn.primary', 'Create worktree')
+  const byHand = path.join(wtDir, 'feature-by-hand')
+  h.expect(await h.until(() => row(byHand), 10000), 'the new worktree is listed')
+  h.expect(fs.existsSync(byHand) && git(byHand, 'branch', '--show-current') === 'feature/by-hand', 'its folder is on the new branch, in .sldev-worktrees')
+  h.expect(git(byHand, 'rev-parse', 'HEAD') === git(h.fixture, 'rev-parse', 'main'), 'branched from main')
+
+  // an existing branch
+  git(h.fixture, 'branch', 'already-there', 'main')
+  await h.until(() => h.js(`!document.querySelector('dialog[open]')`), 3000)
+  await h.wait(300)
+  await h.click('[aria-label="New worktree"]')
+  h.expect(await h.until(async () => (await dialog()).includes('New worktree'), 3000), 'the New worktree dialog opens again')
+  await h.click('dialog[open] .seg button', 'Existing branch')
+  await h.wait(300)
+  h.expect(!(await h.js(`[...document.querySelectorAll('dialog[open] select[name=existing] option')].some(o => o.value === 'feature/by-hand' || o.value === 'main')`)), "branches checked out elsewhere aren't offered")
+  await h.setValue('dialog[open] select[name=existing]', 'already-there')
+  await h.click('dialog[open] .btn.primary', 'Create worktree')
+  const existing = path.join(wtDir, 'already-there')
+  h.expect(await h.until(() => row(existing), 10000), 'the existing branch got a worktree')
+  h.expect(git(existing, 'branch', '--show-current') === 'already-there', 'on that branch')
+
+  // a mission in its own worktree blocks removal while it runs
+  h.key('3', ['control', 'shift'])
+  await h.wait(500)
+  await h.click('.btn', 'New mission')
+  await h.wait(400)
+  await h.setValue('.form select', 'claude', `e.querySelector('option[value=claude]')`)
+  await h.setValue('.form textarea', 'Worktree in use')
+  await h.click('.form .btn.primary', 'Launch')
+  h.expect(await h.until(async () => (await h.js(`document.querySelector('.mission-card')?.textContent ?? ''`)).includes('Ready for you'), 15000), 'mission ran and is ready')
+  await openGit()
+  const missionRow = await h.until(async () => (await rows()).find((r) => r.text.includes('Mission ·')), 8000)
+  h.expect(!!missionRow, 'the mission shows on its worktree')
+  h.expect(missionRow?.removeDisabled === true, 'Remove is disabled while the mission runs')
+  h.expect(await h.js(`[...document.querySelectorAll('.git-wt-why')].some(e => e.textContent.includes('still running here'))`), 'and the row says why')
+  await h.shot('7-worktrees-in-use')
+
+  h.key('3', ['control', 'shift'])
+  await h.wait(500)
+  await h.click('.mission-card .icon-btn[title=Stop]')
+  h.expect(await h.until(async () => !(await h.js(`!!document.querySelector('.mission-card .icon-btn[title=Stop]')`)), 8000), 'mission stopped')
+  await openGit()
+  h.expect(await h.until(async () => (await row(missionRow.path))?.removeDisabled === false, 5000), 'Remove is enabled once it stopped')
+  await clickRemove(missionRow.path)
+  h.expect(await h.until(async () => (await dialog()).includes('Remove this worktree'), 5000), 'remove asks first')
+  const text = await dialog()
+  h.expect(/Discard .*(modified|untracked) file/.test(text), `asks to discard the agent's uncommitted work (${text.slice(0, 160)})`)
+  h.expect(await confirmDisabled(), 'confirm disabled until discard is ticked')
+  h.expect(text.includes('Worktree in use') || text.includes('mission'), 'says the mission stays in its list')
+  await h.wait(400)
+  await h.shot('8-remove-confirm')
+  await tick('Discard')
+  await h.wait(200)
+  h.expect(!(await confirmDisabled()), 'confirm enabled after ticking discard')
+  await h.click('dialog[open] .btn', 'Confirm remove')
+  h.expect(await h.until(() => !fs.existsSync(missionRow.path), 8000), "the mission's worktree folder is gone")
+  h.expect(await h.until(async () => !(await row(missionRow.path)), 5000), 'and off the list')
+
+  // a clean worktree: no discard needed, branch kept unless ticked
+  await clickRemove(byHand)
+  await h.until(async () => (await dialog()).includes('Remove this worktree'), 5000)
+  h.expect(!(await dialog()).includes('Discard'), 'a clean worktree needs no discard')
+  h.expect(!(await confirmDisabled()), 'confirm enabled straight away')
+  await h.click('dialog[open] .btn', 'Confirm remove')
+  h.expect(await h.until(() => !fs.existsSync(byHand), 8000), 'clean worktree removed')
+  h.expect(git(h.fixture, 'branch', '--list', 'feature/by-hand') !== '', 'its branch is kept')
+
+  // a folder deleted behind git's back: Prune
+  fs.rmSync(existing, { recursive: true, force: true })
+  await h.click('.sidebar-actions [aria-label="Refresh"]')
+  h.expect(await h.until(async () => (await row(existing))?.text.includes('folder gone'), 5000), 'a gone folder is marked')
+  await h.shot('9-prunable')
+  await h.click('.git-wt-row .btn', 'Prune')
+  h.expect(await h.until(async () => !(await row(existing)), 5000), 'Prune drops it from the list')
+  h.expect(!git(h.fixture, 'worktree', 'list').includes('already-there'), 'and from git')
+  list = await rows()
+  h.expect(list.length === 1 && list[0].main, 'back to the main checkout only')
 }

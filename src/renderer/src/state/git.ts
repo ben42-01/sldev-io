@@ -1,7 +1,10 @@
-import type { GitBranchList, GitStatus } from '@shared/types'
+import type { GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 import { createStore } from './store'
 import { refreshBranch, workspace } from './workspace'
-import { fetchOutcome, gitErrorLine, pullOutcome } from '../lib/git'
+import { missions } from './missions'
+import { factory, runWorktrees } from './factory'
+import { evals } from './evals'
+import { fetchOutcome, gitErrorLine, pullOutcome, worktreeUsers, type WorktreeOwners, type WorktreeUser } from '../lib/git'
 import { toast } from '../components/Toast'
 
 /**
@@ -25,16 +28,34 @@ export interface GitState {
   actionError: { action: GitAction; message: string; branch?: string } | null
   /** local and remote branches; null until read (or when reading them failed) */
   branches: GitBranchList | null
+  /** every worktree of the repository, the main checkout first; null until read */
+  worktrees: GitWorktree[] | null
+  /** listing them failed */
+  worktreesError: string
+  /** uncommitted files and commits of its own, by worktree path */
+  wtStatus: Record<string, WorktreeStatus>
 }
 
-export const gitState = createStore<GitState>({ root: null, repo: null, status: null, loading: false, error: '', busy: null, actionError: null, branches: null })
+export const gitState = createStore<GitState>({
+  root: null,
+  repo: null,
+  status: null,
+  loading: false,
+  error: '',
+  busy: null,
+  actionError: null,
+  branches: null,
+  worktrees: null,
+  worktreesError: '',
+  wtStatus: {}
+})
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
 /** Read the status again (on focus, after every action). Results for a folder that is no longer open are dropped. */
 export async function refreshGit(): Promise<void> {
   const root = workspace.get().rootFolder
-  if (gitState.get().root !== root) gitState.set({ root, repo: null, status: null, error: '', actionError: null, branches: null })
+  if (gitState.get().root !== root) gitState.set({ root, repo: null, status: null, error: '', actionError: null, branches: null, worktrees: null, worktreesError: '', wtStatus: {} })
   if (!root) return
   gitState.set({ loading: true })
   try {
@@ -44,6 +65,7 @@ export async function refreshGit(): Promise<void> {
       : [null, null]
     if (workspace.get().rootFolder !== root) return
     gitState.set({ repo, status, branches, error: '', loading: false })
+    if (repo) await refreshWorktrees(root)
   } catch (e) {
     if (workspace.get().rootFolder !== root) return
     gitState.set({ error: errText(e), loading: false })
@@ -123,4 +145,57 @@ export async function gitCreateBranch(name: string, base: string, switchTo: bool
     await refreshGit()
     return errText(e)
   }
+}
+
+// ── worktrees ────────────────────────────────────────────────────
+
+/** Missions, factory runs and eval runs as the worktree lookup takes them. */
+export function worktreeOwners(): WorktreeOwners {
+  return {
+    missions: missions.get().list,
+    runs: factory.get().runs.map((r) => ({ id: r.id, intent: r.intent, status: r.status, worktrees: runWorktrees(r) })),
+    evals: evals.get().runs
+  }
+}
+
+/** What uses a worktree right now (see worktreeUsers). */
+export const usersOf = (wt: GitWorktree): WorktreeUser[] => worktreeUsers(wt.path, wt.isMain, worktreeOwners())
+
+/**
+ * The WorktreeInfo the remove and status calls take: its branch (or commit, detached), and as base
+ * what its mission/run/eval branched from, else the main checkout's branch.
+ */
+export function worktreeInfo(wt: GitWorktree, list: GitWorktree[] = gitState.get().worktrees ?? []): WorktreeInfo {
+  const main = list.find((w) => w.isMain) ?? list[0]
+  const base = usersOf(wt).find((u) => u.base)?.base ?? main?.branch ?? main?.head ?? 'HEAD'
+  return { path: wt.path, branch: wt.branch ?? wt.head ?? '', base, repo: main?.path ?? wt.path }
+}
+
+async function refreshWorktrees(root: string): Promise<void> {
+  try {
+    const list = await window.api.git.worktrees(root)
+    if (workspace.get().rootFolder !== root) return
+    gitState.set({ worktrees: list, worktreesError: '' })
+    const entries = await Promise.all(
+      list.filter((w) => !w.prunable && !w.bare).map(async (w) => [w.path, await window.api.git.worktreeStatus(worktreeInfo(w, list)).catch(() => null)] as const)
+    )
+    if (workspace.get().rootFolder !== root) return
+    gitState.set({ wtStatus: Object.fromEntries(entries.filter((e): e is readonly [string, WorktreeStatus] => !!e[1])) })
+  } catch (e) {
+    if (workspace.get().rootFolder !== root) return
+    gitState.set({ worktreesError: errText(e) })
+  }
+}
+
+/** Forget worktrees whose folders are gone (`git worktree prune`); their branches stay. */
+export async function pruneWorktrees(): Promise<void> {
+  const root = workspace.get().rootFolder
+  if (!root) return
+  try {
+    await window.api.git.pruneWorktrees(root)
+    toast('Pruned worktrees whose folders are gone')
+  } catch (e) {
+    toast(`Prune failed: ${gitErrorLine(errText(e))}`, 5000, 'error')
+  }
+  await refreshGit()
 }

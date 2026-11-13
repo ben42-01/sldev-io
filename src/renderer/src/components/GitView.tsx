@@ -7,6 +7,7 @@ import { workspace } from '../state/workspace'
 import { ViewShell } from './RuntimesView'
 import { Empty, ErrorBanner, Loading } from './States'
 import { GitBranches } from './GitBranches'
+import { WorktreesSection } from './GitWorktrees'
 
 /** Everyday git for the open folder: where the branch stands, Fetch and Pull (fast-forward only), branches to switch and create. */
 export function GitView(): React.JSX.Element {
@@ -100,6 +101,8 @@ export function GitView(): React.JSX.Element {
           )}
           {g.error && <ErrorBanner onRetry={() => void refreshGit()}>Couldn't refresh the git status: {g.error}</ErrorBanner>}
           {g.branches && <GitBranches branches={g.branches} />}
+
+          <WorktreesSection root={root} />
         </div>
       )}
     </ViewShell>

@@ -1,10 +1,10 @@
 import { execFileSync } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync, realpathSync } from 'fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync, realpathSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { branchNameProblem, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
-import { branchList, createBranch, fetch, listWorktrees, pull, remoteBranches, status, switchBranch } from '../src/main/git'
+import { addWorktree, branchList, createBranch, fetch, listWorktrees, pruneWorktrees, pull, remoteBranches, removeWorktree, status, switchBranch, worktreeStatus } from '../src/main/git'
 
 describe('parseStatus', () => {
   it('reads branch, upstream, ahead/behind and counts', () => {
@@ -303,5 +303,49 @@ describe('git operations against temp repos', () => {
     await expect(switchBranch(work, '--detach')).rejects.toThrow(/Not a branch/)
     await switchBranch(work, 'master')
     rmSync(join(work, 'scratch.txt'))
+  })
+
+  it('pruneWorktrees forgets worktrees whose folder is gone, and keeps the rest', async () => {
+    expect((await listWorktrees(work)).some((w) => w.prunable)).toBe(true)
+    await pruneWorktrees(work)
+    const list = await listWorktrees(work)
+    expect(list.some((w) => w.prunable)).toBe(false)
+    expect(list.some((w) => w.branch === 'wt-branch')).toBe(true)
+  })
+
+  it('addWorktree by hand: a new branch as typed, or an existing one, in .sldev-worktrees', async () => {
+    const dir = join(tmp, '.sldev-worktrees', 'work')
+    await expect(addWorktree(work, 'bad..name', '', { exact: true })).rejects.toThrow(/valid branch name/)
+    await expect(addWorktree(work, 'x', '--orphan', { exact: true })).rejects.toThrow(/valid base/)
+    await expect(addWorktree(work, 'master', '', { exact: true })).rejects.toThrow(/already exists/)
+    await expect(addWorktree(work, 'nope', '', { existing: true })).rejects.toThrow(/no branch/)
+
+    const fresh = await addWorktree(work, 'feature/by-hand', '')
+    // missions (no options) keep their -2 and sldev/ behaviour; this is just a slashed name
+    expect(fresh).toMatchObject({ path: join(dir, 'feature-by-hand'), branch: 'feature/by-hand', base: 'master', repo: work })
+    rmSync(fresh.path, { recursive: true, force: true })
+    await pruneWorktrees(work)
+
+    const typed = await addWorktree(work, 'plain', 'origin/master', { exact: true })
+    expect(typed).toMatchObject({ path: join(dir, 'plain'), branch: 'plain', base: 'origin/master' })
+    expect(g(typed.path, 'rev-parse', 'HEAD')).toBe(g(work, 'rev-parse', 'origin/master'))
+
+    await createBranch(work, 'feature/kept-2', 'master', false)
+    const ex = await addWorktree(work, 'feature/kept-2', 'master', { existing: true })
+    expect(ex).toMatchObject({ path: join(dir, 'feature-kept-2'), branch: 'feature/kept-2', base: 'master' })
+    expect((await status(ex.path)).branch).toBe('feature/kept-2')
+    // git checks a branch out in one place only
+    await expect(addWorktree(work, 'feature/kept-2', 'master', { existing: true })).rejects.toThrow()
+
+    // removing without discard refuses uncommitted files; the branch stays unless asked
+    writeFileSync(join(typed.path, 'wip.txt'), 'wip\n')
+    expect(await worktreeStatus(typed)).toMatchObject({ exists: true, untracked: 1 })
+    await expect(removeWorktree(typed, { deleteBranch: false, discard: false })).rejects.toThrow()
+    expect(existsSync(typed.path)).toBe(true)
+    await removeWorktree(typed, { deleteBranch: false, discard: true })
+    expect(existsSync(typed.path)).toBe(false)
+    expect(g(work, 'branch', '--list', 'plain').trim()).not.toBe('')
+    await removeWorktree(ex, { deleteBranch: true, discard: false })
+    expect(g(work, 'branch', '--list', 'feature/kept-2').trim()).toBe('')
   })
 })

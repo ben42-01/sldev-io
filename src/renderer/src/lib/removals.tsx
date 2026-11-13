@@ -1,9 +1,10 @@
-import type { WorktreeInfo, WorktreeStatus } from '@shared/types'
+import type { GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { confirmAction, showNotice } from '../components/Modal'
 import { getMission, isLive, missions, removeMission } from '../state/missions'
 import { removeRun, runWorktrees } from '../state/factory'
 import { runningTerminalsIn } from './terminals'
+import type { WorktreeUser } from './git'
 
 /**
  * Every destructive action asks first, in the app, and says what is removed and what is kept.
@@ -100,6 +101,53 @@ export async function removeRunFlow(run: FactoryRun, withWorktrees: boolean): Pr
     await removeRun(run.id, { worktrees: true, discard: !!ok.discard })
   } catch (e) {
     await showNotice('Some worktrees were not removed', errText(e))
+  }
+}
+
+/** Why a worktree can't be removed right now, or [] when it can (the Git view disables Remove on these too). */
+export function worktreeBlockers(wt: GitWorktree, users: WorktreeUser[]): string[] {
+  if (wt.isMain) return ['This is the main checkout. Git keeps it; only linked worktrees can be removed.']
+  const out = users.filter((u) => u.live).map((u) => u.why ?? `${u.label} is still running here.`)
+  const terms = runningTerminalsIn(wt.path)
+  if (terms.length) out.push(`${plural(terms.length, 'terminal')} still running in this folder. Stop or close ${terms.length === 1 ? 'it' : 'them'} first.`)
+  if (wt.locked) out.push(`Git has it locked${wt.lockReason ? ` (${wt.lockReason})` : ''}. Run git worktree unlock first.`)
+  return out
+}
+
+/**
+ * Remove a worktree from the Git view: never the main checkout, never while something runs in it,
+ * uncommitted files only with "discard" ticked (that alone adds --force), the branch only when ticked.
+ * Resolves true when it was removed.
+ */
+export async function removeWorktreeFlow(wt: GitWorktree, info: WorktreeInfo, users: WorktreeUser[]): Promise<boolean> {
+  const st = await window.api.git.worktreeStatus(info).catch(() => null)
+  const loss = st && lossText(st)
+  const finished = users.filter((u) => !u.live)
+  const ok = await confirmAction({
+    title: 'Remove this worktree?',
+    message: <>{wt.branch ? <>Branch {code(wt.branch)}</> : `Detached at ${(wt.head ?? '').slice(0, 7)}`}</>,
+    removes: [<>The worktree folder {code(wt.path)}</>],
+    keeps: [
+      ...(wt.branch ? [<>The branch {code(wt.branch)}{st?.unmerged ? ` with its ${plural(st.unmerged, 'commit')}` : ''}, unless you tick below</>] : []),
+      ...finished.map((u) => <>The {u.kind === 'run' ? 'factory run' : u.kind} “{u.label}” in its list (it worked here; its diff needs this folder)</>),
+      'Your main checkout'
+    ],
+    blockers: worktreeBlockers(wt, users),
+    checks: [
+      ...(loss ? [{ id: 'discard', label: <>Discard {loss} in the worktree (not committed anywhere)</>, required: true }] : []),
+      ...(wt.branch ? [{ id: 'branch', label: <>Also delete the branch {code(wt.branch)}{st?.unmerged ? ` (${plural(st.unmerged, 'commit')} not in ${info.base})` : ''}</> }] : [])
+    ],
+    confirmLabel: 'Confirm remove',
+    cancelLabel: 'Keep worktree',
+    danger: true
+  })
+  if (!ok) return false
+  try {
+    await window.api.git.removeWorktree(info, { deleteBranch: !!ok.branch && !!wt.branch, discard: !!ok.discard })
+    return true
+  } catch (e) {
+    await showNotice('The worktree was not removed', errText(e))
+    return false
   }
 }
 
