@@ -8221,3 +8221,163 @@ select:disabled {
 .git-wt-where code {
   word-break: break-all;
 }
+
+/* GitHub stats panel (dock/GitHubStatsPanel.tsx): dashboard tiles and cards, colour only from status tones */
+.ghs-head {
+  align-items: center;
+}
+.ghs-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.ghs-repo:hover {
+  background: var(--tint);
+  color: var(--fg);
+}
+.ghs-meta {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.ghs-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.ghs-spacer {
+  flex: 1;
+}
+.ghs-updated {
+  font-size: 11px;
+  color: var(--fg-subtle);
+}
+.ghs-setup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  color: var(--fg-muted);
+}
+.ghs-setup strong {
+  color: var(--fg);
+}
+.dash-tile.ghs-tile {
+  min-width: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-elev);
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  color: inherit;
+}
+.ghs-tile.ghs-link {
+  cursor: pointer;
+}
+.ghs-tile.ghs-link:hover {
+  background: var(--bg-hover);
+}
+.ghs-tile.ghs-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.ghs-tile .dash-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ghs-tile b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghs-tile b.ghs-small {
+  font-size: 17px;
+  line-height: 29px;
+}
+.ghs-cards .dash-card-head {
+  justify-content: space-between;
+}
+.ghs-muted {
+  color: var(--fg-subtle);
+  font-size: 11.5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ghs-commit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.ghs-commit code {
+  font: 11.5px var(--font-mono);
+  color: var(--fg);
+}
+.ghs-commit-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.ghs-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ghs-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ghs-run:hover:not(:disabled) {
+  background: var(--tint);
+}
+.ghs-run:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.ghs-run-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.ghs-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: 10.5px;
+  color: var(--fg-muted);
+}
