@@ -12,6 +12,7 @@ import { TasksView } from './TasksView'
 import { NotesView } from './NotesView'
 import { RemoteView } from './RemoteView'
 import { FactoryView } from './FactoryView'
+import { GitView } from './GitView'
 
 export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
   const visible = useStore(workspace, (w) => w.sidebarVisible)
@@ -26,6 +27,7 @@ export function Sidebar({ home }: { home: string }): React.JSX.Element | null {
       {view === 'tasks' && <TasksView />}
       {view === 'notes' && <NotesView />}
       {view === 'remote' && <RemoteView />}
+      {view === 'git' && <GitView />}
       <ResizeHandle />
     </aside>
   )

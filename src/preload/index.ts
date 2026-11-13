@@ -42,7 +42,9 @@ import type {
   UpdateStatus,
   VaultStatus,
   WorktreeInfo,
-  WorktreeStatus
+  WorktreeStatus,
+  GitStatus,
+  GitWorktree
 } from '../shared/types'
 
 import { themeFromArgv, type ResolvedTheme } from '../shared/theme'
@@ -140,6 +142,15 @@ const api = {
     isRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),
     branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),
     switch: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', cwd, branch),
+    status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', cwd),
+    /** fetch --all --prune; resolves with git's report */
+    fetch: (cwd: string): Promise<string> => ipcRenderer.invoke('git:fetch', cwd),
+    /** fast-forward only: rejects with git's message when the branch has diverged */
+    pull: (cwd: string): Promise<string> => ipcRenderer.invoke('git:pull', cwd),
+    /** creates `name` at `base` (HEAD when ''); resolves with the branch name */
+    createBranch: (cwd: string, name: string, base: string, switchTo: boolean): Promise<string> => ipcRenderer.invoke('git:createBranch', cwd, name, base, switchTo),
+    worktrees: (cwd: string): Promise<GitWorktree[]> => ipcRenderer.invoke('git:worktrees', cwd),
+    remoteBranches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:remoteBranches', cwd),
     addWorktree: (root: string, slug: string, base: string): Promise<WorktreeInfo> => ipcRenderer.invoke('git:addWorktree', root, slug, base),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),

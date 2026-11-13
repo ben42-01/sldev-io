@@ -22,6 +22,7 @@ import { openNewRun } from '../components/FactoryView'
 import { openRecipes } from '../dock/RecipesPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
 import { openRecap } from '../components/RecapDialog'
+import { gitFetch, gitPull } from '../state/git'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -71,7 +72,8 @@ const VIEWS: Array<[ViewId, string]> = [
   ['remote', 'Remote'],
   ['factory', 'Factory'],
   ['overview', 'Overview'],
-  ['context', 'Project Context']
+  ['context', 'Project Context'],
+  ['git', 'Git']
 ]
 
 export function showView(view: ViewId): void {
@@ -230,6 +232,8 @@ export function staticCommands(): Command[] {
     { id: 'diagram.files', category: 'View', title: 'Open files diagram (folders and source files, any language)', run: () => openDiagrams('files') },
     { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
+    { id: 'git.fetch', category: 'Git', title: 'Fetch (all remotes)', run: () => (showView('git'), void gitFetch()) },
+    { id: 'git.pull', category: 'Git', title: 'Pull (fast-forward only)', run: () => (showView('git'), void gitPull()) },
     { id: 'preview.open', category: 'View', title: 'Open browser preview (localhost:3000)', run: () => openPanel('preview', `preview-${Date.now()}`, 'localhost:3000', { url: 'http://localhost:3000' }, 'right') },
     { id: 'settings.open', category: 'Preferences', title: 'Open settings', keys: { mac: 'Cmd+,', other: 'Ctrl+,' }, run: openSettings },
     { id: 'app.about', category: 'Help', title: 'About sldev-io', run: showAbout },
