@@ -1,5 +1,6 @@
 // Git view in the left activity bar: status, Fetch and Pull (fast-forward only) against a bare remote in the temp dir.
 // A diverged branch shows git's message and nothing is merged; a folder outside git gets an empty state.
+// Branches: create (an invalid name gets a hint), switch, a dirty tree refuses to switch and changes nothing.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -79,6 +80,79 @@ module.exports = async (h) => {
   await h.wait(300)
   h.key('Enter')
   h.expect(await h.until(() => h.js(`document.querySelector('.toast:not(.tone-error)')?.textContent.includes('Fetched')`), 15000), `palette fetch toast (${await toast()})`)
+
+  // ── Branches ──
+  const row = (name) => `.git-branch-row[data-branch=${JSON.stringify(name)}]`
+  const currentRow = () => h.js(`document.querySelector('.git-branch-row.current')?.dataset.branch ?? ''`)
+  const branchNow = () => git(h.fixture, 'rev-parse', '--abbrev-ref', 'HEAD')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-testid="git-branches"]')`), 5000), 'the Branches section shows')
+  h.expect((await currentRow()) === 'main', `main is marked current (${await currentRow()})`)
+  h.expect(await h.js(`!!document.querySelector(${JSON.stringify(row('main'))} + ' time, ' + ${JSON.stringify(row('main'))} + ' .git-row-time')`), 'the last commit time is shown')
+  h.expect(await h.js(`!document.querySelector('[data-remote-branch]')`), 'remote branches start folded')
+  await h.click('[data-testid="git-remote-toggle"]')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-remote-branch="origin/main"]')`), 3000), 'unfolding shows origin/main')
+
+  // New branch: an invalid name is rejected with a hint under the field, then a good one is created and checked out
+  await h.click('[data-testid="git-new-branch"]')
+  h.expect(await h.until(() => h.js(`!!document.querySelector('[data-testid="git-branch-name"]')`), 3000), 'the New branch dialog opens')
+  h.expect(await h.js(`document.querySelector('[data-testid="git-branch-base"]').value === ''`), 'base defaults to the current branch')
+  h.expect(await h.js(`document.querySelector('[data-testid="git-branch-base"] option').textContent.includes('main (current)')`), 'and says which one')
+  h.expect(await h.js(`document.querySelector('[data-testid="git-branch-switch"]').checked`), '"Switch to it" is ticked by default')
+  await h.setValue('[data-testid="git-branch-name"]', 'my branch..')
+  h.expect(await h.until(() => h.js(`/No spaces/.test(document.querySelector('[data-testid="git-branch-name-problem"]')?.textContent ?? '')`), 2000), 'an invalid name gets a hint under the field')
+  h.expect(await h.js(`document.querySelector('[data-testid="git-create-branch"]').disabled`), 'and Create is disabled')
+  await h.setValue('[data-testid="git-branch-name"]', 'main')
+  h.expect(await h.until(() => h.js(`/already exists/.test(document.querySelector('[data-testid="git-branch-name-problem"]')?.textContent ?? '')`), 2000), 'an existing name is refused too')
+  await h.wait(500)
+  await h.shot('6-new-branch-invalid')
+  await h.setValue('[data-testid="git-branch-name"]', 'feature/e2e')
+  h.expect(await h.until(() => h.js(`!document.querySelector('[data-testid="git-branch-name-problem"]')`), 2000), 'a good name clears the hint')
+  await h.click('[data-testid="git-create-branch"]')
+  h.expect(await h.until(() => h.js(`!document.querySelector('[data-testid="git-branch-name"]')`), 8000), 'the dialog closes after creating')
+  h.expect(branchNow() === 'feature/e2e', `git is on the new branch (${branchNow()})`)
+  h.expect(await h.until(async () => (await currentRow()) === 'feature/e2e', 5000), 'the list marks the new branch current')
+  h.expect((await text('.git-branch-name')) === 'feature/e2e', 'the header follows')
+  await h.shot('7-created')
+
+  // created without switching, from a remote base: listed, not current
+  await h.click('[data-remote-branch="origin/main"]')
+  h.expect(await h.until(() => h.js(`document.querySelector('[data-testid="git-branch-name"]')?.value === 'main'`), 3000), 'a remote branch prefills its local name')
+  h.expect(await h.js(`document.querySelector('[data-testid="git-branch-base"]').value === 'origin/main'`), 'and itself as the base')
+  await h.setValue('[data-testid="git-branch-name"]', 'from-remote')
+  await h.click('[data-testid="git-branch-switch"]')
+  await h.click('[data-testid="git-create-branch"]')
+  h.expect(await h.until(() => h.js(`!!document.querySelector(${JSON.stringify(row('from-remote'))})`), 8000), 'the list shows the branch created without switching')
+  h.expect(git(h.fixture, 'rev-parse', 'from-remote') === git(h.fixture, 'rev-parse', 'origin/main'), 'it starts at origin/main')
+  h.expect(branchNow() === 'feature/e2e' && (await currentRow()) === 'feature/e2e', 'still on feature/e2e')
+
+  // switch with uncommitted changes: git's error, nothing changes
+  fs.writeFileSync(path.join(h.fixture, 'local.txt'), 'uncommitted\n')
+  const dirtyHead = git(h.fixture, 'rev-parse', 'HEAD')
+  await h.click(row('main'))
+  h.expect(await h.until(() => h.js(`/local changes/.test(document.querySelector('.git-error')?.textContent ?? '')`), 8000), "a dirty tree shows git's error")
+  h.expect(await h.js(`document.querySelector('.git-error')?.textContent.includes('local.txt')`), 'naming the changed file')
+  h.expect(await h.js(`/Couldn't switch to main/.test(document.querySelector('.sidebar .error-banner')?.textContent ?? '')`), 'the banner says the switch failed')
+  h.expect(branchNow() === 'feature/e2e' && git(h.fixture, 'rev-parse', 'HEAD') === dirtyHead, 'the branch did not change')
+  h.expect(fs.readFileSync(path.join(h.fixture, 'local.txt'), 'utf8') === 'uncommitted\n', 'the change is still there')
+  h.expect((await currentRow()) === 'feature/e2e', 'the list still marks feature/e2e')
+  await h.shot('8-switch-dirty')
+
+  // clean again: switch back by clicking main
+  git(h.fixture, 'checkout', '--', 'local.txt')
+  await h.click(row('main'))
+  h.expect(await h.until(async () => (await currentRow()) === 'main', 8000), 'clicking main switches back')
+  h.expect(branchNow() === 'main', 'git is on main')
+  h.expect(await h.until(() => h.js(`!document.querySelector('.git-error')`), 3000), 'the old error is cleared')
+
+  // context menu: copy name, open terminal here
+  await h.js(`(() => { const r = document.querySelector(${JSON.stringify(row('main'))}).getBoundingClientRect(); document.querySelector(${JSON.stringify(row('main'))}).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 5 })) })()`)
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.ctx-item')].some(e => e.textContent.includes('Copy name'))`), 2000), 'the context menu offers Copy name')
+  await h.wait(500)
+  await h.shot('9-branch-menu')
+  const terminalsBefore = await h.js(`document.querySelectorAll('.terminal-mount').length`)
+  await h.click('.ctx-item', 'Open terminal here')
+  h.expect(await h.until(async () => (await h.js(`document.querySelectorAll('.terminal-mount').length`)) > terminalsBefore, 5000), 'Open terminal here opens a terminal')
+  await h.shot('10-branches')
 
   // a folder outside git: an empty state, not an error
   const plain = path.join(tmp, 'plain')

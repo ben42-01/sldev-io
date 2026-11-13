@@ -44,7 +44,8 @@ import type {
   WorktreeInfo,
   WorktreeStatus,
   GitStatus,
-  GitWorktree
+  GitWorktree,
+  GitBranchList
 } from '../shared/types'
 
 import { themeFromArgv, type ResolvedTheme } from '../shared/theme'
@@ -152,6 +153,8 @@ const api = {
     /** creates `name` at `base` (HEAD when ''); resolves with the branch name */
     createBranch: (cwd: string, name: string, base: string, switchTo: boolean): Promise<string> => ipcRenderer.invoke('git:createBranch', cwd, name, base, switchTo),
     worktrees: (cwd: string): Promise<GitWorktree[]> => ipcRenderer.invoke('git:worktrees', cwd),
+    /** local and remote branches with their last commit, for the Git view */
+    branchList: (cwd: string): Promise<GitBranchList> => ipcRenderer.invoke('git:branchList', cwd),
     remoteBranches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:remoteBranches', cwd),
     addWorktree: (root: string, slug: string, base: string): Promise<WorktreeInfo> => ipcRenderer.invoke('git:addWorktree', root, slug, base),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),

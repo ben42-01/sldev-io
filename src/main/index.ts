@@ -249,6 +249,7 @@ function registerIpc(): void {
   ipcMain.handle('git:pull', (_e, cwd: string) => git.pull(cwd))
   ipcMain.handle('git:createBranch', (_e, cwd: string, name: string, base: string, switchTo: boolean) => git.createBranch(cwd, name, base, switchTo))
   ipcMain.handle('git:worktrees', (_e, cwd: string) => git.listWorktrees(cwd))
+  ipcMain.handle('git:branchList', (_e, cwd: string) => git.branchList(cwd))
   ipcMain.handle('git:remoteBranches', (_e, cwd: string) => git.remoteBranches(cwd))
   ipcMain.handle('git:addWorktree', (_e, root: string, slug: string, base: string) => git.addWorktree(root, slug, base))
   ipcMain.handle('git:worktreeStatus', (_e, wt: WorktreeInfo) => git.worktreeStatus(wt))

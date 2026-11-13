@@ -1,8 +1,8 @@
 import { execFile } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
-import { parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
-import type { DiffStat, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
+import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
+import type { DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
   code: number
@@ -47,8 +47,26 @@ export async function branches(cwd: string): Promise<string[]> {
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : []
 }
 
+/**
+ * Check out `branch`, only from a working tree without uncommitted changes to tracked files: git itself
+ * would carry them over to the other branch, or refuse when they'd be overwritten. Either way nothing
+ * changes until the tree is clean, and the error lists the files. Untracked files are left to git.
+ */
 export async function switchBranch(cwd: string, branch: string): Promise<void> {
+  if (!branch || branch.startsWith('-')) throw new Error(`Not a branch: "${branch}"`)
+  const dirty = (await ok(['status', '--porcelain', '--untracked-files=no'], cwd)).split('\n').filter(Boolean)
+  if (dirty.length) {
+    const files = dirty.slice(0, 20).map((l) => `\t${l.slice(3)}`)
+    if (dirty.length > 20) files.push(`\t… and ${dirty.length - 20} more`)
+    throw new Error(`error: Your local changes would be carried over to ${branch}:\n${files.join('\n')}\nPlease commit or stash them before you switch branches.\nAborting`)
+  }
   await ok(['switch', branch], cwd)
+}
+
+/** Local and remote-tracking branches with their last commit, most recent first. */
+export async function branchList(cwd: string): Promise<GitBranchList> {
+  const root = (await git(['rev-parse', '--show-toplevel'], cwd)).stdout.trim()
+  return parseBranchList(await ok(['for-each-ref', '--sort=-committerdate', `--format=${BRANCH_LIST_FORMAT}`, 'refs/heads', 'refs/remotes'], cwd), root || cwd)
 }
 
 /** Branch, upstream, ahead/behind and counts of staged, unstaged, untracked and conflicted files. */
