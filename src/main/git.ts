@@ -1,7 +1,8 @@
 import { execFile } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, join } from 'path'
-import type { DiffStat, WorktreeInfo, WorktreeStatus } from '@shared/types'
+import { parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
+import type { DiffStat, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
   code: number
@@ -19,10 +20,10 @@ export function run(cmd: string, args: string[], cwd: string, timeout = 30000): 
   })
 }
 
-const git = (args: string[], cwd: string): Promise<ExecResult> => run('git', args, cwd)
+const git = (args: string[], cwd: string, timeout?: number): Promise<ExecResult> => run('git', args, cwd, timeout)
 
-async function ok(args: string[], cwd: string): Promise<string> {
-  const r = await git(args, cwd)
+async function ok(args: string[], cwd: string, timeout?: number): Promise<string> {
+  const r = await git(args, cwd, timeout)
   if (r.code !== 0) throw new Error(r.stderr.trim() || `git ${args[0]} failed`)
   return r.stdout
 }
@@ -48,6 +49,59 @@ export async function branches(cwd: string): Promise<string[]> {
 
 export async function switchBranch(cwd: string, branch: string): Promise<void> {
   await ok(['switch', branch], cwd)
+}
+
+/** Branch, upstream, ahead/behind and counts of staged, unstaged, untracked and conflicted files. */
+export async function status(cwd: string): Promise<GitStatus> {
+  return parseStatus(await ok(['status', '--porcelain=v2', '--branch', '--untracked-files=all'], cwd))
+}
+
+/** Fetch every remote and drop remote branches that are gone. Never pushes. */
+export async function fetch(cwd: string): Promise<string> {
+  const r = await git(['fetch', '--all', '--prune'], cwd, 120000)
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git fetch failed')
+  // git reports what it fetched on stderr
+  return (r.stdout + r.stderr).trim()
+}
+
+/**
+ * Fast-forward the current branch to its upstream, and nothing else: no merge commit, no rebase,
+ * whatever pull.rebase / pull.ff say. A branch that has diverged fails with git's own message.
+ */
+export async function pull(cwd: string): Promise<string> {
+  const r = await git(['-c', 'pull.rebase=false', '-c', 'pull.ff=only', 'pull', '--ff-only', '--no-rebase', '--no-edit'], cwd, 120000)
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'git pull failed')
+  return (r.stdout + r.stderr).trim()
+}
+
+/**
+ * Create branch `name` at `base` (HEAD when empty), and check it out when `switchTo`. The name goes
+ * through `git check-ref-format --branch` first, so git never sees a name it would reject or reinterpret.
+ */
+export async function createBranch(cwd: string, name: string, base: string, switchTo: boolean): Promise<string> {
+  const branch = name.trim()
+  // a leading dash would be read as an option by the commands below
+  if (!branch || branch.startsWith('-')) throw new Error(`Not a valid branch name: "${name}"`)
+  if (base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  const check = await git(['check-ref-format', '--branch', branch], cwd)
+  // check-ref-format expands "@{-1}" and the like into another branch's name; only take names as written
+  if (check.code !== 0 || check.stdout.trim() !== branch) throw new Error(`Not a valid branch name: "${name}"`)
+  const start = base.trim() ? [base.trim()] : []
+  if (switchTo) await ok(['switch', '--no-track', '-c', branch, ...start], cwd)
+  else await ok(['branch', '--no-track', branch, ...start], cwd)
+  return branch
+}
+
+/** Every worktree of the repository `cwd` belongs to, the main one first. */
+export async function listWorktrees(cwd: string): Promise<GitWorktree[]> {
+  // -z (git 2.36+) keeps paths with newlines whole; older git gets the line form
+  const z = await git(['worktree', 'list', '--porcelain', '-z'], cwd)
+  return parseWorktrees(z.code === 0 ? z.stdout : await ok(['worktree', 'list', '--porcelain'], cwd))
+}
+
+/** Remote-tracking branches ("origin/main"), most recent commit first. */
+export async function remoteBranches(cwd: string): Promise<string[]> {
+  return parseRemoteBranches(await ok(['for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/remotes'], cwd))
 }
 
 /** Create an isolated worktree for a mission next to the repo: ../.sldev-worktrees/<repo>/<slug> */
