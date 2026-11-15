@@ -53,6 +53,8 @@ const HELP_ROWS: PopupRow[] = [
 ]
 /** a spinner frame for working agents; only while one works */
 const SPIN_MS = 100
+/** how long a message from the person's own action holds the status line against other tabs' notifications */
+const MESSAGE_HOLD_MS = 5000
 /** how often the workflows view asks GitHub again while it's open */
 const RUNS_REFRESH_MS = 15_000
 
@@ -169,6 +171,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   /** an editor has the terminal (Ctrl-b c, Ctrl-e): nothing is drawn until it exits */
   let suspended = false
   let message = ''
+  // when the message line last changed, so another tab's notification doesn't wipe what the person just did
+  let messageSeen = ''
+  let messageSince = 0
+  let notice = ''
   let runsView: RunsView | null = null
   let menu: Menu | null = null
   let help = false
@@ -483,7 +489,13 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (prompt) return ` ${ACCENT}›${RESET} ` + BOLD + fit(prompt.label, Math.min(prompt.label.length, cols - 3)) + RESET + fit(prompt.text, Math.max(0, cols - 3 - prompt.label.length))
     // waiting for the key after the prefix: amber, as anything that waits for you
     if (prefix) return hints(HINTS, cols, ` \x1b[1;${TONE_SGR.attention}m^b${RESET} `)
-    if (message) return ` ${DIM}•${RESET} ` + fit(message, cols - 3)
+    if (message) {
+      if (message !== messageSeen) {
+        messageSeen = message
+        messageSince = Date.now()
+      }
+      return ` ${DIM}•${RESET} ` + fit(message, cols - 3)
+    }
     if (menu) return hints(menu.hints, cols, ' ')
     if (help) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
@@ -759,7 +771,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       loops.set(e.loop.id, e.loop)
       schedule()
     } else if (e.event === 'notify' && !visible().includes(e.pane)) {
-      message = `${e.title}: ${e.body}`
+      // a message from the person's own action stays a while; the tab's tone still shows it needs you
+      const fresh = message && message !== notice && (message !== messageSeen || Date.now() - messageSince < MESSAGE_HOLD_MS)
+      if (fresh) return
+      message = notice = `${e.title}: ${e.body}`
       schedule()
     }
   }
