@@ -70,6 +70,8 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
   sldev agents | sldev kinds                           what's installed, what kinds exist
 
 Panes run in a background daemon (sldev serve), so they keep going when you detach.
+SLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light)
+surfaces; NO_COLOR turns colours off.
 Nothing here talks to the network, except the workflows view, which asks GitHub through your gh.`
 
 const script = (): string => resolve(process.argv[1] ?? '')

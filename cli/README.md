@@ -78,10 +78,18 @@ The line under the tabs marks the one in front and says who runs it, where (its 
 
 On terminals 100 columns or wider a sidebar groups the tabs by project (the repo they work in), each group with its
 most urgent state, and each tab with its agent and state in words, or a shell's folder. Its foot counts the agents
-by state and shows any repeat loops. Nothing is drawn in reverse video: the tab in front is bold with an accent bar,
-and the line under it carries the app's blue → green → purple gradient. In a split, the pane that doesn't take the
-keys is drawn faint. Colours are 24-bit where the terminal says so (`COLORTERM=truecolor`), the nearest of 256
-otherwise, and sldev asks the terminal for its background (OSC 11) so lines and popups suit a light theme too.
+by state and shows any repeat loops.
+
+It looks like the app in dark mode: sldev paints its own surfaces from the app's grey ladder (panes on the darkest
+tone, the sidebar, tab bar and status bar a step up, popups and whatever is in focus a step up again), so it doesn't
+depend on your terminal's background. Container edges carry the app's blue → green → purple gradient: soft along
+the sidebar and split dividers, full on popups and under the tab in front; plain rules stay a quiet grey, and colour
+otherwise only means state. Nothing is drawn in reverse video: the tab and sidebar row in front are lifted, bold, with
+an accent bar, and in a split the pane that doesn't take the keys is drawn faint. Inside a pane, a program's own
+colours are kept; only cells with the default colours get the pane's. Colours are 24-bit where the terminal says so
+(`COLORTERM=truecolor`), the nearest of 256 otherwise, and sldev asks the terminal for its background (OSC 11) and
+switches to the app's light ladder on a light one. `SLDEV_THEME=terminal` turns the painted surfaces off and draws on
+your terminal's own background; `NO_COLOR` takes every colour out of sldev's own drawing.
 
 Keys go to the tab in front; Ctrl-b is the prefix:
 

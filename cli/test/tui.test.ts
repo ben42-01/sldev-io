@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { PassThrough, Writable } from 'stream'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
 import { startDaemon, type Daemon } from '../src/daemon'
 import { removeTemp, useFakeAgents } from './fakePath'
@@ -11,6 +11,7 @@ import { createTerm, screenText } from '../src/screen'
 import { runTui, win32Key } from '../src/tui'
 import { brandAt, drawTerm, ellipsis, glyph, inSelection, isLightBackground, to256, layout, selectionText, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
 import type { PaneInfo } from '../src/protocol'
+import * as R from '../src/render'
 
 const esc = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
 /** the sidebar row of the tab in focus: the accent bar, its marker, number and title */
@@ -480,8 +481,8 @@ describe('sidebar', () => {
     // drawn with a background behind the selected cells only
     const drawn = drawTerm(term, { x: 0, y: 0, w: 10, h: 5 }, sel)
     // 24-bit or 256 colours, as the terminal running the tests says
-    expect(drawn).toMatch(/;48;(5;24|2;38;79;120)mline/)
-    expect(drawn).not.toMatch(/;48;(5;24|2;38;79;120)mfirst/)
+    expect(drawn).toMatch(/;(48;5;24|48;2;38;79;120|7)mline/)
+    expect(drawn).not.toMatch(/;(48;5;24|48;2;38;79;120|7)mfirst/)
   })
 
   it("uses the app's brand gradient, the 256-colour fallback, and tells a light background from a dark one", () => {
@@ -505,5 +506,98 @@ describe('sidebar', () => {
     expect(p).toContain('╭─ New tab')
     expect(p).toContain('▌ t  Shell')
     expect(p).toMatch(/1 {2}Claude Code +not installed/)
+  })
+})
+
+describe("the app's look: painted surfaces, the 256 fallback, the light ladder and the opt-outs", () => {
+  let before: ReturnType<typeof R.setColorMode>
+  beforeEach(() => (before = R.setColorMode({ truecolor: true, paint: true, noColor: false })))
+  afterEach(() => {
+    R.setLight(false)
+    R.setColorMode(before)
+  })
+  const tabs = [
+    { title: 'fix', tone: 'working' as const, glyph: '⠹', active: true },
+    { title: 'zsh', tone: 'neutral' as const, glyph: '›', active: false }
+  ]
+
+  it("paints the frame, panes and popups from the app's dark ladder", () => {
+    expect(R.DARK.background).toEqual([10, 10, 10])
+    expect(R.DARK.surface).toEqual([17, 17, 17])
+    expect(R.DARK.raised).toEqual([25, 25, 25])
+    expect(R.SURFACE).toContain('48;2;17;17;17')
+    expect(R.PANE).toContain('48;2;10;10;10')
+    expect(R.RAISED).toContain('48;2;25;25;25')
+    expect(R.MUTED).toContain('48;2;32;32;32')
+    // the bar on the surface, the tab in front lifted onto the raised tone; markers keep their tone
+    const bar = tabBarLayout(tabs, 60).text
+    expect(bar.startsWith(R.SURFACE)).toBe(true)
+    expect(bar).toContain(R.RAISED)
+    expect(bar).toContain(`\x1b[${TONE_SGR.working}m⠹`)
+    expect(plain(bar)).toHaveLength(60)
+    // the sidebar row in focus is raised, the others on the surface
+    const s = sidebar({ panes: [pane('1', { title: 'one' }), pane('2', { title: 'two' })], order: ['1', '2'], active: '1', shown: ['1'] }, SIDEBAR_W, 10)
+    expect(s.lines[2].startsWith(R.RAISED)).toBe(true)
+    expect(s.lines[4].startsWith(R.SURFACE)).toBe(true)
+    // the key chips sit on the muted tone and read as before
+    const h = R.hints([['c', 'new tab']], 30, ' ^b ')
+    expect(h).toContain(R.MUTED)
+    expect(plain(h)).toBe(' ^b c new tab'.padEnd(30))
+  })
+
+  it('frames edges in the brand gradient: soft along long edges, full on popups, plain rules grey', () => {
+    const edge = R.vEdge(28, 1, 20, '┬')
+    expect(plain(edge)).toBe('┬' + '│'.repeat(19))
+    // softened toward the rule tone, blue at the top and purple at the bottom
+    const top = R.brandAt(0).map((v, k) => Math.round(v + (R.DARK.rule[k] - v) * 0.45))
+    expect(edge).toContain(`38;2;${top.join(';')}m┬`)
+    // built once per size
+    expect(R.vEdge(28, 1, 20, '┬')).toBe(edge)
+    const p = popup({ x: 0, y: 0, w: 80, h: 20 }, 'Keys', [{ key: 'c', text: 'new tab' }], -1)
+    expect(p).toContain(`38;2;${R.brandAt(0).join(';')}m╭`)
+    expect(p).toContain(R.RAISED)
+    expect(ruleLine(20, null)).toContain(`38;2;${R.DARK.rule.join(';')}m─`)
+  })
+
+  it('gives only default-coloured pane cells the pane tones, and leaves what a program paints alone', async () => {
+    const term = createTerm(20, 3)
+    await new Promise<void>((r) => term.write('plain\x1b[41mred\x1b[0m\x1b[7minv\x1b[0m', r))
+    const drawn = drawTerm(term, { x: 0, y: 0, w: 20, h: 3 })
+    expect(drawn).toMatch(/48;2;10;10;10mplain/)
+    expect(drawn).toMatch(/;41mred/)
+    expect(drawn).toMatch(/;7;39;49minv/)
+  })
+
+  it('falls back to 256-colour greys without truecolor, and uses the light ladder on a light terminal', () => {
+    R.setColorMode({ truecolor: false })
+    expect(R.PANE).toContain('48;5;232')
+    expect(R.SURFACE).toContain('48;5;233')
+    expect(R.RAISED).toContain('48;5;234')
+    expect(R.SURFACE).not.toContain(';2;')
+    R.setLight(true)
+    expect(R.ladder).toBe(R.LIGHT)
+    expect(R.PANE).toContain('48;5;231')
+    expect(R.SURFACE).toContain('48;5;255')
+    R.setColorMode({ truecolor: true })
+    expect(R.SURFACE).toContain('48;2;246;246;246')
+    expect(R.RAISED).toContain('48;2;238;238;238')
+    // never a dark fill on a light screen
+    expect(R.SURFACE + R.PANE + R.RAISED + R.MUTED).not.toMatch(/48;2;(10|17|25|32);/)
+  })
+
+  it('draws on the terminal background with SLDEV_THEME=terminal, and without any colour under NO_COLOR', async () => {
+    R.setColorMode({ paint: false })
+    expect(R.painted()).toBe(false)
+    expect(R.SURFACE + R.PANE).toBe('')
+    expect(tabBarLayout(tabs, 60).text).not.toContain('48;')
+    expect(R.vEdge(28, 1, 5)).toContain(`38;2;68;68;72m`)
+    const term = createTerm(10, 2)
+    await new Promise<void>((r) => term.write('hi', r))
+    expect(drawTerm(term, { x: 0, y: 0, w: 10, h: 2 })).toMatch(/;39;49mhi/)
+    R.setColorMode({ noColor: true })
+    const p = R.stripColor(popup({ x: 0, y: 0, w: 80, h: 20 }, 'New tab', [{ key: 't', text: 'Shell' }], 0) + tabBar(tabs, 60))
+    expect(p).not.toMatch(/\x1b\[[0-9;]*(3[0-9]|4[0-9]|9[0-7])[;m]/)
+    expect(p).toContain('\x1b[1m')
+    expect(plain(p)).toContain('╭─ New tab')
   })
 })
