@@ -8,7 +8,7 @@ import { copyToClipboard, osc52 } from './clipboard'
 import { openPane, type OpenResult } from './editor'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
-import { ACCENT, at, brandMark, gradient, isLightBackground, logo, RULE, setLight, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
+import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
 import { VERSION } from './version'
 
@@ -22,6 +22,8 @@ import { VERSION } from './version'
  */
 
 const PREFIX = '\x02'
+const RESET = '\x1b[0m'
+const BOLD = '\x1b[1m'
 /** the hint bar, and what the prefix waits for */
 // the most useful first: a narrow terminal shows only the ones that fit
 const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
@@ -226,7 +228,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const l = layout(cols, rows, split)
     const shown = visible()
     let s = ''
-    if (l.brand) s += at(0, 0) + fit('', 1) + brandMark() + `\x1b[90m ${fit(VERSION, SIDEBAR_W - 7)}\x1b[0m`
+    // the brand on the frame's surface, and the column over the divider with it
+    if (l.brand) s += at(0, 0) + onFill(SURFACE, ' ' + brandMark() + `${SUBTLE} ${fit(VERSION, SIDEBAR_W - 7)}${RESET}`) + onFill(SURFACE, ' ')
     bar = tabBarLayout(
       order.flatMap((id) => {
         const v = views.get(id)
@@ -237,14 +240,13 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     s += at(l.tabs.x, l.tabs.y) + bar.text
     // the rule row: under the sidebar, the junction, then each pane's rule
     // a slim brand gradient under the name, as in the app
-    if (l.sidebar) s += at(0, 1) + gradient('─'.repeat(SIDEBAR_W)) + RULE + '┬\x1b[0m'
+    if (l.sidebar) s += at(0, 1) + onFill(SURFACE, gradient('─'.repeat(SIDEBAR_W)))
     l.panes.forEach((r, i) => {
       const v = shown[i] ? views.get(shown[i]) : undefined
       if (l.panes.length > 1) {
         const n = order.indexOf(shown[i]) + 1
         const info = v ? `${n} ${v.info.title} · ${paneDetails(v.info, home, false)}` : ''
         s += at(r.x, r.y) + ruleLine(r.w, i === 0 ? { from: -1, to: r.w + 1 } : null, info)
-        if (i === 0) s += at(r.x + r.w, r.y) + RULE + '┬\x1b[0m'
       } else {
         const span = bar.spans.find((x) => order[x.index] === shown[0])
         const back = v ? scrolledBack(v) : 0
@@ -253,9 +255,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     })
     if (l.sidebar) {
       side = sidebar({ panes: [...views.values()].map((v) => v.info), order, active: shown[0] ?? null, shown, loops: [...loops.values()], frame: spin, home }, l.sidebar.w, l.sidebar.h)
-      side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line + RULE + '│\x1b[0m'))
+      side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line))
+      // the sidebar's edge: the brand top to bottom, softened, from the junction with the rule down
+      s += vEdge(SIDEBAR_W, 1, l.sidebar.h + 1, '┬')
     }
-    return s
+    return stripColor(s)
   }
 
   /** where the terminal's cursor goes: the prompt, else the tab's own cursor if it shows one */
@@ -277,41 +281,53 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     let s = '\x1b[?2026h\x1b[?25l' + chrome()
     const shown = visible()
     const area: Rect = { x: l.panes[0].x, y: l.panes[0].y + 1, w: l.panes[l.panes.length - 1].x + l.panes[l.panes.length - 1].w - l.panes[0].x, h: l.panes[0].h - 1 }
-    if (runsView) s += drawRuns(runsView, area)
-    else if (!shown.length) s += welcome(area)
+    if (runsView) s += stripColor(drawRuns(runsView, area))
+    else if (!shown.length) s += stripColor(welcome(area))
     else
       shown.forEach((id, i) => {
         const v = views.get(id)
         const r = l.panes[i]
         if (!v || !r) return
         s += drawTerm(v.term, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 1 }, sel?.pane === id ? sel.s : null, i > 0)
-        if (i === 0 && l.panes[1]) for (let y = 1; y < r.h; y++) s += at(r.x + r.w, r.y + y) + RULE + '│\x1b[0m'
+        // the split's edge, from the junction on the rule row down between the panes
+        if (i === 0 && l.panes[1]) s += stripColor(vEdge(r.x + r.w, r.y, r.h, '┬', PANE, SURFACE))
       })
-    if (menu) s += popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`)
-    else if (help) s += popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.')
-    s += at(0, l.status.y) + statusLine(cols)
-    out.write(s + cursor() + '\x1b[?2026l')
+    if (menu) s += stripColor(popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`))
+    else if (help) s += stripColor(popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.'))
+    s += at(0, l.status.y) + stripColor(statusLine(cols))
+    // every frame ends on a reset, so nothing between frames (a clear, the shell after exit) takes a fill
+    out.write(s + RESET + cursor() + '\x1b[?2026l')
     spinning()
   }
 
-  /** nothing open yet: what to do, in the pane area */
+  /** nothing open yet: what to do, in the pane area, as a card framed in the brand gradient */
   function welcome(r: Rect): string {
     const lines = [
-      ...logo().map((row) => ` ${row}`),
+      ...logo(),
       '',
-      ' \x1b[90mcoding agents side by side, in your terminal\x1b[0m',
+      `${DIM}coding agents side by side, in your terminal${RESET}`,
       '',
-      ` ${ACCENT}^b c\x1b[0m  new tab: an agent or a shell`,
-      ` ${ACCENT}^b t\x1b[0m  a shell here`,
-      ` ${ACCENT}^b ?\x1b[0m  every key`,
+      `${ACCENT}^b c${RESET}  new tab: an agent or a shell`,
+      `${ACCENT}^b t${RESET}  a shell here`,
+      `${ACCENT}^b ?${RESET}  every key`,
       '',
-      ' \x1b[90mor from another terminal:\x1b[0m',
-      '   sldev new --agent claude "fix the failing test"'
+      `${DIM}or from another terminal:${RESET}`,
+      `  sldev new --agent claude "fix the failing test"`
     ]
-    const top = r.y + Math.max(0, Math.floor((r.h - lines.length) / 3))
     let s = ''
-    for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + ' '.repeat(r.w)
-    lines.forEach((line, i) => (s += at(r.x + 2, top + i) + line))
+    for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + onFill(PANE, ' '.repeat(r.w))
+    const textW = Math.max(...lines.map((l) => width(l.replace(/\x1b\[[0-9;]*m/g, ''))))
+    // a row of air above and below, three columns either side
+    const w = textW + 8
+    const h = lines.length + 4
+    if (w + 2 <= r.w && h <= r.h) {
+      const x = r.x + Math.floor((r.w - w) / 2)
+      const y = r.y + Math.max(0, Math.floor((r.h - h) / 3))
+      return s + box(x, y, w, h, ['', ...lines.map((l) => '   ' + l), ''], { fill: SURFACE, soft: 0.2 })
+    }
+    // too small for the card: the lines on their own
+    const top = r.y + Math.max(0, Math.floor((r.h - lines.length) / 3))
+    lines.slice(0, r.h).forEach((line, i) => (s += at(r.x + 2, top + i) + onFill(PANE, ` ${line}`)))
     return s
   }
 
@@ -325,7 +341,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (busy && !spinTimer && !restored)
       spinTimer = setInterval(() => {
         spin++
-        if (!frame && !restored) out.write('\x1b[?2026h\x1b[?25l' + chrome() + cursor() + '\x1b[?2026l')
+        if (!frame && !restored) out.write('\x1b[?2026h\x1b[?25l' + chrome() + RESET + cursor() + '\x1b[?2026l')
       }, SPIN_MS)
     else if (!busy && spinTimer) {
       clearInterval(spinTimer)
@@ -334,10 +350,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   function drawRuns(v: RunsView, r: Rect): string {
-    let s = at(r.x, r.y) + '\x1b[1m' + fit(` Workflows · ${tilde(v.cwd, home)}${v.loading ? ' · loading…' : ''}`, r.w) + '\x1b[0m'
+    // a toolbar row on the frame's surface, the runs on the pane's background, the picked one lifted
+    let s = at(r.x, r.y) + onFill(SURFACE, BOLD + fit(` Workflows · ${tilde(v.cwd, home)}${v.loading ? ' · loading…' : ''}`, r.w) + RESET)
     const lines: string[] = []
-    if (v.error) lines.push(`\x1b[31m ${fit(v.error, r.w - 1)}\x1b[0m`)
-    else if (!v.runs.length) lines.push(fit(v.loading ? ' Asking GitHub…' : ' No workflow runs yet in this repository.', r.w))
+    if (v.error) lines.push(`\x1b[31m ${fit(v.error, r.w - 1)}${RESET}`)
+    else if (!v.runs.length) lines.push(DIM + fit(v.loading ? ' Asking GitHub…' : ' No workflow runs yet in this repository.', r.w) + RESET)
     const now = Date.now()
     const rows = r.h - 2
     const start = Math.max(0, Math.min(v.sel - Math.floor(rows / 2), v.runs.length - rows))
@@ -345,9 +362,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       v.runs.slice(start, start + rows).forEach((run, i) => {
         const c = runColumns(run, now)
         const focus = start + i === v.sel
-        lines.push(`${focus ? `${ACCENT}▌\x1b[0m` : ' '}\x1b[${TONE_SGR[c.tone]}m●\x1b[0m ${focus ? '\x1b[1m' : ''}${fit(`${c.label.padEnd(9)} ${c.text}`, r.w - 3)}\x1b[0m`)
+        const line = `${focus ? `${ACCENT}▌${RESET}` : ' '}\x1b[${TONE_SGR[c.tone]}m●${RESET} ${focus ? BOLD : ''}${fit(`${c.label.padEnd(9)} ${c.text}`, r.w - 3)}${RESET}`
+        lines.push(focus ? onFill(LIFT, line) : line)
       })
-    for (let i = 0; i < r.h - 1; i++) s += at(r.x, r.y + 1 + i) + (lines[i] ?? ' '.repeat(r.w))
+    for (let i = 0; i < r.h - 1; i++) s += at(r.x, r.y + 1 + i) + onFill(PANE, lines[i] ?? ' '.repeat(r.w))
     return s
   }
 
@@ -442,16 +460,22 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       .finally(schedule)
   }
 
+  /** the bottom row, on the frame's surface: a prompt, a message, or the keys as chips */
   function statusLine(cols: number): string {
-    if (prompt) return ` ${ACCENT}›\x1b[0m ` + '\x1b[1m' + fit(prompt.label, Math.min(prompt.label.length, cols - 3)) + '\x1b[0m' + fit(prompt.text, Math.max(0, cols - 3 - prompt.label.length))
-    if (prefix) return hints(HINTS, cols, ' \x1b[1;33m^b\x1b[0m ')
-    if (message) return ` \x1b[90m•\x1b[0m ` + fit(message, cols - 3)
+    return onFill(SURFACE, statusText(cols))
+  }
+
+  function statusText(cols: number): string {
+    if (prompt) return ` ${ACCENT}›${RESET} ` + BOLD + fit(prompt.label, Math.min(prompt.label.length, cols - 3)) + RESET + fit(prompt.text, Math.max(0, cols - 3 - prompt.label.length))
+    // waiting for the key after the prefix: amber, as anything that waits for you
+    if (prefix) return hints(HINTS, cols, ` \x1b[1;${TONE_SGR.attention}m^b${RESET} `)
+    if (message) return ` ${DIM}•${RESET} ` + fit(message, cols - 3)
     if (menu) return hints(MENU_HINTS, cols, ' ')
     if (help) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
     const right = rightStatus()
     const rw = cols >= 90 ? right.length : 0
-    return hints(HINTS, cols - rw, ` ${ACCENT}^b\x1b[0m `) + (rw ? `\x1b[90m${right}\x1b[0m` : '')
+    return hints(HINTS, cols - rw, ` ${ACCENT}^b${RESET} `) + (rw ? `${DIM}${right}${RESET}` : '')
   }
 
   /** the bottom right: the focused tab's project and the time */
@@ -833,7 +857,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     input.off('data', onKey)
     if (input.isTTY) input.setRawMode?.(false)
     input.pause()
-    out.write('\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l')
+    // colours reset before and after leaving the alternate screen, so the shell isn't left on sldev's fills
+    out.write('\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l\x1b[0m')
   }
 
   function detach(): void {
@@ -874,7 +899,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   input.resume()
   input.on('data', onKey)
   out.on('resize', () => {
-    out.write('\x1b[2J')
+    out.write(RESET + '\x1b[2J')
     sizeViews()
     schedule()
   })
