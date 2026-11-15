@@ -1,13 +1,12 @@
 import { spawnSync } from 'child_process'
-import { readFileSync } from 'fs'
-import { join } from 'path'
 import type { EditorInfo, Mission } from '@shared/types'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand } from '../../src/main/editors'
 import { run } from '../../src/main/git'
+import { readConfig } from './config'
 
 /**
  * `sldev open` and the TUI's Ctrl-b e / v: a pane's folder, or its changed files side by side, in the
- * user's editor. Which one: --editor, then the app's preferred editor (Settings), then the first found
+ * user's editor. Which one: --editor, then "editor" in the CLI's config.json, then the first found
  * (Cursor, VS Code, Windsurf, Zed, …; src/main/editors.ts).
  */
 
@@ -69,11 +68,7 @@ export function runTerminalEditor(argv: string[], cwd: string): void {
   spawnSync(argv[0], argv.slice(1), { cwd, stdio: 'inherit' })
 }
 
-/** The editor picked in the app (Settings → Editor), shared through its data folder; null when none is set. */
+/** The editor set in the CLI's config.json (`editor`); null when none is set. */
 export function preferredEditor(dataDir: string): string | null {
-  try {
-    return (JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')) as { preferredEditor?: string | null }).preferredEditor ?? null
-  } catch {
-    return null
-  }
+  return readConfig(dataDir).editor
 }

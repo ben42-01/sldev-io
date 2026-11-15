@@ -1,4 +1,5 @@
-import { resolve } from 'path'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { join, resolve } from 'path'
 import { parseArgs } from 'util'
 import { allAgents, installedBin, setInstalledBins } from '@shared/agents'
 import { BUILTIN_KINDS } from '@shared/missionKinds'
@@ -12,7 +13,8 @@ import { connect } from './client'
 import { openPane, preferredEditor, runTerminalEditor } from './editor'
 import { loadRuns, runColumns } from './workflows'
 import { startDaemon } from './daemon'
-import { dataDir } from './paths'
+import { appDataDir, dataDir, legacyRuntimeDir } from './paths'
+import { describeConfig, readConfig } from './config'
 import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync, skillsCheck, skillsExport, skillsInstall, skillsStatus } from './repo'
 import { paneSignal } from './render'
@@ -47,8 +49,8 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
   sldev loops [--json]          repeat loops: their passes and what's next
   sldev loops stop <loop>       no pass after the running one
   sldev open <pane> [--diff]    the pane's folder in your editor; --diff: its changed files side by side
-      --editor <id>             cursor, vscode, windsurf, zed, sublime, idea, nvim… (default: the app's
-                                preferred editor, else the first one found)
+      --editor <id>             cursor, vscode, windsurf, zed, sublime, idea, nvim… (default: "editor"
+                                in sldev config, else the first one found)
   sldev workflows [--json]      the repo's latest GitHub Actions runs (needs the GitHub CLI, signed in)
   sldev clean                   finished panes leave the list and their worktrees are removed (asks first)
       --orphans                 also sldev worktrees no pane knows about (never ones the app uses)
@@ -57,6 +59,7 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --dry-run, --yes          only show the plan / don't ask
   sldev kill <pane>             stop a pane's agent (its files stay)
   sldev stop                    stop the daemon and every agent in it
+  sldev config                  where the config file is and what it says (edit it by hand; keys in the README)
 
   sldev rules [status|init|sync [--overwrite <ids>]]   one .sldev/rules.md for every agent
   sldev skills [status|install [--overwrite <names>]] skills that let agents draft missions, stories,
@@ -116,7 +119,24 @@ async function main(argv: string[]): Promise<void> {
   const [cmd, ...rest] = argv
   const data = dataDir()
   const restarted = (was: string): void => void process.stderr.write(`sldev: replaced the background daemon from ${was} with ${VERSION}\n`)
-  const client = (): ReturnType<typeof connect> => connect({ dataDir: data, script: script(), onRestart: restarted })
+  const legacyDir = legacyRuntimeDir()
+  // said once per old daemon, not on every command while it finishes its panes
+  const legacy = (note: string, pid?: number): void => {
+    const seen = join(data, 'legacy-daemon-noted')
+    try {
+      if (pid !== undefined && readFileSync(seen, 'utf8').trim() === String(pid)) return
+    } catch {
+      // not noted yet
+    }
+    process.stderr.write(`${note}\n`)
+    try {
+      mkdirSync(data, { recursive: true, mode: 0o700 })
+      writeFileSync(seen, String(pid ?? ''))
+    } catch {
+      // a note shown twice is fine
+    }
+  }
+  const client = (): ReturnType<typeof connect> => connect({ dataDir: data, legacyDir, script: script(), onRestart: restarted, onLegacy: legacy })
   const opts = <T extends Record<string, { type: 'string' | 'boolean' }>>(options: T) => parseArgs({ args: rest, options, allowPositionals: true, strict: true })
 
   switch (cmd) {
@@ -207,14 +227,14 @@ async function main(argv: string[]): Promise<void> {
     case 'clean': {
       const { values } = opts({ orphans: { type: 'boolean' }, discard: { type: 'boolean' }, branches: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, yes: { type: 'boolean' } })
       // any version's daemon: its panes and loops are what must not be cleaned, so not knowing them stops here
-      const c = await connect({ dataDir: data, script: script(), start: false, check: false }).catch(() => null)
+      const c = await connect({ dataDir: data, legacyDir, script: script(), start: false, check: false }).catch(() => null)
       const known = c ? await Promise.all([c.request('ls', {}, 5000), c.request('loops', {}, 5000)]).catch(() => null) : ([[], []] as [PaneInfo[], LoopInfo[]])
       if (!known) {
         c?.close()
         return fail('the running sldev daemon is from another version and could not say what it runs; sldev stop first, then sldev clean')
       }
       const [panes, loopList] = known
-      const o = { orphans: values.orphans, discard: values.discard, branches: values.branches, repo: await projectRoot(process.cwd()), dataDir: data }
+      const o = { orphans: values.orphans, discard: values.discard, branches: values.branches, repo: await projectRoot(process.cwd()), appDataDir: appDataDir() }
       const items = await planClean(panes, loopList, o)
       if (!items.length) {
         c?.close()
@@ -308,11 +328,13 @@ async function main(argv: string[]): Promise<void> {
       return c.close()
     }
     case 'stop': {
-      const c = await connect({ dataDir: data, script: script(), start: false, check: false }).catch(() => null)
+      const c = await connect({ dataDir: data, legacyDir, script: script(), start: false, check: false }).catch(() => null)
       if (!c) return void console.log('sldev is not running')
       await c.request('stop', {})
       return c.close()
     }
+    case 'config':
+      return void console.log(describeConfig(data))
     case 'rules': {
       const { values, positionals } = opts({ overwrite: { type: 'string' } })
       const root = await projectRoot(process.cwd())
@@ -355,7 +377,7 @@ async function main(argv: string[]): Promise<void> {
       return void console.log(usageTable(rows, values.week ? 'this week' : 'today'))
     }
     case 'agents': {
-      const agents = allAgents()
+      const agents = allAgents(readConfig(data).customAgents)
       setInstalledBins(agents.flatMap((a) => [a.bin, ...(a.aliases ?? [])]).filter((b) => findOnPath(b, process.env)))
       return void console.log(agents.map((a) => `${a.id.padEnd(10)} ${a.name.padEnd(16)} ${installedBin(a) ? 'installed' : `not installed${a.install ? `: ${a.install}` : ''}`}`).join('\n'))
     }

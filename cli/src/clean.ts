@@ -31,8 +31,8 @@ export interface CleanOptions {
   branches?: boolean
   /** the project (repository root) orphans are looked for in */
   repo?: string
-  /** the app's data folder: worktrees its missions, runs and automations use are never orphans */
-  dataDir: string
+  /** the sldev-io app's data folder (appDataDir), read only: worktrees its missions, runs and automations use are never orphans */
+  appDataDir: string
 }
 
 const LIVE = new Set(['starting', 'working', 'waiting', 'needs-input'])
@@ -99,7 +99,7 @@ export async function planClean(panes: PaneInfo[], loops: LoopInfo[], o: CleanOp
     await add(p.id, p.title, p.worktree)
   }
   if (o.orphans && o.repo) {
-    const app = appMentions(o.dataDir)
+    const app = appMentions(o.appDataDir)
     const known = new Set(panes.flatMap((p) => (p.worktree ? [norm(p.worktree.path)] : [])))
     for (const wt of await sldevWorktrees(o.repo)) {
       if (known.has(norm(wt.path)) || mentioned(app, wt.path)) continue

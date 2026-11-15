@@ -98,7 +98,7 @@ marketing/promo/ the 90 s advert, animated with Remotion (own package.json; pric
                   music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
-                  ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in <userData>/cli)
+                  ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in the CLI's own data folder, cli/src/paths.ts)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the tabbed view (top tabs, grouped sidebar, popups; render.ts draws it);
                   loops.ts the repeat loops (`sldev new --repeat`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
@@ -241,8 +241,10 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   beta. Keep those modules free of `electron` imports (they take a data dir or a sink instead). The client checks the
   daemon's version on connect (`connect` in `cli/src/client.ts`): a daemon left by an older sldev is replaced when nothing
   runs in it, and the daemon answers every command, an unknown one with an error, because a silent one hung `sldev` after
-  upgrades. Bump `cli/package.json` and `cli/src/version.ts` together. Its runtime files go in
-  `<userData>/cli`, never over the app's. It makes no network requests of its own; the one exception is the workflows view
+  upgrades. Bump `cli/package.json` and `cli/src/version.ts` together. It has its own data folder
+  (`~/.config/sldev`, `dataDir` in `cli/src/paths.ts`) and config (`<data>/config.json`, `cli/src/config.ts`), and shares
+  code with the app, not state: it never reads the app's settings, and only `sldev clean --orphans` reads the app's records
+  (`appDataDir`), read only. A daemon left by sldev 0.4 in `<app userData>/cli` is kept while it runs panes, else replaced. It makes no network requests of its own; the one exception is the workflows view
   (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating
   `/privacy` like the app. `sldev clean` never removes a worktree a live pane, an unfinished loop or the app (its missions,
   runs, automations) uses. No `sldev run`: the factory stays in the app.

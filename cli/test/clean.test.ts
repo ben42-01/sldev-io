@@ -54,7 +54,7 @@ describe('sldev clean', () => {
       pane('5', 'ended', live),
       pane('6', 'ended')
     ]
-    const o = { dataDir: data, repo }
+    const o = { appDataDir: data, repo }
     const items = await planClean(panes, [loop('L1', 'waiting')], o)
     const lines = describeClean(items).join('\n')
     expect(lines).toContain(`remove pane 1 job 1: ${done.path}; branch feature/done stays`)
@@ -81,7 +81,7 @@ describe('sldev clean', () => {
     writeFileSync(join(ahead.path, 'b.txt'), 'b\n')
     git(ahead.path, 'add', '-A')
     git(ahead.path, 'commit', '-qm', 'only here')
-    const o = { dataDir: data, repo, discard: true, branches: true }
+    const o = { appDataDir: data, repo, discard: true, branches: true }
     const items = await planClean([pane('7', 'ended', dirty), pane('8', 'ended', ahead)], [], o)
     expect(describeClean(items).join('\n')).toMatch(/remove pane 8 .*branch feature\/ahead stays; 1 commit only on feature\/ahead/)
     expect(await runClean(items, o, async () => undefined)).toEqual([])
@@ -94,8 +94,8 @@ describe('sldev clean', () => {
     const orphan = await addWorktree(repo, 'feature/orphan', 'main')
     const appOwned = await addWorktree(repo, 'feature/app-mission', 'main')
     writeFileSync(join(data, 'missions.json'), JSON.stringify({ missions: [{ id: 'm1', cwd: appOwned.path, worktree: appOwned }] }))
-    expect(await planClean([], [], { dataDir: data, repo })).toEqual([])
-    const lines = describeClean(await planClean([], [], { dataDir: data, repo, orphans: true })).join('\n')
+    expect(await planClean([], [], { appDataDir: data, repo })).toEqual([])
+    const lines = describeClean(await planClean([], [], { appDataDir: data, repo, orphans: true })).join('\n')
     expect(lines).toContain(`remove worktree feature/orphan: ${orphan.path}`)
     expect(lines).not.toContain('app-mission')
   })

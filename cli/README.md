@@ -121,7 +121,8 @@ them, and `sldev wait` without a pane waits for agents only.
 
 ### After an upgrade
 
-The daemon from the sldev you had before may still be running. `sldev` checks its version: one with nothing
+The daemon from the sldev you had before may still be running (for 0.4 and older, in the app's folder; see
+[Moving from sldev 0.4](#moving-from-sldev-04)). `sldev` checks its version: one with nothing
 running in it is replaced on the spot; one still running agents is left alone (stopping it would stop them), and
 `sldev` says so. Let them finish, then `sldev stop` and `sldev` again.
 
@@ -132,12 +133,48 @@ there (with the tab in front), which shows how your terminal encodes it. Windows
 `sldev help` lists everything. `SKILL.md` teaches an agent to use sldev itself, so one agent can hand
 work to another.
 
-## Shared with the app
+## Data folder and config
 
-The CLI uses the same `.sldev/` folder (rules, memory, mission kinds, context) and the same data folder
-as the app (`~/.config/sldev-io` on Linux, `~/Library/Application Support/sldev-io` on macOS;
-`SLDEV_DATA_DIR` overrides it). Its own runtime files live in `cli/` inside that folder, so the app and
-the CLI can run at the same time without answering each other's agents.
+The CLI keeps its own folder: `~/.config/sldev` on Linux (`$XDG_CONFIG_HOME/sldev` when that is set),
+`~/Library/Application Support/sldev` on macOS, `%APPDATA%\sldev` on Windows; `SLDEV_DATA_DIR` overrides it.
+Its config, user mission kinds (`missions/`), the project context index (`context/`) and the daemon's runtime
+files (socket, `daemon.log`, hook relay, MCP script) all live there. It shares code with the sldev-io app, not
+state: it never reads the app's settings, and the two can run at the same time without answering each other's
+agents. The one time it looks at the app's folder is `sldev clean --orphans`, which reads the app's missions,
+runs and automations (read only) so it never removes a worktree the app uses (`SLDEV_APP_DATA_DIR` points it
+elsewhere). Both use the project's `.sldev/` folder (rules, memory, mission kinds, context).
+
+`sldev config` prints where `config.json` is and the values in effect. Edit the file by hand; the daemon reads
+it when it starts (`sldev stop`, then `sldev`). A missing file, bad JSON or a wrong value means that key's
+default, never an error.
+
+```json
+{
+  "editor": "zed",
+  "customAgents": [
+    { "id": "aider", "name": "Aider", "command": "aider --message {prompt}", "printCommand": "aider --yes-always --message {prompt}" }
+  ],
+  "failoverOrder": ["codex", "gemini"],
+  "failoverAuto": true,
+  "unattendedModes": { "claude": "acceptEdits", "codex": "" }
+}
+```
+
+| Key | Default | Means |
+| --- | --- | --- |
+| `editor` | `null` | the editor `sldev open` and Ctrl-b e use (`cursor`, `vscode`, `windsurf`, `zed`, `sublime`, `idea`, `nvim`…); `null`: the first one found. `--editor` wins |
+| `customAgents` | `[]` | agent CLIs of your own: `id`, `name`, `command` (`{prompt}` `{model}` `{name}` are filled in; the prompt is appended when `{prompt}` is missing), optional `printCommand` (for `--print`) and `resumeCommand` |
+| `failoverOrder` | `[]` | agents to continue on, in order, when one stops at its usage limit |
+| `failoverAuto` | `false` | use `failoverOrder` for every new pane; otherwise only `--failover` sets one |
+| `unattendedModes` | `{}` | permission mode per agent id for `--print` panes; a missing agent gets its recommended one, `""` the agent's own default |
+
+### Moving from sldev 0.4
+
+sldev 0.4 and older ran inside the app's folder (`~/.config/sldev-io/cli`). Mission kinds and config don't
+move over by themselves: copy `~/.config/sldev-io/missions/*.md` to `~/.config/sldev/missions/` and set your
+editor and custom agents in `config.json` again. A daemon an older sldev left running in the old folder is
+still found: if it runs agents, sldev keeps using it and says it will move once they're done; with nothing
+running, it is stopped and the new one starts in the CLI's own folder.
 
 ## Development
 

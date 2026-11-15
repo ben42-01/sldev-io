@@ -5,7 +5,7 @@ import { join } from 'path'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { connect, tryConnect } from '../src/client'
 import { startDaemon } from '../src/daemon'
-import { cliDir, socketPath } from '../src/paths'
+import { socketPath } from '../src/paths'
 import { lineReader } from '../src/protocol'
 import { VERSION } from '../src/version'
 import { removeTemp } from './fakePath'
@@ -26,10 +26,15 @@ afterEach(async () => {
 })
 afterAll(() => removeTemp(tmp))
 
-/** A daemon of `version` with these panes: answers ping, ls and stop (and records them), ignores the rest. */
-async function oldDaemon(version: string, panes: object[]): Promise<{ data: string; got: string[] }> {
+/**
+ * A daemon of `version` with these panes: answers ping, ls and stop (and records them), ignores the rest.
+ * It listens in `data`, or with `legacy` in `<data>-app/cli`, where sldev 0.4 and older ran it.
+ */
+async function oldDaemon(version: string, panes: object[], legacy = false): Promise<{ data: string; legacyDir: string; got: string[] }> {
   const data = join(tmp, `d${++n}`)
-  mkdirSync(cliDir(data), { recursive: true })
+  const legacyDir = join(`${data}-app`, 'cli')
+  const dir = legacy ? legacyDir : data
+  mkdirSync(dir, { recursive: true })
   const got: string[] = []
   server = createServer((c) =>
     c.on(
@@ -39,7 +44,7 @@ async function oldDaemon(version: string, panes: object[]): Promise<{ data: stri
         got.push(r.cmd)
         const reply = (result: unknown): void => void c.write(JSON.stringify({ id: r.id, ok: true, result }) + '\n')
         if (r.cmd === 'ping') reply({ version, pid: 999_999_999 })
-        else if (r.cmd === 'ls') reply(panes)
+        else if (r.cmd === 'ls' || r.cmd === 'tabs') reply(r.cmd === 'ls' ? panes : { order: [], active: null, split: false })
         else if (r.cmd === 'stop') {
           reply(null)
           // like the real one: it goes away a moment after answering
@@ -49,8 +54,8 @@ async function oldDaemon(version: string, panes: object[]): Promise<{ data: stri
       })
     )
   )
-  await new Promise<void>((r) => server!.listen(socketPath(cliDir(data)), () => r()))
-  return { data, got }
+  await new Promise<void>((r) => server!.listen(socketPath(dir), () => r()))
+  return { data, legacyDir, got }
 }
 
 describe('a daemon left over from another version', () => {
@@ -61,7 +66,7 @@ describe('a daemon left over from another version', () => {
     await expect(connect({ dataDir: old.data, script: '', start: false, onRestart: (w) => (was = w) })).rejects.toThrow('not running')
     expect(old.got).toEqual(['ping', 'ls', 'stop'])
     expect(was).toBe('sldev 0.1.0')
-    expect(await tryConnect(socketPath(cliDir(old.data)))).toBeNull()
+    expect(await tryConnect(socketPath(old.data))).toBeNull()
   })
 
   it('is left alone while it still runs panes, and the error says how to restart it', async () => {
@@ -82,8 +87,58 @@ describe('a daemon left over from another version', () => {
   it('times a request out instead of waiting forever on one it ignores', async () => {
     const old = await oldDaemon(VERSION, [])
     const c = await connect({ dataDir: old.data, script: '', start: false })
-    await expect(c.request('tabs', {}, 200)).rejects.toThrow(`didn't answer "tabs"`)
+    await expect(c.request('loops', {}, 200)).rejects.toThrow(`didn't answer "loops"`)
     c.close()
+  })
+})
+
+describe('a daemon in the old folder (sldev 0.4 ran it in the app\'s data folder)', () => {
+  it('keeps serving while it runs panes, and says once that sldev moves when they are done', async () => {
+    const old = await oldDaemon('0.4.1', [{ id: '2', title: 'busy', status: 'working', pid: 42 }], true)
+    const notes: string[] = []
+    const c = await connect({ dataDir: old.data, legacyDir: old.legacyDir, script: '', start: false, onLegacy: (m) => notes.push(m) })
+    expect(await c.request('tabs', {}, 1000)).toEqual({ order: [], active: null, split: false })
+    c.close()
+    expect(old.got).not.toContain('stop')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/sldev 0\.4\.1 .*runs 1 pane;.*once they're done/)
+  })
+
+  it('is stopped when nothing runs in it, so the new one can start in the CLI\'s own folder', async () => {
+    const old = await oldDaemon('0.4.1', [{ id: '1', title: 'old', status: 'ended' }], true)
+    let was = ''
+    await expect(connect({ dataDir: old.data, legacyDir: old.legacyDir, script: '', start: false, onRestart: (w) => (was = w) })).rejects.toThrow('not running')
+    expect(old.got).toEqual(['ping', 'ls', 'stop'])
+    expect(was).toBe('sldev 0.4.1')
+    expect(await tryConnect(socketPath(old.legacyDir))).toBeNull()
+  })
+
+  it('is left alone with live panes it can\'t be trusted with (older than 0.4), and the error says why', async () => {
+    const old = await oldDaemon('0.3.0', [{ id: '4', title: 'parser', status: 'working', pid: 1 }], true)
+    const err = await connect({ dataDir: old.data, legacyDir: old.legacyDir, script: '', start: false }).catch((e: Error) => e)
+    expect((err as Error).message).toMatch(/from sldev 0\.3\.0 and still runs 1 pane/)
+    expect(old.got).not.toContain('stop')
+  })
+
+  it('is what sldev stop and clean reach when the new folder has none', async () => {
+    const old = await oldDaemon('0.4.1', [{ id: '1', title: 'busy', status: 'working', pid: 1 }], true)
+    const c = await connect({ dataDir: old.data, legacyDir: old.legacyDir, script: '', start: false, check: false })
+    expect(old.got).toEqual([])
+    c.close()
+  })
+
+  it('is not looked at while a daemon answers in the new folder', async () => {
+    const data = join(tmp, 'both')
+    const d = await startDaemon({ dataDir: data, notify: () => undefined })
+    try {
+      const old = await oldDaemon('0.4.1', [{ id: '1', title: 'busy', status: 'working', pid: 1 }], true)
+      const c = await connect({ dataDir: data, legacyDir: old.legacyDir, script: '', start: false })
+      expect((await c.request('ping', {}, 1000)).version).toBe(VERSION)
+      c.close()
+      expect(old.got).toEqual([])
+    } finally {
+      await d.close()
+    }
   })
 })
 
