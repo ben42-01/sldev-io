@@ -1,18 +1,21 @@
 import { promises as fsp } from 'fs'
 import { basename, join } from 'path'
-import { DRAFTS_DIR, SKILL_DIRS, SLDEV_SKILLS, copyState, draftKind, skillText, type DraftFile, type SkillCopyState, type SkillState } from '@shared/sldevSkills'
+import { APP_SKILLS, DRAFTS_DIR, SKILL_DIRS, copyState, draftKind, skillText, type DraftFile, type SkillCopyState, type SkillSet, type SkillState } from '@shared/sldevSkills'
 
-/** sldev's skills in a project and the drafts agents leave for the app. No electron imports: the CLI uses this too. */
+/**
+ * sldev's skills in a project and the drafts agents leave for the app. No electron imports: the CLI uses this
+ * too, with its own skill set (cli/src/skills.ts); without one, these work on the app's.
+ */
 
 const read = (p: string): Promise<string | null> => fsp.readFile(p, 'utf8').catch(() => null)
 const copies = (root: string, name: string): string[] => SKILL_DIRS.map((d) => join(root, ...d.split('/'), name, 'SKILL.md'))
 
 const RANK: SkillCopyState[] = ['missing', 'outdated', 'edited', 'foreign', 'current']
 
-export async function skillsState(root: string): Promise<SkillState[]> {
+export async function skillsState(root: string, set: SkillSet = APP_SKILLS): Promise<SkillState[]> {
   return Promise.all(
-    SLDEV_SKILLS.map(async (s) => {
-      const all = await Promise.all(copies(root, s.name).map(async (p) => copyState(s, await read(p))))
+    set.skills.map(async (s) => {
+      const all = await Promise.all(copies(root, s.name).map(async (p) => copyState(s, await read(p), set.version)))
       // npx skills add writes one folder, so a missing copy only counts when no other copy exists
       const states = all.some((st) => st !== 'missing') ? all.filter((st) => st !== 'missing') : all
       return { name: s.name, label: s.label, state: RANK.find((r) => states.includes(r)) ?? 'current' }
@@ -24,28 +27,28 @@ export async function skillsState(root: string): Promise<SkillState[]> {
  * Writes the missing and outdated copies. A copy edited by hand (or someone else's skill of that name) is
  * kept unless its skill is named in `overwrite`. Returns the files written.
  */
-export async function installSkills(root: string, overwrite: string[] = []): Promise<string[]> {
+export async function installSkills(root: string, overwrite: string[] = [], set: SkillSet = APP_SKILLS): Promise<string[]> {
   const wrote: string[] = []
-  for (const s of SLDEV_SKILLS) {
+  for (const s of set.skills) {
     for (const p of copies(root, s.name)) {
-      const st = copyState(s, await read(p))
+      const st = copyState(s, await read(p), set.version)
       if (st === 'current' || ((st === 'edited' || st === 'foreign') && !overwrite.includes(s.name))) continue
       await fsp.mkdir(join(p, '..'), { recursive: true })
-      await fsp.writeFile(p, skillText(s))
+      await fsp.writeFile(p, skillText(s, set.version))
       wrote.push(p)
     }
   }
-  await prepareDrafts(root)
+  if (set.drafts) await prepareDrafts(root)
   return wrote
 }
 
 /** The skills as plain folders (`<dir>/<name>/SKILL.md`), for the public skills repo that `npx skills add` reads. */
-export async function exportSkills(dir: string): Promise<string[]> {
+export async function exportSkills(dir: string, set: SkillSet = APP_SKILLS): Promise<string[]> {
   const out: string[] = []
-  for (const s of SLDEV_SKILLS) {
+  for (const s of set.skills) {
     const p = join(dir, s.name, 'SKILL.md')
     await fsp.mkdir(join(dir, s.name), { recursive: true })
-    await fsp.writeFile(p, skillText(s))
+    await fsp.writeFile(p, skillText(s, set.version))
     out.push(p)
   }
   return out

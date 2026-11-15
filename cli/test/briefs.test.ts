@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -12,7 +12,8 @@ import { removeTemp, useFakeAgents } from './fakePath'
 
 /** Briefs in .sldev-cli/briefs: read, listed, launched through a real daemon with the fake codex, moved, refused. */
 
-const tmp = mkdtempSync(join(tmpdir(), 'sldev-briefs-'))
+// the real path: Windows' temp folder can be an 8.3 short name (RUNNER~1), and git answers with the long one
+const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), 'sldev-briefs-')))
 const data = join(tmp, 'data')
 const repo = join(tmp, 'repo')
 let daemon: Daemon

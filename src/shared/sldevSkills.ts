@@ -272,11 +272,25 @@ Say in one line that the eval is in sldev-io under Mission Control → Evals, re
   }
 ]
 
+/**
+ * A set of skills installed and versioned together: the app's (below) or the CLI's (cli/src/skills.ts). The
+ * install mechanics in src/main/sldevSkills.ts take one, so each side ships only its own.
+ */
+export interface SkillSet {
+  skills: SldevSkill[]
+  /** bumped when one of its skills' text changes */
+  version: number
+  /** installing also prepares the app's drafts inbox (`.sldev/drafts`) */
+  drafts?: boolean
+}
+
+export const APP_SKILLS: SkillSet = { skills: SLDEV_SKILLS, version: SKILLS_VERSION, drafts: true }
+
 const MARK = 'sldev-skill'
 
 /** The SKILL.md as written into a project. */
-export function skillText(s: SldevSkill): string {
-  return `---\nname: ${s.name}\ndescription: ${JSON.stringify(s.description)}\nmetadata:\n  ${MARK}: "${SKILLS_VERSION}"\n---\n\n${s.body.trim()}\n`
+export function skillText(s: SldevSkill, version = SKILLS_VERSION): string {
+  return `---\nname: ${s.name}\ndescription: ${JSON.stringify(s.description)}\nmetadata:\n  ${MARK}: "${version}"\n---\n\n${s.body.trim()}\n`
 }
 
 /** the version an installed copy says it is; null when it isn't one of ours */
@@ -299,13 +313,13 @@ export interface DraftFile {
   text: string
 }
 
-/** An installed copy against this app's: outdated copies are replaced, hand-edited and foreign ones are kept. */
-export function copyState(s: SldevSkill, text: string | null): SkillCopyState {
+/** An installed copy against this version's: outdated copies are replaced, hand-edited and foreign ones are kept. */
+export function copyState(s: SldevSkill, text: string | null, version = SKILLS_VERSION): SkillCopyState {
   if (text === null) return 'missing'
-  if (text.replace(/\r\n/g, '\n') === skillText(s)) return 'current'
+  if (text.replace(/\r\n/g, '\n') === skillText(s, version)) return 'current'
   const v = skillVersionOf(text)
   if (v === null) return 'foreign'
-  return v < SKILLS_VERSION ? 'outdated' : 'edited'
+  return v < version ? 'outdated' : 'edited'
 }
 
 // ── drafts an agent left in .sldev/drafts ─────────────────────────────
