@@ -11,7 +11,7 @@ import { missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
 import { withMemory } from '@shared/memory'
 import type { PassOutcome } from '@shared/repeat'
 import { wasInterrupted } from '@shared/status'
-import type { AppSettings, CustomAgent, Mission } from '@shared/types'
+import type { CustomAgent, Mission } from '@shared/types'
 import { defaultShell, PtyManager, type PtySink } from '../../src/main/pty'
 import { startHookServer, stopHookServer, type HookInfo } from '../../src/main/hooks'
 import { findOnPath } from '../../src/main/launch'
@@ -24,7 +24,8 @@ import { createTerm, screenText, termScreen, type Term } from './screen'
 import { Tracker } from './tracker'
 import { Loops, type PassStart } from './loops'
 import { desktopNotify } from './notify'
-import { cliDir, socketPath } from './paths'
+import { readConfig } from './config'
+import { socketPath } from './paths'
 import { VERSION } from './version'
 
 /**
@@ -85,12 +86,12 @@ export interface Daemon {
 }
 
 export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
-  const dir = cliDir(o.dataDir)
+  const dir = o.dataDir
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   const socket = socketPath(dir)
   await claimSocket(socket)
 
-  const settings = readSettings(o.dataDir)
+  const settings = readConfig(o.dataDir)
   const custom: CustomAgent[] = settings.customAgents ?? []
   const agents = allAgents(custom)
   setInstalledBins(agents.flatMap((a) => [a.bin, ...(a.aliases ?? [])]).filter((b) => b && findOnPath(b, process.env)))
@@ -358,7 +359,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       worktree,
       kind: kind && { id: kind.id, name: kind.name, readOnly: kind.readOnly },
       // print mode has nobody to approve a tool call: the unattended mode, as for the app's factory stages
-      options: { model: a.model, effort: a.effort, print: a.print || undefined, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : a.print ? stageMode(agent, settings.factoryModes) : undefined) },
+      options: { model: a.model, effort: a.effort, print: a.print || undefined, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : a.print ? stageMode(agent, settings.unattendedModes) : undefined) },
       repeat: pass?.repeat,
       // a pass that hits the limit ends its loop; handing it to another agent would run outside the loop
       failover: pass ? undefined : order?.filter((x) => x !== agent.id),
@@ -595,14 +596,6 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
 }
 
 const isLive = (s: Mission['status']): boolean => s === 'starting' || s === 'working' || s === 'waiting' || s === 'needs-input'
-
-function readSettings(dataDir: string): Partial<AppSettings> {
-  try {
-    return JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')) as Partial<AppSettings>
-  } catch {
-    return {}
-  }
-}
 
 /**
  * A live daemon means this one doesn't start; a socket file left by one that died is removed. Windows named

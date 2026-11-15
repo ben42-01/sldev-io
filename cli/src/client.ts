@@ -3,7 +3,7 @@ import { mkdirSync, openSync } from 'fs'
 import { createConnection, type Socket } from 'net'
 import { join } from 'path'
 import { lineReader, type Command, type DaemonEvent, type PaneInfo, type Requests, type Response } from './protocol'
-import { cliDir, socketPath } from './paths'
+import { socketPath } from './paths'
 import { VERSION } from './version'
 
 /** A connection to the daemon: requests get their reply by id; events (attach) go to onEvent. */
@@ -92,17 +92,24 @@ async function gone(socket: string, ms: number): Promise<boolean> {
  * it knew (ls, attach) and stays silent on anything newer, so after an upgrade `sldev` hung on a blank
  * screen. A stale daemon with nothing running in it is stopped and replaced; one with live panes is left
  * alone (stopping it would kill agents mid-work), and the error says how to restart it.
+ *
+ * `legacy`: the daemon answers on the old socket in the app's folder (sldev 0.4 and older). One that speaks
+ * this protocol (0.4.x) and still runs panes is kept and used until they end, so nothing is orphaned.
  */
-async function checkVersion(c: Client, socket: string): Promise<{ ok: true } | { ok: false; was: string }> {
+async function checkVersion(c: Client, socket: string, legacy = false): Promise<{ ok: true } | { ok: false; was: string } | { keep: string; pid?: number }> {
   const info = await c.request('ping', {}, QUICK_MS).catch(() => null)
-  if (info?.version === VERSION) return { ok: true }
+  if (!legacy && info?.version === VERSION) return { ok: true }
   const was = info?.version ? `sldev ${info.version}` : 'an older sldev'
   const panes: PaneInfo[] = await c.request('ls', {}, QUICK_MS).catch(() => [])
   const live = panes.filter((p) => p.pid !== undefined)
+  const count = `${live.length} pane${live.length === 1 ? '' : 's'}`
+  if (live.length && legacy && info?.version && LEGACY_COMPATIBLE.test(info.version)) {
+    return { keep: `sldev: using the background daemon from ${was} in its old folder while it runs ${count}; sldev ${VERSION} moves to its own folder once they're done`, pid: info.pid }
+  }
   if (live.length) {
     c.close()
     throw new Error(
-      `the background daemon is from ${was} and still runs ${live.length} pane${live.length === 1 ? '' : 's'} (${live.map((p) => `${p.id} ${p.title}`).join(', ')}). ` +
+      `the background daemon is from ${was} and still runs ${count} (${live.map((p) => `${p.id} ${p.title}`).join(', ')}). ` +
         `This is sldev ${VERSION}. Let them finish, then run "sldev stop" (it ends them) and "sldev" again.`
     )
   }
@@ -119,21 +126,49 @@ async function checkVersion(c: Client, socket: string): Promise<{ ok: true } | {
   return { ok: false, was }
 }
 
+/** Old-folder daemons this client can keep talking to: the protocol hasn't changed since 0.4 (ping came then). */
+const LEGACY_COMPATIBLE = /^0\.4\./
+
+export interface ConnectOptions {
+  /** the CLI's data folder; the socket and daemon.log are in it */
+  dataDir: string
+  /** where an older sldev ran its daemon (legacyRuntimeDir); looked at only when nothing answers in dataDir */
+  legacyDir?: string
+  script: string
+  start?: boolean
+  check?: boolean
+  onRestart?: (was: string) => void
+  /** a daemon in the old folder is kept because it still runs panes: what to tell the user, and its pid */
+  onLegacy?: (note: string, pid?: number) => void
+}
+
 /**
  * Connects to the daemon, starting it in the background first when it isn't running (`sldev serve`,
- * detached, logging to <data>/cli/daemon.log). `script` is this CLI's entry file. A daemon of another
+ * detached, logging to <data>/daemon.log). `script` is this CLI's entry file. A daemon of another
  * version is replaced first (see checkVersion); `check: false` skips that, for `sldev stop`.
  */
-export async function connect(o: { dataDir: string; script: string; start?: boolean; check?: boolean; onRestart?: (was: string) => void }): Promise<Client> {
-  const dir = cliDir(o.dataDir)
+export async function connect(o: ConnectOptions): Promise<Client> {
+  const dir = o.dataDir
   const socket = socketPath(dir)
   const c = await tryConnect(socket)
   if (c) {
     // sldev stop must reach a daemon of any version
     if (o.check === false) return c
     const v = await checkVersion(c, socket)
-    if (v.ok) return c
-    o.onRestart?.(v.was)
+    if ('ok' in v && v.ok) return c
+    if ('was' in v) o.onRestart?.(v.was)
+  } else if (o.legacyDir) {
+    const old = socketPath(o.legacyDir)
+    const lc = await tryConnect(old)
+    if (lc) {
+      if (o.check === false) return lc
+      const v = await checkVersion(lc, old, true)
+      if ('keep' in v) {
+        o.onLegacy?.(v.keep, v.pid)
+        return lc
+      }
+      if ('was' in v) o.onRestart?.(v.was)
+    }
   }
   if (o.start === false) throw new Error('sldev is not running')
   mkdirSync(dir, { recursive: true, mode: 0o700 })

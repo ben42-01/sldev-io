@@ -60,10 +60,10 @@ describe('sldev daemon', () => {
     await expect(startDaemon({ dataDir: data })).rejects.toThrow(/already running/)
   })
 
-  it('writes its runtime files in its own folder, not over the app’s', () => {
-    expect(existsSync(join(data, 'cli', 'claude-hooks.json'))).toBe(true)
-    expect(existsSync(join(data, 'cli', 'sldev-mcp.cjs'))).toBe(true)
-    expect(existsSync(join(data, 'claude-hooks.json'))).toBe(false)
+  it('writes its runtime files straight into its own data folder', () => {
+    expect(existsSync(join(data, 'claude-hooks.json'))).toBe(true)
+    expect(existsSync(join(data, 'sldev-mcp.cjs'))).toBe(true)
+    expect(existsSync(join(data, 'cli'))).toBe(false)
   })
 
   it('tracks Claude through its hooks, in a new worktree, with the kind’s prompt', async () => {
@@ -153,7 +153,7 @@ describe('sldev daemon', () => {
     ].join('\n')
     // async: the daemon runs in this process, so a sync spawn would block its replies
     const out = await new Promise<string>((resolve) => {
-      const child = spawn(process.execPath, [join(data, 'cli', 'sldev-mcp.cjs'), '--mission', p.id], { cwd: p.cwd })
+      const child = spawn(process.execPath, [join(data, 'sldev-mcp.cjs'), '--mission', p.id], { cwd: p.cwd })
       let text = ''
       child.stdout.on('data', (d) => (text += d))
       child.on('close', () => resolve(text))

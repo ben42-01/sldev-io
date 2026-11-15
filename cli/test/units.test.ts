@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { dataDir, socketPath } from '../src/paths'
+import { appDataDir, dataDir, legacyRuntimeDir, socketPath } from '../src/paths'
 import { notifyCommand } from '../src/notify'
 import { checkLaunch } from '../src/loops'
 import { pickEditor } from '../src/editor'
@@ -20,15 +20,28 @@ describe('cli units', () => {
     expect(VERSION).toBe(JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')).version)
   })
 
-  it('shares the app data folder per platform, with an override', () => {
-    expect(dataDir({ SLDEV_DATA_DIR: '/x' }, 'linux')).toBe('/x')
-    expect(dataDir({ XDG_CONFIG_HOME: '/cfg' }, 'linux')).toBe('/cfg/sldev-io')
-    expect(dataDir({}, 'darwin')).toMatch(/Library\/Application Support\/sldev-io$/)
-    expect(dataDir({ APPDATA: 'C:\\Users\\a\\AppData\\Roaming' }, 'win32')).toContain('sldev-io')
+  it('has a data folder of its own per platform, never the app\'s, with an override', () => {
+    expect(dataDir({ SLDEV_DATA_DIR: '/x' }, 'linux', '/home/a')).toBe('/x')
+    expect(dataDir({ XDG_CONFIG_HOME: '/cfg' }, 'linux', '/home/a')).toBe('/cfg/sldev')
+    expect(dataDir({}, 'linux', '/home/a')).toBe('/home/a/.config/sldev')
+    expect(dataDir({}, 'darwin', '/Users/a')).toBe('/Users/a/Library/Application Support/sldev')
+    expect(dataDir({ APPDATA: 'C:\\Users\\a\\AppData\\Roaming' }, 'win32', 'C:\\Users\\a')).toBe('C:\\Users\\a\\AppData\\Roaming\\sldev')
+    expect(dataDir({}, 'win32', 'C:\\Users\\a')).toBe('C:\\Users\\a\\AppData\\Roaming\\sldev')
+  })
+
+  it('knows the app\'s folder (read by clean only) and where sldev 0.4 ran its daemon', () => {
+    expect(appDataDir({}, 'linux', '/home/a')).toBe('/home/a/.config/sldev-io')
+    expect(appDataDir({ SLDEV_DATA_DIR: '/x' }, 'linux', '/home/a')).toBe('/home/a/.config/sldev-io')
+    expect(appDataDir({ SLDEV_APP_DATA_DIR: '/app' }, 'linux', '/home/a')).toBe('/app')
+    expect(appDataDir({}, 'darwin', '/Users/a')).toBe('/Users/a/Library/Application Support/sldev-io')
+    expect(appDataDir({ APPDATA: 'C:\\R' }, 'win32', 'C:\\Users\\a')).toBe('C:\\R\\sldev-io')
+    expect(legacyRuntimeDir({ XDG_CONFIG_HOME: '/cfg' }, 'linux', '/home/a')).toBe('/cfg/sldev-io/cli')
+    expect(legacyRuntimeDir({ SLDEV_DATA_DIR: '/x' }, 'linux', '/home/a')).toBe('/x/cli')
+    expect(legacyRuntimeDir({ APPDATA: 'C:\\R' }, 'win32', 'C:\\Users\\a')).toBe('C:\\R\\sldev-io\\cli')
   })
 
   it('keeps the socket path under the Unix limit', () => {
-    expect(socketPath('/home/a/.config/sldev-io/cli', 'linux')).toBe('/home/a/.config/sldev-io/cli/daemon.sock')
+    expect(socketPath('/home/a/.config/sldev', 'linux')).toBe('/home/a/.config/sldev/daemon.sock')
     const long = socketPath(`/${'x'.repeat(120)}/cli`, 'linux')
     expect(long.length).toBeLessThan(100)
     expect(long).toMatch(/sldev-[0-9a-f]{16}\.sock$/)
