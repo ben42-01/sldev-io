@@ -11,8 +11,10 @@ async function kindsIn(dir: string, scope: 'project' | 'user'): Promise<MissionK
   return parsed.filter((k): k is MissionKind => !!k)
 }
 
-export async function listKinds(root: string | null, dataDir: string): Promise<MissionKind[]> {
-  const [project, user] = await Promise.all([root ? kindsIn(kindsDir('project', root, dataDir), 'project') : [], kindsIn(kindsDir('user', null, dataDir), 'user')])
+/** `projectDir` reads the project's kinds from another folder (the CLI's own) instead of `.sldev/missions`. */
+export async function listKinds(root: string | null, dataDir: string, projectDir?: string): Promise<MissionKind[]> {
+  const dir = projectDir ?? (root ? kindsDir('project', root, dataDir) : null)
+  const [project, user] = await Promise.all([dir ? kindsIn(dir, 'project') : [], kindsIn(kindsDir('user', null, dataDir), 'user')])
   return [...project, ...user]
 }
 

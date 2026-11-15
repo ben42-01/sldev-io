@@ -68,6 +68,17 @@ export function runTerminalEditor(argv: string[], cwd: string): void {
   spawnSync(argv[0], argv.slice(1), { cwd, stdio: 'inherit' })
 }
 
+/**
+ * A file in the user's terminal editor, as git opens a commit message: $VISUAL, else $EDITOR, else vi (notepad on
+ * Windows), with any arguments it carries ("code --wait"). Resolves when the editor exits.
+ */
+export async function editInTerminal(file: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const cmd = (env.VISUAL || env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')).trim()
+  const [bin, ...args] = cmd.split(/\s+/)
+  const r = spawnSync(bin, [...args, file], { stdio: 'inherit', env })
+  if (r.error) throw new Error(`Could not run the editor "${cmd}" (set $EDITOR): ${r.error.message}`)
+}
+
 /** The editor set in the CLI's config.json (`editor`); null when none is set. */
 export function preferredEditor(dataDir: string): string | null {
   return readConfig(dataDir).editor

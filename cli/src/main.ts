@@ -1,13 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { basename, join, relative, resolve } from 'path'
 import { parseArgs } from 'util'
 import { allAgents, installedBin, setInstalledBins } from '@shared/agents'
-import { BUILTIN_KINDS } from '@shared/missionKinds'
 import { describeRepeat, parseGap, type RepeatPlan } from '@shared/repeat'
 import { passSignal } from '@shared/status'
 import { findOnPath } from '../../src/main/launch'
-import { listKinds } from '../../src/main/missionKinds'
 import { createInterface } from 'readline/promises'
+import { briefNote, briefTitle, cliKinds, cliRoot, ensureCliFolder, findBrief, launchBrief, listBriefs, shownDir } from './briefs'
 import { describeClean, planClean, runClean } from './clean'
 import { connect, daemonEnv } from './client'
 import { openPane, preferredEditor, runTerminalEditor } from './editor'
@@ -25,11 +24,12 @@ import { VERSION } from './version'
 const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
   sldev                         attach: every agent and shell as a tab, grouped by project, with its status
-                                (Ctrl-b c new tab, t shell, 1-9 or n/p tabs, , rename, x close, s split,
+                                (Ctrl-b c new tab, t shell, b briefs, 1-9 or n/p tabs, , rename, x close, s split,
                                 w workflows, e editor, v changed files, ? every key, d detach; tabs take clicks)
   sldev new [options] "brief"   start an agent in a new pane (prints its id)
       --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)
       --kind <kind>             frame the brief as a mission kind (build, research, plan, review…)
+      --criteria "<text>"       an acceptance criterion for the kind's prompt (repeat it for more)
       --worktree <branch>       run in a new git worktree; --here keeps it in this folder
       --title, --model, --mode, --effort
       --failover <a,b>          continue on these agents when this one hits its usage limit
@@ -43,6 +43,11 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
         --check "<cmd>"         run after each pass; a failure goes to the next pass, two stop the loop
         --accept                passes are interactive and end on sldev accept, not on the agent's exit
         --keep-going            don't stop when a pass changes nothing
+  sldev briefs [--json]         briefs waiting in .sldev-cli/briefs/*.md (at the repo's main checkout)
+  sldev launch <file|name>      start a brief like sldev new, with its kind, agent, worktree and criteria;
+      --agent <id>              it moves to .sldev-cli/briefs/launched/ with its pane id. A brief is Markdown:
+                                front matter (title, kind, agent, criteria: a "- " list, worktree: true|false,
+                                by) and the brief under it. A bad one is refused and stays where it is.
   sldev ls [--json]             panes with agent, status and branch
   sldev send <pane> "text"      type into a pane (Enter included; --no-enter to leave it out)
   sldev read <pane> [--lines n] the pane's screen as text
@@ -76,9 +81,12 @@ on the agents that pane started, and the TUI, review, loops stop and stop not at
   sldev recall [topic] [--path <file>]                 search the project's memory and docs
   sldev memory                                         where the memory is, how big
   sldev usage [--week]                                 tokens and estimated cost, from local logs
-  sldev agents | sldev kinds                           what's installed, what kinds exist
+  sldev agents | sldev kinds                           what's installed, what kinds exist (project kinds:
+                                                       .sldev-cli/kinds/*.md, the format of the app's .sldev/missions)
 
 Panes run in a background daemon (sldev serve), so they keep going when you detach.
+.sldev-cli/ is the CLI's own project folder (git-ignored by its own .gitignore); the app never reads it, and the
+CLI never reads the app's .sldev/drafts. .sldev/memory.md and .sldev/rules.md are shared by both.
 SLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light)
 surfaces; NO_COLOR turns colours off.
 Nothing here talks to the network, except the workflows view, which asks GitHub through your gh.`
@@ -118,6 +126,12 @@ function repeatPlan(v: { repeat?: string; gap?: string; check?: string; accept?:
   return { times, gapMinutes, check: v.check?.trim() || undefined, doneWhen: v.accept ? 'accept' : 'exit', keepGoingUnchanged: v['keep-going'] || undefined }
 }
 
+/** --criteria, once per criterion (or several lines in one), as "- " lines */
+const criteriaText = (v: string[] | undefined): string | undefined => {
+  const lines = (v ?? []).flatMap((c) => c.split('\n')).map((c) => c.trim()).filter(Boolean)
+  return lines.length ? lines.map((c) => (/^(?:[-*+]|\d+[.)])\s/.test(c) ? c : `- ${c}`)).join('\n') : undefined
+}
+
 const list = (v: string | undefined): string[] =>
   (v ?? '')
     .split(',')
@@ -146,12 +160,12 @@ async function main(argv: string[]): Promise<void> {
     }
   }
   const client = (): ReturnType<typeof connect> => connect({ dataDir: data, legacyDir, script: script(), onRestart: restarted, onLegacy: legacy })
-  const opts = <T extends Record<string, { type: 'string' | 'boolean' }>>(options: T) => parseArgs({ args: rest, options, allowPositionals: true, strict: true })
+  const opts = <T extends Record<string, { type: 'string' | 'boolean'; multiple?: boolean }>>(options: T) => parseArgs({ args: rest, options, allowPositionals: true, strict: true })
 
   switch (cmd) {
     case undefined: {
       if (!process.stdout.isTTY || !process.stdin.isTTY) return fail('attaching needs a terminal; see sldev help')
-      return runTui(await client(), process.cwd(), undefined, defaultServices(() => preferredEditor(data)))
+      return runTui(await client(), process.cwd(), undefined, defaultServices(() => preferredEditor(data)), data)
     }
     case 'help':
     case '-h':
@@ -175,6 +189,7 @@ async function main(argv: string[]): Promise<void> {
       const { values, positionals } = opts({
         agent: { type: 'string' },
         kind: { type: 'string' },
+        criteria: { type: 'string', multiple: true },
         worktree: { type: 'string' },
         here: { type: 'boolean' },
         title: { type: 'string' },
@@ -201,6 +216,7 @@ async function main(argv: string[]): Promise<void> {
         brief,
         title: values.title,
         kind: values.kind,
+        criteria: criteriaText(values.criteria),
         worktree: values.here ? false : values.worktree,
         cwd: resolve(values.cwd ?? process.cwd()),
         model: values.model,
@@ -216,6 +232,27 @@ async function main(argv: string[]): Promise<void> {
       c.close()
       if (repeat) process.stderr.write(`loop ${p.repeat?.loop}: ${describeRepeat(repeat)}; pass 1 is pane ${p.id}\n`)
       return void console.log(p.id)
+    }
+    case 'briefs': {
+      const { values } = opts({ json: { type: 'boolean' } })
+      const root = await cliRoot(process.cwd())
+      await ensureCliFolder(root)
+      const briefs = await listBriefs(root, await cliKinds(root, data))
+      if (values.json) return void console.log(JSON.stringify(briefs, null, 2))
+      if (!briefs.length) return void console.log(`No briefs waiting in ${shownDir(root, process.cwd())}. Write one there (see sldev help), then sldev launch <name>.`)
+      const w = Math.max(...briefs.map((b) => b.slug.length))
+      return void console.log(briefs.map((b) => `${b.slug.padEnd(w)}  ${briefTitle(b)}\n${' '.repeat(w + 2)}${briefNote(b)}`).join('\n'))
+    }
+    case 'launch': {
+      const { values, positionals } = opts({ agent: { type: 'string' } })
+      if (!positionals[0]) return fail('sldev launch <file|name> [--agent <id>]; sldev briefs lists them')
+      const root = await cliRoot(process.cwd())
+      const file = findBrief(root, positionals[0], process.cwd())
+      const c = await client()
+      const r = await launchBrief(c, root, file, await cliKinds(root, data), { cwd: process.cwd(), agent: values.agent, cols: process.stdout.columns, rows: process.stdout.rows }).finally(() => c.close())
+      if (r.warning) process.stderr.write(`sldev: ${r.warning}\n`)
+      process.stderr.write(`launched ${basename(file)} as pane ${r.pane.id}; it moved to ${relative(process.cwd(), r.moved) || r.moved}\n`)
+      return void console.log(r.pane.id)
     }
     case 'open': {
       const { values, positionals } = opts({ diff: { type: 'boolean' }, editor: { type: 'string' } })
@@ -398,7 +435,7 @@ async function main(argv: string[]): Promise<void> {
       return void console.log(agents.map((a) => `${a.id.padEnd(10)} ${a.name.padEnd(16)} ${installedBin(a) ? 'installed' : `not installed${a.install ? `: ${a.install}` : ''}`}`).join('\n'))
     }
     case 'kinds': {
-      const kinds = [...BUILTIN_KINDS, ...(await listKinds(await projectRoot(process.cwd()), data))]
+      const kinds = await cliKinds(await cliRoot(process.cwd()), data)
       return void console.log(kinds.map((k) => `${k.id.padEnd(14)} ${k.readOnly ? 'read-only ' : ''}${k.description}`).join('\n'))
     }
   }

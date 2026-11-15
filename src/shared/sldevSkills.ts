@@ -369,7 +369,7 @@ const criterion = (c: unknown): string =>
  * matter that isn't valid YAML is read line by line instead (`warning` says so), so an unquoted colon in a
  * title doesn't lose the draft.
  */
-export function parseMissionDraft(src: string, kinds: string[] = MISSION_KINDS_DRAFTABLE): { draft?: MissionDraft; error?: string; warning?: string } {
+export function parseMissionDraft(src: string, kinds: string[] = MISSION_KINDS_DRAFTABLE): { draft?: MissionDraft; error?: string; warning?: string; unknownKind?: string } {
   const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(src)
   let fm: Record<string, unknown> = {}
   let warning: string | undefined
@@ -392,6 +392,8 @@ export function parseMissionDraft(src: string, kinds: string[] = MISSION_KINDS_D
   if (kind && !kinds.includes(kind)) warning = [warning, `Unknown kind "${kind}": it becomes build. Known: ${kinds.join(', ')}.`].filter(Boolean).join(' ')
   return {
     ...(warning ? { warning } : {}),
+    // the app makes it a build; the CLI's briefs refuse it
+    ...(kind && !kinds.includes(kind) ? { unknownKind: kind } : {}),
     draft: {
       title: text(fm.title)?.slice(0, 100),
       brief,

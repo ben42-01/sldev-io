@@ -20,6 +20,10 @@ sldev ls --json                              # every pane: status, report, branc
 
 - `--kind` frames the brief (build, research, plan, review, freeform; `sldev kinds` lists custom ones).
   Read-only kinds start the agent in its read-only mode. Without `--kind` the brief goes as written.
+- `--criteria "npm test passes"` (once per criterion, with a kind) puts acceptance criteria in the prompt.
+- To leave work for a person to start later, write a brief to `.sldev-cli/briefs/<slug>.md` at the repo's main
+  checkout (front matter: title, kind, agent, criteria, worktree; the brief under it). `sldev briefs` lists them;
+  the person runs `sldev launch <slug>`, so don't launch a brief you wrote yourself.
 - `--worktree <branch>` isolates the work in a new git worktree; `--here` keeps it in this folder.
 - `--failover claude,gemini` continues the same task on the next agent if this one hits its usage limit.
 - `--print` runs the agent non-interactively: it does the task and exits, so `wait --for done` is exact.

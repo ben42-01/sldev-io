@@ -21,6 +21,8 @@ What it does that a plain multiplexer doesn't:
   jobs, open one in the browser; needs the GitHub CLI, signed in), Ctrl-b e opens the pane's folder in your
   editor and Ctrl-b v its changed files side by side. `sldev open <pane> [--diff]` and `sldev workflows` do the
   same from a script. `sldev clean` drops finished panes and removes their worktrees, asking first.
+- **Briefs written ahead of time** in `.sldev-cli/briefs/*.md`: `sldev briefs` lists them, `sldev launch <name>`
+  (or Ctrl-b b, then Enter) starts one with its kind, agent, worktree and acceptance criteria. See [Briefs](#briefs).
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
 - **sldev skills** (`sldev skills install`): any agent can draft a mission, board stories, a factory recipe or an eval
@@ -70,6 +72,58 @@ sldev new --allow-spawn 2 "Split the migration into parts and hand two of them t
 sldev stop                # stops the daemon and every agent in it
 ```
 
+### Briefs
+
+A brief is a mission written ahead of time, by you or by an agent, and started by you. Briefs live in the
+project's `.sldev-cli/` folder, at the top level of the repo's main checkout (also when you're in one of its
+worktrees):
+
+```
+.sldev-cli/
+  .gitignore         "*": nothing in here is committed unless you change it
+  briefs/*.md        waiting
+  briefs/launched/   started ones, with the pane they ran in
+  kinds/*.md         the project's own mission kinds (same format as the app's .sldev/missions/*.md)
+```
+
+A brief is Markdown with the same front matter as an sldev-io mission draft, and the brief as the body:
+
+```markdown
+---
+title: Add a dark mode toggle
+kind: build            # build (default), research, investigate, plan, review, freeform, or a kind of your own
+agent: codex           # optional; sldev launch --agent wins, else claude
+worktree: true         # true: a new worktree named after it; false: in place; left out: as the kind says
+criteria:
+  - The toggle is in Settings and remembered
+  - npm test passes
+by: claude             # who wrote it, shown in the list
+---
+
+Add a toggle to the settings page that switches the UI to a dark theme. …
+```
+
+```bash
+sldev briefs              # what's waiting: name, title, kind, agent, or why it can't launch (--json too)
+sldev launch dark-mode    # by name (the file name without .md) or by path; --agent <id> overrides the brief's
+```
+
+`sldev launch` starts it like `sldev new --kind … --criteria …`: the kind's closing lines and the acceptance
+criteria go into the prompt, along with the pointer to the project memory. The brief then moves to
+`briefs/launched/` with `pane:` and `launched:` added to its front matter, so `sldev briefs` only shows what's
+still waiting. A brief that can't start (no brief under the front matter, front matter that doesn't read, a kind
+or agent sldev doesn't know, criteria on a freeform brief) is refused with the reason and stays where it is.
+Nothing in `.sldev-cli/` ever starts on its own. Attached, **Ctrl-b b** shows the waiting briefs; Enter launches
+the one in focus in a new tab.
+
+In Ctrl-b c's brief prompt, **Ctrl-e** opens a brief template in your terminal editor (`$VISUAL`, `$EDITOR`, else
+vi): write the brief, save and close, and it starts, like `git commit`. Left empty, nothing starts and the file is
+removed; one that can't start waits in `briefs/` with the reason on the status line.
+
+The CLI and the app keep their inboxes apart: the CLI never reads or writes `.sldev/drafts` (the app's), and the
+app never reads `.sldev-cli/`. `.sldev/memory.md` and `.sldev/rules.md` stay shared; they are plain project files
+any agent reads.
+
 ### Tabs
 
 Attached, every session (an agent or a plain shell) is a tab along the top, numbered `1 2 3` with a `+` at the
@@ -96,8 +150,9 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 
 | Ctrl-b then | does |
 | --- | --- |
-| `c` | a new tab: pick a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one |
+| `c` | a new tab: pick a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one; Ctrl-e writes a longer one in `$EDITOR` |
 | `t` | a new shell tab (`$SHELL`; PowerShell on Windows) in the folder of the tab in front |
+| `b` | the briefs waiting in `.sldev-cli/briefs`; Enter launches the one in focus |
 | `1`–`9` | that tab |
 | `n` / `p` (or Tab, `o`) | next / previous tab |
 | `<` / `>` | move the tab left / right |
@@ -160,7 +215,8 @@ files (socket, `daemon.log`, hook relay, MCP script) all live there. It shares c
 state: it never reads the app's settings, and the two can run at the same time without answering each other's
 agents. The one time it looks at the app's folder is `sldev clean --orphans`, which reads the app's missions,
 runs and automations (read only) so it never removes a worktree the app uses (`SLDEV_APP_DATA_DIR` points it
-elsewhere). Both use the project's `.sldev/` folder (rules, memory, mission kinds, context).
+elsewhere). Both use the project's `.sldev/` rules, memory and context; the CLI's project mission kinds and
+briefs are in `.sldev-cli/` (see [Briefs](#briefs)).
 
 `sldev config` prints where `config.json` is and the values in effect. Edit the file by hand; the daemon reads
 it when it starts (`sldev stop`, then `sldev`). A missing file, bad JSON or a wrong value means that key's

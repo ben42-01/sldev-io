@@ -5,7 +5,8 @@ import type { GhRun } from '@shared/types'
 import { findOnPath } from '../../src/main/launch'
 import type { Client } from './client'
 import { copyToClipboard, osc52 } from './clipboard'
-import { openPane, type OpenResult } from './editor'
+import { editInTerminal, openPane, type OpenResult } from './editor'
+import { briefNote, briefsDir, briefTitle, cliKinds, cliRoot, launchBrief, listBriefs, newBriefFile, shownDir, takeEditedBrief } from './briefs'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
 import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
@@ -16,7 +17,7 @@ import { VERSION } from './version'
  * `sldev` with no arguments: every session (an agent or a plain shell) is a tab along the top, numbered
  * 1, 2, 3 with a + for a new one; on wide terminals a sidebar groups them by project with each one's state.
  * One or two are shown, and the keyboard goes to the tab in focus. Ctrl-b is the prefix (n/p, 1-9, </> move,
- * s split, c new tab, t new shell, , rename, x close, w workflows, e editor, v changed files, ? keys,
+ * s split, c new tab, t new shell, b briefs, , rename, x close, w workflows, e editor, v changed files, ? keys,
  * d detach); tabs, sidebar rows and + take clicks too. Detaching leaves every session running, and the
  * daemon keeps the tabs' order, names, the one in front and the split.
  */
@@ -26,14 +27,16 @@ const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 /** the hint bar, and what the prefix waits for */
 // the most useful first: a narrow terminal shows only the ones that fit
-const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
+const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['b', 'briefs'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
 const RUNS_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'open in browser'], ['r', 'rerun failed jobs'], ['u', 'refresh'], ['Esc', 'close']]
 const MENU_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'start'], ['Esc', 'cancel']]
+const BRIEF_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'launch'], ['Esc', 'cancel']]
 /** every key, for Ctrl-b ? */
 const HELP_ROWS: PopupRow[] = [
   { head: true, text: 'Tabs' },
   { key: 'c', text: 'new tab: an agent or a shell' },
   { key: 't', text: 'shell in the folder of the tab in focus' },
+  { key: 'b', text: 'briefs: launch one waiting in .sldev-cli/briefs' },
   { key: '1-9', text: 'go to tab' },
   { key: 'n p', text: 'next, previous tab' },
   { key: '< >', text: 'move the tab left, right' },
@@ -104,11 +107,17 @@ const BG_ANSWER = /^\x1b\]11;([^\x07\x1b]*)(?:\x07|\x1b\\)/
 /** a mouse report in SGR form: ESC [ < button ; x ; y M (press) or m (release) */
 const MOUSE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/
 
-/** The New tab popup: a shell, then each agent, installed or not. */
+/** A popup to pick from: New tab (a shell, then each agent, installed or not) or the waiting briefs. */
 interface Menu {
+  title: string
+  /** the line under the rows */
+  footer: string
+  hints: Array<[string, string]>
   rows: PopupRow[]
   pick: Array<() => void>
   sel: number
+  /** only Enter picks: no row has a key of its own */
+  enterOnly?: boolean
 }
 
 /** The terminal the TUI runs in: process.stdin/stdout, or fakes in tests. */
@@ -125,10 +134,12 @@ export interface TuiServices {
   open: (pane: PaneInfo, diff: boolean) => Promise<OpenResult>
   /** puts text on the system clipboard; false when there's no tool for it */
   copy?: (text: string) => Promise<boolean>
+  /** edits a file in the terminal ($VISUAL, $EDITOR, else vi) until the editor exits; the TUI steps aside meanwhile */
+  edit?: (file: string) => Promise<void>
 }
 
 export function defaultServices(preferred: () => string | null): TuiServices {
-  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard }
+  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard, edit: editInTerminal }
 }
 
 /** lines the wheel scrolls a tab's history by */
@@ -143,7 +154,7 @@ interface RunsView {
   timer?: NodeJS.Timeout
 }
 
-export async function runTui(client: Client, cwd: string, io: TuiIo = { input: process.stdin, output: process.stdout }, services: TuiServices = defaultServices(() => null)): Promise<void> {
+export async function runTui(client: Client, cwd: string, io: TuiIo = { input: process.stdin, output: process.stdout }, services: TuiServices = defaultServices(() => null), dataDir = ''): Promise<void> {
   const out = io.output
   const input = io.input
   const views = new Map<string, View>()
@@ -153,7 +164,10 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let active: string | null = null
   let split = false
   let prefix = false
-  let prompt: { label: string; text: string; done: (text: string) => void } | null = null
+  /** `alt`: Ctrl-e in the prompt does that instead */
+  let prompt: { label: string; text: string; done: (text: string) => void; alt?: () => void } | null = null
+  /** an editor has the terminal (Ctrl-b c, Ctrl-e): nothing is drawn until it exits */
+  let suspended = false
   let message = ''
   let runsView: RunsView | null = null
   let menu: Menu | null = null
@@ -218,7 +232,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   const schedule = (): void => {
-    if (!frame && !restored) frame = setTimeout(draw, 33)
+    if (!frame && !restored && !suspended) frame = setTimeout(draw, 33)
   }
 
   /** the brand, the tab bar, the rule under it and the sidebar: everything but the panes */
@@ -274,7 +288,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   function draw(): void {
     frame = null
-    if (restored) return
+    if (restored || suspended) return
     const cols = out.columns || 80
     const rows = out.rows || 24
     const l = layout(cols, rows, split)
@@ -292,7 +306,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         // the split's edge, from the junction on the rule row down between the panes
         if (i === 0 && l.panes[1]) s += stripColor(vEdge(r.x + r.w, r.y, r.h, '┬', PANE, SURFACE))
       })
-    if (menu) s += stripColor(popup(area, 'New tab', menu.rows, menu.sel, `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`))
+    if (menu) s += stripColor(popup(area, menu.title, menu.rows, menu.sel, menu.footer))
     else if (help) s += stripColor(popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.'))
     s += at(0, l.status.y) + stripColor(statusLine(cols))
     // every frame ends on a reset, so nothing between frames (a clear, the shell after exit) takes a fill
@@ -470,7 +484,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     // waiting for the key after the prefix: amber, as anything that waits for you
     if (prefix) return hints(HINTS, cols, ` \x1b[1;${TONE_SGR.attention}m^b${RESET} `)
     if (message) return ` ${DIM}•${RESET} ` + fit(message, cols - 3)
-    if (menu) return hints(MENU_HINTS, cols, ' ')
+    if (menu) return hints(menu.hints, cols, ' ')
     if (help) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
     const right = rightStatus()
@@ -503,12 +517,95 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   const newAgent = (a: AgentDef): void => {
     const where = newTabCwd()
-    ask(`${a.name}, brief (Enter alone starts it without one): `, (text) => {
-      client
-        .request('new', { agent: a.id, brief: text.trim(), cwd: where, worktree: false, ...paneSize() })
-        .then((p) => started(p, a.name))
-        .catch((err: Error) => ((message = err.message), schedule()))
-    })
+    ask(
+      `${a.name}, brief (Enter alone starts it without one; Ctrl-e writes a longer one in $EDITOR): `,
+      (text) => {
+        client
+          .request('new', { agent: a.id, brief: text.trim(), cwd: where, worktree: false, ...paneSize() })
+          .then((p) => started(p, a.name))
+          .catch((err: Error) => ((message = err.message), schedule()))
+      },
+      '',
+      () => void writeBrief(a, where)
+    )
+  }
+
+  const fail = (err: Error): void => {
+    message = err.message
+    schedule()
+  }
+
+  /** The terminal goes to `fn` (an editor): sldev's screen, mouse and keys step aside until it's done. */
+  async function suspend(fn: () => Promise<void>): Promise<void> {
+    suspended = true
+    if (frame) clearTimeout(frame)
+    frame = null
+    input.off('data', onKey)
+    input.pause()
+    if (input.isTTY) input.setRawMode?.(false)
+    out.write('\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0m\x1b[?25h\x1b[?1049l')
+    try {
+      await fn()
+    } finally {
+      suspended = false
+      if (!restored) {
+        out.write('\x1b[?1049h\x1b[2J\x1b[?1000h\x1b[?1002h\x1b[?1006h')
+        if (input.isTTY) input.setRawMode?.(true)
+        input.on('data', onKey)
+        input.resume()
+        schedule()
+      }
+    }
+  }
+
+  /** A brief for `a` written in the editor, from a template: launched when saved with a brief, dropped when left empty. */
+  async function writeBrief(a: AgentDef, where: string): Promise<void> {
+    try {
+      const root = await cliRoot(where)
+      const file = await newBriefFile(root, a.id)
+      await suspend(() => (services.edit ?? editInTerminal)(file))
+      const saved = await takeEditedBrief(root, file)
+      if (!saved) return void ((message = 'The brief was empty, so nothing started'), schedule())
+      await launch(root, saved, where)
+    } catch (err) {
+      fail(err as Error)
+    }
+  }
+
+  /** A brief started in a tab of its own; one that can't start stays in the briefs folder and says why. */
+  async function launch(root: string, file: string, where: string): Promise<void> {
+    const r = await launchBrief(client, root, file, await cliKinds(root, dataDir), { cwd: where, ...paneSize() })
+    started(r.pane, 'brief')
+    message = `Started brief ${r.pane.id}: ${r.pane.title}${r.warning ? ` (${r.warning})` : ''}`
+    schedule()
+  }
+
+  /** Ctrl-b b: the briefs waiting in the project's .sldev-cli/briefs; Enter launches the one in focus. */
+  async function openBriefs(): Promise<void> {
+    const where = newTabCwd()
+    try {
+      const root = await cliRoot(where)
+      const briefs = await listBriefs(root, await cliKinds(root, dataDir))
+      if (!briefs.length) return void ((message = `No briefs waiting in ${shownDir(root, where)}`), schedule())
+      menu = {
+        title: 'Briefs',
+        footer: `in ${tailFit(tilde(briefsDir(root), home), 50).trimEnd()}`,
+        hints: BRIEF_HINTS,
+        enterOnly: true,
+        // the reason is long: Enter on it says why
+        rows: briefs.map((b) => ({ key: '', text: briefTitle(b), note: b.draft ? briefNote(b) : "can't launch, Enter says why", off: !b.draft })),
+        pick: briefs.map((b) => () => {
+          if (!b.draft) return fail(new Error(`${b.slug} can't launch: ${b.error}`))
+          launch(root, b.file, where).catch(fail)
+        }),
+        sel: Math.max(0, briefs.findIndex((b) => !!b.draft))
+      }
+      help = false
+      message = ''
+      schedule()
+    } catch (err) {
+      fail(err as Error)
+    }
   }
 
   /** Ctrl-b c or a click on +: a shell, or one of the agents (the ones not installed say how to get them) */
@@ -522,7 +619,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       rows.push({ key: i < 9 ? String(i + 1) : '', text: a.name, note: ok ? '' : 'not installed', off: !ok })
       pick.push(() => (ok ? newAgent(a) : void (message = a.install ? `${a.name} isn't installed: ${a.install}` : `${a.name} isn't installed`)))
     })
-    menu = { rows, pick, sel: Math.max(0, rows.findIndex((r, i) => i > 0 && !r.off)) }
+    menu = { title: 'New tab', footer: `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`, hints: MENU_HINTS, rows, pick, sel: Math.max(0, rows.findIndex((r, i) => i > 0 && !r.off)) }
     help = false
     message = ''
   }
@@ -541,7 +638,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       menu = null
       return ''
     }
-    const i = c === '\r' ? m.sel : m.rows.findIndex((r) => r.key === c)
+    const i = c === '\r' ? m.sel : m.enterOnly ? -1 : m.rows.findIndex((r) => r.key === c)
     if (i >= 0) {
       menu = null
       m.pick[i]()
@@ -698,8 +795,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     focusTab(p.id)
   }
 
-  const ask = (label: string, done: (text: string) => void, text = ''): void => {
-    prompt = { label, text, done }
+  const ask = (label: string, done: (text: string) => void, text = '', alt?: () => void): void => {
+    prompt = { label, text, done, alt }
     schedule()
   }
 
@@ -749,6 +846,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       if (ch === '\r') {
         prompt = null
         p.done(p.text)
+      } else if (ch === '\x05' && p.alt) {
+        prompt = null
+        p.alt()
       } else if (ch === '\x1b' || ch === '\x03') {
         prompt = null
         // the rest of an escape sequence (an arrow key) goes with it
@@ -799,6 +899,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         return ''
       } else if (c === 'c' || c === '+') openMenu()
       else if (c === 't') newShell()
+      else if (c === 'b') void openBriefs()
       else if (c === ',' && id) {
         const info = views.get(id)?.info
         ask(
