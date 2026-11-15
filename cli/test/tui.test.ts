@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -9,7 +10,7 @@ import { removeTemp, useFakeAgents } from './fakePath'
 import type { TuiServices } from '../src/tui'
 import { createTerm, screenText } from '../src/screen'
 import { runTui, win32Key } from '../src/tui'
-import { brandAt, drawTerm, ellipsis, glyph, inSelection, isLightBackground, to256, layout, selectionText, paneSignal, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
+import { brandAt, drawTerm, ellipsis, glyph, inSelection, isLightBackground, to256, layout, selectionText, paneSignal, paneTree, popup, rollup, ruleLine, SIDEBAR_MIN_COLS, SIDEBAR_W, sidebar, tabBar, tabBarLayout, tabWindow, tailFit, TONE_SGR } from '../src/render'
 import type { PaneInfo } from '../src/protocol'
 import * as R from '../src/render'
 
@@ -272,6 +273,43 @@ describe('sldev TUI tabs', () => {
   }, 40_000)
 })
 
+describe('closing a tab whose agent started others', () => {
+  it('asks a second question, and closes the children’s tabs too only on yes', async () => {
+    const repo = join(tmp, 'kids')
+    mkdirSync(join(repo, 'src'), { recursive: true })
+    writeFileSync(join(repo, 'src/app.js'), '1\n')
+    for (const a of [['init', '-q', '-b', 'main'], ['add', '-A'], ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i']]) execFileSync('git', a, { cwd: repo })
+    const run = async (answer: string): Promise<{ lead: string; kid: string; left: string[] }> => {
+      const lead = await c.request('new', { agent: 'codex', brief: `lead ${answer}`, cwd: repo, worktree: false, allowSpawn: 1 })
+      const inside = await connect({ dataDir: data, script: '', start: false })
+      inside.from = { pane: lead.id, daemon: daemon.instance }
+      const kid = await inside.request('new', { agent: 'codex', brief: `kid ${answer}`, cwd: repo })
+      inside.close()
+      await c.request('tabs', { active: lead.id })
+      const t = await attachTui(110, 30)
+      await t.textWith(`lead ${answer}`)
+      // the child sits under its parent in the sidebar
+      await t.textWith(new RegExp(`└\\S \\d+ kid ${answer}`))
+      t.input.write('\x02x')
+      await t.textWith(`Close tab ${lead.id}? Its agent stops`)
+      t.input.write('y\r')
+      await t.textWith(`Also close the tab of agents it started (${kid.id})?`)
+      t.input.write(`${answer}\r`)
+      await sleep(300)
+      t.input.write('\x02d')
+      await t.tui
+      return { lead: lead.id, kid: kid.id, left: (await c.request('ls', {})).map((p) => p.id) }
+    }
+    const no = await run('n')
+    expect(no.left).not.toContain(no.lead)
+    expect(no.left).toContain(no.kid)
+    await c.request('kill', { pane: no.kid })
+    const yes = await run('y')
+    expect(yes.left).not.toContain(yes.lead)
+    expect(yes.left).not.toContain(yes.kid)
+  }, 30_000)
+})
+
 describe('selecting and scrolling in a tab', () => {
   it('copies what is dragged over in a shell tab, scrolls its history with the wheel, and types back to the bottom', async () => {
     const savedShell = process.env.SHELL
@@ -432,6 +470,26 @@ describe('tab layout', () => {
 
 const pane = (id: string, over: Partial<PaneInfo>): PaneInfo =>
   ({ id, title: `tab ${id}`, agent: 'codex', agentName: 'Codex', status: 'working', cwd: '/w/app', root: '/w/app', createdAt: 0, brief: '', ...over }) as PaneInfo
+
+describe('agents started by agents', () => {
+  it('puts each child straight under the pane that started it, in its group, marked └; ls lists them the same way', () => {
+    const panes = [
+      pane('1', { title: 'lead' }),
+      pane('2', { title: 'other' }),
+      // its worktree is its own git top level, but it belongs with its parent
+      pane('3', { title: 'part one', spawnedBy: '1', root: '/w/app-wt', cwd: '/w/app-wt' }),
+      // its parent is gone: a pane of its own
+      pane('4', { title: 'orphan', spawnedBy: '9' })
+    ]
+    expect(paneTree(panes).map((t) => `${t.pane.id}${t.child ? 'c' : ''}`)).toEqual(['1', '3c', '2', '4'])
+    const rows = sidebar({ panes, order: ['1', '2', '3', '4'], active: '2', shown: ['2'] }, SIDEBAR_W, 20).lines.map(plain)
+    expect(rows[1]).toMatch(/^ APP +● 4$/)
+    expect(rows[2]).toMatch(/^ {2}⠋ 1 lead/)
+    expect(rows[4]).toMatch(/^ {2}└⠋ 3 part one/)
+    expect(rows[6]).toMatch(/2 other/)
+    expect(rows.join('\n')).not.toMatch(/APP-WT/)
+  })
+})
 
 describe('sidebar', () => {
   const panes = [

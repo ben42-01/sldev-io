@@ -15,6 +15,12 @@ export interface PaneInfo extends Mission {
   failover?: string[]
   /** a plain shell tab, not an agent: no mission status, no MCP tools, and it closes when the shell exits */
   shell?: boolean
+  /** how many agents this pane's agent may start itself (sldev new from inside the pane), over its whole life */
+  allowSpawn?: number
+  /** how many it has started so far; they count even after they end */
+  spawned?: number
+  /** the pane whose agent started this one: it runs in print mode in a worktree and can't start agents itself */
+  spawnedBy?: string
 }
 
 /** The tabs of the attached TUI, kept by the daemon so detaching and attaching again restores them. */
@@ -45,6 +51,8 @@ export interface NewPaneArgs {
   print?: boolean
   /** run the brief pass after pass (src/shared/repeat.ts); implies print unless the plan waits for `sldev accept` */
   repeat?: RepeatPlan
+  /** the pane's agent may start up to this many agents itself (1–8); without it, sldev new from inside the pane is refused */
+  allowSpawn?: number
   cols?: number
   rows?: number
 }
@@ -77,7 +85,8 @@ export interface Requests {
   send: [{ pane: string; text: string; enter?: boolean }, null]
   read: [{ pane: string; lines?: number }, { text: string }]
   wait: [{ pane?: string; for: WaitFor; timeout?: number }, PaneInfo | null]
-  kill: [{ pane: string }, null]
+  /** children: also stop the agents the pane started */
+  kill: [{ pane: string; children?: boolean }, null]
   review: [{ pane: string; agent: string }, PaneInfo]
   /** a pass that waits for you is good: its agent stops and the loop moves on */
   accept: [{ pane: string }, null]
@@ -103,6 +112,27 @@ export interface Request<C extends Command = Command> {
   id: number
   cmd: C
   args: Requests[C][0]
+  /** sent by an sldev run inside a pane: that pane's agent is asking (see paneOrigin) */
+  from?: PaneOrigin
+}
+
+/** A pane, as the env of the agent in it names it: its id, and the daemon that started it. */
+export interface PaneOrigin {
+  pane: string
+  daemon: string
+}
+
+/** the most agents one pane may start (--allow-spawn) */
+export const MAX_SPAWN = 8
+
+/**
+ * The pane an sldev command runs in, from the env its daemon gave the agent there; null in any other shell.
+ * The app's missions set SLDEV_MISSION_ID too, but not SLDEV_CLI_DAEMON, so they don't count as panes.
+ */
+export function paneOrigin(env: NodeJS.ProcessEnv): PaneOrigin | null {
+  const pane = env.SLDEV_MISSION_ID?.trim()
+  const daemon = env.SLDEV_CLI_DAEMON?.trim()
+  return pane && daemon ? { pane, daemon } : null
 }
 
 export type Response = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string }

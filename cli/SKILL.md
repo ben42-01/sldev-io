@@ -30,6 +30,17 @@ sldev ls --json                              # every pane: status, report, branc
 - `--repeat 3 [--gap 10m] [--check "npm test"]` runs the brief 3 times in one worktree, each pass building on the
   last (0: until a pass changes nothing). `sldev loops` shows where each loop is; `sldev loops stop L1` ends one after its pass.
 
+### From inside a sldev pane
+
+If `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON` are set, you run in a sldev pane yourself, and sldev knows it:
+
+- `sldev new` works only if the human started your pane with `--allow-spawn <n>`, and at most n times. The agents you
+  start always run `--print` in a worktree of their own (`--here`, `--repeat` and `--allow-spawn` are refused), and
+  they can't start agents themselves. If it's refused, don't look for a way around it: tell the human what you wanted
+  to hand off.
+- `send`, `kill` and `accept` work only on the agents you started; `ls`, `read` and `wait` work on any pane.
+- `review`, `loops stop`, `stop` and attaching (`sldev` alone) are for the human's own terminal.
+
 ## Answer, review, stop
 
 ```bash

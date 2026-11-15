@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { mkdirSync, openSync } from 'fs'
 import { createConnection, type Socket } from 'net'
 import { join } from 'path'
-import { lineReader, type Command, type DaemonEvent, type PaneInfo, type Requests, type Response } from './protocol'
+import { lineReader, paneOrigin, type Command, type DaemonEvent, type PaneInfo, type Requests, type Response } from './protocol'
 import { socketPath } from './paths'
 import { VERSION } from './version'
 
@@ -11,6 +11,8 @@ export class Client {
   private seq = 0
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
   private listeners: Array<(e: DaemonEvent) => void> = []
+  /** run inside a pane, every request says so: the daemon then only allows what that pane's agent may do */
+  from = paneOrigin(process.env)
 
   constructor(private sock: Socket) {
     sock.on(
@@ -46,7 +48,7 @@ export class Client {
       }, timeoutMs) : undefined
       const done = <T>(fn: (v: T) => void) => (v: T): void => (clearTimeout(timer), fn(v))
       this.pending.set(id, { resolve: done(resolve as (v: unknown) => void), reject: done(reject) })
-      this.sock.write(JSON.stringify({ id, cmd, args }) + '\n')
+      this.sock.write(JSON.stringify(this.from ? { id, cmd, args, from: this.from } : { id, cmd, args }) + '\n')
     })
   }
 
@@ -174,11 +176,21 @@ export async function connect(o: ConnectOptions): Promise<Client> {
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   const log = openSync(join(dir, 'daemon.log'), 'a')
   // windowsHide: a detached process on Windows otherwise gets a console window of its own
-  spawn(process.execPath, [o.script, 'serve'], { detached: true, windowsHide: true, stdio: ['ignore', log, log], env: { ...process.env, SLDEV_DATA_DIR: o.dataDir } }).unref()
+  spawn(process.execPath, [o.script, 'serve'], { detached: true, windowsHide: true, stdio: ['ignore', log, log], env: { ...daemonEnv(process.env), SLDEV_DATA_DIR: o.dataDir } }).unref()
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 100))
     const c2 = await tryConnect(socket)
     if (c2) return c2
   }
   throw new Error(`The sldev daemon didn't start; see ${join(dir, 'daemon.log')}`)
+}
+
+/**
+ * The env a daemon starts with: without the variables of the pane or app mission it was started from, or its
+ * shell tabs would pass for that pane (and report to that mission's hooks).
+ */
+export function daemonEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out = { ...env }
+  for (const k of ['SLDEV_MISSION_ID', 'SLDEV_CLI_DAEMON', 'SLDEV_HOOK_PORT', 'SLDEV_HOOK_TOKEN']) delete out[k]
+  return out
 }

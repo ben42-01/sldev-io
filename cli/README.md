@@ -68,6 +68,7 @@ sldev                     # attach: every session is a tab (keys below)
 sldev ls
 sldev wait 2 --for needs-you
 sldev send 2 "yes"
+sldev new --allow-spawn 2 "Split the migration into parts and hand two of them to other agents"
 sldev stop                # stops the daemon and every agent in it
 ```
 
@@ -173,6 +174,23 @@ The daemon keeps the tabs: `sldev` attaches again to the same order, names, tab 
 every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell tabs show in `sldev ls`
 and take `send`, `read` and `kill` like agents, but they aren't missions: the sldev MCP tools don't list
 them, and `sldev wait` without a pane waits for agents only.
+
+### Agents that start agents
+
+An agent in a pane can run `sldev` too. sldev gives every agent pane `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON`, and
+a command run with them counts as that pane's agent asking:
+
+- `sldev new` is refused unless you started that pane with `--allow-spawn <n>` (1–8). Its agent may then start up to n
+  agents over the pane's whole life (ones that ended still count). They always run `--print` in a worktree of their
+  own (`--here` and `--repeat` are refused), have no failover, can't start agents themselves, and nothing in this path
+  pushes.
+- `send`, `kill`, `accept`, `rename` and typing work only on that pane's own children; `ls`, `read` and `wait` stay
+  open; `review`, `loops stop`, `stop` and attaching the TUI are refused.
+
+`sldev ls` and the sidebar show each child under the pane that started it (`└`), and `ls` shows a pane's
+`[started 1/2]`. Closing a tab whose children still run asks whether to stop them too; `sldev kill <pane> --children`
+does the same from the command line. This is a guard against an agent starting agents nobody asked for, not a
+sandbox: an agent that unsets those variables goes unrecognised, like any shell outside sldev.
 
 ### After an upgrade
 

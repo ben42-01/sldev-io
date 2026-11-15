@@ -460,6 +460,16 @@ export const tilde = (path: string, home: string): string => (home && (path === 
 
 const basename = (path: string): string => path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path
 
+/**
+ * Panes in their order, each one an agent started straight after the pane that started it (when that pane is
+ * still listed), marked as a child.
+ */
+export function paneTree(panes: PaneInfo[]): Array<{ pane: PaneInfo; child: boolean }> {
+  const ids = new Set(panes.map((p) => p.id))
+  const isChild = (p: PaneInfo): boolean => !!p.spawnedBy && p.spawnedBy !== p.id && ids.has(p.spawnedBy)
+  return panes.filter((p) => !isChild(p)).flatMap((p) => [{ pane: p, child: false }, ...panes.filter((x) => isChild(x) && x.spawnedBy === p.id).map((x) => ({ pane: x, child: true }))])
+}
+
 // ── sidebar ────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface Sidebar {
@@ -499,7 +509,9 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   // groups in the order their first tab comes
   const groups = new Map<string, PaneInfo[]>()
   for (const p of panes) {
-    const key = p.root || p.cwd
+    // an agent another one started sits in its parent's group, under it
+    const up = p.spawnedBy ? byId.get(p.spawnedBy) : undefined
+    const key = (up ?? p).root || (up ?? p).cwd
     groups.set(key, [...(groups.get(key) ?? []), p])
   }
   if (!panes.length) push(DIM + fit('  No tabs yet', w) + RESET)
@@ -513,13 +525,14 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 3)
     push(`${BOLD}${DIM}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET}`)
     // agents first, then shells, each in tab order
-    for (const p of [...list.filter((x) => !x.shell), ...list.filter((x) => x.shell)]) {
+    for (const { pane: p, child } of paneTree([...list.filter((x) => !x.shell), ...list.filter((x) => x.shell)])) {
       const n = order.indexOf(p.id) + 1
       const focus = p.id === active
       const bar = focus ? `${ACCENT}▌${RESET}` : shown.includes(p.id) ? `${DIM}│${RESET}` : ' '
       const num = `${n}`
-      const title = ellipsis(p.title, w - 5 - num.length)
-      push(`${bar} ${marker(p, frame)} ${DIM}${num}${RESET} ${focus ? BOLD : ''}${title}${RESET}`, p.id, focus)
+      const tree = child ? `${DIM}└${RESET}` : ''
+      const title = ellipsis(p.title, w - 5 - num.length - (child ? 1 : 0))
+      push(`${bar} ${tree}${marker(p, frame)} ${DIM}${num}${RESET} ${focus ? BOLD : ''}${title}${RESET}`, p.id, focus)
       const sub = p.shell ? tilde(p.cwd, home) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
       // the diff stat, only the parts that aren't zero
       const ins = !p.shell && p.stats?.insertions ? `+${p.stats.insertions}` : ''

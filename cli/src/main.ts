@@ -8,15 +8,15 @@ import { findOnPath } from '../../src/main/launch'
 import { createInterface } from 'readline/promises'
 import { briefNote, briefTitle, cliKinds, cliRoot, ensureCliFolder, findBrief, launchBrief, listBriefs, shownDir } from './briefs'
 import { describeClean, planClean, runClean } from './clean'
-import { connect } from './client'
+import { connect, daemonEnv } from './client'
 import { openPane, preferredEditor, runTerminalEditor } from './editor'
 import { loadRuns, runColumns } from './workflows'
 import { startDaemon } from './daemon'
 import { appDataDir, dataDir, legacyRuntimeDir } from './paths'
 import { describeConfig, readConfig } from './config'
-import type { LoopInfo, PaneInfo, WaitFor } from './protocol'
+import { MAX_SPAWN, type LoopInfo, type PaneInfo, type WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync, skillsCheck, skillsExport, skillsInstall, skillsStatus } from './repo'
-import { paneSignal } from './render'
+import { paneSignal, paneTree } from './render'
 import { defaultServices, runTui } from './tui'
 import { claudeUsage, codexUsage, periodStart, usageTable } from './usage'
 import { VERSION } from './version'
@@ -34,6 +34,9 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --title, --model, --mode, --effort
       --failover <a,b>          continue on these agents when this one hits its usage limit
       --print                   the agent does the task and exits, no questions (its exit means done)
+      --allow-spawn <n>         its agent may start up to n agents itself (1-8, for its whole life); they
+                                run --print in worktrees, can't start agents and never push. Without it,
+                                sldev new from inside a pane is refused
       --repeat <n>              run the brief n times, each pass building on the last (0: until a pass
                                 changes nothing); every pass is committed in the loop's worktree
         --gap <30m>             wait this long after a pass is over before the next (s, m, h)
@@ -62,7 +65,10 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --discard                 remove worktrees with uncommitted files too
       --branches                delete their branches when every commit is on the base
       --dry-run, --yes          only show the plan / don't ask
-  sldev kill <pane>             stop a pane's agent (its files stay)
+  sldev kill <pane> [--children]  stop a pane's agent (its files stay); --children: the agents it started too
+
+Inside a pane, sldev knows which pane it runs in: ls, read and wait work on any pane, send and kill only
+on the agents that pane started, and the TUI, review, loops stop and stop not at all.
   sldev stop                    stop the daemon and every agent in it
   sldev config                  where the config file is and what it says (edit it by hand; keys in the README)
 
@@ -92,11 +98,14 @@ function fail(msg: string): never {
   process.exit(1)
 }
 
-function paneLine(p: PaneInfo): string {
+function paneLine(p: PaneInfo, child = false): string {
   const sig = paneSignal(p)
   const where = p.shell ? 'shell' : p.worktree ? p.worktree.branch : 'in place'
   const stats = p.stats ? `  ${p.stats.files} files +${p.stats.insertions} -${p.stats.deletions}` : ''
-  return `${p.id.padStart(3)}  ${p.agentName.padEnd(14)} ${sig.label.padEnd(13)} ${where.padEnd(24)} ${p.title}${stats}${p.notification ? `\n     ${p.notification}` : ''}`
+  const spawns = p.allowSpawn ? `  [started ${p.spawned ?? 0}/${p.allowSpawn}]` : ''
+  const from = p.spawnedBy && !child ? `  [started by ${p.spawnedBy}]` : ''
+  // a pane another pane's agent started goes under it, marked └
+  return `${child ? `└${p.id}`.padStart(3) : p.id.padStart(3)}  ${p.agentName.padEnd(14)} ${sig.label.padEnd(13)} ${where.padEnd(24)} ${p.title}${stats}${spawns}${from}${p.notification ? `\n     ${p.notification}` : ''}`
 }
 
 function loopLine(l: LoopInfo): string {
@@ -167,6 +176,8 @@ async function main(argv: string[]): Promise<void> {
     case 'version':
       return void console.log(VERSION)
     case 'serve': {
+      // started by hand inside a pane, its shell tabs would otherwise pass for that pane
+      for (const k of Object.keys(process.env)) if (!(k in daemonEnv(process.env))) delete process.env[k]
       const d = await startDaemon({ dataDir: data })
       console.log(`sldev ${VERSION} serving on ${d.socket}`)
       const stop = (): void => void d.close().then(() => process.exit(0))
@@ -192,10 +203,13 @@ async function main(argv: string[]): Promise<void> {
         gap: { type: 'string' },
         check: { type: 'string' },
         accept: { type: 'boolean' },
-        'keep-going': { type: 'boolean' }
+        'keep-going': { type: 'boolean' },
+        'allow-spawn': { type: 'string' }
       })
       const brief = positionals.join(' ')
       const repeat = repeatPlan(values)
+      const allowSpawn = values['allow-spawn'] === undefined ? undefined : Number(values['allow-spawn'])
+      if (allowSpawn !== undefined && (!Number.isInteger(allowSpawn) || allowSpawn < 1 || allowSpawn > MAX_SPAWN)) fail(`--allow-spawn takes a number from 1 to ${MAX_SPAWN}`)
       const c = await client()
       const p = await c.request('new', {
         agent: values.agent,
@@ -211,6 +225,7 @@ async function main(argv: string[]): Promise<void> {
         failover: values.failover !== undefined ? list(values.failover) : undefined,
         print: values.print,
         repeat,
+        allowSpawn,
         cols: process.stdout.columns,
         rows: process.stdout.rows
       })
@@ -324,7 +339,7 @@ async function main(argv: string[]): Promise<void> {
       const panes = await c.request('ls', {})
       c.close()
       if (values.json) return void console.log(JSON.stringify(panes, null, 2))
-      return void console.log(panes.length ? panes.map(paneLine).join('\n') : 'No panes. Start one with sldev new --agent claude "…"')
+      return void console.log(panes.length ? paneTree(panes).map(({ pane, child }) => paneLine(pane, child)).join('\n') : 'No panes. Start one with sldev new --agent claude "…"')
     }
     case 'send': {
       const { values, positionals } = opts({ 'no-enter': { type: 'boolean' } })
@@ -359,9 +374,10 @@ async function main(argv: string[]): Promise<void> {
       return void console.log(p.id)
     }
     case 'kill': {
-      if (!rest[0]) return fail('sldev kill <pane>')
+      const { values, positionals } = opts({ children: { type: 'boolean' } })
+      if (!positionals[0]) return fail('sldev kill <pane> [--children]')
       const c = await client()
-      await c.request('kill', { pane: rest[0] })
+      await c.request('kill', { pane: positionals[0], children: values.children || undefined })
       return c.close()
     }
     case 'stop': {
