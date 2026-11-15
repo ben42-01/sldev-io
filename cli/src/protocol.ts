@@ -32,6 +32,8 @@ export interface NewPaneArgs {
   brief: string
   title?: string
   kind?: string
+  /** acceptance criteria, one "- " line each; they go into the kind's prompt, so they need a kind other than freeform */
+  criteria?: string
   /** a branch or slug: the agent runs in a new git worktree; false: in place even when the kind would isolate it */
   worktree?: string | false
   cwd: string

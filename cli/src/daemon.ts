@@ -6,7 +6,7 @@ import { branchName, cleanBranchName } from '@shared/branch'
 import { contextPointer } from '@shared/context'
 import { failoverBrief, nextAgent, TAIL_ROWS } from '@shared/failover'
 import { patchMission, pushStatus } from '@shared/missionHistory'
-import { BUILTIN_KINDS, type MissionKind } from '@shared/missionKinds'
+import type { MissionKind } from '@shared/missionKinds'
 import { missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
 import { withMemory } from '@shared/memory'
 import type { PassOutcome } from '@shared/repeat'
@@ -16,7 +16,6 @@ import { defaultShell, PtyManager, type PtySink } from '../../src/main/pty'
 import { startHookServer, stopHookServer, type HookInfo } from '../../src/main/hooks'
 import { findOnPath } from '../../src/main/launch'
 import { addWorktree, diffStat, gitBranch, head, isRepo, run } from '../../src/main/git'
-import { listKinds } from '../../src/main/missionKinds'
 import { memoryInfo } from '../../src/main/memory'
 import { closeContext, initContext, search } from '../../src/main/context'
 import { lineReader, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Request, type Requests, type Response, type TabState } from './protocol'
@@ -25,6 +24,7 @@ import { Tracker } from './tracker'
 import { Loops, type PassStart } from './loops'
 import { desktopNotify } from './notify'
 import { readConfig } from './config'
+import { cliKinds, cliRoot } from './briefs'
 import { socketPath } from './paths'
 import { VERSION } from './version'
 
@@ -55,6 +55,7 @@ interface PaneSpec {
   agent: AgentDef
   prompt: string
   brief?: string
+  criteria?: string
   title: string
   root: string
   cwd: string
@@ -246,6 +247,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       title: s.title,
       prompt: s.prompt,
       brief: s.brief,
+      criteria: s.criteria,
       root: s.root,
       cwd: s.cwd,
       worktree: s.worktree,
@@ -330,14 +332,16 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     // git prints C:/forward/slashes on Windows: resolve() gives the platform's own form
     const top = repo ? (await run('git', ['rev-parse', '--show-toplevel'], a.cwd)).stdout.trim() : ''
     const root = top ? resolve(top) : a.cwd
-    const kinds: MissionKind[] = [...BUILTIN_KINDS, ...(await listKinds(root, o.dataDir))]
+    // the CLI's project kinds are in .sldev-cli/kinds of the main checkout, also for a pane started in a worktree
+    const kinds: MissionKind[] = await cliKinds(await cliRoot(a.cwd), o.dataDir)
     const kind = a.kind ? kinds.find((k) => k.id === a.kind || k.name.toLowerCase() === a.kind!.toLowerCase()) : undefined
     if (a.kind && !kind) throw new Error(`Unknown mission kind "${a.kind}". Known: ${kinds.map((k) => k.id).join(', ')}`)
+    if (a.criteria?.trim() && (!kind || kind.id === 'freeform')) throw new Error('Acceptance criteria go into a mission kind\'s prompt: add --kind (not freeform, which sends the brief exactly as written)')
     const title = a.title?.trim() || a.brief.trim().split('\n')[0].slice(0, 60) || `${agent.name} session`
     // without a kind the brief goes exactly as written, like Freeform in the app
     let prompt = a.brief
     if (kind && kind.id !== 'freeform') {
-      prompt = missionPrompt({ title, brief: a.brief }, kind)
+      prompt = missionPrompt({ title, brief: a.brief, criteria: a.criteria?.trim() || undefined }, kind)
       prompt = withMemory(prompt, await contextLines(root, agent, a.brief))
     }
     let cwd = pass?.cwd ?? a.cwd
@@ -353,6 +357,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       agent,
       prompt,
       brief: a.brief,
+      criteria: a.criteria?.trim() || undefined,
       title,
       root,
       cwd,

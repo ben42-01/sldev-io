@@ -100,7 +100,7 @@ test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in the CLI's own data folder, cli/src/paths.ts)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the tabbed view (top tabs, grouped sidebar, popups; render.ts draws it);
-                  loops.ts the repeat loops (`sldev new --repeat`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
+                  loops.ts the repeat loops (`sldev new --repeat`); briefs.ts the CLI's project folder `.sldev-cli/` (briefs launched by `sldev launch`/Ctrl-b b, project kinds in `kinds/`; the app never reads it, the CLI never touches `.sldev/drafts`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 

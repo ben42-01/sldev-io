@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { PassThrough, Writable } from 'stream'
@@ -155,7 +155,7 @@ describe('sldev TUI', () => {
 })
 
 /** A TUI on its own fake terminal, against the test daemon. */
-async function attachTui(cols: number, rows: number) {
+async function attachTui(cols: number, rows: number, extra: Partial<TuiServices> = {}) {
   const screen = createTerm(cols, rows)
   let written = Promise.resolve()
   const output = Object.assign(
@@ -170,9 +170,9 @@ async function attachTui(cols: number, rows: number) {
   const input = new PassThrough()
   // the clipboard is a fake too: the tests never touch the real one
   const copied: string[] = []
-  const services: TuiServices = { runs: async () => [], rerun: async () => undefined, openRun: async () => undefined, open: async () => ({ note: '' }), copy: async (t) => (copied.push(t), true) }
+  const services: TuiServices = { runs: async () => [], rerun: async () => undefined, openRun: async () => undefined, open: async () => ({ note: '' }), copy: async (t) => (copied.push(t), true), ...extra }
   let sent = ''
-  const tui = runTui(await connect({ dataDir: data, script: '', start: false }), work, { input, output: Object.assign(output, { write: ((orig) => (chunk: string, ...rest: never[]) => ((sent += chunk), orig(chunk, ...rest)))(output.write.bind(output)) }) }, services)
+  const tui = runTui(await connect({ dataDir: data, script: '', start: false }), work, { input, output: Object.assign(output, { write: ((orig) => (chunk: string, ...rest: never[]) => ((sent += chunk), orig(chunk, ...rest)))(output.write.bind(output)) }) }, services, data)
   const text = async (): Promise<string> => {
     await sleep(200)
     await written
@@ -600,4 +600,71 @@ describe("the app's look: painted surfaces, the 256 fallback, the light ladder a
     expect(p).toContain('\x1b[1m')
     expect(plain(p)).toContain('╭─ New tab')
   })
+})
+
+describe('briefs in the TUI', () => {
+  it('Ctrl-b b lists the waiting briefs and Enter launches one; Ctrl-e in the brief prompt writes one in the editor', async () => {
+    const dir = join(work, '.sldev-cli', 'briefs')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'a-broken.md'), '---\ntitle: Broken one\nkind: nope\n---\nsomething\n')
+    writeFileSync(join(dir, 'hello.md'), '---\ntitle: Say hello\nagent: codex\nworktree: false\ncriteria:\n  - prints hello\n---\nPrint hello.\n')
+    // the editor is a fake: the first time it writes a brief, the second it leaves the template as it was
+    const edits: string[] = []
+    const edit = async (file: string): Promise<void> => {
+      edits.push(file)
+      if (edits.length === 1) writeFileSync(file, readFileSync(file, 'utf8').replace('title: ', 'title: From the editor') + 'Write a haiku.\n')
+    }
+    const t = await attachTui(110, 30, { edit })
+    await t.textWith('^b c new tab')
+
+    t.input.write('\x02b')
+    let s = await t.textWith('Briefs')
+    expect(s).toContain('Say hello')
+    expect(s).toMatch(/a-broken +can't launch, Enter says why/)
+    expect(s).toContain('Enter launch')
+    // a number doesn't launch anything here: only Enter on the brief in focus
+    t.input.write('1')
+    await sleep(300)
+    expect(existsSync(join(dir, 'hello.md'))).toBe(true)
+    // the first one that can launch is in focus; the broken one says why and stays
+    t.input.write('\x1b[A')
+    t.input.write('\r')
+    await t.textWith(/a-broken can't launch: Unknown kind "nope"/)
+    expect(existsSync(join(dir, 'a-broken.md'))).toBe(true)
+
+    t.input.write('\x02b')
+    await t.textWith('Briefs')
+    t.input.write('\r')
+    s = await t.textWith(/Started brief \d+: Say hello/)
+    expect(existsSync(join(dir, 'hello.md'))).toBe(false)
+    expect(readdirSync(join(dir, 'launched'))).toEqual(['hello.md'])
+    const hello = (await c.request('ls', {})).find((p) => p.title === 'Say hello')!
+    expect(hello.prompt).toContain('Acceptance criteria:\n- prints hello')
+
+    // Ctrl-b c, Codex, then Ctrl-e: the template in the editor, launched once saved
+    t.input.write('\x02c')
+    await t.textWith('New tab')
+    t.input.write('2')
+    await t.textWith('Ctrl-e writes a longer one')
+    t.input.write('\x05')
+    await t.textWith(/Started brief \d+: From the editor/)
+    expect(edits[0]).toMatch(/\.new-\d+\.md$/)
+    expect(existsSync(edits[0])).toBe(false)
+    expect(readdirSync(join(dir, 'launched')).sort()).toEqual(['from-the-editor.md', 'hello.md'])
+    const fromEditor = (await c.request('ls', {})).find((p) => p.title === 'From the editor')!
+    expect(fromEditor.agentName).toBe('Codex')
+    expect(fromEditor.prompt).toContain('Write a haiku.')
+
+    // left empty: nothing starts and the template is gone
+    t.input.write('\x02c')
+    await t.textWith('New tab')
+    t.input.write('2')
+    await t.textWith('Ctrl-e writes a longer one')
+    t.input.write('\x05')
+    await t.textWith('The brief was empty, so nothing started')
+    expect(readdirSync(dir).filter((f) => f.startsWith('.new-'))).toEqual([])
+    for (const p of [hello, fromEditor]) await c.request('kill', { pane: p.id })
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
 })
