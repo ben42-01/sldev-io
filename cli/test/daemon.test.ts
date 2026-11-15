@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { connect, type Client } from '../src/client'
-import { startDaemon, type Daemon } from '../src/daemon'
+import { connect, daemonEnv, type Client } from '../src/client'
+import { paneOrigin } from '../src/protocol'
+import { noPushEnv, startDaemon, type Daemon } from '../src/daemon'
 import { removeTemp, useFakeAgents } from './fakePath'
 import type { PaneInfo } from '../src/protocol'
 
@@ -246,4 +247,128 @@ describe('sldev daemon', () => {
     await c.request('kill', { pane: a.id })
     await c.request('tabs', { split: false })
   }, 20_000)
+})
+
+describe('agents starting agents from inside a pane', () => {
+  /** a client as the sldev an agent runs in pane `id` would be */
+  const inside = async (id: string, daemonId = daemon.instance): Promise<Client> => {
+    const x = await connect({ dataDir: data, script: '', start: false })
+    x.from = { pane: id, daemon: daemonId }
+    return x
+  }
+  const quiet = { agent: 'codex', cwd: repo } as const
+
+  it('refuses sldev new from a pane started without --allow-spawn, and says how to allow it', async () => {
+    const p = await c.request('new', { ...quiet, brief: 'plain', worktree: false })
+    const x = await inside(p.id)
+    await expect(x.request('new', { ...quiet, brief: 'more' })).rejects.toThrow(/--allow-spawn <n> \(1-8\)/)
+    x.close()
+    await c.request('kill', { pane: p.id })
+  })
+
+  it('takes --allow-spawn from 1 to 8 only', async () => {
+    await expect(c.request('new', { ...quiet, brief: 'x', allowSpawn: 0 })).rejects.toThrow(/from 1 to 8/)
+    await expect(c.request('new', { ...quiet, brief: 'x', allowSpawn: 9 })).rejects.toThrow(/from 1 to 8/)
+    await expect(c.request('new', { ...quiet, brief: 'x', allowSpawn: 1.5 })).rejects.toThrow(/from 1 to 8/)
+  })
+
+  it('lets a pane start n children in print mode and worktrees, refuses the next, and children can’t spawn', async () => {
+    const lead = await c.request('new', { ...quiet, brief: 'lead', worktree: false, allowSpawn: 2 })
+    expect(lead.allowSpawn).toBe(2)
+    const x = await inside(lead.id)
+    // refusals that take no place
+    await expect(x.request('new', { ...quiet, brief: 'here', worktree: false })).rejects.toThrow(/--here is refused/)
+    await expect(x.request('new', { shell: true, brief: '', cwd: repo })).rejects.toThrow(/not shell tabs/)
+    await expect(x.request('new', { ...quiet, brief: 'loop', repeat: { times: 2, gapMinutes: 0, doneWhen: 'exit' } })).rejects.toThrow(/--repeat/)
+    await expect(x.request('new', { ...quiet, brief: 'grand', allowSpawn: 1 })).rejects.toThrow(/--allow-spawn can't be given/)
+    await expect(x.request('new', { agent: 'nope', brief: 'x', cwd: repo })).rejects.toThrow(/Unknown agent/)
+    expect((await ls(lead.id)).spawned ?? 0).toBe(0)
+
+    const one = await x.request('new', { ...quiet, brief: 'part one' })
+    const two = await x.request('new', { ...quiet, brief: 'part two', worktree: 'kid/two' })
+    for (const k of [one, two]) {
+      expect(k.spawnedBy).toBe(lead.id)
+      expect(k.options.print).toBe(true)
+      expect(k.worktree?.path).toBeTruthy()
+      expect(k.failover).toBeUndefined()
+    }
+    expect(two.worktree?.branch).toBe('kid/two')
+    expect((await ls(lead.id)).spawned).toBe(2)
+    await expect(x.request('new', { ...quiet, brief: 'part three' })).rejects.toThrow(/started all 2 agents/)
+
+    // a child asking is refused, even with a place left nowhere
+    const k = await inside(one.id)
+    await expect(k.request('new', { ...quiet, brief: 'grandchild' })).rejects.toThrow(/started by the agent in pane/)
+
+    // killed children still count
+    await x.request('kill', { pane: one.id })
+    await expect(x.request('new', { ...quiet, brief: 'again' })).rejects.toThrow(/started all 2/)
+    k.close()
+    x.close()
+    await c.request('kill', { pane: lead.id, children: true })
+    expect((await c.request('ls', {})).some((p) => p.id === two.id)).toBe(false)
+  }, 30_000)
+
+  it('lets send and kill reach only the pane’s own children; ls, read and wait stay open; the rest is refused', async () => {
+    const lead = await c.request('new', { ...quiet, brief: 'lead two', worktree: false, allowSpawn: 1 })
+    const other = await c.request('new', { ...quiet, brief: 'someone else', worktree: false })
+    const x = await inside(lead.id)
+    const kid = await x.request('new', { ...quiet, brief: 'kid' })
+    const k = await inside(kid.id)
+
+    await expect(x.request('send', { pane: other.id, text: 'hi' })).rejects.toThrow(new RegExp(`pane ${other.id} isn't one`))
+    await expect(x.request('kill', { pane: other.id })).rejects.toThrow(/only on the agents that pane started/)
+    await expect(x.request('input', { pane: other.id, data: 'x' })).rejects.toThrow(/only on the agents/)
+    await expect(x.request('rename', { pane: other.id, title: 'mine' })).rejects.toThrow(/only on the agents/)
+    await expect(x.request('accept', { pane: other.id })).rejects.toThrow(/only on the agents/)
+    // not on itself, and a child not on its parent
+    await expect(x.request('kill', { pane: lead.id })).rejects.toThrow(/only on the agents/)
+    await expect(k.request('send', { pane: lead.id, text: 'hi' })).rejects.toThrow(/only on the agents/)
+    for (const cmd of ['stop', 'attach', 'tabs', 'loop-stop'] as const) await expect(x.request(cmd, { cols: 80, rows: 24, loop: 'L1' } as never)).rejects.toThrow(/from your own terminal/)
+    await expect(x.request('review', { pane: kid.id, agent: 'codex' })).rejects.toThrow(/from your own terminal/)
+
+    expect((await x.request('ls', {})).map((p) => p.id)).toContain(other.id)
+    expect(typeof (await x.request('read', { pane: other.id, lines: 5 })).text).toBe('string')
+    expect(await x.request('wait', { pane: other.id, for: 'idle', timeout: 1 })).not.toBeUndefined()
+
+    // its own child is fine (rename: the print-mode fake may have exited already, which send would refuse)
+    expect((await x.request('rename', { pane: kid.id, title: 'part' })).title).toBe('part')
+    expect((await c.request('ls', {})).some((p) => p.id === other.id)).toBe(true)
+
+    // a pane that's gone can't ask for anything that acts
+    const gone = await inside('999')
+    await expect(gone.request('new', { ...quiet, brief: 'x' })).rejects.toThrow(/isn't running any more/)
+    expect(Array.isArray(await gone.request('ls', {}))).toBe(true)
+    // another daemon's (or the app's) mission id isn't one of these panes: it behaves like any shell
+    const app = await inside(lead.id, 'not-this-daemon')
+    const free = await app.request('new', { ...quiet, brief: 'outside', worktree: false })
+    expect(free.spawnedBy).toBeUndefined()
+    await app.request('kill', { pane: free.id })
+
+    // killing the parent leaves its children unless asked
+    await c.request('kill', { pane: lead.id })
+    expect((await ls(kid.id)).spawnedBy).toBe(lead.id)
+    await c.request('kill', { pane: kid.id })
+    await c.request('kill', { pane: other.id })
+    for (const y of [x, k, gone, app]) y.close()
+  }, 30_000)
+
+  it('knows a pane from its env, and a daemon started there doesn’t pass the pane on', () => {
+    expect(paneOrigin({})).toBeNull()
+    // the app's missions set SLDEV_MISSION_ID too: without the daemon's id it's not a pane
+    expect(paneOrigin({ SLDEV_MISSION_ID: '3' })).toBeNull()
+    expect(paneOrigin({ SLDEV_MISSION_ID: '3', SLDEV_CLI_DAEMON: 'abc' })).toEqual({ pane: '3', daemon: 'abc' })
+    expect(daemonEnv({ PATH: '/bin', SLDEV_MISSION_ID: '3', SLDEV_CLI_DAEMON: 'abc', SLDEV_HOOK_PORT: '1', SLDEV_HOOK_TOKEN: 't' })).toEqual({ PATH: '/bin' })
+  })
+
+  it('makes a child’s git push fail, after any GIT_CONFIG_* already set, while fetch still works', () => {
+    expect(noPushEnv({})).toEqual({ GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: expect.stringMatching(/^url\..+\.pushInsteadOf$/), GIT_CONFIG_VALUE_0: '' })
+    expect(noPushEnv({ GIT_CONFIG_COUNT: '2' })).toMatchObject({ GIT_CONFIG_COUNT: '3', GIT_CONFIG_VALUE_2: '' })
+    const remote = join(tmp, 'remote.git')
+    execFileSync('git', ['init', '-q', '--bare', remote])
+    const env = { ...process.env, ...noPushEnv(process.env) }
+    expect(() => execFileSync('git', ['push', '-q', remote, 'HEAD:refs/heads/x'], { cwd: repo, env, stdio: 'pipe' })).toThrow()
+    execFileSync('git', ['push', '-q', remote, 'HEAD:refs/heads/x'], { cwd: repo, stdio: 'pipe' })
+    execFileSync('git', ['fetch', '-q', remote, 'x'], { cwd: repo, env, stdio: 'pipe' })
+  })
 })

@@ -248,6 +248,11 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating
   `/privacy` like the app. `sldev clean` never removes a worktree a live pane, an unfinished loop or the app (its missions,
   runs, automations) uses. No `sldev run`: the factory stays in the app.
+  A request from inside a pane (the client sends `from` when `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON`, the daemon's
+  random instance id, are both set) is guarded in `guard` in `cli/src/daemon.ts`: `new` only with the pane's `--allow-spawn <n>`
+  (children: worktree, print, no failover, can't spawn, git push blocked through env config), `send`/`kill`/… only on its
+  own children, `ls`/`read`/`wait` open, the rest refused. A new command must go in `OPEN` or `CHILD_ONLY` on purpose, or it's
+  refused from panes. The guard changes the protocol's meaning, so bump the CLI version with it (an older daemon ignores `from`).
 - **Destructive actions** ask first with `confirmAction`/`confirmDelete` (`components/Modal.tsx`,
   flows in `lib/removals.tsx`), saying what is removed and kept. Never `window.confirm`/`alert`.
   Worktrees are removed without `--force` unless the user ticked "discard", and never while something

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { chmodSync, existsSync, mkdirSync, promises as fsp, readFileSync, unlinkSync } from 'fs'
 import { createConnection, createServer, type Server, type Socket } from 'net'
 import { basename, join, resolve } from 'path'
@@ -19,7 +20,7 @@ import { addWorktree, diffStat, gitBranch, head, isRepo, run } from '../../src/m
 import { listKinds } from '../../src/main/missionKinds'
 import { memoryInfo } from '../../src/main/memory'
 import { closeContext, initContext, search } from '../../src/main/context'
-import { lineReader, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Request, type Requests, type Response, type TabState } from './protocol'
+import { lineReader, MAX_SPAWN, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type PaneOrigin, type Request, type Requests, type Response, type TabState } from './protocol'
 import { createTerm, screenText, termScreen, type Term } from './screen'
 import { Tracker } from './tracker'
 import { Loops, type PassStart } from './loops'
@@ -64,6 +65,9 @@ interface PaneSpec {
   parent?: Mission['parent']
   repeat?: Mission['repeat']
   failover?: string[]
+  allowSpawn?: number
+  spawned?: number
+  spawnedBy?: string
   cols: number
   rows: number
 }
@@ -82,6 +86,8 @@ export interface DaemonOptions {
 
 export interface Daemon {
   socket: string
+  /** given to every agent pane as SLDEV_CLI_DAEMON: a request naming it comes from one of this daemon's panes */
+  instance: string
   close: () => Promise<void>
 }
 
@@ -105,6 +111,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   /** the TUI's tabs: their order, the one in front and the split, so attaching again finds them as they were */
   const tabs: TabState = { order: [], active: null, split: false }
   const notify = o.notify ?? desktopNotify
+  const instance = randomBytes(16).toString('hex')
 
   const broadcast = (e: DaemonEvent): void => {
     const line = JSON.stringify(e) + '\n'
@@ -258,7 +265,10 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       updatedAt: now,
       history: pushStatus(undefined, 'starting', now),
       agentName: s.agent.name,
-      failover: s.failover?.length ? s.failover : undefined
+      failover: s.failover?.length ? s.failover : undefined,
+      allowSpawn: s.allowSpawn,
+      spawned: s.spawned,
+      spawnedBy: s.spawnedBy
     }
     const term = createTerm(s.cols, s.rows, { bell: () => pane.tracker?.attention(), notify: (text) => pane.tracker?.attention(text) })
     const pane: Pane = {
@@ -281,7 +291,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     panes.set(id, pane)
     const prompt = launchPrompt(id, s.prompt)
     const argv = agentCommand(s.agent, s.options, prompt, s.title, { settingsPath: hook.settingsPath, mcp: s.agent.mcpArgs ? sldevMcp(hook.mcp, id) : undefined })
-    const env = { SLDEV_MISSION_ID: id, SLDEV_HOOK_PORT: String(hook.port), SLDEV_HOOK_TOKEN: hook.token }
+    const env = { SLDEV_MISSION_ID: id, SLDEV_CLI_DAEMON: instance, SLDEV_HOOK_PORT: String(hook.port), SLDEV_HOOK_TOKEN: hook.token, ...(s.spawnedBy ? noPushEnv(process.env) : {}) }
     try {
       const { pid } = ptys.create(sink, id, { cwd: s.cwd, command: argv, cols: s.cols, rows: s.rows, env })
       pane.info = { ...pane.info, pid }
@@ -321,9 +331,14 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     return loops.create({ name, brief: a.brief, plan, args: { ...a, repeat: undefined } })
   }
 
-  async function newPane(a: NewPaneArgs, pass?: PassStart): Promise<PaneInfo> {
+  /**
+   * `parent`: the pane whose agent asked (sldev new from inside it, already allowed by spawnChild). Its child
+   * always gets a worktree and print mode, has no failover and can't start agents of its own.
+   */
+  async function newPane(a: NewPaneArgs, pass?: PassStart, parent?: Pane): Promise<PaneInfo> {
     if (a.shell) return newShell(a)
     if (a.repeat && !pass) return newLoop(a)
+    const allowSpawn = parent ? undefined : spawnLimit(a.allowSpawn)
     const agent = agentFor(a.agent)
     if (!a.brief.trim() && a.kind) throw new Error('A mission kind needs a brief')
     const repo = await isRepo(a.cwd)
@@ -342,13 +357,15 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     }
     let cwd = pass?.cwd ?? a.cwd
     let worktree: Mission['worktree'] = pass?.cwd ? pass.worktree : undefined
-    const wantsTree = !pass?.cwd && (typeof a.worktree === 'string' || (a.worktree === undefined && (kind?.worktree ?? false)))
+    const wantsTree = !pass?.cwd && (!!parent || typeof a.worktree === 'string' || (a.worktree === undefined && (kind?.worktree ?? false)))
+    if (parent && !repo) throw new Error(`${a.cwd} is not a git repository: an agent started from inside a pane needs a worktree of its own`)
     if (wantsTree && repo) {
       const base = (await gitBranch(root)) || 'HEAD'
       worktree = await addWorktree(root, a.worktree ? cleanBranchName(a.worktree) : branchName(a.brief || title), base)
       cwd = worktree.path
     } else if (wantsTree && typeof a.worktree === 'string') throw new Error(`${a.cwd} is not a git repository, so it can't have a worktree`)
-    const order = a.failover ?? (settings.failoverAuto ? settings.failoverOrder : undefined)
+    const order = parent ? undefined : a.failover ?? (settings.failoverAuto ? settings.failoverOrder : undefined)
+    const print = a.print || !!parent
     const info = spawnPane({
       agent,
       prompt,
@@ -359,10 +376,12 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       worktree,
       kind: kind && { id: kind.id, name: kind.name, readOnly: kind.readOnly },
       // print mode has nobody to approve a tool call: the unattended mode, as for the app's factory stages
-      options: { model: a.model, effort: a.effort, print: a.print || undefined, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : a.print ? stageMode(agent, settings.unattendedModes) : undefined) },
+      options: { model: a.model, effort: a.effort, print: print || undefined, permissionMode: a.mode ?? (kind?.readOnly ? agent.readOnlyMode : print ? stageMode(agent, settings.unattendedModes) : undefined) },
       repeat: pass?.repeat,
       // a pass that hits the limit ends its loop; handing it to another agent would run outside the loop
       failover: pass ? undefined : order?.filter((x) => x !== agent.id),
+      allowSpawn,
+      spawnedBy: parent?.info.id,
       cols: a.cols ?? 120,
       rows: a.rows ?? 40
     })
@@ -402,6 +421,9 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       options: { permissionMode: p.info.kind?.readOnly ? agent.readOnlyMode : undefined },
       parent: { id: p.info.id, kind: 'failover' },
       failover: order.filter((x) => x !== to),
+      // the same work goes on: so does what's left of its budget for starting agents, and its children stay its own
+      allowSpawn: p.info.allowSpawn,
+      spawned: p.info.spawned,
       cols: p.term.cols,
       rows: p.term.rows
     })
@@ -455,10 +477,70 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     })
   }
 
-  const handlers: { [C in Command]: (args: Requests[C][0], client: Socket) => Requests[C][1] | Promise<Requests[C][1]> } = {
+  /**
+   * sldev new from inside a pane: allowed only when the person started that pane with --allow-spawn <n>, at most
+   * n times over its life, never from a pane an agent started, and always in a worktree (no --here, no shell
+   * tab, no repeat). The count is taken before the start, so two at once can't both take the last place.
+   */
+  async function spawnChild(a: NewPaneArgs, caller: Pane): Promise<PaneInfo> {
+    const id = caller.info.id
+    if (caller.info.spawnedBy) throw new Error(`Pane ${id} was started by the agent in pane ${caller.info.spawnedBy}, so it can't start agents itself`)
+    const limit = caller.info.allowSpawn ?? 0
+    if (!limit)
+      throw new Error(
+        `Pane ${id} may not start agents: sldev new from inside a sldev pane is off unless the person starts that pane with --allow-spawn <n> (1-${MAX_SPAWN}), e.g. sldev new --allow-spawn 2 "…"`
+      )
+    if (a.allowSpawn !== undefined) throw new Error(`--allow-spawn can't be given from inside a pane: an agent another agent starts can't start agents`)
+    if (a.shell) throw new Error(`Pane ${id} may start agents, not shell tabs`)
+    if (a.repeat) throw new Error(`--repeat can't be started from inside a pane; ask the person to run it`)
+    if (a.worktree === false) throw new Error(`--here is refused from inside a pane: an agent started there always gets a worktree of its own`)
+    const used = caller.info.spawned ?? 0
+    if (used >= limit) throw new Error(`Pane ${id} has started all ${limit} agent${limit === 1 ? '' : 's'} it may (--allow-spawn ${limit}); they count even after they end`)
+    update(caller, { spawned: used + 1 })
+    try {
+      return await newPane(a, undefined, caller)
+    } catch (err) {
+      // a start that failed took no place
+      if (panes.has(id)) update(caller, { spawned: Math.max(0, (caller.info.spawned ?? 1) - 1) })
+      throw err
+    }
+  }
+
+  /** a pane `target` whose agent `caller` started: directly, or the pane `caller` continues after a usage limit */
+  function isChildOf(target: Pane, caller: Pane): boolean {
+    const by = target.info.spawnedBy
+    if (!by) return false
+    const ids = [caller.info.id]
+    for (let up = caller.info.parent; up?.kind === 'failover' && !ids.includes(up.id); up = panes.get(up.id)?.info.parent) ids.push(up.id)
+    return ids.includes(by)
+  }
+
+  /** the panes `p`'s agent started that are still in the list */
+  const childrenOf = (p: Pane): Pane[] => [...panes.values()].filter((x) => x !== p && isChildOf(x, p))
+
+  /**
+   * What a request from inside a pane may do: `ls`, `read`, `wait` and the like stay open; `send`, `kill` and
+   * the other commands that act on one pane only on that pane's own children; `new` through spawnChild; and
+   * nothing that drives the TUI, starts a review or stops the daemon. A request naming a pane that's gone is
+   * refused the same way: it can't be told from one that lies.
+   */
+  function guard(cmd: Command, args: unknown, from: PaneOrigin): Pane | undefined {
+    if (OPEN.has(cmd)) return undefined
+    const caller = panes.get(from.pane)
+    if (!caller || caller.info.shell) throw new Error(`sldev ${cmd} from inside a sldev pane: pane ${from.pane} isn't running any more`)
+    if (cmd === 'new') return caller
+    if (CHILD_ONLY.has(cmd)) {
+      const target = paneFor(String((args as { pane?: unknown })?.pane ?? ''))
+      if (!isChildOf(target, caller)) throw new Error(`From inside pane ${caller.info.id}, sldev ${cmd} works only on the agents that pane started; pane ${target.info.id} isn't one`)
+      return caller
+    }
+    throw new Error(`sldev ${cmd} can't be run from inside a sldev pane; run it from your own terminal`)
+  }
+
+  const handlers: { [C in Command]: (args: Requests[C][0], client: Socket, caller?: Pane) => Requests[C][1] | Promise<Requests[C][1]> } = {
     ping: () => ({ version: VERSION, pid: process.pid }),
     ls: () => [...panes.values()].map((p) => p.info),
-    new: (a) => newPane(a),
+    new: (a, _c, caller) => (caller ? spawnChild(a, caller) : newPane(a)),
     send: (a) => {
       const p = paneFor(a.pane)
       if (p.info.pid === undefined) throw new Error(`Pane ${p.info.id} has exited`)
@@ -473,8 +555,11 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     wait: (a) => wait(a),
     kill: (a) => {
       const p = paneFor(a.pane)
-      removePane(p)
-      if (p.info.repeat && isLive(p.info.status)) loops.ended(p.info.id, 'stopped')
+      const children = a.children ? childrenOf(p) : []
+      for (const x of [p, ...children]) {
+        removePane(x)
+        if (x.info.repeat && isLive(x.info.status)) loops.ended(x.info.id, 'stopped')
+      }
       return null
     },
     review: (a) => review(a.pane, a.agent),
@@ -548,8 +633,10 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
         const reply = (res: Response): void => void (!c.destroyed && c.write(JSON.stringify(res) + '\n'))
         // a command from a newer sldev gets an answer, never silence: a client waiting on it would hang
         if (!Object.hasOwn(handlers, r.cmd)) return reply({ id: r.id, ok: false, error: `sldev ${VERSION} doesn't know "${r.cmd}"` })
+        // only a request that names this daemon's own instance comes from one of its panes; an app mission's doesn't
+        const from = r.from && typeof r.from === 'object' && r.from.daemon === instance ? r.from : undefined
         Promise.resolve()
-          .then(() => (handlers[r.cmd] as (a: unknown, c: Socket) => unknown)(r.args ?? {}, c))
+          .then(() => (handlers[r.cmd] as (a: unknown, c: Socket, caller?: Pane) => unknown)(r.args ?? {}, c, from ? guard(r.cmd, r.args ?? {}, from) : undefined))
           .then(
             (result) => reply({ id: r.id, ok: true, result: result ?? null }),
             (err: Error) => reply({ id: r.id, ok: false, error: err?.message ?? String(err) })
@@ -592,7 +679,30 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     if (process.platform !== 'win32' && existsSync(socket)) unlinkSync(socket)
   }
 
-  return { socket, close }
+  return { socket, instance, close }
+}
+
+/** what a pane's agent may ask for about any pane */
+const OPEN = new Set<Command>(['ping', 'ls', 'read', 'wait', 'loops', 'screen', 'focus'])
+/** what it may do only to the agents it started */
+const CHILD_ONLY = new Set<Command>(['send', 'kill', 'accept', 'input', 'resize', 'rename'])
+
+/**
+ * Git config, through the env, that makes every push from an agent another agent started fail (fetch and pull
+ * still work): each remote's push URL is rewritten to a protocol git doesn't know. It comes after any
+ * GIT_CONFIG_* the user already set. A guard against an unattended child pushing, not a sandbox.
+ */
+export function noPushEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const n = Number(env.GIT_CONFIG_COUNT)
+  const at = Number.isInteger(n) && n > 0 ? n : 0
+  return { GIT_CONFIG_COUNT: String(at + 1), [`GIT_CONFIG_KEY_${at}`]: 'url.sldev-child-pane-may-not-push::.pushInsteadOf', [`GIT_CONFIG_VALUE_${at}`]: '' }
+}
+
+/** --allow-spawn: a whole number from 1 to MAX_SPAWN, or nothing */
+function spawnLimit(n: number | undefined): number | undefined {
+  if (n === undefined || n === null) return undefined
+  if (!Number.isInteger(n) || n < 1 || n > MAX_SPAWN) throw new Error(`--allow-spawn takes a number from 1 to ${MAX_SPAWN}`)
+  return n
 }
 
 const isLive = (s: Mission['status']): boolean => s === 'starting' || s === 'working' || s === 'waiting' || s === 'needs-input'

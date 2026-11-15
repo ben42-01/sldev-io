@@ -810,12 +810,18 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         )
       } else if (c === 'x' && id) {
         const info = views.get(id)?.info
-        const kill = (): void => void client.request('kill', { pane: id }).catch((err: Error) => ((message = err.message), schedule()))
+        const kill = (children?: boolean): void => void client.request('kill', { pane: id, children }).catch((err: Error) => ((message = err.message), schedule()))
+        // the tabs of agents this one started: closing them too (and stopping the ones still running) is a second question
+        const kids = [...views.values()].filter((v) => v.info.spawnedBy === id).map((v) => v.info.id)
+        const close = (): void => {
+          if (!kids.length) return kill()
+          ask(`Also close the ${kids.length === 1 ? 'tab' : `${kids.length} tabs`} of agents it started (${kids.join(', ')})? Running ones stop; files stay. (y/N) `, (text) => kill(/^y/i.test(text.trim()) || undefined))
+        }
         // nothing runs in it any more: close it without asking
-        if (info?.pid === undefined) kill()
+        if (info?.pid === undefined) close()
         else
           ask(info.shell ? `Close tab ${id}? Its shell and anything running in it stop. (y/N) ` : `Close tab ${id}? Its agent stops; files stay. (y/N) `, (text) => {
-            if (/^y/i.test(text.trim())) kill()
+            if (/^y/i.test(text.trim())) close()
           })
       }
       else if (c === PREFIX && id) void client.request('input', { pane: id, data: PREFIX })
