@@ -1,5 +1,6 @@
 import { CopyCommand } from './components/CopyCommand'
-import { Logo } from './components/Logo'
+import { Footer, hrefTo, Nav } from './components/Chrome'
+import { Features } from './components/Features'
 import { TerminalMockup } from './components/TerminalMockup'
 import site from './content/site.json'
 
@@ -33,18 +34,7 @@ const POINTS: Array<{ title: string; text: string }> = [
 export function App() {
   return (
     <>
-      <header className="nav">
-        <div className="container nav-inner">
-          <a className="nav-logo" href="#top" aria-label="sldev home">
-            <Logo />
-            <span>{site.name}</span>
-          </a>
-          <span className="nav-free">Free</span>
-          <a className="nav-link" href="#how">
-            How it works
-          </a>
-        </div>
-      </header>
+      <Nav page="home" />
 
       <main id="top">
         <section className="hero">
@@ -92,6 +82,8 @@ export function App() {
           </div>
         </section>
 
+        <Features />
+
         <section className="section">
           <div className="container">
             <ul className="points">
@@ -104,22 +96,15 @@ export function App() {
             </ul>
             <div className="install install-bottom">
               <CopyCommand command={site.install} label="install command" />
+              <p className="install-note">
+                Every command and option: <a className="text-link" href={hrefTo('home', 'commands')}>the command list</a>
+              </p>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="container footer-inner">
-          <span className="footer-brand">
-            <Logo size={16} /> sldev {version}
-          </span>
-          <span className="muted">Free to use.</span>
-          <a className="footer-app" href={site.app.url}>
-            Want a window instead? {site.app.name}, the desktop app →
-          </a>
-        </div>
-      </footer>
+      <Footer version={version} />
     </>
   )
 }
