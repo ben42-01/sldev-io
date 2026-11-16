@@ -94,6 +94,9 @@ website/        marketing site (Vercel): api/download.ts (/download/<os>), api/s
                   pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx),
                   /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts; a new guide
                   also needs website/docs/<id>/index.html, which test/docsPages.test.ts checks)
+cli-site/       the free sldev CLI's home page: static (Vite + React, own package.json), built alone (imports nothing from
+                  website/, src/ or cli/src; test/cliSite.test.ts checks), base path from CLI_SITE_BASE; its TUI mockup follows
+                  cli/src/render.ts. Says "free", never open source
 marketing/promo/ the 90 s advert, animated with Remotion (own package.json; prices, URL and colours read from website/,
                   music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)
