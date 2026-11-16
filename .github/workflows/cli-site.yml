@@ -1,0 +1,90 @@
+name: Deploy CLI site
+
+# Manual: builds cli-site/ (the free sldev CLI's home page) and force-pushes it as the `gh-pages` branch of the
+# PUBLIC downloads repo, which GitHub Pages serves (Settings → Pages → Deploy from a branch → gh-pages, / (root)):
+#
+#   https://ben42-01.github.io/downloads.sldev.io/    # default, base /downloads.sldev.io/
+#   https://<CLI_SITE_DOMAIN>/                        # with the CLI_SITE_DOMAIN repository variable: base /, plus a CNAME
+#
+# It uses the RELEASES_TOKEN secret (Contents read/write on the downloads repo), like the app release and cli-publish.
+# It touches only the gh-pages branch: no tags, no releases, so the app's updater, /download and the `cli` branch
+# never see it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOWNLOADS_REPO: ben42-01/downloads.sldev.io
+
+concurrency:
+  group: cli-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the token
+        env:
+          TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: '[ -n "$TOKEN" ] || { echo "::error::RELEASES_TOKEN secret is missing (see docs/go-to-production.md)"; exit 1; }'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cli-site/package-lock.json
+      # the /commands page builds the CLI (root `npm run cli:build`), so the root needs its dependencies too
+      - run: npm ci
+      - name: Choose the base path
+        id: site
+        env:
+          DOMAIN: ${{ vars.CLI_SITE_DOMAIN }}
+        run: |
+          DOMAIN=$(printf '%s' "$DOMAIN" | tr -d '[:space:]')
+          if [ -n "$DOMAIN" ]; then
+            # a bare host name only: a scheme or a path in CNAME breaks GitHub Pages
+            printf '%s' "$DOMAIN" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$' \
+              || { echo "::error::CLI_SITE_DOMAIN must be a bare host name like cli.example.com, got '$DOMAIN'"; exit 1; }
+            echo "base=/" >> "$GITHUB_OUTPUT"
+            echo "url=https://$DOMAIN/" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=/${DOWNLOADS_REPO#*/}/" >> "$GITHUB_OUTPUT"
+            echo "url=https://${DOWNLOADS_REPO%%/*}.github.io/${DOWNLOADS_REPO#*/}/" >> "$GITHUB_OUTPUT"
+          fi
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+      - name: Build
+        working-directory: cli-site
+        env:
+          CLI_SITE_BASE: ${{ steps.site.outputs.base }}
+        run: |
+          npm ci
+          npm run build
+      - name: Add the Pages files
+        working-directory: cli-site/dist
+        env:
+          DOMAIN: ${{ steps.site.outputs.domain }}
+        run: |
+          touch .nojekyll
+          cp index.html 404.html
+          if [ -n "$DOMAIN" ]; then printf '%s\n' "$DOMAIN" > CNAME; fi
+          ls -la
+      - name: Push to the downloads repo
+        working-directory: cli-site/dist
+        env:
+          TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          URL: ${{ steps.site.outputs.url }}
+        run: |
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "sldev CLI site (from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7})"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${DOWNLOADS_REPO}.git"
+          # only this branch: no tags, so the `cli` branch, cli-v* tags and the app's releases stay as they are
+          git push --force origin HEAD:refs/heads/gh-pages
+          echo "Deployed to the gh-pages branch of ${DOWNLOADS_REPO}: $URL" >> "$GITHUB_STEP_SUMMARY"

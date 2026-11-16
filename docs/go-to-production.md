@@ -703,3 +703,11 @@ git switch -c release/0.1.0-beta.3 && git push -u origin release/0.1.0-beta.3 &&
 standalone package to the `cli` branch of `ben42-01/downloads.sldev.io`, tagged `cli-v<version>`, using `RELEASES_TOKEN`.
 Users install it with `npm i -g github:ben42-01/downloads.sldev.io#cli`. Bump `cli/package.json` first. It makes no GitHub
 release there, so the app updater and `/download` don't see it. Moving to npm later: `npm publish` from `cli/` once the name is free.
+
+The CLI's home page (`cli-site/`) is deployed by `.github/workflows/cli-site.yml` (manual: Actions → Deploy CLI site → Run
+workflow): it builds the site and force-pushes it as the `gh-pages` branch of the same downloads repo, with `RELEASES_TOKEN`,
+and nothing else there (no tags, no releases). Once, in the downloads repo: Settings → Pages → Deploy from a branch →
+`gh-pages`, `/ (root)`. It's then at `https://ben42-01.github.io/downloads.sldev.io/`. For a domain of its own, set the
+repository variable `CLI_SITE_DOMAIN` (a bare host like `cli.sldev.io`) here, point a CNAME DNS record at
+`ben42-01.github.io` and run the workflow again: it builds with base `/` and writes the `CNAME` file. CI builds `cli-site/`
+on every push, so a broken site fails there first.
