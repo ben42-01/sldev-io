@@ -2810,6 +2810,204 @@ a {
   display: flex;
   min-height: 0;
 }
+
+/* ── the Review tab's ship bar: PR, workflow runs, the next step ── */
+.ship {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+.ship-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 12px;
+  flex-wrap: wrap;
+}
+.ship-row .spacer {
+  flex: 1;
+}
+.ship-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 340px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+}
+.ship-ref {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.ship-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--fg);
+}
+button.ship-pr:hover {
+  background: var(--tint);
+}
+.ship-pr.open svg {
+  color: var(--status-review);
+}
+.ship-pr.merged svg {
+  color: var(--status-done);
+}
+.ship-pr.closed svg {
+  color: var(--status-error);
+}
+.ship-pr.none {
+  cursor: default;
+  border-style: dashed;
+}
+.ship-pr-state {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.ship-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 2px;
+  border-radius: var(--radius-full);
+  color: var(--fg-muted);
+}
+.ship-checks:hover,
+.ship-checks.on {
+  background: var(--tint);
+}
+.ship-checks .spill {
+  font-size: 11px;
+}
+.ship-checks .up {
+  transform: rotate(180deg);
+}
+.ship-why {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.ship-why.ready {
+  color: var(--status-done);
+}
+.ship-busy {
+  font-size: 11.5px;
+}
+.ship-split {
+  display: inline-flex;
+}
+.ship-split > .btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.ship-split > .btn:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: color-mix(in oklch, currentColor 20%, transparent);
+  padding-inline: 5px;
+}
+.ship-error {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font: 11.5px var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--status-error);
+}
+.ship-runs {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 6px;
+  border-top: 1px solid var(--border);
+  overflow: auto;
+}
+.ship-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+  min-height: 28px;
+}
+.ship-run:hover {
+  background: var(--tint);
+}
+.ship-run .spacer {
+  flex: 1;
+}
+.ship-run-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ship-run-event {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ship-run-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ship-run-when {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ship-run-empty {
+  padding: 6px 4px;
+}
+
+/* draggable dividers in the Review tab: the list's right edge (x) and the line under the ship bar (y) */
+.pane-resizer {
+  position: relative;
+  z-index: 3;
+  outline: none;
+}
+.pane-resizer::after {
+  content: '';
+  position: absolute;
+  transition: background 120ms;
+}
+.pane-resizer:hover::after,
+.pane-resizer:focus-visible::after {
+  background: var(--fg-muted);
+}
+.pane-resizer.x {
+  flex: 0 0 7px;
+  margin: 0 -4px 0 -3px;
+  cursor: col-resize;
+}
+.pane-resizer.x::after {
+  inset: 0 3px;
+}
+.pane-resizer.y {
+  height: 7px;
+  margin: -4px 0 -3px;
+  cursor: row-resize;
+}
+.pane-resizer.y::after {
+  inset: 3px 0;
+}
+body.resizing-y,
+body.resizing-y * {
+  cursor: row-resize !important;
+}
 .diff-files {
   width: 260px;
   flex-shrink: 0;

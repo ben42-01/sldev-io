@@ -4,6 +4,7 @@ import { arch, homedir, release, type as osType } from 'os'
 import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { clampZoom, resolveTheme, THEME_ARG, titleBarHeight, WINDOW_COLORS, type ResolvedTheme } from '@shared/theme'
+import type { MergeMethod } from '@shared/ship'
 import { PtyManager, setShellOverride, type PtySink } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
@@ -260,7 +261,7 @@ function registerIpc(): void {
   ipcMain.handle('git:diff', (_e, cwd: string, base: string) => git.diff(cwd, base))
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
-  ipcMain.handle('git:merge', (_e, repo: string, branch: string) => git.merge(repo, branch))
+  ipcMain.handle('git:merge', (_e, repo: string, branch: string, into?: string) => git.merge(repo, String(branch), into ? String(into) : undefined))
   ipcMain.handle('git:push', (_e, cwd: string, branch: string) => git.push(cwd, branch))
   ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
 
@@ -306,6 +307,8 @@ function registerIpc(): void {
   ipcMain.handle('gh:activity', (_e, cwd: string, days: number) => gh.repoActivity(cwd, days))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
   ipcMain.handle('gh:prState', (_e, cwd: string, n: number) => gh.prState(cwd, Number(n)))
+  ipcMain.handle('gh:ship', (_e, cwd: string, branch: string) => gh.shipStatus(cwd, String(branch)))
+  ipcMain.handle('gh:mergePr', (_e, cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean) => gh.mergePr(cwd, Number(n), method, String(headSha), !!auto))
   ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
+import { pickPr, type MergeMethod, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -233,4 +234,78 @@ export async function repoActivity(cwd: string, days: number): Promise<RepoActiv
     return ghJson(['pr', 'list', '--state', 'all', '--limit', '1000', '--search', prSearch(from), '--json', 'number,createdAt,mergedAt,closedAt'], cwd, [])
   })
   return { days, from, commits: await commitsP, prs }
+}
+
+/**
+ * The Review tab's ship bar: the branch's PR, the workflow runs on it and what git knows locally (uncommitted
+ * files, commits origin doesn't have). Read-only: git commands that don't touch the network, and gh's
+ * pr list and run list. The git part is always there; GitHub failing only fills `error`.
+ */
+export async function shipStatus(cwd: string, branch: string): Promise<ShipStatus> {
+  const [sha, porcelain, remote] = await Promise.all([
+    run('git', ['rev-parse', 'HEAD'], cwd),
+    run('git', ['status', '--porcelain'], cwd),
+    run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`], cwd)
+  ])
+  const localSha = sha.stdout.trim()
+  const uncommitted = porcelain.stdout.split('\n').filter(Boolean).length
+  let unpushed: number | null = null
+  if (remote.code === 0) {
+    const r = await run('git', ['rev-list', '--count', `refs/remotes/origin/${branch}..HEAD`], cwd)
+    unpushed = Number(r.stdout.trim()) || 0
+  }
+  const local = { branch, localSha, unpushed, uncommitted, pr: null, runs: [] }
+  const problem = await ghProblem(cwd)
+  if (problem) return { ...local, error: problem }
+  try {
+    const [prs, runs] = await Promise.all([
+      ghJson<Array<Omit<ShipPr, 'mergeState' | 'base' | 'headSha'> & { mergeStateStatus?: string; baseRefName?: string; headRefOid?: string }>>(
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '5', '--json', 'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid'],
+        cwd,
+        []
+      ),
+      ghJson<Array<GhRun & { headSha?: string }>>(['run', 'list', '--branch', branch, '--limit', '30', '--json', `${RUN_FIELDS},headSha`], cwd, [])
+    ])
+    const p = pickPr(prs.map((x) => ({ ...x, state: String(x.state).toUpperCase() })))
+    const pr: ShipPr | null = p
+      ? {
+          number: p.number,
+          title: p.title,
+          state: p.state === 'MERGED' || p.state === 'CLOSED' ? p.state : 'OPEN',
+          url: p.url,
+          isDraft: !!p.isDraft,
+          mergeable: String(p.mergeable ?? 'UNKNOWN').toUpperCase(),
+          mergeState: String(p.mergeStateStatus ?? 'UNKNOWN').toUpperCase(),
+          reviewDecision: String(p.reviewDecision ?? '').toUpperCase(),
+          base: p.baseRefName ?? '',
+          headSha: p.headRefOid ?? ''
+        }
+      : null
+    const shipRuns: ShipRun[] = runs.map((r) => ({
+      id: r.databaseId,
+      workflow: r.workflowName,
+      title: r.displayTitle,
+      status: r.status,
+      conclusion: r.conclusion,
+      event: r.event,
+      url: r.url,
+      createdAt: r.createdAt,
+      headSha: r.headSha ?? ''
+    }))
+    return { ...local, pr, runs: shipRuns }
+  } catch (e) {
+    return { ...local, error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+/**
+ * Merge PR `n` on GitHub, only if its head is still `headSha` (what the reviewer looked at). `auto` asks
+ * GitHub to merge once the required checks pass. Nothing local changes: no checkout, no branch deleted.
+ */
+export async function mergePr(cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean): Promise<string> {
+  if (!['squash', 'merge', 'rebase'].includes(method)) throw new Error(`Unknown merge method: ${method}`)
+  if (!/^[0-9a-f]{7,40}$/i.test(headSha)) throw new Error('The PR head commit is unknown; refresh and try again')
+  const r = await gh(['pr', 'merge', String(n), `--${method}`, '--match-head-commit', headSha, ...(auto ? ['--auto'] : [])], cwd, 60000)
+  if (r.code !== 0) throw new Error(r.stderr.trim() || 'gh pr merge failed')
+  return (r.stdout + r.stderr).trim() || (auto ? `#${n} will merge once its checks pass` : `Merged #${n}`)
 }

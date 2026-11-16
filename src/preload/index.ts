@@ -7,6 +7,7 @@ import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
+import type { MergeMethod, ShipStatus } from '@shared/ship'
 import type {
   AgentProfile,
   RulesState,
@@ -173,7 +174,8 @@ const api = {
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
-    merge: (repo: string, branch: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch),
+    /** merge `branch` locally in the main checkout, which must be on `into` */
+    merge: (repo: string, branch: string, into?: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch, into),
     push: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:push', cwd, branch),
     pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },
@@ -212,6 +214,10 @@ const api = {
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prForBranch: (cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> => ipcRenderer.invoke('gh:prForBranch', cwd, branch),
+    /** the Review tab's ship bar: the branch's PR, its workflow runs and the local git facts */
+    ship: (cwd: string, branch: string): Promise<ShipStatus> => ipcRenderer.invoke('gh:ship', cwd, branch),
+    /** gh pr merge, only while the PR head is still `headSha` */
+    mergePr: (cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean): Promise<string> => ipcRenderer.invoke('gh:mergePr', cwd, n, method, headSha, auto),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),

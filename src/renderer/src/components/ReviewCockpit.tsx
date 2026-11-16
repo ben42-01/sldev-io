@@ -10,8 +10,10 @@ import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
 import { askAboutPart, diffSignature, explainChanges, markPart, readWalkthrough, sendBack, settleReview } from '../state/review'
 import { workspace } from '../state/workspace'
+import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { DiffLines } from './DiffTables'
+import { ReviewListResizer, reviewListWidth } from './PaneResizer'
 import { Empty } from './States'
 import { toast } from './Toast'
 
@@ -41,6 +43,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const [error, setError] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null)
+  const listWidth = useStore(workspace, (w) => reviewListWidth(w.reviewListWidth))
 
   useEffect(() => void settleReview(mission.id), [mission.id])
   useEffect(() => {
@@ -232,7 +235,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
       </header>
 
       <div className="rc-body">
-        <nav className="rc-parts" aria-label="Parts in reading order">
+        <nav className="rc-parts" aria-label="Parts in reading order" style={{ width: listWidth }}>
           {parts.map((p, i) => {
             const mk = marks[p.id]
             return (
@@ -265,6 +268,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
             </button>
           )}
         </nav>
+        <ReviewListResizer />
 
         <div className="rc-main" ref={main}>
           {current ? (

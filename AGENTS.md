@@ -205,6 +205,11 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
   kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
   is committed or pushed.
+- **Ship bar** (`src/shared/ship.ts`, `components/ShipBar.tsx`, the Review tab of a worktree mission): checks come from the branch's
+  Actions runs (`gh run list`), not `statusCheckRollup`, which fine-grained tokens can't read. GitHub is asked only while the tab is on
+  screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge
+  --match-head-commit` with the reviewed commit, after `confirmAction`, and changes nothing local. A local merge needs the main checkout
+  on the base branch and undoes itself on a conflict.
 - **sldev skills** (`src/shared/sldevSkills.ts`): they only ever create drafts. Missions and stories go through `.sldev/drafts/` (git-ignored),
   which the app takes in while it is open (saved missions, the board's Proposed column) and then empties; nothing an agent drafts
   launches or reaches Agent ready without a person. Recipes and evals are written where the app already reads them. Install never

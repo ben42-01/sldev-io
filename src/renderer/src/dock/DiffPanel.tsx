@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { ChevronDown, ChevronRight, Columns2, ExternalLink, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, Files, ListChecks, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, RefreshCw, Rows2, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Columns2, ExternalLink, FileDiff, GitCommitHorizontal, Files, ListChecks, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, RefreshCw, Rows2 } from 'lucide-react'
 import { parseDiff, type DiffFile } from '../lib/diff'
 import { DiffLines } from '../components/DiffTables'
 import { ReviewCockpit } from '../components/ReviewCockpit'
+import { ShipBar } from '../components/ShipBar'
+import { ReviewListResizer, reviewListWidth } from '../components/PaneResizer'
 import { openFileAt, openInEditor } from '../lib/actions'
 import { scrollToTop } from '../lib/scroll'
 import { getMission, missionBase, refreshStats, useMission } from '../state/missions'
-import { removeMissionFlow } from '../lib/removals'
 import { preferredEditor, updateSettings, workspace } from '../state/workspace'
 import { reviewFocus } from '../state/focus'
 import { useStore } from '../state/store'
@@ -27,9 +28,12 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
   /** files the reviewer ticked as seen; kept for this tab only */
   const [viewed, setViewed] = useState<Set<string>>(new Set())
   const [showFiles, setShowFiles] = useState(true)
+  /** bumped after every read of the diff, so the ship bar reads the branch again too */
+  const [stamp, setStamp] = useState(0)
   const layout = useStore(workspace, (w) => w.diffLayout ?? 'split')
   const view = useStore(workspace, (w) => w.reviewView ?? 'walk')
   const focusOn = useStore(workspace, (w) => w.reviewFocus !== false)
+  const listWidth = useStore(workspace, (w) => reviewListWidth(w.reviewListWidth))
   const [visible, setVisible] = useState(props.api.isVisible)
   const scroller = useRef<HTMLDivElement>(null)
   const editor = preferredEditor()
@@ -68,6 +72,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
     setError('')
     try {
       setFiles(parseDiff(await window.api.git.diff(m.cwd, missionBase(m))))
+      setStamp((n) => n + 1)
       void refreshStats(m.id)
     } catch (e) {
       setFiles([])
@@ -76,6 +81,13 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
   }, [props.params.missionId])
 
   useEffect(() => void load(), [load])
+
+  // a done message fades after a while; errors stay until the next action
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => setNotice(''), 8000)
+    return () => window.clearTimeout(t)
+  }, [notice])
 
   const totals = useMemo(() => (files ?? []).reduce((a, f) => ({ add: a.add + f.additions, del: a.del + f.deletions }), { add: 0, del: 0 }), [files])
 
@@ -172,20 +184,8 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
         <button className="btn sm" disabled={!!busy || !files?.length} onClick={() => setCommitMsg(commitMsg === null ? mission.title : null)}>
           <GitCommitHorizontal size={13} /> Commit
         </button>
-        {wt && (
-          <>
-            <button className="btn sm" disabled={!!busy} title={`git merge --no-ff ${wt.branch} into ${wt.base} (in the main checkout)`} onClick={() => void act('Merge', () => window.api.git.merge(wt.repo, wt.branch))}>
-              <GitMerge size={13} /> Merge into {wt.base}
-            </button>
-            <button className="btn sm" disabled={!!busy} title="git push, then gh pr create" onClick={() => void act('Pull request', () => window.api.git.pushAndPr(mission.cwd, wt.branch, wt.base, mission.title))}>
-              <GitPullRequest size={13} /> Push & PR
-            </button>
-            <button className="icon-btn danger" disabled={!!busy} title="Remove the mission and its worktree…" aria-label="Remove the mission and its worktree" onClick={() => void removeMissionFlow(mission.id)}>
-              <Trash2 size={14} />
-            </button>
-          </>
-        )}
       </div>
+      {wt && <ShipBar mission={mission} wt={wt} visible={visible} stamp={stamp} onChanged={() => void load()} onCommit={() => setCommitMsg((m) => m ?? mission.title)} />}
       {mission.criteria && view === 'files' && (
         <details className="diff-criteria">
           <summary>Acceptance criteria</summary>
@@ -220,7 +220,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
       ) : (
       <div className="diff-body">
         {showFiles && files && files.length > 0 && (
-          <nav className="diff-files" aria-label="Changed files">
+          <nav className="diff-files" aria-label="Changed files" style={{ width: listWidth }}>
             {files.map((f) => {
               const slash = f.path.lastIndexOf('/')
               return (
@@ -237,6 +237,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
             })}
           </nav>
         )}
+        {showFiles && files && files.length > 0 && <ReviewListResizer />}
         <div className="diff-content" ref={scroller}>
           {files === null && <Loading what="Reading the diff…" />}
           {files?.length === 0 && !error && <Empty icon={<FileDiff size={20} />} title="No changes yet" hint="When the agent edits files, they show up here. Refresh after it finishes a turn." />}

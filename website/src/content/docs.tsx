@@ -702,6 +702,16 @@ const missions: DocPage = {
             gives every note to the agent that did the work as one follow-up, each with its part and files. A Board card in Review has a{' '}
             <b>Review</b> button that opens the same tab.
           </p>
+          <p>
+            For a mission in its own branch, the bar under the toolbar follows the change to its base branch. It shows the branch's pull
+            request, the <b>workflow runs</b> on the commit you are reviewing (click them for each run; a failed one can be re-run, or go back
+            to the agent with <b>Fix with …</b>, which reads the failed log and commits a fix) and the one next step: <b>Commit first</b>,{' '}
+            <b>Push &amp; open PR</b>, <b>Push</b> new commits, or <b>Squash &amp; merge</b> (the arrow next to it picks a merge commit or a
+            rebase instead, or merging once the checks pass). Merging happens on GitHub, asks first, and only merges the commit you
+            reviewed: if someone pushed since, GitHub refuses. Once merged, <b>Pull</b> brings the base branch up to date in your main
+            checkout and <b>Clean up</b> removes the worktree. The <b>…</b> menu can still merge locally without a pull request; your main
+            checkout has to be on the base branch for that. Drag the line under that bar down to make room for the workflow runs (all the way up closes them), and the edge of the list beside the diff to make it wider.
+          </p>
         </>
       )
     },

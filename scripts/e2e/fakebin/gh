@@ -2,7 +2,7 @@
 # Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
 # FAKE_GH_AUTHED=1 (a scenario's env) logs it in, with a repo, workflows and runs for the Workflows view.
 # FAKE_GH_NO_WORKFLOWS=1 adds a repo without Actions: real gh prints nothing for `workflow list --json`, and [] for runs.
-# FAKE_GH_MISSING=1 acts like gh isn't installed. FAKE_GH_LOG=<file> appends every call (one per line).
+# FAKE_GH_MISSING=1 acts like gh isn't installed. FAKE_GH_SHIP=<dir>: the Review tab's PR and runs (below). FAKE_GH_LOG=<file> appends every call (one per line).
 [ -n "$FAKE_GH_LOG" ] && echo "$*" >> "$FAKE_GH_LOG"
 if [ -n "$FAKE_GH_MISSING" ]; then echo "sh: 1: gh: not found" >&2; exit 127; fi
 if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
@@ -10,6 +10,17 @@ if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
     "workflow list") exit 0 ;;
     "run list") echo '[]'; exit 0 ;;
   esac
+fi
+# the Review tab's ship bar: FAKE_GH_SHIP=<dir> serves pr.json (the branch's PRs) and runs.json from that dir;
+# `pr merge` records its arguments in merge.txt and marks the PR merged
+if [ -n "$FAKE_GH_SHIP" ]; then
+  [ "$1 $2 $3" = "pr list --head" ] && { cat "$FAKE_GH_SHIP/pr.json" 2>/dev/null || echo '[]'; exit 0; }
+  [ "$1 $2 $3" = "run list --branch" ] && { cat "$FAKE_GH_SHIP/runs.json" 2>/dev/null || echo '[]'; exit 0; }
+  if [ "$1 $2" = "pr merge" ]; then
+    echo "$*" > "$FAKE_GH_SHIP/merge.txt"
+    sed -i 's/"state":"OPEN"/"state":"MERGED"/' "$FAKE_GH_SHIP/pr.json"
+    echo "Squashed and merged pull request #$3"; exit 0
+  fi
 fi
 # a mission card's PR, found by the branch it was pushed from: #21, in the state pr-state.txt says
 if [ "$1 $2 $3" = "pr list --head" ]; then

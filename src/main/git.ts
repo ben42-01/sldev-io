@@ -259,8 +259,25 @@ export async function commitAll(cwd: string, message: string): Promise<string> {
   return ok(['commit', '-m', message], cwd)
 }
 
-export async function merge(repo: string, branch: string): Promise<string> {
-  return ok(['merge', '--no-ff', '--no-edit', branch], repo)
+/**
+ * Merge `branch` into `into` in the main checkout, locally (no PR). The checkout must already be on `into`:
+ * merging into whatever happens to be checked out there is how a branch ends up somewhere unexpected.
+ */
+export async function merge(repo: string, branch: string, into?: string): Promise<string> {
+  if (into) {
+    const on = await gitBranch(repo)
+    if (on !== into) throw new Error(`The main checkout (${repo}) is on ${on || 'a detached HEAD'}, not ${into}. Switch it to ${into} first, or merge through the pull request.`)
+  }
+  const r = await git(['merge', '--no-ff', '--no-edit', branch], repo)
+  if (r.code === 0) return (r.stdout + r.stderr).trim()
+  const out = (r.stderr + '\n' + r.stdout).trim()
+  // a conflict leaves the checkout mid-merge; say how to get out, not just git's wall of text
+  if (/CONFLICT|Automatic merge failed/.test(out)) {
+    await git(['merge', '--abort'], repo)
+    throw new Error(`${branch} conflicts with ${into ?? 'the checked-out branch'}; the merge was undone. Resolve it in the worktree (merge ${into ?? 'the base'} into it), or through the pull request.`)
+  }
+  if (/would be overwritten/.test(out)) throw new Error(`The main checkout has uncommitted changes in files this branch touches. Commit or stash them there first, or merge through the pull request.\n\n${out}`)
+  throw new Error(out || 'git merge failed')
 }
 
 export async function pushAndCreatePr(cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> {

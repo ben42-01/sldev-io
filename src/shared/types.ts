@@ -68,6 +68,12 @@ export interface AppSettings {
   reviewView?: 'walk' | 'files'
   /** the sidebars hide while a review tab is on screen (default on) */
   reviewFocus?: boolean
+  /** width of the Review tab's list (walkthrough parts, changed files), dragged by its edge */
+  reviewListWidth?: number
+  /** height of the Review tab's workflow runs list, dragged by the line under the ship bar */
+  shipRunsHeight?: number
+  /** how the Review tab's ship bar merges a pull request on GitHub (default squash) */
+  mergeMethod?: 'squash' | 'merge' | 'rebase'
   terminalFontSize: number
   terminalFontFamily: string
   /** where open tabs sit in each dock group: a strip on top, or a list down the left side */
