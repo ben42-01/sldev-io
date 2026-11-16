@@ -36,7 +36,9 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --print                   the agent does the task and exits, no questions (its exit means done)
       --allow-spawn <n>         its agent may start up to n agents itself (1-8, for its whole life); they
                                 run --print in worktrees, can't start agents and never push. Without it,
-                                sldev new from inside a pane is refused
+                                sldev new from inside a pane is refused. With the sldev-conductor skill
+                                (sldev skills install), that agent splits the brief between them, merges
+                                their branches into its own and reports; it never pushes
       --repeat <n>              run the brief n times, each pass building on the last (0: until a pass
                                 changes nothing); every pass is committed in the loop's worktree
         --gap <30m>             wait this long after a pass is over before the next (s, m, h)
@@ -74,7 +76,8 @@ on the agents that pane started, and the TUI, review, loops stop and stop not at
 
   sldev rules [status|init|sync [--overwrite <ids>]]   one .sldev/rules.md for every agent
   sldev skills [status|install [--overwrite <names>]] skills that let agents draft missions, stories,
-                                                       recipes and evals for the sldev-io app
+                                                       recipes and evals for the sldev-io app, and
+                                                       sldev-conductor: run other agents (needs --allow-spawn)
   sldev skills export <dir>                            the same skills as plain folders in <dir>
   sldev skills check <file…>                           read a draft, recipe or eval as the app will
   sldev remember "note" [--files a,b]                  add a line to .sldev/memory.md

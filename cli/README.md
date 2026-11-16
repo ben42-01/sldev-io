@@ -28,6 +28,8 @@ What it does that a plain multiplexer doesn't:
 - **sldev skills** (`sldev skills install`): any agent can draft a mission, board stories, a factory recipe or an eval
   as files the sldev-io app takes in as drafts. `sldev skills check <file>` reads one the way the app will (agents
   started by sldev get the same check as the `sldev_check` tool), so a draft that wouldn't load is fixed before anyone waits for it.
+  The same install adds `sldev-conductor`: an agent in a pane started with `--allow-spawn` splits a task between
+  other agents and merges their branches into its own. See [A conductor](#a-conductor-one-agent-running-others).
 - **Project memory** in `.sldev/memory.md`, searchable with `sldev recall`, and the sldev MCP tools in
   every agent it starts.
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
@@ -191,6 +193,57 @@ a command run with them counts as that pane's agent asking:
 `[started 1/2]`. Closing a tab whose children still run asks whether to stop them too; `sldev kill <pane> --children`
 does the same from the command line. This is a guard against an agent starting agents nobody asked for, not a
 sandbox: an agent that unsets those variables goes unrecognised, like any shell outside sldev.
+
+### A conductor: one agent running others
+
+`sldev skills install` also installs the `sldev-conductor` skill (in `.claude/skills` and `.agents/skills`). An agent
+that has it, running in a pane you started with `--allow-spawn <n>`, splits the brief into at most n independent
+parts, starts each as an agent of its own in a worktree branched from its branch, waits for them, merges their
+branches into its own and reports. It never pushes or opens a pull request, and it stops on a merge conflict it can't
+resolve. Started without `--allow-spawn`, it says so and gives you the command to start it again.
+
+```bash
+sldev skills install
+sldev new --allow-spawn 3 --kind build --worktree conduct/users \
+  "/sldev-conductor Add pagination to the users list: the API, the UI table and the docs"
+```
+
+(`/sldev-conductor` is how Claude Code calls a skill; other agents find it by its description, or say "use the
+sldev-conductor skill".) Its agent then does what the skill tells it to, in its own pane:
+
+```bash
+sldev ls --json                    # its own pane: allowSpawn 3, spawned 0
+start=$(git rev-parse HEAD)
+w1=$(sldev new --print --kind build --agent claude --worktree conduct/users-api \
+  --criteria "GET /users takes ?page and ?per_page" --criteria "npm test passes" \
+  "Add pagination to GET /users in src/api/users.ts … Commit your work on this branch when it is done.")
+w2=$(sldev new --print --kind build --agent codex --worktree conduct/users-ui …)
+sldev wait "$w1" --for done --timeout 300   # "sldev: timed out" and exit 1: still going, wait again
+sldev ls --json                    # status, report, worktree.path and worktree.branch of each
+sldev read "$w1" --lines 120
+git merge --no-ff conduct/users-api -m "Merge conduct/users-api: paginate GET /users"
+git merge --no-ff conduct/users-ui  -m "Merge conduct/users-ui: paged users table"
+npm test
+r=$(sldev new --print --kind review --agent codex --worktree conduct/users-review \
+  "Review the changes from $start to HEAD (git diff $start..HEAD) …")   # the third place, optional
+sldev wait "$r" --for done --timeout 300 && sldev read "$r" --lines 200
+```
+
+Its final reply is the report for you:
+
+```
+Branch conduct/users: 2 merges, 1 fix after review (git log --oneline 3f2a1c0..HEAD).
+- pane 4, claude, conduct/users-api: ?page/?per_page on GET /users, tests added. Merged.
+- pane 5, codex, conduct/users-ui: the table pages through the API. Merged.
+- pane 6, codex, review: an off-by-one on the last page (fixed in 9b1e2d4); docs still list the old response.
+npm test passes after each merge. The docs part I did myself (7c4d0a1). Left: nothing known.
+Nothing was pushed; the branch is ready for your review.
+```
+
+`sldev ls` shows the workers under the conductor (`└`). Review its branch in your editor (`sldev open <pane> --diff`),
+or have a second agent go over it with `sldev review <pane> --agent <id>`, which only works from your own terminal.
+When you're done, `sldev clean` removes the finished panes and their worktrees. The limits are the guard's above: the
+workers can't start agents and can't push, and `review`, `stop` and the TUI are refused from inside a pane.
 
 ### After an upgrade
 
