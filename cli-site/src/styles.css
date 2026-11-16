@@ -1,5 +1,6 @@
 /* The dark tokens and brand gradient of website/src/styles.css, copied so either site can change alone. */
 :root {
+  color-scheme: dark;
   --bg: #0a0a0a;
   --bg-elev: #0f0f0f;
   --bg-hover: #ffffff0d;
@@ -78,8 +79,11 @@ code, pre, kbd { font-family: var(--font-mono); }
   padding: 4px 6px;
   border-radius: var(--radius);
 }
-.nav-link { margin-left: auto; font-size: 14px; color: var(--fg-muted); }
-.nav-link:hover { color: var(--fg); }
+.nav-links { display: flex; align-items: center; gap: 20px; margin-left: auto; }
+.nav-link { font-size: 14px; color: var(--fg-muted); }
+.nav-link:hover, .nav-link[aria-current='page'] { color: var(--fg); }
+.text-link { color: var(--fg-muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+.text-link:hover { color: var(--fg); }
 
 /* hero: a faint grid and a glow behind the headline */
 .hero { position: relative; overflow: hidden; padding: 72px 0 72px; text-align: center; }
@@ -333,6 +337,79 @@ code, pre, kbd { font-family: var(--font-mono); }
 .points h3 { font-size: 16px; margin-bottom: 6px; }
 .install-bottom { margin-top: 64px; }
 
+/* features: one card per thing the CLI does, with the commands that do it */
+.section-lede { max-width: 640px; margin: 14px auto 0; color: var(--fg-muted); font-size: 16px; text-align: center; }
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 44px; }
+.feature {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 20px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s;
+}
+.feature:hover { border-color: var(--border-strong); }
+.feature h3 { font-size: 16px; letter-spacing: -0.01em; }
+.feature p { margin-top: 8px; color: var(--fg-muted); font-size: 14.5px; flex: 1; }
+.uses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.use {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 8px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+a.use:hover { border-color: var(--fg-muted); }
+/* ten cards in three columns: the first and last span two, so every row is full */
+.feature:first-child, .feature:last-child { grid-column: span 2; }
+
+/* the commands page: a list of sections on the left, the commands from `sldev help` on the right */
+.commands-page { padding: 56px 0 88px; }
+.commands-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; align-items: start; }
+.commands-toc {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  font-size: 13px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.commands-toc > div + div, .commands-toc > div + a { display: block; margin-top: 18px; }
+.toc-section { display: block; font: 500 10px/1 var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-subtle); margin-bottom: 8px; }
+.toc-section:hover { color: var(--fg-muted); }
+.commands-toc li a { display: block; padding: 3px 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--fg-muted); }
+.commands-toc li a:hover { color: var(--fg); }
+.commands-head h1 { font-size: clamp(30px, 4.6vw, 44px); letter-spacing: -0.03em; line-height: 1.1; }
+.commands-head .section-lede { margin: 12px 0 0; text-align: left; }
+.commands-head .install { margin: 24px 0 0; }
+.section-lede code, .cmd-section-text code { font-size: 0.92em; color: var(--fg); }
+.cmd-section { margin-top: 56px; scroll-margin-top: 80px; }
+.cmd-section h2 { font-size: 22px; letter-spacing: -0.02em; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.cmd-section-text { margin-top: 10px; color: var(--fg-muted); font-size: 15px; }
+.cmd { margin-top: 20px; padding: 18px 20px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); scroll-margin-top: 80px; }
+.cmd:target { border-color: var(--border-strong); box-shadow: inset 2px 0 0 var(--brand-blue); }
+.cmd-usage { position: relative; display: flex; gap: 10px; align-items: baseline; font-size: 14.5px; font-weight: 500; }
+.cmd-usage code { overflow-wrap: anywhere; }
+.cmd-anchor { color: var(--fg-subtle); font: 500 13px/1 var(--font-mono); }
+.cmd-anchor:hover { color: var(--fg); }
+.cmd-text { margin-top: 8px; color: var(--fg-muted); font-size: 14.5px; }
+.cmd-opts { margin: 14px 0 0; display: grid; gap: 8px; }
+.cmd-opt { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px; padding-top: 8px; border-top: 1px solid var(--border); }
+.cmd-opt.depth-1 { margin-left: 24px; }
+.cmd-opt dt code { font-size: 12.5px; color: var(--fg); overflow-wrap: anywhere; }
+.cmd-opt dd { margin: 0; color: var(--fg-muted); font-size: 14px; }
+.cmd-note { margin-top: 12px; color: var(--fg-muted); font-size: 15px; }
+.cmd-raw { margin-top: 56px; border: 1px solid var(--border); border-radius: var(--radius); }
+.cmd-raw summary { cursor: pointer; padding: 12px 16px; font-size: 14px; color: var(--fg-muted); }
+.cmd-raw summary:hover { color: var(--fg); }
+.cmd-raw pre { margin: 0; padding: 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 12px; line-height: 1.5; overflow-x: auto; }
+
 /* footer */
 .footer { border-top: 1px solid var(--border); padding: 28px 0; font-size: 13px; color: var(--fg-muted); }
 .footer-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
@@ -351,6 +428,9 @@ code, pre, kbd { font-family: var(--font-mono); }
   .tui-brand, .tui-brandline, .tui-side, .tui-grid::after { display: none; }
   .tui-right { display: none; }
   .steps { grid-template-columns: minmax(0, 1fr); }
+  .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .commands-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .commands-toc { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -364,6 +444,14 @@ code, pre, kbd { font-family: var(--font-mono); }
   .tui-pane { padding: 0.8em 1ch; }
   .section { padding: 64px 0; }
   .points { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .features { grid-template-columns: minmax(0, 1fr); }
+  .feature:first-child, .feature:last-child { grid-column: auto; }
+  .nav-links { gap: 14px; }
+  .nav-links .nav-link:nth-child(2) { display: none; }
+  .commands-page { padding-top: 40px; }
+  .cmd { padding: 16px; }
+  .cmd-opt { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .cmd-opt.depth-1 { margin-left: 14px; }
   .footer-app { margin-left: 0; }
 }
 
