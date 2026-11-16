@@ -35,7 +35,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cli-site/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            cli-site/package-lock.json
+      # the /commands page builds the CLI (root `npm run cli:build`), so the root needs its dependencies too
+      - run: npm ci
       - name: Choose the base path
         id: site
         env:
