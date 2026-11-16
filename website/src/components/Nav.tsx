@@ -9,7 +9,8 @@ const links: { page?: NavPage; href: string; label: string }[] = [
   { href: '/#how', label: 'How it works' },
   { page: 'features', href: '/features', label: 'Features' },
   { page: 'pricing', href: '/pricing', label: 'Pricing' },
-  { page: 'docs', href: '/docs', label: 'Docs' }
+  { page: 'docs', href: '/docs', label: 'Docs' },
+  { href: site.cliUrl, label: 'sldev CLI (free)' }
 ]
 
 export function Nav({ active }: { active?: NavPage }) {

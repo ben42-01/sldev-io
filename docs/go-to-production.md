@@ -704,10 +704,40 @@ standalone package to the `cli` branch of `ben42-01/downloads.sldev.io`, tagged 
 Users install it with `npm i -g github:ben42-01/downloads.sldev.io#cli`. Bump `cli/package.json` first. It makes no GitHub
 release there, so the app updater and `/download` don't see it. Moving to npm later: `npm publish` from `cli/` once the name is free.
 
-The CLI's home page (`cli-site/`) is deployed by `.github/workflows/cli-site.yml` (manual: Actions → Deploy CLI site → Run
-workflow): it builds the site and force-pushes it as the `gh-pages` branch of the same downloads repo, with `RELEASES_TOKEN`,
-and nothing else there (no tags, no releases). Once, in the downloads repo: Settings → Pages → Deploy from a branch →
-`gh-pages`, `/ (root)`. It's then at `https://ben42-01.github.io/downloads.sldev.io/`. For a domain of its own, set the
-repository variable `CLI_SITE_DOMAIN` (a bare host like `cli.sldev.io`) here, point a CNAME DNS record at
-`ben42-01.github.io` and run the workflow again: it builds with base `/` and writes the `CNAME` file. CI builds `cli-site/`
-on every push, so a broken site fails there first.
+### The CLI site on GitHub Pages (runbook)
+
+The CLI's home page (`cli-site/`) is deployed by `.github/workflows/cli-site.yml` (manual only). It builds the site and
+force-pushes it as the `gh-pages` branch of `ben42-01/downloads.sldev.io` with `RELEASES_TOKEN`, and touches nothing else
+there (no tags, no releases, not the `cli` branch), so the app's updater and `/download` never see it. CI builds `cli-site/`
+on every push, so a broken site fails there first. The two sites link each other through plain data, not imports:
+`cliUrl` in `website/src/content/site.json` (nav and footer, "sldev CLI (free)") and `app.url` in
+`cli-site/src/content/site.json` (the CLI site's footer).
+
+1. **🧑 Deploy once, so the branch exists**: here (sldev-io), Actions → Deploy CLI site → Run workflow on `master`. It
+   needs the `RELEASES_TOKEN` secret (Contents read/write on the downloads repo); the first step fails with a clear
+   message if it's missing. The run's summary prints the URL it deployed for.
+2. **🧑 Switch Pages on (once)**: in the downloads repo, Settings → Pages → Build and deployment → Source: *Deploy from a
+   branch* → branch `gh-pages`, folder `/ (root)` → Save. A minute later the site is at
+   `https://ben42-01.github.io/downloads.sldev.io/` (the default `cliUrl`). Click the links both ways to check.
+3. **Deploying after that**: run the same workflow again whenever `cli-site/` or the CLI's help changes (the Commands
+   page is generated from `sldev help` at build time). Each run replaces the whole `gh-pages` branch.
+4. **🧑 Custom domain (optional)**:
+   - DNS: a `CNAME` record from the host (say `cli.sldev.io`) to `ben42-01.github.io`.
+   - Here (sldev-io): Settings → Secrets and variables → Actions → Variables → `CLI_SITE_DOMAIN` = the bare host
+     (`cli.sldev.io`, no `https://`, no path; the workflow rejects anything else).
+   - Run the workflow: it builds with base `/` and writes the `CNAME` file, which sets the domain in Pages. Once GitHub
+     has issued the certificate, tick Settings → Pages → *Enforce HTTPS* in the downloads repo.
+   - Change `cliUrl` in `website/src/content/site.json` to `https://cli.sldev.io/` and redeploy the website. The
+     github.io address redirects to the domain, so old links keep working.
+   - To drop the domain: delete the variable and run the workflow (no `CNAME` file, base `/downloads.sldev.io/`), then
+     put `cliUrl` back.
+5. **Rollback**: `gh-pages` is force-pushed, so its history doesn't hold old versions; redeploy an older commit instead.
+   Run workflow only offers branches and tags, so push the good commit as a branch and run it from there:
+   ```bash
+   git push origin <good-sha>:refs/heads/cli-site-rollback
+   # Actions → Deploy CLI site → Run workflow → Use workflow from: cli-site-rollback
+   git push origin --delete cli-site-rollback   # once the fix is on master and deployed
+   ```
+   The commit must already contain `.github/workflows/cli-site.yml` (added in `fc0d391`). The run uses the domain
+   variable as it is now, not as it was then. To take the site down entirely: Settings → Pages → Source → None in the
+   downloads repo (the branch stays, so switching it back on is instant).

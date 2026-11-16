@@ -41,6 +41,7 @@ export function Footer() {
         <a href={site.repoUrl}>GitHub</a>
         <a href="/pricing">Pricing</a>
         <a href="/docs">Docs</a>
+        <a href={site.cliUrl}>sldev CLI (free)</a>
         <a href="/compare">Compare</a>
         <a href="/changelog">Changelog</a>
         <a href="/terms">Terms</a>
