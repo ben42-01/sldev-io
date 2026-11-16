@@ -40,6 +40,8 @@ If `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON` are set, you run in a sldev pane yo
   to hand off.
 - `send`, `kill` and `accept` work only on the agents you started; `ls`, `read` and `wait` work on any pane.
 - `review`, `loops stop`, `stop` and attaching (`sldev` alone) are for the human's own terminal.
+- To split a whole task between agents and merge their branches, follow the `sldev-conductor` skill
+  (`sldev skills install` adds it).
 
 ## Answer, review, stop
 

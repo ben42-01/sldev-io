@@ -688,9 +688,9 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
 }
 
 /** what a pane's agent may ask for about any pane */
-const OPEN = new Set<Command>(['ping', 'ls', 'read', 'wait', 'loops', 'screen', 'focus'])
+export const OPEN = new Set<Command>(['ping', 'ls', 'read', 'wait', 'loops', 'screen', 'focus'])
 /** what it may do only to the agents it started */
-const CHILD_ONLY = new Set<Command>(['send', 'kill', 'accept', 'input', 'resize', 'rename'])
+export const CHILD_ONLY = new Set<Command>(['send', 'kill', 'accept', 'input', 'resize', 'rename'])
 
 /**
  * Git config, through the env, that makes every push from an agent another agent started fail (fetch and pull

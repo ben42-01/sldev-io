@@ -1,12 +1,13 @@
 import { promises as fsp } from 'fs'
 import { resolve } from 'path'
 import { recallText } from '@shared/context'
-import { checkSkillFile, checkText, type SkillFileCheck } from '@shared/sldevSkills'
+import { APP_SKILLS, checkSkillFile, checkText, type SkillFileCheck, type SkillSet, type SkillState } from '@shared/sldevSkills'
 import { createRules, rulesState, syncRules } from '../../src/main/rules'
 import { memoryInfo, remember } from '../../src/main/memory'
 import { initContext, recall } from '../../src/main/context'
 import { run } from '../../src/main/git'
 import { exportSkills, installSkills, skillsState } from '../../src/main/sldevSkills'
+import { CLI_SKILLS } from './skills'
 
 /**
  * The repo features, without the daemon: they read and write the same `.sldev/` files as the app,
@@ -80,27 +81,37 @@ const SKILL_STATE: Record<string, string> = {
   foreign: 'another skill with this name (install --overwrite <name> to replace)'
 }
 
-/** sldev's own skills: agents draft missions, board stories, recipes and evals as files the app picks up. */
+/**
+ * sldev's own skills: the app's (agents draft missions, board stories, recipes and evals as files the app picks up)
+ * and the CLI's (cli/src/skills.ts: an agent that runs other agents through sldev).
+ */
+const SETS: SkillSet[] = [APP_SKILLS, CLI_SKILLS]
+
+const allStates = async (root: string): Promise<SkillState[]> => (await Promise.all(SETS.map((set) => skillsState(root, set)))).flat()
+
 export async function skillsStatus(root: string): Promise<string> {
-  const s = await skillsState(root)
+  const s = await allStates(root)
   const width = Math.max(...s.map((x) => x.name.length))
   return [`sldev skills in ${root}:`, ...s.map((x) => `  /${x.name.padEnd(width)}  ${x.label.padEnd(24)} ${SKILL_STATE[x.state]}`)].join('\n')
 }
 
 export async function skillsInstall(root: string, overwrite: string[]): Promise<string> {
-  const wrote = await installSkills(root, overwrite)
-  const after = await skillsState(root)
+  const wrote: string[] = []
+  for (const set of SETS) wrote.push(...(await installSkills(root, overwrite, set)))
+  const after = await allStates(root)
   const kept = after.filter((x) => x.state === 'edited' || x.state === 'foreign').map((x) => x.name)
   return [
     wrote.length ? `Wrote ${wrote.length} files:` : 'Already up to date.',
     ...wrote.map((p) => `  ${p}`),
     ...(kept.length ? [`Kept (edited by hand): ${kept.join(', ')}. Use --overwrite ${kept.join(',')} to replace them.`] : []),
-    'Agents now draft missions and stories into .sldev/drafts; sldev-io takes them in when it is open.'
+    'Agents now draft missions and stories into .sldev/drafts; sldev-io takes them in when it is open.',
+    '/sldev-conductor splits a task between other agents; it runs in a pane started with sldev new --allow-spawn <n>.'
   ].join('\n')
 }
 
 export async function skillsExport(dir: string): Promise<string> {
-  const wrote = await exportSkills(resolve(dir))
+  const wrote: string[] = []
+  for (const set of SETS) wrote.push(...(await exportSkills(resolve(dir), set)))
   return [`Wrote ${wrote.length} skills:`, ...wrote.map((p) => `  ${p}`)].join('\n')
 }
 
