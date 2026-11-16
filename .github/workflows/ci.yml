@@ -54,3 +54,21 @@ jobs:
           cache-dependency-path: website/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  # the free CLI's home page builds alone (cli-site.yml deploys it by hand); a broken site fails here first
+  cli-site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cli-site/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          CLI_SITE_BASE: /downloads.sldev.io/
