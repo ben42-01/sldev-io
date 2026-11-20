@@ -8,6 +8,8 @@
     "render": "remotion render src/index.ts Promo out/sldev-io-promo.mp4",
     "render:music": "remotion render src/index.ts Promo out/sldev-io-promo.mp4 --props=music.json",
     "music": "node scripts/make-music.cjs",
+    "render:cli": "remotion render src/index.ts CliPromo out/sldev-cli-promo.mp4 --props=music-cli.json",
+    "music:cli": "node scripts/make-music.cjs src/cli/timeline.json music-cli.mp3",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -52,6 +52,34 @@ bold, upright, in the brand gradient (`ACCENT` in `src/ui.tsx`), so a line is th
 terminals, on a dark pool that keeps them readable. `STORY_FONTS.mono` (JetBrains Mono Light) is the code-style
 alternative: switch `STORY` to it.
 
+## The CLI video (35 bars = 70 s)
+
+A second composition, `CliPromo`, tells the `sldev` CLI's story in the same style: `src/cli/timeline.json`,
+scenes in `src/cli/Scenes.tsx`, and the TUI drawn by `src/cli/Tui.tsx`, which follows `cli/src/render.ts` and the
+website's mockup (`website/src/cli/TerminalMockup.tsx`) by eye. Its tagline, agents and version come from
+`website/src/cli/cli.json` and `cli/package.json`. Both films run on `src/Film.tsx` (scenes in bars, chapters,
+cuts that zoom through).
+
+```bash
+npm run music:cli       # public/music-cli.mp3 from src/cli/timeline.json
+npm run render:cli      # out/sldev-cli-promo.mp4, with that music
+```
+
+| Bars | Scene | Says |
+|---|---|---|
+| 4 | Open | A plain shell: three `sldev new --agent … --worktree` commands, then `sldev`. |
+| 6 | 01 Run · tabs | Every agent in a tab; Codex needs you (desktop notification), Ctrl-b 2, 1, it carries on; Gemini is ready. |
+| 4 | Worktrees | The branch and diff stat on each pane; Ctrl-b v shows the changes side by side. |
+| 3 | 02 Recover · failover | Claude hits its usage limit; `--failover` continues the task on Codex in a new pane, same worktree. |
+| 4 | Repeat | `--repeat 4 --check "npm test"`: a commit per pass, a failing check handed to the next pass. |
+| 5 | 03 Delegate · conductor | An `--allow-spawn 3` pane starts three agents, waits, merges their branches, runs the tests; nothing pushed. |
+| 2 | Scripting | `sldev wait 2 --for needs-you && sldev send 2 "yes"`. |
+| 3 | Agents | Every agent from `cli.json`; no account, no telemetry, free and open source. |
+| 4 | Call to action | The tagline, Apache-2.0, works next to the app, `npm i -g sldev-cli` and the /cli URL. |
+
+When a command, flag or key in the CLI changes, change the scene that shows it: the video should never show
+something `sldev` doesn't do.
+
 ## Music
 
 The video is timed in bars of a **120 BPM** track (`BPM` in `src/lib.ts`), so every cut lands on a downbeat.

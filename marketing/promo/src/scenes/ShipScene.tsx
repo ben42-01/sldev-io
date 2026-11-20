@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { AbsoluteFill, Sequence, interpolate, useCurrentFrame } from 'remotion'
 import { BRAND, C, MONO, UI, beats, onBeat, pop, progress, typed } from '../lib'
 import { Brand, Camera, Headline, Scrim, Window } from '../ui'
+import { Bold, CH, ROW as TUI_ROW, T, TONE, Tui, type Pane } from '../cli/Tui'
 
 // Ship: a fast run of the things around the work, one every couple of beats, then the rest of the
 // app as a wall of tiles. Each part is short on purpose: the montage is the selling point.
@@ -254,73 +255,38 @@ function RecapPart() {
 
 // ---------------------------------------------------------------- the CLI
 
-const CLI_CMD = 'sldev new --agent codex --worktree feat/invites "Invite people by email"'
+// the same TUI the CLI's own video draws (src/cli/Tui.tsx): one sldev window, every agent a tab, Codex asking
+const CLI_PANES: Pane[] = [
+  { n: 1, title: 'rate-limit', agent: 'claude', branch: 'sldev/rate-limit', project: 'acme-shop', tone: 'working', stat: { ins: 38, del: 4 } },
+  { n: 2, title: 'invites', agent: 'codex', branch: 'sldev/invites', project: 'acme-shop', tone: 'attention', stat: { ins: 125, del: 0 } },
+  { n: 3, title: 'members', agent: 'gemini', branch: 'sldev/members', project: 'acme-shop', tone: 'review', stat: { ins: 41, del: 6 } },
+  { n: 4, title: 'shell', cwd: '~/acme-shop', project: 'acme-shop', tone: 'neutral' }
+]
+const CLI_LINES: ReactNode[] = [
+  <div style={{ background: T.raised, margin: `0 -${CH}px ${TUI_ROW / 4}px`, padding: `2px ${CH}px` }}>
+    <span style={{ color: C.blue }}>› </span>Invite people by email
+  </div>,
+  <span>
+    <span style={{ color: TONE.working }}>● </span>
+    <Bold>Edited src/api/invites.ts</Bold> <span style={{ color: TONE.working }}>+84</span> <span style={{ color: TONE.error }}>-0</span>
+  </span>,
+  <span>
+    <span style={{ color: TONE.working }}>● </span>
+    <Bold>Edited src/email/invite.tsx</Bold> <span style={{ color: TONE.working }}>+41</span> <span style={{ color: TONE.error }}>-0</span>
+  </span>,
+  ' ',
+  <span style={{ color: C.amber }}>Allow Codex to run `npm test`?</span>,
+  <span style={{ color: C.amber }}>{'  › 1. Yes    2. Always    3. No'}</span>
+]
 
 function CliPart() {
   const frame = useCurrentFrame()
-  const tui = frame >= 20
-  const tab = pop(frame, 20)
   return (
-    <Camera keys={[[0, { z: 1.08, rx: 6, ry: 18 }], [beats(5.5), { z: 1.02, rx: 0, ry: -6 }]]}>
-      <div style={{ position: 'absolute', left: 260, top: 240, width: 1400, height: 740, borderRadius: 12, overflow: 'hidden', background: '#0b0b0b', border: '1px solid #2b2b2b', boxShadow: `0 40px 120px #000c, 0 0 80px ${C.green}14`, fontFamily: MONO, fontSize: 19, color: '#cfcfcf' }}>
-        <div style={{ height: 38, display: 'flex', alignItems: 'center', padding: '0 16px', background: '#161616', borderBottom: '1px solid #232323', position: 'relative' }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[0, 1, 2].map((d) => (
-              <span key={d} style={{ width: 12, height: 12, borderRadius: 99, background: '#3a3a3a' }} />
-            ))}
-          </div>
-          <span style={{ position: 'absolute', left: 0, right: 0, textAlign: 'center', font: `500 14px ${UI}`, color: C.muted }}>zsh — ~/acme-shop</span>
-          <span style={{ marginLeft: 'auto', font: `600 13px ${UI}`, padding: '3px 10px', border: `1px solid ${C.green}77`, color: C.green }}>open source · Apache-2.0</span>
-        </div>
-        {!tui ? (
-          <div style={{ padding: '18px 22px' }}>
-            <span style={{ color: C.green }}>~/acme-shop ❯ </span>
-            {typed(CLI_CMD, frame, 1, 200)}
-            <span style={{ display: 'inline-block', width: 11, height: 22, background: '#d0d0d0', verticalAlign: -4, marginLeft: 2 }} />
-          </div>
-        ) : (
-          <div style={{ opacity: tab }}>
-            <div style={{ display: 'flex', borderBottom: '1px solid #232323', fontSize: 16 }}>
-              {[
-                ['1 claude · rate-limit', C.blue, '●'],
-                ['2 codex · invites', C.amber, '◆'],
-                ['3 gemini · members', C.green, '✓'],
-                ['4 shell', C.subtle, '']
-              ].map(([l, tone, mark], i) => (
-                <span key={l} style={{ padding: '9px 18px', borderRight: '1px solid #232323', background: i === 1 ? '#1a1a1a' : 'transparent', color: i === 1 ? C.fg : C.muted, boxShadow: i === 1 ? `inset 0 2px 0 ${C.amber}` : undefined }}>
-                  <span style={{ color: tone }}>{mark}</span> {l}
-                </span>
-              ))}
-            </div>
-            <div style={{ display: 'flex' }}>
-              <div style={{ width: 330, borderRight: '1px solid #232323', padding: '14px 18px', fontSize: 16, lineHeight: 1.9, color: C.muted }}>
-                <div style={{ color: C.subtle, fontSize: 13, letterSpacing: '0.1em' }}>NEEDS YOU</div>
-                <div style={{ color: C.amber }}>◆ codex · invites</div>
-                <div style={{ color: C.subtle, fontSize: 13, letterSpacing: '0.1em', marginTop: 8 }}>WORKING</div>
-                <div style={{ color: C.blue }}>● claude · rate-limit</div>
-                <div style={{ color: C.subtle, fontSize: 13, letterSpacing: '0.1em', marginTop: 8 }}>READY</div>
-                <div style={{ color: C.green }}>✓ gemini · members</div>
-              </div>
-              <div style={{ flex: 1, padding: '14px 20px', lineHeight: 1.7, fontSize: 18 }}>
-                {[
-                  ['• Explored', C.fg],
-                  ['  └ Read src/api/teams.ts', C.muted],
-                  ['• Edited src/api/invites.ts (+84 -0)', C.fg],
-                  ['• Edited src/email/invite.tsx (+41 -0)', C.fg],
-                  ['', C.fg],
-                  ['Allow Codex to run `npm test`?', C.amber],
-                  ['  › 1. Yes   2. Always   3. No', C.amber]
-                ].map(([l, tone], i) => (frame >= 22 + i * 2 ? <div key={i} style={{ color: tone, whiteSpace: 'pre' }}>{l || ' '}</div> : null))}
-              </div>
-            </div>
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '8px 18px', borderTop: '1px solid #232323', fontSize: 14, color: C.subtle, display: 'flex', gap: 22 }}>
-              <span>Ctrl-b n new</span>
-              <span>Ctrl-b w workflows</span>
-              <span>Ctrl-b v diff</span>
-              <span style={{ marginLeft: 'auto', color: C.muted }}>3 agents · 3 worktrees · rules · memory · failover</span>
-            </div>
-          </div>
-        )}
+    <Camera keys={[[0, { z: 1.0, rx: 6, ry: 18 }], [beats(5.5), { z: 0.96, rx: 0, ry: -6 }]]}>
+      <div style={{ position: 'absolute', left: 140, top: 200, opacity: progress(frame, 0, 8) }}>
+        <Tui panes={CLI_PANES} active={2} width={1640} height={820}>
+          {CLI_LINES.map((l, i) => (frame >= 6 + i * 3 ? <div key={i} style={{ minHeight: TUI_ROW, opacity: progress(frame, 6 + i * 3, 5) }}>{l}</div> : null))}
+        </Tui>
       </div>
     </Camera>
   )

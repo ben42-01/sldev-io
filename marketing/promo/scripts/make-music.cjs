@@ -3,7 +3,8 @@
 // Everything is synthesised here, so there's no licence to worry about; a produced track can still
 // replace it (see README).
 //
-//   npm run music
+//   npm run music                                              the app promo: src/timeline.json → public/music.mp3
+//   node scripts/make-music.cjs src/cli/timeline.json music-cli.mp3   another film's timeline and file
 //
 // The sound: anti-aliased supersaws through a resonant filter, a layered kick that the rest of the
 // mix pumps against (sidechain), a stereo reverb and a ping-pong delay, a hook that comes in when
@@ -11,7 +12,8 @@
 const { execFileSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
-const timeline = require('../src/timeline.json')
+const timeline = require(path.resolve(process.argv[2] || path.join(__dirname, '../src/timeline.json')))
+const OUT = process.argv[3] || 'music.mp3'
 
 const SR = 44100
 const BPM = timeline.bpm
@@ -544,8 +546,8 @@ header.writeUInt32LE(pcm.length, 40)
 
 const pub = path.join(__dirname, '..', 'public')
 fs.mkdirSync(pub, { recursive: true })
-const wav = path.join(pub, 'music.wav')
+const wav = path.join(pub, OUT.replace(/\.mp3$/, '') + '.wav')
 fs.writeFileSync(wav, Buffer.concat([header, pcm]))
-execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-b:a', '320k', path.join(pub, 'music.mp3')])
+execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-b:a', '320k', path.join(pub, OUT)])
 fs.rmSync(wav)
-console.log(`public/music.mp3: ${(N / SR).toFixed(1)} s, ${BPM} BPM, ${TOTAL_BARS} bars`)
+console.log(`public/${OUT}: ${(N / SR).toFixed(1)} s, ${BPM} BPM, ${TOTAL_BARS} bars`)

@@ -1,0 +1,14 @@
+{
+  "bpm": 120,
+  "scenes": [
+    { "id": "open", "bars": 4, "energy": "lite" },
+    { "id": "attach", "bars": 6, "energy": "groove", "chapter": "Run", "tag": "Tabs · status" },
+    { "id": "branches", "bars": 4, "energy": "full", "tag": "Worktrees · changes" },
+    { "id": "failover", "bars": 3, "energy": "full", "chapter": "Recover", "tag": "Failover" },
+    { "id": "repeat", "bars": 4, "energy": "full", "tag": "Repeat" },
+    { "id": "conductor", "bars": 5, "energy": "peak", "chapter": "Delegate", "tag": "Conductor" },
+    { "id": "script", "bars": 2, "energy": "peak", "tag": "Scripting" },
+    { "id": "agents", "bars": 3, "energy": "break" },
+    { "id": "cta", "bars": 4, "energy": "outro" }
+  ]
+}
