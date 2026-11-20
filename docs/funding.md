@@ -22,8 +22,12 @@ itself without bringing back a paywall.
 ## Now: stars and GitHub Sponsors
 
 - Star and Sponsor links: `sourceUrl` and `sponsorUrl` in `website/src/content/site.json`.
-- GitHub Sponsors on a personal account: GitHub takes no fee. Tiers to start with: $3 (thanks, name in the README),
-  $10 (name on the website), $50/month for companies (logo on the README and the website).
+- GitHub Sponsors on a personal account: GitHub takes no fee. Tiers (set up 2026-11-20):
+  - Monthly: $3 Supporter (name in the README), $10 Backer (name on the website too), $100 Company (logo in the
+    README and on the home page).
+  - One time: $10 and $25 thank-yous (name in the README if they like), and $500 Founding Company Sponsor (logo for
+    6 months, a permanent place among the Founding Sponsors, a one-hour setup call; open during the first year).
+  - Sponsoring never unlocks features or changes how sldev treats agents.
 - `.github/FUNDING.yml` (`github: ben42-01`) makes GitHub show the Sponsor button once the repo is public and Sponsors
   is turned on for the account.
 
