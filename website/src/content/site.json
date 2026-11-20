@@ -5,6 +5,8 @@
   "url": "https://sldev-io.vercel.app",
   "downloadUrl": "https://sldev-io.vercel.app/download",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
+  "sourceUrl": "https://github.com/ben42-01/sldev-io",
+  "sponsorUrl": "https://github.com/sponsors/ben42-01",
   "cliUrl": "https://ben42-01.github.io/downloads.sldev.io/",
   "contactEmail": "team.agora.hub@gmail.com",
   "maker": "Ben",
@@ -23,10 +25,9 @@
     "Any CLI"
   ],
   "legal": {
-    "seller": "Benjamin Keil",
+    "owner": "Benjamin Keil",
     "address": "",
     "country": "Ireland",
-    "updatedAt": "2026-11-16",
-    "personalMachines": 3
+    "updatedAt": "2026-11-20"
   }
 }

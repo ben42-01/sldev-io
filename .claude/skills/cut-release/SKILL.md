@@ -7,11 +7,10 @@ description: Publish a new sldev-io release with installers for Linux, Windows a
 
 The `.github/workflows/release.yml` workflow runs on pushes to `release/**`. It builds every OS and
 publishes the installers (deb, exe, arm64 and x64 dmg) and the update files (`latest*.yml`, `.blockmap`, macOS zip) as release `v<package.json version>`
-in the **public** repo `ben42-01/downloads.sldev.io` (needs the `RELEASES_TOKEN` secret), plus a
-copy in the private source repo. The release starts as a **draft** in both repos; each OS build uploads
+in this repo, `ben42-01/sldev-io` (with the workflow's own token). The release starts as a **draft**; each OS build uploads
 its files straight onto it (no Actions artifacts, whose storage quota blocked beta.6 and beta.7), and the
-final job publishes it only when every build succeeded. It then **deletes every older release** (and its
-tag) from the public repo, so only the newest installers can be downloaded.
+final job publishes it only when every build succeeded. It then **deletes releases published more than
+3 days ago** (`KEEP_DAYS`; tags stay), so old installers don't pile up.
 
 Pushing is outward-facing. Confirm the version and the go-ahead with the user before pushing.
 
@@ -29,7 +28,7 @@ Pushing is outward-facing. Confirm the version and the go-ahead with the user be
 4. Create and push the branch: `git switch -c release/X.Y.Z && git push -u origin release/X.Y.Z`.
 5. Watch it: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
    If a single OS fails, fix it on the branch and push again (or `gh run rerun --failed` for a flaky step). The draft is reused and assets are replaced (`--clobber`); nothing is public until the release job runs.
-6. Check `gh release view vX.Y.Z --repo ben42-01/downloads.sldev.io` lists the deb, the exe,
+6. Check `gh release view vX.Y.Z --repo ben42-01/sldev-io` lists the deb, the exe,
    the two dmgs (arm64, x64), the macOS zips, `latest*.yml` and `.blockmap` files, and that `curl -sI https://sldev-io.vercel.app/download/linux`
    redirects to the new version's deb (the CDN caches the redirect for up to 5 minutes).
 7. Launch the published Linux build. The e2e harness runs `out/`, not the packaged app, so it can't

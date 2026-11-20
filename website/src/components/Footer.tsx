@@ -1,4 +1,4 @@
-import { site } from '../lib/pricing'
+import { site } from '../lib/site'
 import { CopyCommand, DownloadButton } from './Download'
 import { Logo } from './Logo'
 
@@ -38,15 +38,13 @@ export function Footer() {
         <span className="muted">© {new Date().getFullYear()} {site.name}</span>
         <span className="grow" />
         <a href={`mailto:${site.contactEmail}`}>Contact</a>
-        <a href={site.repoUrl}>GitHub</a>
-        <a href="/pricing">Pricing</a>
+        <a href={site.sourceUrl}>GitHub</a>
+        <a href={site.sponsorUrl}>Sponsor</a>
         <a href="/docs">Docs</a>
-        <a href={site.cliUrl}>sldev CLI (free)</a>
+        <a href={site.cliUrl}>sldev CLI</a>
         <a href="/compare">Compare</a>
         <a href="/changelog">Changelog</a>
-        <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>
-        <a href="/refunds">Refunds</a>
       </div>
     </footer>
   )

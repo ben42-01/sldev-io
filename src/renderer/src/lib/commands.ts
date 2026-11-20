@@ -5,9 +5,8 @@ import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTermi
 import { isRightView, pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
 import { openSetup } from '../state/setup'
-import { checkForUpdates, reportBug } from '../state/updates'
+import { checkForUpdates, openSponsor, reportBug } from '../state/updates'
 import { openWhatsNew } from '../state/whatsNew'
-import { openLicense } from '../components/License'
 import { openInEditor } from './actions'
 import { applyTerminalFont, focusTerminal, shellKind, toggleBroadcast, writeToTerminal } from './terminals'
 import { basename, dirname, shellQuote, tildify } from './paths'
@@ -242,8 +241,7 @@ export function staticCommands(): Command[] {
     { id: 'app.about', category: 'Help', title: 'About sldev-io', run: showAbout },
     { id: 'app.whatsNew', category: 'Help', title: "What's new", run: () => openWhatsNew() },
     { id: 'app.feedback', category: 'Help', title: 'Report a bug or send feedback', run: reportBug },
-    { id: 'app.license', category: 'Help', title: 'Enter license key', run: openLicense },
-    { id: 'app.buy', category: 'Help', title: 'Buy a license', run: openLicense },
+    { id: 'app.sponsor', category: 'Help', title: 'Sponsor sldev-io on GitHub', run: openSponsor },
     { id: 'app.checkUpdates', category: 'Help', title: 'Check for updates', run: () => {
       showAbout()
       void checkForUpdates()

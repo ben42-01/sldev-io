@@ -1,5 +1,5 @@
 // Settings → About: version, update state (unsupported when unpacked), diagnostics, legal links.
-// Also: a beta build is free, so Settings → License has no key field.
+// sldev-io is free: no license section, no trial chip, a Star and a Sponsor button instead.
 const text = (h, sel) => h.js(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? ''`)
 
 module.exports = async (h) => {
@@ -19,14 +19,10 @@ module.exports = async (h) => {
   h.expect(status.state === 'unsupported', 'updater stays off in the unpacked build')
   h.expect((await h.js(`[...document.querySelectorAll('.about-links .link')].map(e => e.textContent).join('|')`)).includes('Privacy policy'), 'legal links present')
   h.expect(!(await h.js(`!!document.querySelector('.statusbar .status-item.ok')`)), 'no update chip without an update')
-  if (/-beta\b/.test(version)) {
-    h.expect((await text(h, '#settings-license')).includes('Free during the beta'), 'beta build: License says free during the beta')
-    h.expect(!(await h.js(`!!document.querySelector('#settings-license .license-form')`)), 'beta build: no license key field')
-    const refused = await h.js(`window.api.license.activate('SLDEV-TEST-GOOD').then(() => 'activated', e => String(e))`)
-    h.expect(/from sldev-io 1\.0/.test(refused), 'beta build: main refuses to activate a key')
-  } else {
-    // activation itself is covered by the license scenario
-    h.expect(await h.js(`!!document.querySelector('#settings-license .license-form')`), `stable ${version}: Settings → License takes a key`)
-  }
+  h.expect(!(await h.js(`!!document.getElementById('settings-license')`)), 'no License section: the app is free')
+  h.expect(!/trial|license/i.test(await text(h, '.statusbar')), 'no trial or license chip in the status bar')
+  const sponsor = await text(h, '.about-sponsor')
+  h.expect(sponsor.includes('Star on GitHub') && sponsor.includes('Sponsor'), 'About offers Star on GitHub and Sponsor')
+  h.expect(await h.js(`!('license' in window.api) && !('beta' in window.api)`), 'no license or beta API in the preload bridge')
   await h.shot('1-about')
 }

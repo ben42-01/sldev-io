@@ -3,7 +3,8 @@
 sldev-io is an Electron desktop app: a terminal-first workspace for agentic coding through CLI
 agents (Claude Code, Codex, Cursor Agent, GitHub Copilot, OpenCode, Gemini CLI, custom). It is
 **not an IDE**: no code editor, files open in the user's editor. Look and feel: Cursor-like, sharp,
-monochrome with a slim blue→green→purple brand gradient.
+monochrome with a slim blue→green→purple brand gradient. It is **free and open source** (Apache-2.0):
+no payments, licenses, trials or locks anywhere; GitHub stars and Sponsors are how it's supported.
 
 Repo: https://github.com/ben42-01/sldev-io · default branch `master`
 
@@ -16,7 +17,6 @@ npm run typecheck         # tsc for main/preload (tsconfig.node) and renderer (t
 npm test                  # vitest unit tests in test/
 npm run e2e -- smoke      # build, then drive the real app (scripts/e2e), screenshots in .e2e-out/
 npm run e2e -- missions   # Claude + Codex missions with fake CLIs through every status
-npm run e2e -- beta       # free-beta window from /beta.json
 npm run e2e -- tour       # every main surface in dark and light, for judging a styling change
 npm run dist:linux        # installers into dist/ (each OS builds its own; node-pty is native)
 npm run cli:build         # the free sldev CLI → cli/dist/sldev.mjs (its tests run with npm test)
@@ -36,10 +36,7 @@ src/main/       Electron main process (Node): everything privileged
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events and sldev MCP tool calls (token-protected)
   mcpServer.ts    the stdio MCP server agents start (script string, installed in userData); mcp.ts answers its tools
-  beta.ts         free-beta window: fetches <site>/beta.json, encrypted cache, clock-rollback guard
-  updater.ts      electron-updater from the downloads repo (macOS: notify only until builds are signed)
-  license.ts      license keys + trial: Ed25519-signed tokens from <site>/api/license, verified offline
-                  (format in website/api/_licenseToken.ts, shared with the server); machineId.ts hashes the OS id
+  updater.ts      electron-updater from this repo's GitHub Releases (macOS: notify only until builds are signed)
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   diagram.ts      code map (imports between folders: TS/JS, Python, Java/Kotlin/Scala, Go, C#, Rust, C/C++, Ruby, PHP), Files (folders
@@ -64,7 +61,6 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   unit-tested logic: agents.ts (the agent registry and command builders, used by the CLI too), factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
                   recipeDraft.ts (the recipe builder's draft ↔ YAML, validated by parsing it back), recipeBundle.ts (share/import text),
                   profiles.ts, rules.ts, usage.ts, missionHistory.ts, argv.ts (quoting), status.ts (state → tone),
-                  pricing.ts (plans and Polar checkout links for the in-app plans, from website/src/content/pricing.json),
                   missionPrompt.ts (mission/follow-up/second-opinion prompts and handoff), missionKinds.ts (Build,
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, Files tree, layered and tree layouts, Mermaid export), diagramLangs.ts (per-language import parsers and resolvers over one index), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
@@ -90,14 +86,14 @@ src/renderer/src/
                   notes, remote, git: status, fetch, pull, branches (GitBranches.tsx) and the worktrees list (GitWorktrees.tsx) in state/git.ts), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
 website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
-                  src/content/changelog.json (also baked into the app as What's new), api/license/* (Polar), public/install.sh,
-                  pages: / (src/App.tsx) and /features, /pricing, /download, legal, /thanks (src/pages.tsx),
+                  src/content/changelog.json (also baked into the app as What's new), public/install.sh,
+                  pages: / (src/App.tsx) and /features, /download, /privacy (src/pages.tsx),
                   /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts; a new guide
                   also needs website/docs/<id>/index.html, which test/docsPages.test.ts checks)
 cli-site/       the free sldev CLI's home page: static (Vite + React, own package.json), built alone (imports nothing from
                   website/, src/ or cli/src; test/cliSite.test.ts checks), base path from CLI_SITE_BASE; its TUI mockup follows
-                  cli/src/render.ts. Says "free", never open source
-marketing/promo/ the 90 s advert, animated with Remotion (own package.json; prices, URL and colours read from website/,
+                  cli/src/render.ts
+marketing/promo/ the advert (about 2 min, Plan → Build → Review → Ship), animated with Remotion (own package.json; URL and colours read from website/,
                   music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
@@ -140,20 +136,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   scattered through the UI. The app is agent-agnostic: don't add Claude-only UI unless the
   feature is Claude-only by nature (slash commands, subagents, MCP). Skills are plain SKILL.md
   folders, so any agent can run them (`skillPrompt` in `src/shared/agents.ts`).
-- **Beta window**: beta builds (`-beta` in the version) read `startsAt`/`endsAt` from the website's
-  `/beta.json`, generated from `website/src/content/pricing.json`. Never bake dates into a build.
-  An ended beta locks only at **launch** (`BetaEnded` screen, data untouched), never mid-session.
-  If the site is unreachable and nothing is cached, the beta stays open (fails open on purpose).
-  Logic lives in `src/shared/beta.ts`; build-time URLs come from `website/src/content/site.json`
-  (`SLDEV_SITE_URL` / `SLDEV_BETA_CONFIG_URL` override).
-- **Licensing**: the lock decision (`isLocked` in `src/shared/license.ts`) is made at **launch** only, like the
-  beta. A license overrides an ended beta or trial. Beta builds are free: no key field, and main
-  refuses to activate (`available: false`); licenses and the trial start with the first stable release. Only main verifies tokens; env overrides
-  (`SLDEV_LICENSE_API`, `SLDEV_LICENSE_PUBLIC_KEY`, `SLDEV_TRIAL_DAYS_AGO`) work in unpackaged builds only.
-  Unpackaged builds (`npm run dev`, the owner's own copy) are always licensed and skip the trial (`devBuild` in
-  `src/main/license.ts`), unless `SLDEV_LICENSE_API` is set (the e2e harness sets it) or `SLDEV_DEV_LICENSE=0`.
-  Packaged builds never take that path.
-  Tests never call Polar: unit tests stub `fetch`, e2e uses the fake license server in `scripts/e2e/run.cjs`.
+- **Free, no locks**: there is no license, trial, beta window or paywall, and nothing may lock the app or hide a feature.
+  Support links (Star on GitHub, Sponsor in Settings → About and the palette) come from `sourceUrl`/`sponsorUrl` in
+  `website/src/content/site.json` (`__SOURCE_URL__`/`__SPONSOR_URL__`); sponsoring never unlocks anything.
 - **Privacy**: no telemetry. A new network request from the app means updating `website/src/content/legal.tsx`
   (`/privacy`) and `legal.updatedAt` in `site.json` in the same change.
 - **Secrets**: credential secrets are resolved in main only. Don't send them over IPC and don't log them.
@@ -245,8 +230,8 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
-  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills), never the UI, licensing or
-  beta. Keep those modules free of `electron` imports (they take a data dir or a sink instead). The client checks the
+  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills), never the UI.
+  Keep those modules free of `electron` imports (they take a data dir or a sink instead). The client checks the
   daemon's version on connect (`connect` in `cli/src/client.ts`): a daemon left by an older sldev is replaced when nothing
   runs in it, and the daemon answers every command, an unknown one with an error, because a silent one hung `sldev` after
   upgrades. Bump `cli/package.json` and `cli/src/version.ts` together. It has its own data folder
@@ -315,9 +300,8 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 
 ## Production docs
 
-`docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks) and
-`docs/monetization-plan.md` has the reasoning. Keep them in sync when you change releases, the
-beta window, licensing or pricing. `docs/v1-roadmap.md` is the 1.0 scope, its status and what still
+`docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks). Keep it in sync
+when you change releases. `docs/v1-roadmap.md` is the 1.0 scope, its status and what still
 needs checking against the real agent CLIs. Since 1.0.2, work happens on `master` (`v1` is kept equal to it);
 releases are still cut from `release/<version>` branches, and pushing `master` builds nothing but CI.
 

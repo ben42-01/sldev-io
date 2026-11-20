@@ -1,16 +1,17 @@
 import { Download, Menu, X } from 'lucide-react'
 import { useState } from 'react'
-import { site } from '../lib/pricing'
+import { site } from '../lib/site'
 import { Logo } from './Logo'
 
-export type NavPage = 'features' | 'pricing' | 'download' | 'docs'
+export type NavPage = 'features' | 'download' | 'docs'
 
 const links: { page?: NavPage; href: string; label: string }[] = [
   { href: '/#how', label: 'How it works' },
   { page: 'features', href: '/features', label: 'Features' },
-  { page: 'pricing', href: '/pricing', label: 'Pricing' },
   { page: 'docs', href: '/docs', label: 'Docs' },
-  { href: site.cliUrl, label: 'sldev CLI (free)' }
+  { href: site.cliUrl, label: 'sldev CLI' },
+  { href: site.sourceUrl, label: 'GitHub' },
+  { href: site.sponsorUrl, label: 'Sponsor' }
 ]
 
 export function Nav({ active }: { active?: NavPage }) {

@@ -31,11 +31,9 @@ import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConne
 import { JsonStore } from './store'
 import { detectRuntimes, detectScripts } from './runtimes'
 import { loadShellEnv } from './shellEnv'
-import { betaStatus, refreshBeta, startBetaChecks } from './beta'
 import { checkSetup } from './setup'
 import { containerAction, listContainers } from './docker'
 import { checkForUpdates, installUpdate, startUpdateChecks, updateStatus } from './updater'
-import { activateLicense, deactivateLicense, licenseStatus, refreshLicense, startLicenseChecks } from './license'
 
 const isMac = process.platform === 'darwin'
 const userData = (): string => app.getPath('userData')
@@ -200,8 +198,6 @@ function registerIpc(): void {
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
-  ipcMain.handle('beta:status', () => betaStatus())
-  ipcMain.handle('beta:refresh', () => refreshBeta())
   ipcMain.handle('app:openDataFolder', () => shell.openPath(app.getPath('userData')))
   ipcMain.handle('app:info', (): AppInfo => ({
     name: app.getName(),
@@ -215,12 +211,6 @@ function registerIpc(): void {
     os: `${osType()} ${release()}`,
     stalls: recentStalls()
   }))
-
-  // license
-  ipcMain.handle('license:status', () => licenseStatus())
-  ipcMain.handle('license:activate', (_e, key: string) => activateLicense(String(key)))
-  ipcMain.handle('license:deactivate', () => deactivateLicense())
-  ipcMain.handle('license:refresh', () => refreshLicense(true))
 
   // updates
   ipcMain.handle('update:status', () => updateStatus())
@@ -450,10 +440,7 @@ app.whenReady().then(async () => {
   vault.initVault()
   context.initContext(app.getPath('userData'))
   setShellOverride(settings.get().shell)
-  // runs alongside startup; the renderer awaits the first result before showing the app
-  startBetaChecks((s) => win?.webContents.send('beta:changed', s))
   startUpdateChecks((s) => win?.webContents.send('update:changed', s))
-  startLicenseChecks((s) => win?.webContents.send('license:changed', s))
   // Lead tools start and watch missions, which the window owns: ask it and wait for the answer
   const leadAsks = new Map<string, (r: { text?: string; error?: string }) => void>()
   ipcMain.on('lead:reply', (_e, id: string, r: { text?: string; error?: string }) => {

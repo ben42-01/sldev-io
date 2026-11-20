@@ -3,8 +3,8 @@
 Run coding agents side by side in your terminal: Claude Code, Codex, Cursor Agent, GitHub Copilot,
 OpenCode and Gemini CLI, each in its own tab, with a marker that says which one is working, which is
 ready, and which needs you. Plain shell tabs sit next to them, so one `sldev` window can stand in for a
-terminal multiplexer while agents work. Free and open source (Apache-2.0). The paid [sldev-io](https://github.com/ben42-01/sldev-io)
-desktop app adds mission cards, the Software Factory and more on the same project files.
+terminal multiplexer while agents work. Free and open source (Apache-2.0), like the [sldev-io](https://github.com/ben42-01/sldev-io)
+desktop app, which adds mission cards, the Software Factory and more on the same project files.
 
 What it does that a plain multiplexer doesn't:
 
@@ -55,7 +55,7 @@ npm i -g github:ben42-01/downloads.sldev.io#cli-v0.3.0   # a specific version
 
 From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-<version>.tgz`, which installs with `npm i -g ./dist/sldev-<version>.tgz`.
 
-The CLI is standalone: it does not need the sldev-io desktop app, Electron or a license. It needs Node.js
+The CLI is standalone: it does not need the sldev-io desktop app or Electron. It needs Node.js
 22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS and Windows get a prebuilt binary.
 
 On Windows the daemon listens on a named pipe instead of a Unix socket, notifications are Windows toasts,

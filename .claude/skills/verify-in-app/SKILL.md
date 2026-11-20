@@ -15,7 +15,6 @@ The harness at `scripts/e2e/run.cjs` boots the **built** app (`out/`) and gives 
 ```bash
 npm run e2e -- smoke       # builds first; then runs scripts/e2e/scenarios/smoke.cjs
 npm run e2e -- missions
-npm run e2e -- beta        # free-beta window: countdown, banner, ended screen, reopening
 # already built? skip the build:
 npx electron --no-sandbox scripts/e2e/run.cjs <scenario>
 ```
@@ -37,8 +36,7 @@ screenshots** with the Read tool; a passing assertion doesn't mean the UI looks 
 | `h.setValue(selector, value, pickExpr?)` | set a React-controlled input/select/textarea; `pickExpr` is JS on `e` to choose among matches |
 | `h.js(code)` | evaluate in the renderer (`window.api.*` is available) |
 | `h.until(fn, timeoutMs?)` | poll an async check until it's truthy (use for time-based status changes) |
-| `h.setBeta({ startsInDays, endsInDays })` | change the fake `/beta.json` the app reads (offsets from today, `null` = unset); then `h.js('window.api.beta.refresh()')` |
-| `h.reload()` | reload the renderer, which acts like a new launch for the beta gate |
+| `h.reload()` | reload the renderer, which acts like a new launch |
 | `h.wait(ms)`, `h.shot(name)`, `h.expect(cond, msg)`, `h.log(...)` | |
 
 Tips:

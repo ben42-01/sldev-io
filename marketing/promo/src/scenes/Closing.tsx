@@ -1,7 +1,6 @@
 import { ArrowRight, Download, EyeOff, Infinity as Forever, SquarePen } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
-import pricing from '../../../../website/src/content/pricing.json'
 import site from '../../../../website/src/content/site.json'
 import { C, MONO, SERIF, UI, beats, enter, pop, progress, typed } from '../lib'
 import { Brand, Button, Headline, Logo, Pill, Pointer, Reveal, type State } from '../ui'
@@ -140,11 +139,7 @@ export function Agents() {
   )
 }
 
-const plan = pricing.plans.find((p) => p.id === 'personal') ?? pricing.plans[0]
-const price = new Intl.NumberFormat('en-IE', { style: 'currency', currency: pricing.currency }).format(plan.price)
-const trialDays = /(\d+)-day/.exec(pricing.announcement)?.[1] ?? '14'
-
-/** Logo, offer, platforms and the URL. Prices and URL come from the website's content files. */
+/** Logo, offer, platforms and the URL, from the website's content files. */
 export function Cta() {
   const frame = useCurrentFrame()
   const { durationInFrames } = useVideoConfig()
@@ -160,9 +155,9 @@ export function Cta() {
       <Reveal text={site.tagline} at={beats(1)} stagger={2} style={{ marginTop: 26, font: `italic 400 50px/1.2 ${SERIF}`, color: '#a8a8a8' }} />
       <div style={{ display: 'flex', gap: 18, marginTop: 56, ...enter(frame, beats(2)) }}>
         <Button primary style={{ fontSize: 30, padding: '18px 30px', gap: 14 }}>
-          <Download size={30} /> Free {trialDays}-day trial
+          <Download size={30} /> Download free
         </Button>
-        <Button style={{ fontSize: 30, padding: '18px 30px' }}>then {price}, once</Button>
+        <Button style={{ fontSize: 30, padding: '18px 30px' }}>Open source</Button>
       </div>
       <div style={{ fontSize: 26, color: C.subtle, marginTop: 34, letterSpacing: '0.04em', ...enter(frame, beats(3)) }}>{site.platforms.join('  ·  ')}</div>
       <div style={{ fontSize: 44, fontWeight: 600, marginTop: 50, fontFamily: MONO, ...enter(frame, beats(4)) }}>{site.url.replace(/^https?:\/\//, '')}</div>

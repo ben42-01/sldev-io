@@ -7,17 +7,16 @@ import { FeatureGrid } from './components/Features'
 import { FinalCta } from './components/Footer'
 import { Layout, PageHeader } from './components/Layout'
 import { LegalPage } from './components/LegalPage'
-import { FaqSection, PricingPlans } from './components/Pricing'
+import { FaqSection } from './components/Faq'
 import { AgentAgnostic, HowItWorks } from './components/Spotlight'
 import { WorkflowsSpotlight } from './components/Workflows'
 import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
 import { FailoverSpotlight } from './components/Failover'
 import { ContextSpotlight } from './components/ContextSpotlight'
 import { WhySection } from './components/Story'
-import { Thanks } from './components/Thanks'
 import { docs } from './content/docs'
 import { legalPages, type LegalPageId } from './content/legal'
-import { pricing, site } from './lib/pricing'
+import { site } from './lib/site'
 import './fonts'
 import './styles.css'
 
@@ -48,25 +47,8 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
         <WorkflowsSpotlight />
         <AgentAgnostic />
         <HowItWorks />
-        <FinalCta />
-      </Layout>
-    )
-  },
-  pricing: {
-    title: 'Pricing',
-    render: () => (
-      <Layout page="pricing">
-        <PageHeader
-          eyebrow="Pricing"
-          title={
-            <>
-              Pay once. <span className="brand-text">Own it.</span>
-            </>
-          }
-          lead={`No subscription, no seat meter. A single ${pricing.billing} payment per license, with every future update included.`}
-        />
-        <PricingPlans />
         <FaqSection />
+        <FinalCta />
       </Layout>
     )
   },
@@ -81,7 +63,7 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
               Get <span className="brand-text">sldev-io</span>
             </>
           }
-          lead={`Version ${site.version}. Try it free for 14 days, then pay once. Pick your system, or install from a terminal.`}
+          lead={`Version ${site.version}. Free and open source. Pick your system, or install from a terminal.`}
         />
         <DownloadOptions />
       </Layout>
@@ -136,14 +118,6 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
       }
     ])
   ),
-  thanks: {
-    title: 'Thanks for buying sldev-io',
-    render: () => (
-      <Layout>
-        <Thanks />
-      </Layout>
-    )
-  },
   ...Object.fromEntries(
     Object.values(legalPages).map((l) => [
       l.id,

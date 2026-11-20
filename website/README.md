@@ -10,47 +10,21 @@ npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build into dist/
 ```
 
-## Change the pricing
+## Free and open source
 
-Edit [`src/content/pricing.json`](src/content/pricing.json), commit and push; Vercel redeploys.
-Each entry in `plans` is one card:
-
-| field | meaning |
-|---|---|
-| `price` | what it costs today. `0` shows "Free" |
-| `listPrice` | regular price; shown struck through while `price` is lower |
-| `checkoutUrl` | Stripe payment link. While it is empty (or `price` is 0) the button downloads the app instead |
-| `ctaLabel` / `ctaLabelPaid` | button text for the free and the paid state |
-| `highlight` | brand-gradient border on the featured plan |
-| `features` | bullet list |
-
-**Beta window**: `beta.startsAt` and `beta.endsAt` (`"YYYY-MM-DD"`, UTC; the end date is the last free
-day) control the free beta **for the website and the desktop app**. The build publishes them as
-`/beta.json`, which the app reads at start and every 6 hours:
-
-| `startsAt` / `endsAt` | website | app (beta builds only) |
-|---|---|---|
-| `null` / `null` | "Limited time only" | runs, no limit |
-| future / any | "Free beta opens …" | runs normally |
-| any / a date | "Free beta ends in N days · free until …" | status-bar chip; banner in the last 14 days |
-| any / past | "The free beta has ended" | next launch shows the "beta ended" screen (data is kept) |
-
-Change a date, push, and Vercel redeploys: that's how you open, extend or end the beta. Moving
-`endsAt` later reopens it for everyone, and the app's "Check again" button picks it up at once. Stable
-(non-beta) builds ignore this. `beta.label` is the tag on free plans; tags only appear while a plan
-has `price: 0` and a higher `listPrice`.
-
-**Going paid**: set `price` to the real amount, paste the Stripe payment link into `checkoutUrl`,
-update `announcement` (the banner above the plans). Add or remove plans by adding or removing
-objects. `faq` feeds the FAQ section too.
+sldev-io is free: no plans, no checkout, no license server. The home page's free band, the FAQ, the nav and the
+footer link to the source (`sourceUrl`) and GitHub Sponsors (`sponsorUrl`) in `site.json`. The old `/pricing`,
+`/terms`, `/refunds` and `/thanks` URLs redirect (`redirects` in `vercel.json`).
 
 Other copy and links (version, download URL, supported agents, contact) live in
-[`src/content/site.json`](src/content/site.json). ## Downloads
+[`src/content/site.json`](src/content/site.json).
+
+## Downloads
 
 Nobody browses GitHub for an installer. The **Download** buttons detect the visitor's OS and link to
 `/download/<windows|mac|mac-intel|linux>`; [`api/download.ts`](api/download.ts) (a Vercel function,
 via the rewrite in `vercel.json`) redirects to the matching file of the newest release in
-`ben42-01/downloads.sldev.io`, pre-releases included. The CDN caches each redirect for 5 minutes,
+`ben42-01/sldev-io`, pre-releases included. The CDN caches each redirect for 5 minutes,
 so a new release shows up within minutes and the GitHub API stays under its rate limit. Set a
 `GITHUB_TOKEN` env var in Vercel only if it ever hits the limit. `npm run dev` serves the same
 redirects.
@@ -63,15 +37,15 @@ apt) or the right .dmg (copied into /Applications, quarantine flag removed) thro
 
 `/` is the landing page (`src/App.tsx`). Every other page has a `<name>/index.html` with
 `data-page="<name>"`, rendered by `src/pages.tsx` inside the shared `Layout` (nav, footer) with a
-`PageHeader`: `/features`, `/pricing` (plans + FAQ), `/download`, the legal pages and `/thanks`.
+`PageHeader`: `/features` (with the full FAQ), `/download`, `/changelog`, `/compare`, `/docs` and `/privacy`.
 To add one: add the HTML file, an entry in `pages.tsx`, the name in `pages` in `vite.config.ts`
-and a rewrite in `vercel.json`. Old one-page links (`/#download`, `/#pricing`, …) redirect to
+and a rewrite in `vercel.json`. Old one-page links (`/#download`, `/#features`, …) redirect to
 their page (`src/main.tsx`).
 
-## Legal pages
+## Privacy page
 
-`/terms`, `/privacy` and `/refunds` are rendered from [`src/content/legal.tsx`](src/content/legal.tsx). The seller name, address, governing-law country,
-machines per license, years of updates and the "last updated" date come from `legal` in
+`/privacy` is rendered from [`src/content/legal.tsx`](src/content/legal.tsx). The owner's name, address and the
+"last updated" date come from `legal` in
 [`src/content/site.json`](src/content/site.json). The app links to them from Settings → About.
 Fonts are self-hosted (`src/fonts.ts`), so the site loads nothing from third parties; keep it
 that way or update the privacy page.

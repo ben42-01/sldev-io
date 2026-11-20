@@ -43,4 +43,4 @@ nsis:
 publish:
   provider: github
   owner: ben42-01
-  repo: downloads.sldev.io
+  repo: sldev-io

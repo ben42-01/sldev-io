@@ -1,5 +1,8 @@
 # Website Refactor Plan: single product → multi-product company site
 
+> **2026-11-20:** sldev-io is now free and open source. Pricing, licensing, the trial and the beta window were
+> removed; mentions of them below are history.
+
 > **Status**: DRAFT — planning only, no code changes.
 > **Goal**: turn the current sldev-io-only marketing site into a company site (working name: *Graft* / *SLDC-IO* / *Agora* — undecided) that advertises sldev-io now and future products later. Most likely moves to its own repo.
 

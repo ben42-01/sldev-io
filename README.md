@@ -5,6 +5,10 @@ OpenCode, Gemini CLI or any CLI you add. Dockable terminals, a file explorer, ru
 missions with live status and diff review, skills and MCP, GitHub workflows, notes, SSH with an
 encrypted credential vault, and Docker containers (shells, logs, start/stop) under Remote. See [ROADMAP.md](ROADMAP.md).
 
+sldev-io is free and open source under the [Apache-2.0 license](LICENSE): every feature, no account, no license key.
+If it saves you time, **star the repo** so other developers find it, or
+[sponsor it on GitHub](https://github.com/sponsors/ben42-01). Sponsoring unlocks nothing: everyone gets the same app.
+
 ## Key shortcuts (Linux/Windows · macOS)
 
 | | |
@@ -74,20 +78,18 @@ node-pty is native, so each OS builds its own installer.
 
 ## CI and releases
 
-Launching (downloads, beta window, payments, licensing, signing): see
+Launching (downloads, signing): see
 [docs/go-to-production.md](docs/go-to-production.md).
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push and PR: typecheck, unit tests, build.
 - **Release** (`.github/workflows/release.yml`) runs when you push a `release/**` branch
   (e.g. `release/0.2.0`). It builds Linux (deb), Windows (NSIS exe) and macOS
   (dmg, Intel and Apple Silicon), then publishes them with the update metadata electron-updater reads (`latest*.yml`,
-  `.blockmap`, the macOS zip) as release `v<package.json version>` in the **public**
-  [`ben42-01/downloads.sldev.io`](https://github.com/ben42-01/downloads.sldev.io) repo (using the
-  `RELEASES_TOKEN` secret), and records the same release in this private repo. Bump `version` before cutting the
+  `.blockmap`, the macOS zip) as release `v<package.json version>` in this repo. Bump `version` before cutting the
   branch; pushing again to the branch replaces the assets. You can also start it from the
   Actions tab and switch macOS off.
-- After publishing, older releases are deleted from the public repo: only the newest installers
-  stay downloadable (the private repo keeps every release as a record).
+- After publishing, releases older than 3 days (`KEEP_DAYS`) are deleted with their installers; their git
+  tags stay. Old builds don't pile up, and the previous release stays for a few days in case you need it.
 - Users never browse that page: the website's `/download/<windows|mac|mac-intel|linux>`
   (`website/api/download.ts`) redirects to the newest matching installer, and
   `curl -fsSL https://sldev-io.vercel.app/install.sh | sh` installs it on macOS and Linux.

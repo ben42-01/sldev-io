@@ -1,17 +1,15 @@
 import { ArrowRight } from 'lucide-react'
-import { betaMessage, betaStatus, formatPrice, pricing, site } from '../lib/pricing'
+import { site } from '../lib/site'
 import { TeamGraph } from './TeamGraph'
 import { DownloadButton } from './Download'
 
 export function Hero() {
-  const personal = pricing.plans.find((p) => p.id === 'personal') ?? pricing.plans[0]
   return (
     <section className="hero" id="top">
       <div className="hero-glow" aria-hidden="true" />
       <div className="container hero-inner">
-        <a className="pill" href="/pricing">
-          <span className="pill-dot" /> v{site.version} · free 14-day trial
-          {betaStatus().active && <span className="pill-limited">· {betaMessage().toLowerCase()}</span>}
+        <a className="pill" href={site.sourceUrl}>
+          <span className="pill-dot" /> v{site.version} · free and open source
           <ArrowRight size={12} />
         </a>
         <h1>
@@ -30,7 +28,7 @@ export function Hero() {
           </a>
         </div>
         <p className="platforms">
-          Free for 14 days · then {formatPrice(personal.price)} once, no subscription · <a href="/download">{site.platforms.join(' · ')}</a>
+          Free and open source · <a href={site.sourceUrl}>Star on GitHub</a> · <a href="/download">{site.platforms.join(' · ')}</a>
         </p>
         <TeamGraph />
         <p className="tg-caption">A Lead mission, replayed. Pick another goal to watch it again.</p>

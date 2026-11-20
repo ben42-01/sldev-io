@@ -8,10 +8,6 @@
       "destination": "/download/index.html"
     },
     {
-      "source": "/pricing",
-      "destination": "/pricing/index.html"
-    },
-    {
       "source": "/features",
       "destination": "/features/index.html"
     },
@@ -36,20 +32,8 @@
       "destination": "/api/download?os=:os"
     },
     {
-      "source": "/terms",
-      "destination": "/terms/index.html"
-    },
-    {
       "source": "/privacy",
       "destination": "/privacy/index.html"
-    },
-    {
-      "source": "/refunds",
-      "destination": "/refunds/index.html"
-    },
-    {
-      "source": "/thanks",
-      "destination": "/thanks/index.html"
     }
   ],
   "headers": [
@@ -59,15 +43,6 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/beta.json",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300, must-revalidate"
         }
       ]
     },
@@ -96,6 +71,28 @@
           "value": "strict-origin-when-cross-origin"
         }
       ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/pricing",
+      "destination": "/#free",
+      "permanent": true
+    },
+    {
+      "source": "/terms",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/refunds",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/thanks",
+      "destination": "/",
+      "permanent": true
     }
   ]
 }

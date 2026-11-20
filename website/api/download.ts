@@ -7,7 +7,7 @@
  */
 
 // same repo as DOWNLOADS_REPO in .github/workflows/release.yml
-const REPO = 'ben42-01/downloads.sldev.io'
+const REPO = 'ben42-01/sldev-io'
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
 
 export type Platform = 'windows' | 'mac' | 'mac-intel' | 'linux'

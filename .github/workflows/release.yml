@@ -1,10 +1,9 @@
 name: Release
 
 # Push to a release branch (release/0.2.0, release/next, …) to build installers for every OS
-# and publish them on a GitHub release tagged v<package.json version> (a draft until every build uploaded):
-#   - in the PUBLIC downloads repo (what users and the website download), using the
-#     RELEASES_TOKEN secret (fine-grained token: Contents read/write on that repo only)
-#   - in this private repo too, with generated notes, as an internal record
+# and publish them on this repo's GitHub release tagged v<package.json version> (a draft until every
+# build uploaded). The website's /download/<os>, install.sh and the app's updater all read from here.
+# Releases older than KEEP_DAYS are deleted afterwards (their tags stay), so old installers don't pile up.
 on:
   push:
     branches: ['release/**']
@@ -19,7 +18,7 @@ permissions:
   contents: write
 
 env:
-  DOWNLOADS_REPO: ben42-01/downloads.sldev.io
+  KEEP_DAYS: 3
 
 concurrency:
   group: release-${{ github.ref }}
@@ -42,23 +41,18 @@ jobs:
       - id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-  # Draft releases first, in the public downloads repo and in this one. Drafts can't be seen or
-  # downloaded, so nobody gets a half-uploaded release; the release job publishes them once every
-  # build has uploaded its files. Re-runs reuse the existing drafts.
+  # Draft the release first: drafts can't be seen or downloaded, so nobody gets a half-uploaded
+  # release; the release job publishes it once every build has uploaded its files. Re-runs reuse it.
   prepare:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - name: Draft in the public downloads repo
+      - name: Draft the release
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          GH_REPO: ${{ env.DOWNLOADS_REPO }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: v${{ needs.check.outputs.version }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::RELEASES_TOKEN secret is missing (see docs/go-to-production.md, Phase 1)"
-            exit 1
-          fi
           gh release view "$TAG" >/dev/null 2>&1 && exit 0
           # versions like 0.2.0-beta.1 are published as pre-releases and never become "Latest"
           case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
@@ -77,18 +71,10 @@ jobs:
 
           Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
           right-click the app and choose **Open** the first time.
+
+          sldev-io is free and open source. If it saves you time, star the repo or sponsor it.
           EOF
-          # the downloads repo has no source, so the tag points at its default branch
-          gh release create "$TAG" --draft --title "sldev-io $TAG" --notes-file notes.md $PRE
-      - name: Draft in this repo
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: v${{ needs.check.outputs.version }}
-        run: |
-          gh release view "$TAG" >/dev/null 2>&1 && exit 0
-          case "$TAG" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "sldev-io $TAG" --generate-notes $PRE
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "sldev-io $TAG" --notes-file notes.md --generate-notes $PRE
 
   build:
     needs: [check, prepare]
@@ -143,14 +129,13 @@ jobs:
           max=$(find dist/linux-unpacked -name '*.node' -path '*/build/Release/*' -exec objdump -T {} + | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
           echo "highest glibc symbol: $max"
           [ "$(printf '%s\n' "$max" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35 ]
-      # straight onto the draft releases, not through artifacts: artifact storage counts against the
+      # straight onto the draft release, not through artifacts: artifact storage counts against the
       # account's quota for hours after the files expire, and a full quota blocked beta.6 and beta.7
-      - name: Upload to the draft releases
+      - name: Upload to the draft release
         if: env.skip != '1'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          PRIVATE_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.check.outputs.version }}
         run: |
           shopt -s nullglob
@@ -159,41 +144,32 @@ jobs:
           files=(dist/*.deb dist/*.dmg dist/*.exe dist/*.zip dist/*.blockmap dist/latest*.yml)
           [ ${#files[@]} -gt 0 ] || { echo "::error::no installers in dist/"; exit 1; }
           if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi
-          gh release upload "$TAG" "${files[@]}" --clobber --repo "$DOWNLOADS_REPO"
-          GH_TOKEN="$PRIVATE_TOKEN" gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
   release:
     needs: [check, build]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: v${{ needs.check.outputs.version }}
     steps:
-      - name: Publish in the public downloads repo
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          GH_REPO: ${{ env.DOWNLOADS_REPO }}
-          TAG: v${{ needs.check.outputs.version }}
+      - name: Publish
         run: |
           gh release view "$TAG" --json assets -q '.assets[].name'
           gh release edit "$TAG" --draft=false
 
-      # Only the newest installers stay downloadable: older betas would otherwise float around, and
-      # installed apps update from the newest release anyway. Runs only after publishing succeeded.
-      - name: Remove older releases from the public downloads repo
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          GH_REPO: ${{ env.DOWNLOADS_REPO }}
-          TAG: v${{ needs.check.outputs.version }}
+      # Old installers shouldn't float around: once the new release is out, releases published more than
+      # KEEP_DAYS ago are deleted with their files. Their git tags stay as history. Runs only after
+      # publishing succeeded, and never touches the release just published.
+      - name: Remove releases older than KEEP_DAYS
         run: |
           gh release view "$TAG" >/dev/null
-          gh release list --limit 100 --json tagName -q '.[].tagName' | while read -r t; do
-            if [ "$t" != "$TAG" ]; then
-              echo "deleting $t"
-              gh release delete "$t" --yes --cleanup-tag
+          cutoff=$(date -u -d "-$KEEP_DAYS days" +%s)
+          gh release list --limit 100 --json tagName,publishedAt,isDraft \
+            -q '.[] | select(.isDraft | not) | "\(.tagName) \(.publishedAt)"' | while read -r t published; do
+            if [ "$t" != "$TAG" ] && [ "$(date -u -d "$published" +%s)" -lt "$cutoff" ]; then
+              echo "deleting $t (published $published)"
+              gh release delete "$t" --yes
             fi
           done
-
-      - name: Publish the record in this repo
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: v${{ needs.check.outputs.version }}
-        run: gh release edit "$TAG" --draft=false

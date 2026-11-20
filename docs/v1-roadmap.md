@@ -1,5 +1,8 @@
 # v1 roadmap
 
+> **2026-11-20:** sldev-io is now free and open source. Pricing, licensing, the trial and the beta window were
+> removed; mentions of them below are history.
+
 What the paid 1.0 ships, in build order. Built on the `v1` branch (see "Branches" in
 `go-to-production.md`); `master` stays the beta line and is merged into `v1` regularly.
 

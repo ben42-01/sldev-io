@@ -5,7 +5,7 @@ import { parseHelp } from '../cli-site/scripts/cliHelp'
 import { FEATURES } from '../cli-site/src/content/features'
 
 // cli-site/ is the free CLI's own home page: it builds alone (no imports from the app, website/ or the CLI's
-// source) and never calls the CLI open source, since its source is private
+// source) and links the CLI's source, which is public (Apache-2.0)
 const root = join(__dirname, '..', 'cli-site')
 const files = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
@@ -23,12 +23,10 @@ describe('cli-site', () => {
     }
   })
 
-  it('never says open source or Apache, and links no source code', () => {
-    for (const f of sources) {
-      const text = readFileSync(f, 'utf8')
-      expect(text, f).not.toMatch(/open[ -]source|apache/i)
-      expect(text, f).not.toMatch(/github\.com\/ben42-01\/sldev-io/)
-    }
+  it('says open source and links the source code', () => {
+    const all = sources.map((f) => readFileSync(f, 'utf8')).join('\n')
+    expect(all).toMatch(/open[ -]source/i)
+    expect(all).toMatch(/github\.com\/ben42-01\/sldev-io/)
   })
 
   it('loads nothing from other sites (no CDN fonts, scripts or analytics)', () => {

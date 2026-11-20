@@ -1,6 +1,6 @@
 import { ArrowRight, Lock } from 'lucide-react'
 import { AppShowcase } from './AppMockup'
-import { site } from '../lib/pricing'
+import { site } from '../lib/site'
 
 /** Numbers that set it apart, and the agents it runs, right under the hero. */
 export function ProofBand() {

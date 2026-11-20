@@ -1,5 +1,5 @@
 import { legalPages, type LegalPageId } from '../content/legal'
-import { site } from '../lib/pricing'
+import { site } from '../lib/site'
 
 export function LegalPage({ id }: { id: LegalPageId }) {
   const p = legalPages[id]

@@ -35,10 +35,10 @@ describe("What's new", () => {
 })
 
 describe('Report a bug', () => {
-  it('opens a new issue on the public downloads repo with the diagnostics', () => {
+  it('opens a new issue on the app repo with the diagnostics', () => {
     const info = { name: 'sldev-io', version: '0.1.0-beta.5', channel: 'beta' as const, electron: '45', chrome: '156', node: '24', platform: 'linux', arch: 'x64', os: 'Linux 6.8' }
     const url = new URL(feedbackUrl(info, null))
-    expect(`${url.origin}${url.pathname}`).toBe('https://github.com/ben42-01/downloads.sldev.io/issues/new')
+    expect(`${url.origin}${url.pathname}`).toBe('https://github.com/ben42-01/sldev-io/issues/new')
     expect(url.searchParams.get('body')).toContain('sldev-io 0.1.0-beta.5 (beta)\nElectron 45')
     expect(new URL(feedbackUrl(null, null)).searchParams.get('body')).not.toContain('```')
   })

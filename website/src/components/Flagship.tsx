@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Circle, CornerDownRight, GitMerge, Scissors, Sparkles, Trophy, X } from 'lucide-react'
-import { formatPrice, pricing } from '../lib/pricing'
+import { ArrowRight, Check, Circle, CornerDownRight, GitMerge, Heart, Scissors, Sparkles, Star, Trophy, X } from 'lucide-react'
+import { site } from '../lib/site'
 import { DownloadButton } from './Download'
 
 /**
  * The home page's argument in three parts: the shift (writing code got cheap, deciding what ships didn't),
  * the loop that answers it (plan, build, review, prove; each with a picture of the real feature), and the
- * price, which is the other thing nobody else does: pay once.
+ * deal: free and open source, kept going by stars and sponsors.
  */
 
 export function Shift() {
@@ -323,45 +323,43 @@ checks:
   )
 }
 
-/** The price, on the home page: the other thing nobody else does. */
-export function PriceBand() {
-  const personal = pricing.plans.find((p) => p.id === 'personal') ?? pricing.plans[0]
-  const team = pricing.plans.find((p) => p.id === 'team')
-  // read from the plans, so this band can't drift from /pricing
-  const machines = /up to (\d+)/i.exec(personal.tagline)?.[1]
-  const seats = team && /(\d+) seats/i.exec(team.priceNote)?.[1]
+/** Free and open source, on the home page: what it costs (nothing) and how to help. */
+export function FreeBand() {
   return (
-    <section className="section price-band" id="price" aria-labelledby="price-h">
+    <section className="section price-band" id="free" aria-labelledby="free-h">
       <div className="container">
         <div className="pb-inner">
           <div className="pb-copy">
-            <p className="eyebrow">Pricing</p>
-            <h2 id="price-h">
+            <p className="eyebrow">Free and open source</p>
+            <h2 id="free-h">
               Your agents bill monthly.
               <br />
               <span className="brand-text">Their lead doesn't.</span>
             </h2>
             <p className="section-lead">
-              Keep the agent plans you already pay for. sldev-io makes them one team, for a single payment, with every future update included.
+              Keep the agent plans you already pay for. sldev-io makes them one team, and costs nothing: every feature, no trial, no account, no
+              license key.
             </p>
           </div>
           <div className="pb-card brand-frame">
-            <div className="pb-plan">{personal.name}</div>
+            <div className="pb-plan">Everyone</div>
             <div className="pb-price">
-              {formatPrice(personal.price)}
-              <span>once</span>
+              Free
+              <span>Apache-2.0</span>
             </div>
             <ul className="pb-list">
-              <li><Check size={14} /> Free for 14 days from the first launch</li>
-              <li><Check size={14} /> Every future update included</li>
-              <li><Check size={14} /> {machines ? `Up to ${machines} of your machines, ` : ''}Linux, Windows and macOS</li>
-              {team && <li><Check size={14} /> {team.name}: {seats ? `${seats} seats for ` : ''}{formatPrice(team.price)}, once</li>}
-              <li className="no"><X size={14} /> No subscription, no seat meter, no telemetry</li>
+              <li><Check size={14} /> Every feature, every agent</li>
+              <li><Check size={14} /> Linux, Windows and macOS</li>
+              <li><Check size={14} /> Source on GitHub</li>
+              <li className="no"><X size={14} /> No account, no license key, no telemetry</li>
             </ul>
             <div className="pb-cta">
               <DownloadButton />
-              <a className="more-link" href="/pricing">
-                Pricing and licenses <ArrowRight size={15} />
+              <a className="more-link" href={site.sourceUrl}>
+                <Star size={15} /> Star on GitHub
+              </a>
+              <a className="more-link" href={site.sponsorUrl}>
+                <Heart size={15} /> Sponsor <ArrowRight size={15} />
               </a>
             </div>
           </div>

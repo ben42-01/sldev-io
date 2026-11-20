@@ -25,7 +25,7 @@ const rows: { what: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   { what: 'One rules file kept in sync for every agent', cells: [false, false, false, true] },
   { what: 'Time, tokens and estimated cost across agents', cells: [false, 'For its own agent', 'For its own agent', true] },
   { what: 'Edits code, autocomplete', cells: ['Your editor', true, false, 'No: files open in your editor'] },
-  { what: 'Price', cells: ['Free', 'Usually a subscription', 'Subscription or per task', 'One payment, updates included'] }
+  { what: 'Price', cells: ['Free', 'Usually a subscription', 'Subscription or per task', 'Free and open source'] }
 ]
 
 function Value({ cell }: { cell: Cell }) {

@@ -48,6 +48,9 @@ export function Nav({ page }: { page: Page }) {
           <a className="nav-link" href={hrefTo(page, 'commands')} aria-current={page === 'commands' ? 'page' : undefined}>
             Commands
           </a>
+          <a className="nav-link" href={site.source}>
+            GitHub
+          </a>
         </nav>
       </div>
     </header>
@@ -61,7 +64,9 @@ export function Footer({ version }: { version: string }) {
         <span className="footer-brand">
           <Logo size={16} /> sldev {version}
         </span>
-        <span className="muted">Free to use.</span>
+        <span className="muted">
+          Free and open source (Apache-2.0) · <a href={site.source}>Source</a> · <a href={site.sponsor}>Sponsor</a>
+        </span>
         <a className="footer-app" href={site.app.url}>
           Want a window instead? {site.app.name}, the desktop app →
         </a>

@@ -6,8 +6,7 @@ import './styles.css'
 // the home page used to hold every section; old links like /#download go to their page now
 const moved: Record<string, string> = {
   '#download': '/download',
-  '#pricing': '/pricing',
-  '#faq': '/pricing#faq',
+  '#pricing': '/#free',
   // the deep dives went to /features when the home page became one argument
   '#lead': '/features#lead',
   '#board': '/features#board',

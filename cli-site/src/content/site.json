@@ -1,9 +1,22 @@
 {
   "name": "sldev",
   "tagline": "Every coding agent, side by side in your terminal.",
-  "description": "A free CLI that runs Claude Code, Codex, Cursor Agent, GitHub Copilot, OpenCode and Gemini CLI in tabs, tells you which one needs you, and keeps them running when you close the terminal.",
+  "description": "A free, open-source CLI that runs Claude Code, Codex, Cursor Agent, GitHub Copilot, OpenCode and Gemini CLI in tabs, tells you which one needs you, and keeps them running when you close the terminal.",
   "install": "npm i -g github:ben42-01/downloads.sldev.io#cli",
   "requires": "Node.js 22.5 or newer · Linux, macOS, Windows",
-  "agents": ["Claude Code", "Codex", "Cursor Agent", "GitHub Copilot", "OpenCode", "Gemini CLI", "Any CLI"],
-  "app": { "name": "sldev-io", "url": "https://sldev-io.vercel.app" }
+  "agents": [
+    "Claude Code",
+    "Codex",
+    "Cursor Agent",
+    "GitHub Copilot",
+    "OpenCode",
+    "Gemini CLI",
+    "Any CLI"
+  ],
+  "app": {
+    "name": "sldev-io",
+    "url": "https://sldev-io.vercel.app"
+  },
+  "source": "https://github.com/ben42-01/sldev-io/tree/master/cli",
+  "sponsor": "https://github.com/sponsors/ben42-01"
 }

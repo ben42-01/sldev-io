@@ -1,6 +1,4 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BetaStatus } from '@shared/beta'
-import type { LicenseStatus } from '@shared/license'
 import type { TokenUsage } from '@shared/usage'
 import type { MissionKind } from '@shared/missionKinds'
 import type { ContextHit, ContextStats } from '@shared/context'
@@ -113,26 +111,12 @@ const api = {
     openPath: (p: string): Promise<string> => ipcRenderer.invoke('shell:openPath', p),
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
   },
-  beta: {
-    /** the free-beta window; the first call waits for the startup check */
-    status: (): Promise<BetaStatus> => ipcRenderer.invoke('beta:status'),
-    refresh: (): Promise<BetaStatus> => ipcRenderer.invoke('beta:refresh'),
-    onChanged: (cb: (s: BetaStatus) => void): Unsubscribe => on('beta:changed', cb)
-  },
   app: {
     focus: (): Promise<void> => ipcRenderer.invoke('app:focus'),
     /** overlay: a PNG data URL for the Windows taskbar, ignored elsewhere */
     badge: (count: number, overlay: string | null): Promise<void> => ipcRenderer.invoke('app:badge', count, overlay),
     openDataFolder: (): Promise<string> => ipcRenderer.invoke('app:openDataFolder'),
     info: (): Promise<AppInfo> => ipcRenderer.invoke('app:info')
-  },
-  license: {
-    status: (): Promise<LicenseStatus> => ipcRenderer.invoke('license:status'),
-    /** throws with a message for the user (invalid key, too many machines, offline) */
-    activate: (key: string): Promise<LicenseStatus> => ipcRenderer.invoke('license:activate', key),
-    deactivate: (): Promise<LicenseStatus> => ipcRenderer.invoke('license:deactivate'),
-    refresh: (): Promise<LicenseStatus> => ipcRenderer.invoke('license:refresh'),
-    onChanged: (cb: (s: LicenseStatus) => void): Unsubscribe => on('license:changed', cb)
   },
   update: {
     status: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:status'),

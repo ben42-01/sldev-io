@@ -1,5 +1,5 @@
 import type { Platform } from '../../api/download'
-import { site } from './pricing'
+import { site } from './site'
 
 export type { Platform }
 

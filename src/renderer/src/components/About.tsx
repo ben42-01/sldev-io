@@ -1,16 +1,14 @@
-import { Bug, Check, Copy, Download, ExternalLink, FolderOpen, MessageSquare, RefreshCw, RotateCw, Sparkles } from 'lucide-react'
+import { Bug, Check, Copy, Download, ExternalLink, FolderOpen, Heart, MessageSquare, RefreshCw, RotateCw, Sparkles, Star } from 'lucide-react'
 import type { UpdateStatus } from '@shared/types'
 import { useState } from 'react'
-import { checkForUpdates, diagnostics, downloadUpdate, reportBug, siteLink, updates } from '../state/updates'
+import { checkForUpdates, diagnostics, downloadUpdate, openSource, openSponsor, reportBug, siteLink, updates } from '../state/updates'
 import { openWhatsNew } from '../state/whatsNew'
 import { useStore } from '../state/store'
 import { Logo } from './Logo'
 
 const links = [
   { label: 'Website', path: '/' },
-  { label: 'License terms', path: '/terms' },
-  { label: 'Privacy policy', path: '/privacy' },
-  { label: 'Refunds', path: '/refunds' }
+  { label: 'Privacy policy', path: '/privacy' }
 ]
 
 function UpdateRow(): React.JSX.Element {
@@ -78,6 +76,19 @@ export function AboutSection(): React.JSX.Element {
             {info?.channel === 'beta' && <span className="about-tag">beta</span>}
           </div>
           <div className="muted">The terminal-first workspace for agentic coding.</div>
+        </div>
+      </div>
+      <div className="about-sponsor">
+        <p>
+          sldev-io is free and open source. If it saves you time, a star or a sponsorship keeps it going.
+        </p>
+        <div className="about-actions">
+          <button className="btn sm" onClick={openSource}>
+            <Star size={13} /> Star on GitHub
+          </button>
+          <button className="btn sm" onClick={openSponsor}>
+            <Heart size={13} /> Sponsor
+          </button>
         </div>
       </div>
       <UpdateRow />
