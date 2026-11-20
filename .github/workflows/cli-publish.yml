@@ -2,9 +2,9 @@ name: Publish CLI
 
 # Manual: builds the free sldev CLI and pushes it as a tiny standalone package (package.json, README,
 # LICENSE, SKILL.md and the built dist/sldev.mjs) to the `cli` branch of the PUBLIC downloads repo, tagged
-# cli-v<version>. npm can install a git branch but not a subfolder, and the source repo is private, so:
+# cli-v<version>. npm can install a git branch but not a subfolder (and the source repo was private then), so:
 #
-#   npm i -g github:ben42-01/downloads.sldev.io#cli            # newest
+#   npm i -g github:ben42-01/downloads.sldev.io#cli            # newest (npm: npm i -g sldev-cli, published by hand)
 #   npm i -g github:ben42-01/downloads.sldev.io#cli-v0.1.0     # pinned
 #
 # It uses the RELEASES_TOKEN secret (Contents read/write on the downloads repo), like the app release.

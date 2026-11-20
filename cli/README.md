@@ -43,17 +43,18 @@ Claude's hooks and the MCP tools), both protected.
 Needs Node.js 22.5 or newer, on Linux, macOS or Windows 10/11 (Windows is new: tested in CI, tell us what breaks).
 
 ```bash
-npm i -g sldev        # once it is published to npm
+npm i -g sldev-cli    # the package is sldev-cli; the command is sldev
 ```
 
-Until then, install it from GitHub (the public downloads repo, branch `cli`, written by the "Publish CLI" workflow):
+npm wouldn't take the name `sldev` (too close to an existing package), so the package is `sldev-cli`.
+Builds are also on GitHub (the public downloads repo, branch `cli`, written by the "Publish CLI" workflow):
 
 ```bash
 npm i -g github:ben42-01/downloads.sldev.io#cli          # newest
 npm i -g github:ben42-01/downloads.sldev.io#cli-v0.3.0   # a specific version
 ```
 
-From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-<version>.tgz`, which installs with `npm i -g ./dist/sldev-<version>.tgz`.
+From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-cli-<version>.tgz`, which installs with `npm i -g ./dist/sldev-cli-<version>.tgz`.
 
 The CLI is standalone: it does not need the sldev-io desktop app or Electron. It needs Node.js
 22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS and Windows get a prebuilt binary.

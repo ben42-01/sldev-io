@@ -383,8 +383,12 @@ git switch -c release/0.1.0-beta.3 && git push -u origin release/0.1.0-beta.3 &&
 
 `.github/workflows/cli-publish.yml` (manual: Actions → Publish CLI → Run workflow) builds `cli/` and force-pushes it as a
 standalone package to the `cli` branch of `ben42-01/downloads.sldev.io`, tagged `cli-v<version>`, using `RELEASES_TOKEN`.
-Users install it with `npm i -g github:ben42-01/downloads.sldev.io#cli`. Bump `cli/package.json` first. It makes no GitHub
-release there, so the app updater and `/download` don't see it. Moving to npm later: `npm publish` from `cli/` once the name is free.
+Bump `cli/package.json` first. It makes no GitHub release there, so the app updater and `/download` don't see it.
+
+**npm** (since 2026-11-20): the package is `sldev-cli` (npm refused `sldev` as too close to `sade`); the command is still
+`sldev`, and users install it with `npm i -g sldev-cli`. Published by hand from `cli/` after `npm run cli:build`:
+`npm publish --dry-run --access public`, then `npm publish --access public` (asks for the npm account's 2FA). Bump
+`cli/package.json` and `cli/src/version.ts` together first; npm never takes the same version twice.
 
 ### The CLI's pages
 
