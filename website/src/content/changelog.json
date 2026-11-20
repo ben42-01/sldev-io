@@ -1,7 +1,7 @@
 [
   {
     "version": "1.0.3",
-    "date": null,
+    "date": "2026-11-20",
     "changes": [
       "sldev-io is now free and open source. There is no trial, no license key and no locked screen any more: every feature works for everyone, and the source is on GitHub under Apache-2.0. If it saves you time, star it on GitHub or sponsor it from Settings → About (or Help: Sponsor sldev-io on GitHub in the command palette). The app no longer asks the website for a beta window or a license, so it makes one fewer network request.",
       "Activity charts in GitHub stats: commits per day over the last 7 or 30 days (per week over 90), with merge commits highlighted and who made the most, and pull requests opened against merged. The commit counts are exactly what git log lists for the range; days follow your own time zone. Hover a bar for its numbers. Pull requests need the GitHub CLI; without it that chart says so and the commit chart still shows.",
