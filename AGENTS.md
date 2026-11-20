@@ -293,7 +293,8 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 
 ## Workflows and releases
 
-- `.github/workflows/ci.yml`: typecheck, test and build on every push and PR.
+- `.github/workflows/ci.yml`: typecheck, test and build on pushes to `master` and on PRs (not on every branch push).
+- `.github/workflows/cli-windows.yml`: the CLI's tests on Windows, only when files the CLI is built from change.
 - `.github/workflows/release.yml`: push `release/<version>` to build Linux, Windows and macOS
   installers and attach them to GitHub release `v<package.json version>`. Bump the version
   first. Builds are unsigned for now.

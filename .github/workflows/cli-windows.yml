@@ -1,0 +1,74 @@
+name: CLI on Windows
+
+# The CLI on Windows: named pipe, ConPTY, .cmd shims and cmd.exe, against Windows twins of the fake agents.
+# Only when something the CLI is built from changes (it runs on master and on pull requests, like CI), since a
+# Windows runner is slow and its terminal tests depend on timing.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'cli/**'
+      - 'src/shared/**'
+      - 'src/main/context.ts'
+      - 'src/main/editors.ts'
+      - 'src/main/git.ts'
+      - 'src/main/github.ts'
+      - 'src/main/hooks.ts'
+      - 'src/main/launch.ts'
+      - 'src/main/mcp.ts'
+      - 'src/main/mcpServer.ts'
+      - 'src/main/memory.ts'
+      - 'src/main/missionKinds.ts'
+      - 'src/main/pty.ts'
+      - 'src/main/rules.ts'
+      - 'src/main/sldevSkills.ts'
+      - 'scripts/e2e/fakebin/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/cli-windows.yml'
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'src/shared/**'
+      - 'src/main/context.ts'
+      - 'src/main/editors.ts'
+      - 'src/main/git.ts'
+      - 'src/main/github.ts'
+      - 'src/main/hooks.ts'
+      - 'src/main/launch.ts'
+      - 'src/main/mcp.ts'
+      - 'src/main/mcpServer.ts'
+      - 'src/main/memory.ts'
+      - 'src/main/missionKinds.ts'
+      - 'src/main/pty.ts'
+      - 'src/main/rules.ts'
+      - 'src/main/sldevSkills.ts'
+      - 'scripts/e2e/fakebin/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/cli-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cli-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cli-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit -p cli/tsconfig.json
+      # terminal tests race the runner's ConPTY now and then; a test that only fails on a slow machine gets one
+      # more go, a real failure still fails
+      - run: npx vitest run cli/test --retry 1
+      - run: npm run cli:build
+      - run: node cli/dist/sldev.mjs help

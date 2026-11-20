@@ -187,9 +187,24 @@ async function attachTui(cols: number, rows: number, extra: Partial<TuiServices>
     if (!has(t)) throw new Error(`screen never showed ${want}:\n${t}`)
     return t
   }
+  /**
+   * The screen once it stops changing: a shell's prompt can land (and scroll everything up a row) a moment after
+   * the output a test waited for, which made position-based checks off by one on Windows.
+   */
+  const settled = async (quietMs = 600, timeout = 10_000): Promise<string> => {
+    const end = Date.now() + timeout
+    let last = await text()
+    let since = Date.now()
+    while (Date.now() < end) {
+      const t = await text()
+      if (t !== last) [last, since] = [t, Date.now()]
+      else if (Date.now() - since >= quietMs) return t
+    }
+    return last
+  }
   /** the first row: the tab bar */
   const bar = (): string => screen.buffer.active.getLine(screen.buffer.active.viewportY)?.translateToString(true) ?? ''
-  return { input, tui, textWith, bar, copied, sent: () => sent }
+  return { input, tui, textWith, settled, bar, copied, sent: () => sent }
 }
 
 describe('sldev TUI tabs', () => {
@@ -319,7 +334,9 @@ describe('selecting and scrolling in a tab', () => {
     await t.textWith(/› \d+ \S+/)
     if (process.platform !== 'win32') process.env.SHELL = savedShell
     t.input.write(process.platform === 'win32' ? '1..40 | % { "row-$_" }\r' : 'i=1; while [ $i -le 40 ]; do echo row-$i; i=$((i+1)); done\r')
-    let s = await t.textWith('row-40')
+    await t.textWith('row-40')
+    // measure once the prompt after the output is there too, or the rows shift under the drag
+    let s = await t.settled()
     // the pane starts right of the sidebar (29 columns) and under the rule (row 2); a drag from the first
     // visible row-N to the end of the next copies those two lines
     const rows = s.split('\n')

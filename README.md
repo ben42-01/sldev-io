@@ -81,7 +81,8 @@ node-pty is native, so each OS builds its own installer.
 Launching (downloads, signing): see
 [docs/go-to-production.md](docs/go-to-production.md).
 
-- **CI** (`.github/workflows/ci.yml`) runs on every push and PR: typecheck, unit tests, build.
+- **CI** (`.github/workflows/ci.yml`) runs on pushes to `master` and on pull requests: typecheck, unit tests, build.
+  **CLI on Windows** (`.github/workflows/cli-windows.yml`) runs the CLI's tests on Windows when CLI files change.
 - **Release** (`.github/workflows/release.yml`) runs when you push a `release/**` branch
   (e.g. `release/0.2.0`). It builds Linux (deb), Windows (NSIS exe) and macOS
   (dmg, Intel and Apple Silicon), then publishes them with the update metadata electron-updater reads (`latest*.yml`,
