@@ -1,5 +1,7 @@
 {
   "name": "sldev-io",
+  "brand": "sldev",
+  "brandTagline": "Tools for leading coding agents, free and open source.",
   "tagline": "The terminal-first workspace for agentic coding.",
   "version": "1.0.3",
   "url": "https://sldev-io.vercel.app",
@@ -7,7 +9,6 @@
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
   "sourceUrl": "https://github.com/ben42-01/sldev-io",
   "sponsorUrl": "https://github.com/sponsors/ben42-01",
-  "cliUrl": "https://ben42-01.github.io/downloads.sldev.io/",
   "contactEmail": "team.agora.hub@gmail.com",
   "maker": "Ben",
   "platforms": [

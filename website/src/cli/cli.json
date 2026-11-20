@@ -12,11 +12,5 @@
     "OpenCode",
     "Gemini CLI",
     "Any CLI"
-  ],
-  "app": {
-    "name": "sldev-io",
-    "url": "https://sldev-io.vercel.app"
-  },
-  "source": "https://github.com/ben42-01/sldev-io/tree/master/cli",
-  "sponsor": "https://github.com/sponsors/ben42-01"
+  ]
 }

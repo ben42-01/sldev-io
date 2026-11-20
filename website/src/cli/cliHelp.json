@@ -1,0 +1,324 @@
+{
+  "version": "0.6.0",
+  "help": {
+    "title": "sldev 0.6.0: run coding agents side by side in your terminal",
+    "sections": [
+      {
+        "id": "attach",
+        "commands": [
+          {
+            "id": "attach",
+            "name": "",
+            "usage": "sldev",
+            "text": "attach: every agent and shell as a tab, grouped by project, with its status (Ctrl-b c new tab, t shell, b briefs, 1-9 or n/p tabs, , rename, x close, s split, w workflows, e editor, v changed files, ? every key, d detach; tabs take clicks)",
+            "options": []
+          }
+        ]
+      },
+      {
+        "id": "panes",
+        "commands": [
+          {
+            "id": "new",
+            "name": "new",
+            "usage": "sldev new [options] \"brief\"",
+            "text": "start an agent in a new pane (prints its id)",
+            "options": [
+              {
+                "flag": "--agent <id>",
+                "text": "claude, codex, cursor, copilot, opencode, gemini (default claude)",
+                "depth": 0
+              },
+              {
+                "flag": "--kind <kind>",
+                "text": "frame the brief as a mission kind (build, research, plan, review…)",
+                "depth": 0
+              },
+              {
+                "flag": "--criteria \"<text>\"",
+                "text": "an acceptance criterion for the kind's prompt (repeat it for more)",
+                "depth": 0
+              },
+              {
+                "flag": "--worktree <branch>",
+                "text": "run in a new git worktree; --here keeps it in this folder",
+                "depth": 0
+              },
+              {
+                "flag": "--title, --model, --mode, --effort",
+                "text": "",
+                "depth": 0
+              },
+              {
+                "flag": "--failover <a,b>",
+                "text": "continue on these agents when this one hits its usage limit",
+                "depth": 0
+              },
+              {
+                "flag": "--print",
+                "text": "the agent does the task and exits, no questions (its exit means done)",
+                "depth": 0
+              },
+              {
+                "flag": "--allow-spawn <n>",
+                "text": "its agent may start up to n agents itself (1-8, for its whole life); they run --print in worktrees, can't start agents and never push. Without it, sldev new from inside a pane is refused. With the sldev-conductor skill (sldev skills install), that agent splits the brief between them, merges their branches into its own and reports; it never pushes",
+                "depth": 0
+              },
+              {
+                "flag": "--repeat <n>",
+                "text": "run the brief n times, each pass building on the last (0: until a pass changes nothing); every pass is committed in the loop's worktree",
+                "depth": 0
+              },
+              {
+                "flag": "--gap <30m>",
+                "text": "wait this long after a pass is over before the next (s, m, h)",
+                "depth": 1
+              },
+              {
+                "flag": "--check \"<cmd>\"",
+                "text": "run after each pass; a failure goes to the next pass, two stop the loop",
+                "depth": 1
+              },
+              {
+                "flag": "--accept",
+                "text": "passes are interactive and end on sldev accept, not on the agent's exit",
+                "depth": 1
+              },
+              {
+                "flag": "--keep-going",
+                "text": "don't stop when a pass changes nothing",
+                "depth": 1
+              }
+            ]
+          },
+          {
+            "id": "briefs",
+            "name": "briefs",
+            "usage": "sldev briefs [--json]",
+            "text": "briefs waiting in .sldev-cli/briefs/*.md (at the repo's main checkout)",
+            "options": []
+          },
+          {
+            "id": "launch",
+            "name": "launch",
+            "usage": "sldev launch <file|name>",
+            "text": "start a brief like sldev new, with its kind, agent, worktree and criteria;",
+            "options": [
+              {
+                "flag": "--agent <id>",
+                "text": "it moves to .sldev-cli/briefs/launched/ with its pane id. A brief is Markdown: front matter (title, kind, agent, criteria: a \"- \" list, worktree: true|false, by) and the brief under it. A bad one is refused and stays where it is.",
+                "depth": 0
+              }
+            ]
+          },
+          {
+            "id": "ls",
+            "name": "ls",
+            "usage": "sldev ls [--json]",
+            "text": "panes with agent, status and branch",
+            "options": []
+          },
+          {
+            "id": "send",
+            "name": "send",
+            "usage": "sldev send <pane> \"text\"",
+            "text": "type into a pane (Enter included; --no-enter to leave it out)",
+            "options": []
+          },
+          {
+            "id": "read",
+            "name": "read",
+            "usage": "sldev read <pane> [--lines n]",
+            "text": "the pane's screen as text",
+            "options": []
+          },
+          {
+            "id": "wait",
+            "name": "wait",
+            "usage": "sldev wait [<pane>] --for ready|needs-you|done|idle [--timeout s]",
+            "text": "",
+            "options": []
+          },
+          {
+            "id": "review",
+            "name": "review",
+            "usage": "sldev review <pane> --agent <id>",
+            "text": "a second agent reviews that pane's changes, read-only",
+            "options": []
+          },
+          {
+            "id": "open",
+            "name": "open",
+            "usage": "sldev open <pane> [--diff]",
+            "text": "the pane's folder in your editor; --diff: its changed files side by side",
+            "options": [
+              {
+                "flag": "--editor <id>",
+                "text": "cursor, vscode, windsurf, zed, sublime, idea, nvim… (default: \"editor\" in sldev config, else the first one found)",
+                "depth": 0
+              }
+            ]
+          },
+          {
+            "id": "workflows",
+            "name": "workflows",
+            "usage": "sldev workflows [--json]",
+            "text": "the repo's latest GitHub Actions runs (needs the GitHub CLI, signed in)",
+            "options": []
+          },
+          {
+            "id": "clean",
+            "name": "clean",
+            "usage": "sldev clean",
+            "text": "finished panes leave the list and their worktrees are removed (asks first)",
+            "options": [
+              {
+                "flag": "--orphans",
+                "text": "also sldev worktrees no pane knows about (never ones the app uses)",
+                "depth": 0
+              },
+              {
+                "flag": "--discard",
+                "text": "remove worktrees with uncommitted files too",
+                "depth": 0
+              },
+              {
+                "flag": "--branches",
+                "text": "delete their branches when every commit is on the base",
+                "depth": 0
+              },
+              {
+                "flag": "--dry-run, --yes",
+                "text": "only show the plan / don't ask",
+                "depth": 0
+              }
+            ]
+          },
+          {
+            "id": "kill",
+            "name": "kill",
+            "usage": "sldev kill <pane> [--children]",
+            "text": "stop a pane's agent (its files stay); --children: the agents it started too",
+            "options": []
+          },
+          {
+            "id": "stop",
+            "name": "stop",
+            "usage": "sldev stop",
+            "text": "stop the daemon and every agent in it",
+            "options": []
+          },
+          {
+            "id": "config",
+            "name": "config",
+            "usage": "sldev config",
+            "text": "where the config file is and what it says (edit it by hand; keys in the README)",
+            "options": []
+          }
+        ]
+      },
+      {
+        "id": "loops",
+        "commands": [
+          {
+            "id": "accept",
+            "name": "accept",
+            "usage": "sldev accept <pane>",
+            "text": "a pass that waits for you is good: stop it, the loop goes on",
+            "options": []
+          },
+          {
+            "id": "loops",
+            "name": "loops",
+            "usage": "sldev loops [--json]",
+            "text": "repeat loops: their passes and what's next",
+            "options": []
+          },
+          {
+            "id": "loops-stop",
+            "name": "loops stop",
+            "usage": "sldev loops stop <loop>",
+            "text": "no pass after the running one",
+            "options": []
+          }
+        ]
+      },
+      {
+        "id": "repo",
+        "commands": [
+          {
+            "id": "rules",
+            "name": "rules",
+            "usage": "sldev rules [status|init|sync [--overwrite <ids>]]",
+            "text": "one .sldev/rules.md for every agent",
+            "options": []
+          },
+          {
+            "id": "skills",
+            "name": "skills",
+            "usage": "sldev skills [status|install [--overwrite <names>]]",
+            "text": "skills that let agents draft missions, stories, recipes and evals for the sldev-io app, and sldev-conductor: run other agents (needs --allow-spawn)",
+            "options": []
+          },
+          {
+            "id": "skills-export",
+            "name": "skills export",
+            "usage": "sldev skills export <dir>",
+            "text": "the same skills as plain folders in <dir>",
+            "options": []
+          },
+          {
+            "id": "skills-check",
+            "name": "skills check",
+            "usage": "sldev skills check <file…>",
+            "text": "read a draft, recipe or eval as the app will",
+            "options": []
+          },
+          {
+            "id": "remember",
+            "name": "remember",
+            "usage": "sldev remember \"note\" [--files a,b]",
+            "text": "add a line to .sldev/memory.md",
+            "options": []
+          },
+          {
+            "id": "recall",
+            "name": "recall",
+            "usage": "sldev recall [topic] [--path <file>]",
+            "text": "search the project's memory and docs",
+            "options": []
+          },
+          {
+            "id": "memory",
+            "name": "memory",
+            "usage": "sldev memory",
+            "text": "where the memory is, how big",
+            "options": []
+          },
+          {
+            "id": "usage",
+            "name": "usage",
+            "usage": "sldev usage [--week]",
+            "text": "tokens and estimated cost, from local logs",
+            "options": []
+          },
+          {
+            "id": "agents",
+            "name": "agents",
+            "usage": "sldev agents | sldev kinds",
+            "text": "what's installed, what kinds exist (project kinds: .sldev-cli/kinds/*.md, the format of the app's .sldev/missions)",
+            "options": []
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "Inside a pane, sldev knows which pane it runs in: ls, read and wait work on any pane, send and kill only on the agents that pane started, and the TUI, review, loops stop and stop not at all.",
+      "Panes run in a background daemon (sldev serve), so they keep going when you detach.",
+      ".sldev-cli/ is the CLI's own project folder (git-ignored by its own .gitignore); the app never reads it, and the CLI never reads the app's .sldev/drafts. .sldev/memory.md and .sldev/rules.md are shared by both.",
+      "SLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light) surfaces; NO_COLOR turns colours off.",
+      "Nothing here talks to the network, except the workflows view, which asks GitHub through your gh."
+    ],
+    "raw": "sldev 0.6.0: run coding agents side by side in your terminal\n\n  sldev                         attach: every agent and shell as a tab, grouped by project, with its status\n                                (Ctrl-b c new tab, t shell, b briefs, 1-9 or n/p tabs, , rename, x close, s split,\n                                w workflows, e editor, v changed files, ? every key, d detach; tabs take clicks)\n  sldev new [options] \"brief\"   start an agent in a new pane (prints its id)\n      --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)\n      --kind <kind>             frame the brief as a mission kind (build, research, plan, review…)\n      --criteria \"<text>\"       an acceptance criterion for the kind's prompt (repeat it for more)\n      --worktree <branch>       run in a new git worktree; --here keeps it in this folder\n      --title, --model, --mode, --effort\n      --failover <a,b>          continue on these agents when this one hits its usage limit\n      --print                   the agent does the task and exits, no questions (its exit means done)\n      --allow-spawn <n>         its agent may start up to n agents itself (1-8, for its whole life); they\n                                run --print in worktrees, can't start agents and never push. Without it,\n                                sldev new from inside a pane is refused. With the sldev-conductor skill\n                                (sldev skills install), that agent splits the brief between them, merges\n                                their branches into its own and reports; it never pushes\n      --repeat <n>              run the brief n times, each pass building on the last (0: until a pass\n                                changes nothing); every pass is committed in the loop's worktree\n        --gap <30m>             wait this long after a pass is over before the next (s, m, h)\n        --check \"<cmd>\"         run after each pass; a failure goes to the next pass, two stop the loop\n        --accept                passes are interactive and end on sldev accept, not on the agent's exit\n        --keep-going            don't stop when a pass changes nothing\n  sldev briefs [--json]         briefs waiting in .sldev-cli/briefs/*.md (at the repo's main checkout)\n  sldev launch <file|name>      start a brief like sldev new, with its kind, agent, worktree and criteria;\n      --agent <id>              it moves to .sldev-cli/briefs/launched/ with its pane id. A brief is Markdown:\n                                front matter (title, kind, agent, criteria: a \"- \" list, worktree: true|false,\n                                by) and the brief under it. A bad one is refused and stays where it is.\n  sldev ls [--json]             panes with agent, status and branch\n  sldev send <pane> \"text\"      type into a pane (Enter included; --no-enter to leave it out)\n  sldev read <pane> [--lines n] the pane's screen as text\n  sldev wait [<pane>] --for ready|needs-you|done|idle [--timeout s]\n  sldev review <pane> --agent <id>   a second agent reviews that pane's changes, read-only\n  sldev accept <pane>           a pass that waits for you is good: stop it, the loop goes on\n  sldev loops [--json]          repeat loops: their passes and what's next\n  sldev loops stop <loop>       no pass after the running one\n  sldev open <pane> [--diff]    the pane's folder in your editor; --diff: its changed files side by side\n      --editor <id>             cursor, vscode, windsurf, zed, sublime, idea, nvim… (default: \"editor\"\n                                in sldev config, else the first one found)\n  sldev workflows [--json]      the repo's latest GitHub Actions runs (needs the GitHub CLI, signed in)\n  sldev clean                   finished panes leave the list and their worktrees are removed (asks first)\n      --orphans                 also sldev worktrees no pane knows about (never ones the app uses)\n      --discard                 remove worktrees with uncommitted files too\n      --branches                delete their branches when every commit is on the base\n      --dry-run, --yes          only show the plan / don't ask\n  sldev kill <pane> [--children]  stop a pane's agent (its files stay); --children: the agents it started too\n\nInside a pane, sldev knows which pane it runs in: ls, read and wait work on any pane, send and kill only\non the agents that pane started, and the TUI, review, loops stop and stop not at all.\n  sldev stop                    stop the daemon and every agent in it\n  sldev config                  where the config file is and what it says (edit it by hand; keys in the README)\n\n  sldev rules [status|init|sync [--overwrite <ids>]]   one .sldev/rules.md for every agent\n  sldev skills [status|install [--overwrite <names>]] skills that let agents draft missions, stories,\n                                                       recipes and evals for the sldev-io app, and\n                                                       sldev-conductor: run other agents (needs --allow-spawn)\n  sldev skills export <dir>                            the same skills as plain folders in <dir>\n  sldev skills check <file…>                           read a draft, recipe or eval as the app will\n  sldev remember \"note\" [--files a,b]                  add a line to .sldev/memory.md\n  sldev recall [topic] [--path <file>]                 search the project's memory and docs\n  sldev memory                                         where the memory is, how big\n  sldev usage [--week]                                 tokens and estimated cost, from local logs\n  sldev agents | sldev kinds                           what's installed, what kinds exist (project kinds:\n                                                       .sldev-cli/kinds/*.md, the format of the app's .sldev/missions)\n\nPanes run in a background daemon (sldev serve), so they keep going when you detach.\n.sldev-cli/ is the CLI's own project folder (git-ignored by its own .gitignore); the app never reads it, and the\nCLI never reads the app's .sldev/drafts. .sldev/memory.md and .sldev/rules.md are shared by both.\nSLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light)\nsurfaces; NO_COLOR turns colours off.\nNothing here talks to the network, except the workflows view, which asks GitHub through your gh."
+  }
+}

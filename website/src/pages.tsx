@@ -1,4 +1,7 @@
 import { createRoot } from 'react-dom/client'
+import { AppLanding } from './AppLanding'
+import { CliHome } from './cli/CliHome'
+import { CommandsPage } from './cli/CommandsPage'
 import { ChangelogList } from './components/Changelog'
 import { CompareTable } from './components/Compare'
 import { DocArticle, DocsIndex } from './components/Docs'
@@ -19,9 +22,13 @@ import { legalPages, type LegalPageId } from './content/legal'
 import { site } from './lib/site'
 import './fonts'
 import './styles.css'
+import './cli/cli.css'
 
 /** Every page except the home page: <name>/index.html sets data-page="<name>". */
 const pages: Record<string, { title: string; render: () => React.JSX.Element }> = {
+  app: { title: `${site.name}, the desktop app`, render: () => <AppLanding /> },
+  cli: { title: 'sldev CLI: every coding agent, side by side in your terminal', render: () => <CliHome /> },
+  'cli-commands': { title: 'sldev CLI commands', render: () => <CommandsPage /> },
   features: {
     title: 'Features',
     render: () => (
@@ -135,5 +142,5 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
 
 const root = document.getElementById('root')!
 const page = pages[root.dataset.page!]
-document.title = `${page.title} · ${site.name}`
+document.title = `${page.title} · ${site.brand}`
 createRoot(root).render(page.render())

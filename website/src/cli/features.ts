@@ -1,6 +1,6 @@
 /**
  * The home page's feature cards. Each names the command or key that uses it; `command` is the anchor of that
- * command on /commands (its id in the parsed `sldev help`), and test/cliSite.test.ts checks each one still exists.
+ * command on /cli/commands (its id in the parsed `sldev help`), and test/cliSite.test.ts checks each one still exists.
  * Describe only what the CLI on master does.
  */
 export interface Use {

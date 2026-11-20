@@ -1,10 +1,13 @@
-import { CopyCommand } from './components/CopyCommand'
-import { Footer, hrefTo, Nav } from './components/Chrome'
-import { Features } from './components/Features'
-import { TerminalMockup } from './components/TerminalMockup'
-import site from './content/site.json'
+import { Footer } from '../components/Footer'
+import { Nav } from '../components/Nav'
+import { hrefTo, useScrollToHash } from './Chrome'
+import cli from './cli.json'
+import data from './cliHelp.json'
+import { CopyCommand } from './CopyCommand'
+import { Features } from './Features'
+import { TerminalMockup } from './TerminalMockup'
 
-const version = __CLI_VERSION__
+const version = data.version
 
 const STEPS: Array<{ title: string; command: string; text: string }> = [
   {
@@ -31,30 +34,32 @@ const POINTS: Array<{ title: string; text: string }> = [
   { title: 'Local and quiet', text: 'No account, no telemetry. Everything runs on your machine, under your own agent logins.' }
 ]
 
-export function App() {
+/** /cli: the sldev CLI's page. */
+export function CliHome() {
+  useScrollToHash()
   return (
     <>
-      <Nav page="home" />
+      <Nav active="cli" />
 
-      <main id="top">
+      <main id="top" className="cli">
         <section className="hero">
           <div className="hero-glow" aria-hidden="true" />
           <div className="container hero-inner">
             <p className="eyebrow">
-              <span className="dot" /> sldev CLI {version} · free
+              <span className="dot" /> sldev CLI {version} · free and open source
             </p>
             <h1>
               Every coding agent,
               <br />
               <span className="brand-text">side by side in your terminal.</span>
             </h1>
-            <p className="lede">{site.description}</p>
+            <p className="lede">{cli.description}</p>
             <div className="install">
-              <CopyCommand command={site.install} label="install command" />
-              <p className="install-note">{site.requires}</p>
+              <CopyCommand command={cli.install} label="install command" />
+              <p className="install-note">{cli.requires}</p>
             </div>
             <ul className="agents" aria-label="Agents it runs">
-              {site.agents.map((a) => (
+              {cli.agents.map((a) => (
                 <li key={a}>{a}</li>
               ))}
             </ul>
@@ -95,16 +100,16 @@ export function App() {
               ))}
             </ul>
             <div className="install install-bottom">
-              <CopyCommand command={site.install} label="install command" />
+              <CopyCommand command={cli.install} label="install command" />
               <p className="install-note">
-                Every command and option: <a className="text-link" href={hrefTo('home', 'commands')}>the command list</a>
+                Every command and option: <a className="text-link" href={hrefTo('commands')}>the command list</a>
               </p>
             </div>
           </div>
         </section>
       </main>
 
-      <Footer version={version} />
+      <Footer />
     </>
   )
 }

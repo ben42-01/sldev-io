@@ -29,7 +29,7 @@ const docPages = readdirSync(new URL('./docs/', import.meta.url), { withFileType
   .map((e) => `docs/${e.name}`)
 
 // extra HTML pages next to index.html (each has <name>/index.html)
-const pages = ['features', 'download', 'changelog', 'compare', 'docs', ...docPages, 'privacy']
+const pages = ['app', 'features', 'download', 'changelog', 'compare', 'docs', ...docPages, 'cli', 'cli/commands', 'privacy']
 
 /** /privacy → /privacy/ in dev and preview, like the vercel.json rewrites (Vite would serve the home page). */
 function pageRoutes(): Plugin {

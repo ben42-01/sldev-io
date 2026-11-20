@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Marketing site for sldev-io, deployed on Vercel.",
+  "description": "The sldev site: the sldev-io app, the sldev CLI and their docs, deployed on Vercel.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cli-help": "node --experimental-strip-types --no-warnings scripts/cli-help.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

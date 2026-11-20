@@ -1,51 +1,26 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parseHelp } from '../cli-site/scripts/cliHelp'
-import { FEATURES } from '../cli-site/src/content/features'
+import { parseHelp, usageFromSource } from '../website/src/cli/cliHelp'
+import data from '../website/src/cli/cliHelp.json'
+import { FEATURES } from '../website/src/cli/features'
 
-// cli-site/ is the free CLI's own home page: it builds alone (no imports from the app, website/ or the CLI's
-// source) and links the CLI's source, which is public (Apache-2.0)
-const root = join(__dirname, '..', 'cli-site')
-const files = (dir: string): string[] =>
-  readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name)
-    if (name === 'node_modules' || name === 'dist') return []
-    return statSync(path).isDirectory() ? files(path) : [path]
-  })
-const sources = files(root).filter((f) => /\.(tsx?|json|html|css)$/.test(f) && !f.endsWith('package-lock.json'))
+// the sldev CLI's pages on the sldev site (/cli, /cli/commands). The site builds from website/ alone, so the
+// CLI's help is a generated file, website/src/cli/cliHelp.json; these keep it in step with the CLI.
+const cliDir = join(__dirname, '..', 'cli')
+const usage = (version = '9.9.9'): string => usageFromSource(readFileSync(join(cliDir, 'src', 'main.ts'), 'utf8'), version)
 
-describe('cli-site', () => {
-  it('imports nothing from website/, src/ or cli/src', () => {
-    for (const f of sources.filter((x) => /\.tsx?$/.test(x))) {
-      const specs = [...readFileSync(f, 'utf8').matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1])
-      for (const s of specs) expect(s, `${f} imports ${s}`).not.toMatch(/^(\.\.\/)+(website|src|cli)\b|^@(shared|renderer)\//)
-    }
-  })
-
-  it('says open source and links the source code', () => {
-    const all = sources.map((f) => readFileSync(f, 'utf8')).join('\n')
-    expect(all).toMatch(/open[ -]source/i)
-    expect(all).toMatch(/github\.com\/ben42-01\/sldev-io/)
-  })
-
-  it('loads nothing from other sites (no CDN fonts, scripts or analytics)', () => {
-    for (const f of sources.filter((x) => /\.(html|css)$/.test(x))) {
-      expect(readFileSync(f, 'utf8'), f).not.toMatch(/(src|href)=["']https?:|url\(\s*['"]?https?:|@import\s+['"]?https?:/)
-    }
+describe('website /cli', () => {
+  it('has the help and version of the CLI on master (run `npm run cli-help` in website/ when this fails)', () => {
+    const version = JSON.parse(readFileSync(join(cliDir, 'package.json'), 'utf8')).version
+    expect(data.version).toBe(version)
+    expect(data.help).toEqual(parseHelp(usage(version)))
   })
 })
 
-// the /commands page is the CLI's own help, parsed at build time; these run the parser on the help text in
-// cli/src/main.ts (as the built CLI prints it) so a layout the parser can't read fails here, not on the site
-const usage = (): string => {
-  const src = readFileSync(join(__dirname, '..', 'cli', 'src', 'main.ts'), 'utf8')
-  const m = /const USAGE = `([\s\S]*?)`\n/.exec(src)
-  if (!m) throw new Error('USAGE not found in cli/src/main.ts')
-  return m[1].replace(/\$\{VERSION\}/g, '9.9.9')
-}
-
-describe('cli-site /commands', () => {
+// the commands page is the CLI's own help, parsed; these run the parser on the help text in cli/src/main.ts so a
+// layout the parser can't read fails here, not on the site
+describe('website /cli/commands', () => {
   const help = parseHelp(usage())
   const commands = help.sections.flatMap((s) => s.commands)
 
@@ -76,7 +51,7 @@ describe('cli-site /commands', () => {
     expect([section('attach'), section('new'), section('loops-stop'), section('accept'), section('usage')]).toEqual(['attach', 'panes', 'loops', 'loops', 'repo'])
   })
 
-  it('reads a changed help without any edit to cli-site', () => {
+  it('reads a changed help without any edit to the site', () => {
     const changed = usage().replace('  sldev ls [--json]', '  sldev frob <pane>             frobs a pane\n  sldev ls [--json]')
     const c = parseHelp(changed).sections.flatMap((s) => s.commands).find((x) => x.id === 'frob')
     expect(c).toMatchObject({ usage: 'sldev frob <pane>', text: 'frobs a pane' })
@@ -90,9 +65,4 @@ describe('cli-site /commands', () => {
     }
   })
 
-  it('uses no root-absolute links, so it works under any base path', () => {
-    for (const f of sources.filter((x) => /\.tsx$/.test(x))) {
-      expect(readFileSync(f, 'utf8'), f).not.toMatch(/href=(\{\s*)?["'`]\/(?!\/)/)
-    }
-  })
 })

@@ -1,6 +1,6 @@
-# sldev-io website
+# The sldev site
 
-Marketing site for sldev-io. Vite + React + TypeScript, fully static, deployed on Vercel.
+The site of the sldev family: the sldev-io desktop app, the sldev CLI and sldev's agent skills. Vite + React + TypeScript, fully static, deployed on Vercel.
 It is independent of the Electron app: its own `package.json` and lockfile.
 
 ```bash
@@ -35,7 +35,9 @@ apt) or the right .dmg (copied into /Applications, quarantine flag removed) thro
 
 ## Pages
 
-`/` is the landing page (`src/App.tsx`). Every other page has a `<name>/index.html` with
+`/` is the family's home page (`src/App.tsx`, one card per product); `/app` is the desktop app's landing page
+(`src/AppLanding.tsx`); `/cli` and `/cli/commands` are the CLI's (`src/cli/`, styles scoped under `.cli` in
+`src/cli/cli.css`; after changing the CLI's help or version run `npm run cli-help` here and commit `src/cli/cliHelp.json`). Every other page has a `<name>/index.html` with
 `data-page="<name>"`, rendered by `src/pages.tsx` inside the shared `Layout` (nav, footer) with a
 `PageHeader`: `/features` (with the full FAQ), `/download`, `/changelog`, `/compare`, `/docs` and `/privacy`.
 To add one: add the HTML file, an entry in `pages.tsx`, the name in `pages` in `vite.config.ts`

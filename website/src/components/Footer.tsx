@@ -33,15 +33,16 @@ export function Footer() {
     <footer className="footer">
       <div className="container footer-inner">
         <span className="nav-logo">
-          <Logo size={18} /> {site.name}
+          <Logo size={18} /> {site.brand}
         </span>
-        <span className="muted">© {new Date().getFullYear()} {site.name}</span>
+        <span className="muted">© {new Date().getFullYear()} {site.brand} · free and open source</span>
         <span className="grow" />
         <a href={`mailto:${site.contactEmail}`}>Contact</a>
         <a href={site.sourceUrl}>GitHub</a>
         <a href={site.sponsorUrl}>Sponsor</a>
+        <a href="/app">App</a>
+        <a href="/cli">CLI</a>
         <a href="/docs">Docs</a>
-        <a href={site.cliUrl}>sldev CLI</a>
         <a href="/compare">Compare</a>
         <a href="/changelog">Changelog</a>
         <a href="/privacy">Privacy</a>

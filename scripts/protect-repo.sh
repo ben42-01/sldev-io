@@ -43,7 +43,7 @@ replace_ruleset "Master needs green CI" '{
         "required_review_thread_resolution": false } },
     { "type": "required_status_checks", "parameters": {
         "strict_required_status_checks_policy": false,
-        "required_status_checks": [{ "context": "check" }, { "context": "website" }, { "context": "cli-site" }] } }
+        "required_status_checks": [{ "context": "check" }, { "context": "website" }] } }
   ],
   "bypass_actors": [{ "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }]
 }'

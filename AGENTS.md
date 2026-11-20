@@ -85,14 +85,14 @@ src/renderer/src/
   components/     sidebar views and shared UI: the left ActivityBar → Sidebar (explorer, runtimes, factory, tasks,
                   notes, remote, git: status, fetch, pull, branches (GitBranches.tsx) and the worktrees list (GitWorktrees.tsx) in state/git.ts), the right RightPanel tabs (overview, agents, skills, context, workflows); showView() routes by ViewId
   styles/app.css  all styling; design tokens on :root
-website/        marketing site (Vercel): api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
+website/        the sldev site (Vercel): / is the family's home (src/App.tsx: app, CLI, skills), /app the desktop app
+                  (src/AppLanding.tsx), /cli and /cli/commands the CLI (src/cli/, styles scoped under .cli; its TUI mockup follows
+                  cli/src/render.ts; src/cli/cliHelp.json is `sldev help`, regenerated with `npm run cli-help` in website/,
+                  test/cliSite.test.ts fails while it is stale). Also: api/download.ts (/download/<os>), api/stats.ts (public download counts from GitHub), /changelog from
                   src/content/changelog.json (also baked into the app as What's new), public/install.sh,
-                  pages: / (src/App.tsx) and /features, /download, /privacy (src/pages.tsx),
+                  pages: /features, /download, /privacy… (src/pages.tsx),
                   /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts; a new guide
                   also needs website/docs/<id>/index.html, which test/docsPages.test.ts checks)
-cli-site/       the free sldev CLI's home page: static (Vite + React, own package.json), built alone (imports nothing from
-                  website/, src/ or cli/src; test/cliSite.test.ts checks), base path from CLI_SITE_BASE; its TUI mockup follows
-                  cli/src/render.ts
 marketing/promo/ the advert (about 2 min, Plan → Build → Review → Ship), animated with Remotion (own package.json; URL and colours read from website/,
                   music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
 test/           vitest (node env; test/setup.ts stubs window.api)

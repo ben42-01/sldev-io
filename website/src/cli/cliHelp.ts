@@ -1,9 +1,6 @@
-import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-
 /**
- * The /commands page is `sldev help`, parsed at build time: nothing about a command is written by hand here,
- * so a change to the help shows up on the next build. The help is laid out in columns (usage, then its
+ * The /cli/commands page is `sldev help`, parsed (website/scripts/cli-help.ts writes it to cliHelp.json, and
+ * test/cliSite.test.ts fails when that file is out of date): nothing about a command is written by hand here. The help is laid out in columns (usage, then its
  * description), options indented under their command, wrapped lines indented further, and prose at column 0.
  */
 
@@ -160,14 +157,9 @@ export function parseHelp(raw: string): CliHelp {
   }
 }
 
-/** Builds the CLI from the repo root and reads its help. Throws if either fails, so a build never ships a stale list. */
-export function readCliHelp(): CliHelp {
-  const repo = fileURLToPath(new URL('../../', import.meta.url))
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-  execFileSync(npm, ['run', 'cli:build'], { cwd: repo, stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' })
-  const out = execFileSync(process.execPath, ['cli/dist/sldev.mjs', 'help'], { cwd: repo, encoding: 'utf8' })
-  const help = parseHelp(out)
-  const count = help.sections.reduce((n, s) => n + s.commands.length, 0)
-  if (count === 0) throw new Error(`sldev help printed no commands:\n${out}`)
-  return help
+/** The help as the CLI prints it, read from its source: the USAGE template in cli/src/main.ts with the version filled in. */
+export function usageFromSource(mainTs: string, version: string): string {
+  const m = /const USAGE = `([\s\S]*?)`\n/.exec(mainTs)
+  if (!m) throw new Error('USAGE not found in cli/src/main.ts')
+  return m[1].replace(/\$\{VERSION\}/g, version)
 }

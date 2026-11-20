@@ -3,13 +3,13 @@ import { useState } from 'react'
 import { site } from '../lib/site'
 import { Logo } from './Logo'
 
-export type NavPage = 'features' | 'download' | 'docs'
+export type NavPage = 'app' | 'features' | 'cli' | 'download' | 'docs'
 
-const links: { page?: NavPage; href: string; label: string }[] = [
-  { href: '/#how', label: 'How it works' },
-  { page: 'features', href: '/features', label: 'Features' },
-  { page: 'docs', href: '/docs', label: 'Docs' },
-  { href: site.cliUrl, label: 'sldev CLI' },
+// the app's own pages (features, download) light up "App"
+const links: { pages?: NavPage[]; href: string; label: string }[] = [
+  { pages: ['app', 'features', 'download'], href: '/app', label: 'App' },
+  { pages: ['cli'], href: '/cli', label: 'CLI' },
+  { pages: ['docs'], href: '/docs', label: 'Docs' },
   { href: site.sourceUrl, label: 'GitHub' },
   { href: site.sponsorUrl, label: 'Sponsor' }
 ]
@@ -19,18 +19,18 @@ export function Nav({ active }: { active?: NavPage }) {
   return (
     <header className="nav">
       <div className="container nav-inner">
-        <a href="/" className="nav-logo" aria-label={`${site.name} home`}>
+        <a href="/" className="nav-logo" aria-label={`${site.brand} home`}>
           <Logo />
-          <span>{site.name}</span>
+          <span>{site.brand}</span>
         </a>
         <nav className={`nav-links${open ? ' open' : ''}`} aria-label="Main">
           {links.map((l) => (
-            <a key={l.href} href={l.href} aria-current={l.page && l.page === active ? 'page' : undefined} onClick={() => setOpen(false)}>
+            <a key={l.href} href={l.href} aria-current={active && l.pages?.includes(active) ? 'page' : undefined} onClick={() => setOpen(false)}>
               {l.label}
             </a>
           ))}
           <a className="btn primary nav-cta-mobile" href="/download" onClick={() => setOpen(false)}>
-            <Download size={14} /> Download
+            <Download size={14} /> Download the app
           </a>
         </nav>
         <a className="btn primary nav-cta" href="/download" aria-current={active === 'download' ? 'page' : undefined}>

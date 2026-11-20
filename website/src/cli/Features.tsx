@@ -1,7 +1,7 @@
-import { FEATURES } from '../content/features'
 import { hrefTo } from './Chrome'
+import { FEATURES } from './features'
 
-/** One card per thing the CLI does, each naming the command or key that does it (linked to /commands). */
+/** One card per thing the CLI does, each naming the command or key that does it (linked to /cli/commands). */
 export function Features() {
   return (
     <section className="section" id="features">
@@ -17,7 +17,7 @@ export function Features() {
                 {f.uses.map((u) => (
                   <li key={u.text}>
                     {u.command ? (
-                      <a className="use" href={hrefTo('home', 'commands', `#${u.command}`)}>
+                      <a className="use" href={hrefTo('commands', `#${u.command}`)}>
                         <code>{u.text}</code>
                       </a>
                     ) : (

@@ -4,6 +4,18 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/app",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/cli",
+      "destination": "/cli/index.html"
+    },
+    {
+      "source": "/cli/commands",
+      "destination": "/cli/commands/index.html"
+    },
+    {
       "source": "/download",
       "destination": "/download/index.html"
     },
@@ -76,7 +88,7 @@
   "redirects": [
     {
       "source": "/pricing",
-      "destination": "/#free",
+      "destination": "/app#free",
       "permanent": true
     },
     {

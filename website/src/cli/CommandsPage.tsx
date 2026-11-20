@@ -1,10 +1,13 @@
-import help from 'virtual:cli-help'
-import type { HelpCommand, SectionId } from '../scripts/cliHelp'
-import { CopyCommand } from './components/CopyCommand'
-import { Footer, Nav } from './components/Chrome'
-import site from './content/site.json'
+import { Footer } from '../components/Footer'
+import { Nav } from '../components/Nav'
+import { useScrollToHash } from './Chrome'
+import cli from './cli.json'
+import type { CliHelp, HelpCommand, SectionId } from './cliHelp'
+import data from './cliHelp.json'
+import { CopyCommand } from './CopyCommand'
 
-const version = __CLI_VERSION__
+const version = data.version
+const help = data.help as CliHelp
 
 /** headings for the groups the parser sorts commands into; the commands themselves come from `sldev help` */
 const SECTIONS: Record<SectionId, { title: string; text: string }> = {
@@ -40,11 +43,13 @@ function Command({ c }: { c: HelpCommand }) {
   )
 }
 
+/** /cli/commands: every command and option, from `sldev help`. */
 export function CommandsPage() {
+  useScrollToHash()
   return (
     <>
-      <Nav page="commands" />
-      <main className="commands-page">
+      <Nav active="cli" />
+      <main className="cli commands-page">
         <div className="container commands-layout">
           <aside className="commands-toc" aria-label="Sections">
             {help.sections.map((s) => (
@@ -72,10 +77,10 @@ export function CommandsPage() {
             <header className="commands-head">
               <h1>Commands</h1>
               <p className="section-lede">
-                Generated from <code>sldev help</code> of sldev {version} when this site was built, so it always matches the CLI.
+                Generated from <code>sldev help</code> of sldev {version}, so it matches the CLI.
               </p>
               <div className="install">
-                <CopyCommand command={site.install} label="install command" />
+                <CopyCommand command={cli.install} label="install command" />
               </div>
             </header>
 
@@ -109,7 +114,7 @@ export function CommandsPage() {
           </div>
         </div>
       </main>
-      <Footer version={version} />
+      <Footer />
     </>
   )
 }
