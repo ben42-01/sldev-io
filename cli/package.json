@@ -8,7 +8,8 @@
   "files": ["dist", "SKILL.md", "README.md", "LICENSE"],
   "engines": { "node": ">=22.5" },
   "os": ["linux", "darwin", "win32"],
-  "homepage": "https://github.com/ben42-01/sldev-io/tree/master/cli",
+  "homepage": "https://sldev-io.vercel.app/cli",
+  "bugs": { "url": "https://github.com/ben42-01/sldev-io/issues" },
   "repository": { "type": "git", "url": "git+https://github.com/ben42-01/sldev-io.git", "directory": "cli" },
   "dependencies": {
     "@xterm/headless": "6.0.0",
