@@ -302,7 +302,7 @@ files; `codex` prints, goes quiet, then rings the bell. Add a fake there for a n
 
 `docs/go-to-production.md` is the owner's launch guide (phases, accounts, secrets, runbooks). Keep it in sync
 when you change releases. `docs/v1-roadmap.md` is the 1.0 scope, its status and what still
-needs checking against the real agent CLIs. Since 1.0.2, work happens on `master` (`v1` is kept equal to it);
+needs checking against the real agent CLIs. Work happens on `master` (the old `v1` branch was removed on 2026-11-20);
 releases are still cut from `release/<version>` branches, and pushing `master` builds nothing but CI.
 
 ## Skills

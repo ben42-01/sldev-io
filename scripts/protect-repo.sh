@@ -2,7 +2,7 @@
 # Protects ben42-01/sldev-io once it is public (or on GitHub Pro): rulesets need one of the two.
 # Safe to run again: it replaces its own rulesets by name.
 #
-#   1. "Protect main lines": master, v1 and release/** can't be deleted or force-pushed, by anyone (the owner
+#   1. "Protect main lines": master and release/** can't be deleted or force-pushed, by anyone (the owner
 #      included; turn the ruleset off in Settings → Rules for a deliberate history rewrite).
 #   2. "Master needs green CI": changes to master go through a pull request with CI passing. The owner
 #      (repository admin) can bypass it, so direct pushes to master keep working for you and nobody else.
@@ -25,7 +25,7 @@ replace_ruleset "Protect main lines" '{
   "name": "Protect main lines",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH", "refs/heads/v1", "refs/heads/release/**"], "exclude": [] } },
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH", "refs/heads/release/**"], "exclude": [] } },
   "rules": [{ "type": "deletion" }, { "type": "non_fast_forward" }],
   "bypass_actors": []
 }'
