@@ -1,7 +1,10 @@
 import { Bell, GitBranch } from 'lucide-react'
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion'
 import { C, MONO, beats, pop } from '../lib'
-import { Button, Headline, Pill, Pointer, Toast, TONE, Window, type State } from '../ui'
+import { Button, Camera, Headline, Pill, Pointer, Scrim, Spotlight, Toast, TONE, Window, focus, type State } from '../ui'
+
+/** the scene's beats, stretched to the bars it has in src/timeline.json */
+const bt = (n: number): number => beats(n * 1.18)
 
 interface Card {
   agent: string
@@ -17,8 +20,8 @@ const CARDS: Card[] = [
     title: 'Migrate auth to sessions',
     branch: 'sldev/auth-sessions',
     timeline: [
-      [beats(1), 'working', 'Editing src/auth/routes.ts', '+64 −21 · 4 files'],
-      [beats(22), 'ready', 'Done. Sessions replace JWTs; 41 tests pass.', '+118 −44 · 9 files']
+      [bt(0.5), 'working', 'Editing src/auth/routes.ts', '+64 −21 · 4 files'],
+      [bt(13.5), 'ready', 'Done. Sessions replace JWTs; 41 tests pass.', '+118 −44 · 9 files']
     ]
   },
   {
@@ -26,25 +29,25 @@ const CARDS: Card[] = [
     title: 'Fix flaky checkout test',
     branch: 'sldev/flaky-checkout',
     timeline: [
-      [beats(2), 'working', 'Planning: stabilise the clock in tests', '+3 −1 · 1 file'],
-      [beats(14), 'needs', 'Allow command: npm test?', '+12 −4 · 2 files'],
-      [beats(20), 'working', 'Running npm test', '+12 −4 · 2 files'],
-      [beats(27), 'ready', 'Done. Fake timers fix the race.', '+12 −4 · 2 files']
+      [bt(1), 'working', 'Planning: stabilise the clock in tests', '+3 −1 · 1 file'],
+      [bt(7.5), 'needs', 'Allow command: npm test?', '+12 −4 · 2 files'],
+      [bt(10.2), 'working', 'Running npm test', '+12 −4 · 2 files'],
+      [bt(15), 'ready', 'Done. Fake timers fix the race.', '+12 −4 · 2 files']
     ]
   },
   {
     agent: 'Gemini CLI',
     title: 'Add rate limiting',
     branch: 'sldev/rate-limit',
-    timeline: [[beats(3), 'working', 'Writing src/api/rateLimit.ts', '+41 −0 · 2 files']]
+    timeline: [[bt(1.5), 'working', 'Writing src/api/rateLimit.ts', '+41 −0 · 2 files']]
   },
   {
     agent: 'Cursor Agent',
     title: 'Dark mode toggle',
     branch: 'sldev/dark-mode',
     timeline: [
-      [beats(4), 'working', 'Editing src/components/Toggle.tsx', '+20 −2 · 2 files'],
-      [beats(17), 'ready', 'Done. Toggle saves to localStorage.', '+33 −5 · 3 files']
+      [bt(2), 'working', 'Editing src/components/Toggle.tsx', '+20 −2 · 2 files'],
+      [bt(11.5), 'ready', 'Done. Toggle saves to localStorage.', '+33 −5 · 3 files']
     ]
   }
 ]
@@ -59,6 +62,9 @@ const COL_GAP = 22
 const CARD_H = 148
 const BOARD_X = 24
 const BOARD_Y = 118
+/** the window's content origin on the stage */
+const OX = 180 + 56
+const OY = 160 + 46
 
 function stateAt(card: Card, frame: number) {
   let s: Card['timeline'][number] | null = null
@@ -89,12 +95,21 @@ export function Missions() {
   const needs = to.filter((p) => p && p[0] === 0).length
   const win = pop(frame, 0, 18)
   return (
-    <AbsoluteFill style={{ alignItems: 'center' }}>
-      <Headline at={0} out={beats(7)}>Every agent. *One window.*</Headline>
-      <Headline at={beats(8)} out={beats(13)}>Each one in its own git worktree.</Headline>
-      <Headline at={beats(14)} out={beats(21)}>It pings you when one needs you.</Headline>
-      <Headline at={beats(22)}>And says when it&apos;s done.</Headline>
-      <div style={{ position: 'absolute', top: 180, transform: `translateY(${(1 - win) * 60}px) scale(${0.96 + 0.04 * win})`, opacity: win }}>
+    <AbsoluteFill>
+      <Camera
+        keys={[
+          [0, { y: 100, z: 0.84, rx: 16, ry: -10 }],
+          [bt(1.5), { z: 1 }],
+          [bt(3.6), { z: 1 }],
+          [bt(5), focus(OX + 760, OY + 420, 1.18, { ry: 4 })],
+          [bt(6.8), focus(OX + 760, OY + 420, 1.18, { ry: 4 })],
+          [bt(8.2), focus(OX + 300, OY + 330, 1.34, { ry: 6 })],
+          [bt(11.6), focus(OX + 330, OY + 330, 1.34, { ry: 6 })],
+          [bt(13.4), focus(OX + 1100, OY + 400, 1.16, { ry: -6 })],
+          [bt(18.5), focus(OX + 1060, OY + 400, 1.12, { ry: -4 })]
+        ]}
+      >
+      <div style={{ position: 'absolute', left: 180, top: 160, opacity: win }}>
         <Window width={1560} height={880} active={0}>
           <div style={{ position: 'absolute', left: BOARD_X, top: 24, right: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
             <div>
@@ -126,7 +141,7 @@ export function Missions() {
             const appear = pop(frame, c.timeline[0][0])
             const x = interpolate(move, [0, 1], [x0, x1])
             const y = interpolate(move, [0, 1], [y0, y1])
-            const glowBranch = frame >= beats(8) && frame < beats(13)
+            const glowBranch = frame >= bt(4.4) && frame < bt(7.4)
             return (
               <div key={c.title} style={{ position: 'absolute', left: x + 12, top: y, width: COL_W - 24, height: CARD_H, padding: '14px 16px', background: C.elev, border: `1px solid ${C.borderStrong}`, borderLeft: `3px solid ${TONE[s[1]]}`, opacity: appear, transform: `scale(${0.9 + 0.1 * appear})`, boxShadow: s[1] === 'needs' ? `0 0 40px ${C.amber}33` : 'none' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -144,7 +159,7 @@ export function Missions() {
                 </div>
                 {s[1] === 'needs' && (
                   <div style={{ position: 'absolute', right: 14, top: 50, display: 'flex', gap: 8 }}>
-                    <Button primary glow={frame > beats(18) && frame < beats(20) ? 1 : 0} style={{ padding: '5px 12px', fontSize: 13 }}>
+                    <Button primary glow={frame > bt(9) && frame < bt(10.2) ? 1 : 0} style={{ padding: '5px 12px', fontSize: 13 }}>
                       Allow
                     </Button>
                   </div>
@@ -152,17 +167,23 @@ export function Missions() {
               </div>
             )
           })}
-          <Toast at={beats(14)} out={beats(20)} tone={C.amber} icon={<Bell size={20} />} title="Codex needs you" text="Allow command: npm test?" />
+          <Spotlight x={BOARD_X + 12} y={BOARD_Y + 46} w={COL_W - 24} h={CARD_H} at={bt(7.8)} out={bt(10.6)} tone={C.amber} label="Codex is asking. One click, it carries on." side="bottom" />
+          <Toast at={bt(7.5)} out={bt(10.4)} tone={C.amber} icon={<Bell size={20} />} title="Codex needs you" text="Allow command: npm test?" />
           <Pointer
             path={[
               [0, 1300, 700],
-              [beats(15), 1300, 700],
-              [beats(18), 432, 222]
+              [bt(7.8), 1300, 700],
+              [bt(9.4), 432, 222]
             ]}
-            click={[beats(19)]}
+            click={[bt(9.9)]}
           />
         </Window>
       </div>
+      </Camera>
+      <Scrim />
+      <Headline at={0} out={bt(7.2)}>{'Every agent, each in its own *git worktree.*'}</Headline>
+      <Headline at={bt(7.5)} out={bt(12.8)}>{'It pings you when one *needs you.*'}</Headline>
+      <Headline at={bt(13.2)}>{'And tells you when it\'s *done.*'}</Headline>
     </AbsoluteFill>
   )
 }

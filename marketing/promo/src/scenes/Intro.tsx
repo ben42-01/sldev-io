@@ -1,7 +1,7 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion'
 import site from '../../../../website/src/content/site.json'
-import { BAR, BRAND, C, FPS, MONO, SERIF, UI, onBeat, pop, progress, rand, typed } from '../lib'
-import { ACCENT_IN_SERIF, Backdrop, Logo, Reveal, WORDMARK } from '../ui'
+import { BAR, BRAND, C, FPS, MONO, STORY, UI, onBeat, pop, progress, rand, story, typed } from '../lib'
+import { ACCENT_IN_STORY, Backdrop, Logo, Reveal, WORDMARK } from '../ui'
 
 // One continuous shot over the first 9 bars, so nothing cuts between the problem and the answer:
 //   bars 0–5  terminals pile up, each streaming real-looking output, the camera pulls back
@@ -416,13 +416,15 @@ export function Intro() {
           )
         })}
 
-      {/* captions: a cinema scrim at the bottom while the pile grows */}
+      {/* captions: centred over the pile, on a dark pool so they read while the terminals churn around them */}
       {frame < SWIRL && (
         <>
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 440, background: 'linear-gradient(transparent, #000000d9 60%, #000000f2)', opacity: progress(frame, 10, 16) }} />
+          <div style={{ position: 'absolute', left: 960, top: 540, width: 1900, height: 560, transform: 'translate(-50%, -50%)', background: 'radial-gradient(closest-side, #070707f0, #070707c0 55%, transparent)', opacity: progress(frame, 10, 16) }} />
           {CAPTIONS.map((c) =>
             frame >= c.at - 2 && frame < c.out + 14 ? (
-              <Reveal key={c.text} text={c.text} at={c.at} out={c.out} style={{ position: 'absolute', left: 0, right: 0, bottom: 110, font: `400 96px/1.05 ${SERIF}`, letterSpacing: '-0.01em', color: C.fg }} accent={c.accent ? { ...WORDMARK, fontSize: '0.8em', color: c.accent } : { fontStyle: 'italic' }} />
+              <AbsoluteFill key={c.text} style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <Reveal text={c.text} at={c.at} out={c.out} style={{ font: story(104), letterSpacing: STORY.spacing, color: C.fg }} accent={c.accent ? { ...WORDMARK, fontSize: '0.94em', color: c.accent } : ACCENT_IN_STORY} />
+              </AbsoluteFill>
             ) : null
           )}
         </>
@@ -432,14 +434,14 @@ export function Intro() {
       {frame >= SWIRL && !born && (
         <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ position: 'absolute', width: 1700, height: 520, background: 'radial-gradient(closest-side, #070707e6, #070707a0 55%, transparent)', opacity: progress(frame, SWIRL, 14) * (1 - rush) }} />
-          <Reveal text="Coding agents got good." at={SWIRL + 6} out={SWIRL + 52} style={{ position: 'absolute', left: 0, right: 0, font: `400 132px/1.05 ${SERIF}`, letterSpacing: '-0.015em', color: C.fg }} />
+          <Reveal text="Coding agents got good." at={SWIRL + 6} out={SWIRL + 52} style={{ position: 'absolute', left: 0, right: 0, font: story(132, 1.05), letterSpacing: STORY.spacing, color: C.fg }} />
           <Reveal
             text="Keeping track of them *didn't.*"
             at={SWIRL + 62}
             out={DROP - 16}
             stagger={4}
-            style={{ position: 'absolute', left: 0, right: 0, font: `400 132px/1.05 ${SERIF}`, letterSpacing: '-0.015em', color: C.fg }}
-            accent={ACCENT_IN_SERIF}
+            style={{ position: 'absolute', left: 0, right: 0, font: story(132, 1.05), letterSpacing: STORY.spacing, color: C.fg }}
+            accent={ACCENT_IN_STORY}
           />
         </AbsoluteFill>
       )}
@@ -473,7 +475,7 @@ function Birth({ frame }: { frame: number }) {
             </div>
           </div>
         </div>
-        <Reveal text={site.tagline} at={DROP + 40} stagger={2} style={{ marginTop: 34, font: `italic 400 54px/1.2 ${SERIF}`, color: '#a8a8a8' }} />
+        <Reveal text={site.tagline} at={DROP + 40} stagger={2} style={{ marginTop: 34, font: story(52, 1.2), letterSpacing: STORY.spacing, color: '#b4b4b4' }} />
       </AbsoluteFill>
       <AbsoluteFill style={{ background: `radial-gradient(circle at 50% 50%, #ffffff, ${C.green}66 30%, transparent 70%)`, opacity: interpolate(frame, [0, 2, 16], [0.95, 0.8, 0], { extrapolateRight: 'clamp' }), pointerEvents: 'none' }} />
     </AbsoluteFill>

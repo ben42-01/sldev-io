@@ -1,9 +1,9 @@
-import { ArrowRight, Download, EyeOff, Infinity as Forever, SquarePen } from 'lucide-react'
+import { ArrowRight, Download, Laptop, SquarePen, Star } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import site from '../../../../website/src/content/site.json'
-import { C, MONO, SERIF, UI, beats, enter, pop, progress, typed } from '../lib'
-import { Brand, Button, Headline, Logo, Pill, Pointer, Reveal, type State } from '../ui'
+import { C, MONO, STORY, UI, beats, enter, pop, progress, story, typed } from '../lib'
+import { Brand, Button, Camera, Headline, Logo, Pill, Pointer, Reveal, Scrim, type State } from '../ui'
 
 function Term({ agent, state, lines, from, width = 640, children }: { agent: string; state: State; lines: Array<[number, string, string?]>; from: number; width?: number; children?: ReactNode }) {
   const frame = useCurrentFrame()
@@ -24,51 +24,62 @@ function Term({ agent, state, lines, from, width = 640, children }: { agent: str
   )
 }
 
+/** the scene was timed for a longer cut; every beat is scaled to fit its bars */
+const bt = (n: number): number => beats(n * 0.95)
+
 /** Claude stops at its usage limit; one click and Codex carries on with the same task and notes. */
 export function Failover() {
   const frame = useCurrentFrame()
-  const handed = frame >= beats(10)
-  const arrow = progress(frame, beats(10), 12)
+  const handed = frame >= bt(10)
+  const arrow = progress(frame, bt(10), 12)
   return (
-    <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Headline at={0} out={beats(9)}>Hit your usage limit mid-task?</Headline>
-      <Headline at={beats(10)}>Another agent picks it up. Same task, same branch.</Headline>
+    <AbsoluteFill>
+      <Camera
+        keys={[
+          [0, { x: 120, y: 30, z: 1.0, rx: 8, ry: 12 }],
+          [bt(4), { x: 160, y: 20, z: 1.06, ry: 8 }],
+          [bt(9), { x: 140, y: 20, z: 1.06, ry: 6 }],
+          [bt(11), { x: -140, y: 20, z: 1.06, ry: -8 }],
+          [bt(16), { x: -160, y: 20, z: 1.08, ry: -10 }]
+        ]}
+      >
+      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 40, marginTop: 120 }}>
         <Term
           agent="Claude Code"
-          state={frame >= beats(4) ? 'limit' : 'working'}
+          state={frame >= bt(4) ? 'limit' : 'working'}
           from={0}
           lines={[
             [4, '● Reading src/checkout.ts'],
             [16, '● Editing src/checkout.ts'],
             [32, '● Adding retry with backoff…'],
-            [beats(4), 'Usage limit reached.', C.amber],
-            [beats(4) + 8, 'Resets at 3pm.', C.amber]
+            [bt(4), 'Usage limit reached.', C.amber],
+            [bt(4) + 8, 'Resets at 3pm.', C.amber]
           ]}
         >
-          {frame >= beats(5) && (
-            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 18, padding: '14px 16px', border: `1px solid ${C.amber}66`, background: `${C.amber}10`, display: 'flex', alignItems: 'center', gap: 12, ...enter(frame, beats(5), { rise: 12 }) }}>
+          {frame >= bt(5) && (
+            <div style={{ position: 'absolute', left: 18, right: 18, bottom: 18, padding: '14px 16px', border: `1px solid ${C.amber}66`, background: `${C.amber}10`, display: 'flex', alignItems: 'center', gap: 12, ...enter(frame, bt(5), { rise: 12 }) }}>
               <span style={{ color: C.amber, fontSize: 16, flex: 1 }}>Claude Code stopped at its usage limit.</span>
-              <Button primary glow={frame > beats(8) && frame < beats(10) ? 1 : 0}>Continue on Codex</Button>
+              <Button primary glow={frame > bt(8) && frame < bt(10) ? 1 : 0}>Continue on Codex</Button>
             </div>
           )}
         </Term>
         <div style={{ width: 90, opacity: arrow, transform: `translateX(${(1 - arrow) * -30}px)`, color: C.green }}>
           <ArrowRight size={90} strokeWidth={1.5} />
         </div>
-        <div style={{ opacity: handed ? 1 : 0.15 }}>
+        <div style={{ opacity: handed ? 1 : 0.4, filter: handed ? undefined : 'grayscale(1)' }}>
           <Term
             agent="Codex"
             state={handed ? 'working' : 'ready'}
-            from={handed ? beats(10) : 0}
+            from={handed ? bt(10) : 0}
             lines={
               handed
                 ? [
-                    [beats(10) + 6, "› Picking up where Claude Code stopped", C.green],
-                    [beats(11), "› Reading its notes and partial diff"],
-                    [beats(12), '› Editing src/checkout.ts'],
-                    [beats(13), '› Running npm test'],
-                    [beats(14) + 8, '  ✓ 26 passed', C.green]
+                    [bt(10) + 6, "› Picking up where Claude Code stopped", C.green],
+                    [bt(11), "› Reading its notes and partial diff"],
+                    [bt(12), '› Editing src/checkout.ts'],
+                    [bt(13), '› Running npm test'],
+                    [bt(14) + 8, '  ✓ 26 passed', C.green]
                   ]
                 : []
             }
@@ -79,61 +90,84 @@ export function Failover() {
         <Pointer
           path={[
             [0, 1100, 950],
-            [beats(6), 1100, 950],
-            [beats(8), 690, 805]
+            [bt(6), 1100, 950],
+            [bt(8), 690, 805]
           ]}
-          click={[beats(9)]}
+          click={[bt(9)]}
         />
       </AbsoluteFill>
+      </AbsoluteFill>
+      </Camera>
+      <Scrim />
+      <Headline at={0} out={bt(9.4)}>{'Hit your usage limit *mid-task?*'}</Headline>
+      <Headline at={bt(10)}>{'Codex picks it up. *Same branch.*'}</Headline>
     </AbsoluteFill>
   )
 }
 
-const AGENTS = ['Claude Code', 'Codex', 'Cursor Agent', 'GitHub Copilot', 'Gemini CLI', 'OpenCode', 'your own CLI']
+// the agents come from the website, so the advert lists what the site lists; the last one is "Any CLI"
+const AGENTS = site.agents
 const VALUES = [
-  { icon: SquarePen, title: 'Not an IDE', text: 'Your files open in your own editor.' },
-  { icon: Forever, title: 'No new AI subscription', text: 'It runs the agents you already have.' },
-  { icon: EyeOff, title: 'No telemetry', text: 'It all runs on your machine.' }
+  { icon: SquarePen, title: 'Not an IDE.', text: 'Your files open in the editor you already use.' },
+  { icon: Laptop, title: 'Runs on your machine.', text: 'No cloud in between, no telemetry.' },
+  { icon: Star, title: 'Free and open source.', text: 'Every feature, no account, no license key.' }
 ]
+const NAME_AT = (i: number): number => beats(1 + i * 1.15)
+const SECOND = beats(10)
 
-/** Agent-agnostic, then what it is not. */
+/** Agent-agnostic, as a slot that lands one name per beat and a bit, then three things it is not. */
 export function Agents() {
   const frame = useCurrentFrame()
-  const second = beats(10)
-  const out = 1 - progress(frame, second - 8, 8)
+  const first = 1 - progress(frame, SECOND - 8, 8)
+  const current = AGENTS.reduce((n, _, i) => (frame >= NAME_AT(i) ? i : n), 0)
   return (
-    <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', fontFamily: UI }}>
-      <Headline at={0} out={second - 8} top={300} size={76}>
-        {'Bring the agents you *already use.*'}
-      </Headline>
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18, width: 1400, marginTop: 220, opacity: out }}>
-        {AGENTS.map((a, i) => {
-          const p = pop(frame, beats(1 + i))
-          return (
-            <div key={a} style={{ padding: '18px 30px', fontSize: 34, fontWeight: 600, border: `1px solid ${i === AGENTS.length - 1 ? C.border : C.borderStrong}`, background: C.elev, color: i === AGENTS.length - 1 ? C.muted : C.fg, opacity: p, transform: `translateY(${(1 - p) * 30}px) scale(${0.9 + 0.1 * p})` }}>
-              {a}
-            </div>
-          )
-        })}
-      </div>
-      {frame >= second - 8 && (
-        <>
-          <Headline at={second} top={300} size={76}>
-            Built around how you already work.
-          </Headline>
-          <div style={{ position: 'absolute', top: 520, display: 'flex', gap: 28 }}>
-            {VALUES.map((v, i) => {
-              const Icon = v.icon
+    <AbsoluteFill style={{ fontFamily: UI }}>
+      {frame < SECOND && (
+        <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', opacity: first }}>
+          <div style={{ font: story(64), letterSpacing: STORY.spacing, color: C.muted, ...enter(frame, 0, { rise: 16 }) }}>Bring the agent you already use</div>
+          <div style={{ position: 'relative', height: 190, width: 1800, marginTop: 20, overflow: 'hidden' }}>
+            {AGENTS.map((a, i) => {
+              const inP = progress(frame, NAME_AT(i), 9)
+              const outP = i < AGENTS.length - 1 ? progress(frame, NAME_AT(i + 1), 9) : 0
+              if (inP <= 0 || outP >= 1) return null
+              const last = i === AGENTS.length - 1
               return (
-                <div key={v.title} style={{ width: 440, padding: '34px 32px', background: C.bg, border: `1px solid ${C.border}`, borderTop: '2px solid transparent', borderImage: `linear-gradient(90deg, ${C.blue}, ${C.green}, ${C.purple}) 1`, borderImageSlice: '1 0 0 0', ...enter(frame, second + beats(1 + i), { rise: 30 }) }}>
-                  <Icon size={34} strokeWidth={1.5} color={C.green} />
-                  <div style={{ fontSize: 34, fontWeight: 700, marginTop: 18, letterSpacing: '-0.02em' }}>{v.title}</div>
-                  <div style={{ fontSize: 24, color: C.muted, marginTop: 8 }}>{v.text}</div>
+                <div key={a} style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `translateY(${(1 - inP) * 120 - outP * 120}px)`, opacity: inP * (1 - outP) ** 3, filter: `blur(${(1 - inP) * 8 + outP * 12}px)` }}>
+                  <span style={{ font: `700 150px/1.1 ${UI}`, letterSpacing: '-0.05em', ...(last ? { background: `linear-gradient(90deg, ${C.blue}, ${C.green}, ${C.purple})`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', padding: '0 0.05em' } : { color: C.fg }) }}>{a}</span>
                 </div>
               )
             })}
           </div>
-        </>
+          {/* the ones already named collect underneath */}
+          <div style={{ display: 'flex', gap: 14, marginTop: 30, height: 46 }}>
+            {AGENTS.map((a, i) => (
+              <span key={a} style={{ padding: '8px 16px', border: `1px solid ${i === current ? C.green : C.borderStrong}`, color: i === current ? C.fg : C.muted, fontSize: 20, fontWeight: 600, background: C.elev, opacity: pop(frame, NAME_AT(i) + 4), transform: `scale(${0.8 + 0.2 * pop(frame, NAME_AT(i) + 4)})` }}>
+                {a}
+              </span>
+            ))}
+          </div>
+        </AbsoluteFill>
+      )}
+      {frame >= SECOND - 4 && (
+        <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 56 }}>
+          {VALUES.map((v, i) => {
+            const Icon = v.icon
+            const at = SECOND + beats(i * 1.6)
+            return (
+              <div key={v.title} style={{ display: 'flex', alignItems: 'center', gap: 40, ...enter(frame, at, { rise: 40, dur: 14 }) }}>
+                <div style={{ width: 104, height: 104, display: 'grid', placeItems: 'center', border: `1px solid ${C.borderStrong}`, background: C.elev, borderRadius: 18, boxShadow: `0 0 40px ${[C.blue, C.green, C.purple][i]}22` }}>
+                  <Icon size={50} strokeWidth={1.5} color={[C.blue, C.green, C.purple][i]} />
+                </div>
+                <div>
+                  <div style={{ font: `700 76px/1.05 ${UI}`, letterSpacing: '-0.04em' }}>{v.title}</div>
+                  <div style={{ font: story(36, 1.3), letterSpacing: STORY.spacing, color: C.muted, marginTop: 6 }}>{v.text}</div>
+                </div>
+              </div>
+            )
+          })}
+          </div>
+        </AbsoluteFill>
       )}
     </AbsoluteFill>
   )
@@ -146,21 +180,28 @@ export function Cta() {
   const end = interpolate(frame, [durationInFrames - 24, durationInFrames - 1], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
   return (
     <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', fontFamily: UI, opacity: end }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 26, ...enter(frame, 0, { dur: 10, rise: 0 }) }}>
-        <Logo size={120} />
-        <div style={{ font: `700 116px/1 ${UI}`, letterSpacing: '-0.05em' }}>
+      {/* an aurora turning slowly behind the mark */}
+      <div style={{ position: 'absolute', left: 960, top: 470, width: 1300, height: 1300, transform: `translate(-50%, -50%) rotate(${frame * 0.6}deg) scale(${0.8 + 0.2 * pop(frame, 0, 20)})`, borderRadius: '50%', background: `conic-gradient(from 0deg, ${C.blue}00, ${C.blue}40, ${C.green}40, ${C.purple}40, ${C.blue}00 70%)`, filter: 'blur(90px)', opacity: 0.55 }} />
+      <div style={{ position: 'absolute', left: 960, top: 470, width: 1500 * progress(frame, 0, 40), height: 1500 * progress(frame, 0, 40), transform: 'translate(-50%, -50%)', borderRadius: '50%', border: `1px solid ${C.green}`, opacity: 0.5 * (1 - progress(frame, 0, 40)) }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 26, ...enter(frame, 0, { dur: 10, rise: 0 }), position: 'relative', overflow: 'hidden', padding: '0 20px' }}>
+        {/* a glint across the wordmark */}
+        <div style={{ position: 'absolute', top: 0, bottom: 0, width: 160, left: interpolate(frame, [beats(1), beats(2.5)], [-200, 1100], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }), background: 'linear-gradient(100deg, transparent, #ffffff30, transparent)', mixBlendMode: 'screen' }} />
+        <Logo size={150} />
+        <div style={{ font: `700 150px/1.1 ${UI}`, letterSpacing: '-0.05em' }}>
           <Brand>{site.name}</Brand>
         </div>
       </div>
-      <Reveal text={site.tagline} at={beats(1)} stagger={2} style={{ marginTop: 26, font: `italic 400 50px/1.2 ${SERIF}`, color: '#a8a8a8' }} />
-      <div style={{ display: 'flex', gap: 18, marginTop: 56, ...enter(frame, beats(2)) }}>
-        <Button primary style={{ fontSize: 30, padding: '18px 30px', gap: 14 }}>
-          <Download size={30} /> Download free
+      <Reveal text={site.tagline} at={beats(1)} stagger={2} style={{ marginTop: 22, font: story(58, 1.2), letterSpacing: STORY.spacing, color: '#c4c4c4' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 22, marginTop: 70, ...enter(frame, beats(2.5)) }}>
+        <Button primary glow={0.6 + 0.4 * Math.sin(frame / 9)} style={{ fontSize: 38, padding: '22px 38px', gap: 16, borderRadius: 8 }}>
+          <Download size={36} /> Download free
         </Button>
-        <Button style={{ fontSize: 30, padding: '18px 30px' }}>Open source</Button>
+        <div style={{ fontSize: 34, color: C.muted }}>
+          <span style={{ color: C.fg, fontWeight: 700 }}>Open source</span>, Apache-2.0
+        </div>
       </div>
-      <div style={{ fontSize: 26, color: C.subtle, marginTop: 34, letterSpacing: '0.04em', ...enter(frame, beats(3)) }}>{site.platforms.join('  ·  ')}</div>
-      <div style={{ fontSize: 44, fontWeight: 600, marginTop: 50, fontFamily: MONO, ...enter(frame, beats(4)) }}>{site.url.replace(/^https?:\/\//, '')}</div>
+      <div style={{ fontSize: 24, color: C.muted, marginTop: 26, letterSpacing: '0.02em', ...enter(frame, beats(3.5)) }}>Star it on GitHub · {site.platforms.join(' · ')}</div>
+      <div style={{ fontSize: 56, fontWeight: 600, marginTop: 64, fontFamily: MONO, letterSpacing: '-0.02em', ...enter(frame, beats(5)) }}>{site.url.replace(/^https?:\/\//, '')}</div>
     </AbsoluteFill>
   )
 }

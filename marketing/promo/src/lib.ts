@@ -13,14 +13,15 @@ export const beats = (n: number): number => Math.round(n * BEAT)
 // the website's tokens (website/src/styles.css)
 export const C = {
   bg: '#0a0a0a',
-  elev: '#0f0f0f',
-  panel: '#0c0c0c',
+  // surfaces a step lighter than the website's, so the UI reads on video (and on a phone)
+  elev: '#151515',
+  panel: '#0f0f0f',
   hover: '#ffffff0d',
-  border: '#1f1f1f',
-  borderStrong: '#333333',
+  border: '#262626',
+  borderStrong: '#3b3b3b',
   fg: '#ededed',
-  muted: '#8f8f8f',
-  subtle: '#5a5a5a',
+  muted: '#9c9c9c',
+  subtle: '#666666',
   blue: '#4d8dff',
   green: '#2ee6a8',
   purple: '#a970ff',
@@ -31,8 +32,17 @@ export const BRAND = `linear-gradient(90deg, ${C.blue}, ${C.green}, ${C.purple})
 export const BRAND_D = `linear-gradient(135deg, ${C.blue}, ${C.green}, ${C.purple})`
 export const UI = "Inter, -apple-system, 'Segoe UI', Ubuntu, sans-serif"
 export const MONO = "'JetBrains Mono', Menlo, Consolas, monospace"
-/** the display face for the story beats (intro captions, the turn, the tagline) */
-export const SERIF = "'Instrument Serif', Georgia, serif"
+/**
+ * The thin face for the story beats (intro captions, the turn, the tagline). Anything in the brand
+ * gradient stays Inter bold, like the wordmark: thin story, bold brand.
+ */
+export const STORY_FONTS = {
+  roboto: { family: "Roboto, 'Helvetica Neue', Arial, sans-serif", weight: 100, small: 300, scale: 1, spacing: '-0.02em' },
+  mono: { family: "'JetBrains Mono', Menlo, Consolas, monospace", weight: 200, small: 300, scale: 0.88, spacing: '-0.04em' }
+} as const
+export const STORY = STORY_FONTS.roboto
+/** a CSS font shorthand in the story face; below 72px it takes a heavier cut, or a hairline disappears */
+export const story = (size: number, lh = 1.1): string => `${size < 72 ? STORY.small : STORY.weight} ${Math.round(size * STORY.scale)}px/${lh} ${STORY.family}`
 
 export const ease = Easing.bezier(0.2, 0.7, 0.2, 1)
 

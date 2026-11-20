@@ -2,7 +2,10 @@ import { Bot, Check, FileText, FlaskConical, GitPullRequest, RotateCcw } from 'l
 import type { ReactNode } from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
 import { BRAND, C, MONO, beats, pop, progress } from '../lib'
-import { Button, Headline, Pointer, Window } from '../ui'
+import { Button, Camera, Headline, Pointer, Scrim, Spotlight, Window, focus } from '../ui'
+
+/** the scene was timed for a longer cut; every beat is scaled to fit its bars */
+const bt = (n: number): number => beats(n * 0.93)
 
 type NodeState = 'pending' | 'running' | 'approval' | 'done' | 'failed' | 'shipped'
 const TONE: Record<NodeState, string> = { pending: C.subtle, running: C.blue, approval: C.amber, done: C.green, failed: C.red, shipped: C.purple }
@@ -21,11 +24,11 @@ interface Node {
 const W = 270
 const H = 128
 const NODES: Node[] = [
-  { id: 'spec', title: 'Write the spec', who: 'Codex', icon: <FileText size={16} />, x: 70, y: 300, timeline: [[beats(2), 'running'], [beats(6), 'approval'], [beats(9), 'done']] },
-  { id: 'backend', title: 'Build the API', who: 'Claude Code', icon: <Bot size={16} />, x: 430, y: 150, timeline: [[beats(9), 'running'], [beats(15), 'done']] },
-  { id: 'frontend', title: 'Build the UI', who: 'Codex', icon: <Bot size={16} />, x: 430, y: 460, timeline: [[beats(9), 'running'], [beats(16), 'done'], [beats(19), 'running', 'attempt 2 · fixing the test'], [beats(22), 'done', 'attempt 2']] },
-  { id: 'tests', title: 'Run the tests', who: 'npm test', icon: <FlaskConical size={16} />, x: 790, y: 300, timeline: [[beats(16), 'running'], [beats(18), 'failed', '1 failed: refund button'], [beats(22), 'running', 'attempt 2'], [beats(24), 'done', '26 passed']] },
-  { id: 'pr', title: 'Pull request', who: 'you decide', icon: <GitPullRequest size={16} />, x: 1150, y: 300, timeline: [[beats(24), 'approval'], [beats(28), 'shipped', '#129 · checks passing']] }
+  { id: 'spec', title: 'Write the spec', who: 'Codex', icon: <FileText size={16} />, x: 70, y: 300, timeline: [[bt(2), 'running'], [bt(6), 'approval'], [bt(9), 'done']] },
+  { id: 'backend', title: 'Build the API', who: 'Claude Code', icon: <Bot size={16} />, x: 430, y: 150, timeline: [[bt(9), 'running'], [bt(15), 'done']] },
+  { id: 'frontend', title: 'Build the UI', who: 'Codex', icon: <Bot size={16} />, x: 430, y: 460, timeline: [[bt(9), 'running'], [bt(16), 'done'], [bt(19), 'running', 'attempt 2 · fixing the test'], [bt(22), 'done', 'attempt 2']] },
+  { id: 'tests', title: 'Run the tests', who: 'npm test', icon: <FlaskConical size={16} />, x: 790, y: 300, timeline: [[bt(16), 'running'], [bt(18), 'failed', '1 failed: refund button'], [bt(22), 'running', 'attempt 2'], [bt(24), 'done', '26 passed']] },
+  { id: 'pr', title: 'Pull request', who: 'you decide', icon: <GitPullRequest size={16} />, x: 1150, y: 300, timeline: [[bt(24), 'approval'], [bt(28), 'shipped', '#129 · checks passing']] }
 ]
 const EDGES: Array<[string, string]> = [
   ['spec', 'backend'],
@@ -47,16 +50,22 @@ export function FactoryScene() {
   const frame = useCurrentFrame()
   const win = pop(frame, 0, 18)
   const done = NODES.filter((n) => ['done', 'shipped'].includes(stateOf(n, frame)[0])).length
-  const retry = progress(frame, beats(18), 14)
+  const retry = progress(frame, bt(18), 14)
   return (
-    <AbsoluteFill style={{ alignItems: 'center' }}>
-      <Headline at={0} out={beats(8)}>
-        {'Software Factory: an idea in, *a PR out.*'}
-      </Headline>
-      <Headline at={beats(9)} out={beats(17)}>Agents build in parallel.</Headline>
-      <Headline at={beats(18)} out={beats(24)}>Tests fail? It loops back and fixes.</Headline>
-      <Headline at={beats(25)}>Nothing ships without *your click.*</Headline>
-      <div style={{ position: 'absolute', top: 180, opacity: win, transform: `translateY(${(1 - win) * 60}px)` }}>
+    <AbsoluteFill>
+      <Camera
+        keys={[
+          [0, { y: 90, z: 0.84, rx: 18, ry: -12 }],
+          [bt(2), { z: 1 }],
+          [bt(5), focus(180 + 56 + 300, 160 + 46 + 380, 1.3, { ry: 6 })],
+          [bt(9), focus(180 + 56 + 420, 160 + 46 + 380, 1.15, { ry: 2 })],
+          [bt(17), focus(180 + 56 + 760, 160 + 46 + 450, 1.28, { ry: -4 })],
+          [bt(23), focus(180 + 56 + 760, 160 + 46 + 450, 1.28, { ry: -4 })],
+          [bt(26), focus(180 + 56 + 1150, 160 + 46 + 380, 1.3, { ry: -8 })],
+          [bt(32), focus(180 + 56 + 1150, 160 + 46 + 380, 1.3, { ry: -8 })]
+        ]}
+      >
+      <div style={{ position: 'absolute', left: 180, top: 160, opacity: win }}>
         <Window width={1560} height={880} active={3}>
           <div style={{ position: 'absolute', left: 24, right: 24, top: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
             <div>
@@ -83,11 +92,11 @@ export function FactoryScene() {
               const live = stateOf(B, frame)[0] !== 'pending'
               return <path key={i} d={d} fill="none" stroke={live ? '#4a4a4a' : C.borderStrong} strokeWidth={2} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - draw} />
             })}
-            {frame >= beats(18) && (
+            {frame >= bt(18) && (
               <path
                 d={`M${byId.tests.x + W / 2},${byId.tests.y + H} C${byId.tests.x + W / 2},${byId.tests.y + H + 170} ${byId.frontend.x + W + 120},${byId.frontend.y + H / 2} ${byId.frontend.x + W},${byId.frontend.y + H / 2}`}
                 fill="none"
-                stroke={frame < beats(22) ? C.red : '#5a3a3f'}
+                stroke={frame < bt(22) ? C.red : '#5a3a3f'}
                 strokeWidth={2.5}
                 strokeDasharray="8 7"
                 strokeDashoffset={-frame * 0.8}
@@ -95,7 +104,7 @@ export function FactoryScene() {
               />
             )}
           </svg>
-          {frame >= beats(18) && (
+          {frame >= bt(18) && (
             <div style={{ position: 'absolute', left: byId.tests.x + W / 2 - 40, top: byId.tests.y + H + 108, display: 'flex', gap: 6, alignItems: 'center', fontSize: 14, color: C.red, opacity: retry, fontFamily: MONO }}>
               <RotateCcw size={14} /> retry build-ui
             </div>
@@ -131,18 +140,26 @@ export function FactoryScene() {
               </div>
             )
           })}
+          <Spotlight x={byId.tests.x} y={byId.tests.y} w={W} h={H} at={bt(18.3)} out={bt(22)} tone={C.red} label="1 test failed: it goes back to the UI agent" side="bottom" />
           <Pointer
             path={[
               [0, 700, 720],
-              [beats(6), 700, 720],
-              [beats(8), byId.spec.x + 60, byId.spec.y + 100],
-              [beats(24), byId.spec.x + 60, byId.spec.y + 100],
-              [beats(27), byId.pr.x + 90, byId.pr.y + 100]
+              [bt(6), 700, 720],
+              [bt(8), byId.spec.x + 60, byId.spec.y + 100],
+              [bt(24), byId.spec.x + 60, byId.spec.y + 100],
+              [bt(27), byId.pr.x + 90, byId.pr.y + 100]
             ]}
-            click={[beats(8.5), beats(27.5)]}
+            click={[bt(8.5), bt(27.5)]}
           />
         </Window>
       </div>
+      </Camera>
+      <Scrim />
+      <Headline at={0} out={bt(17)}>
+        {'Software Factory: an idea in, *a PR out.*'}
+      </Headline>
+      <Headline at={bt(18)} out={bt(24)}>Tests fail? It loops back and fixes.</Headline>
+      <Headline at={bt(25)}>Nothing ships without *your click.*</Headline>
     </AbsoluteFill>
   )
 }

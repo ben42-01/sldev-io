@@ -1,0 +1,16 @@
+{
+  "bpm": 120,
+  "scenes": [
+    { "id": "intro", "bars": 9, "energy": "intro" },
+    { "id": "board", "bars": 7, "energy": "groove", "chapter": "Plan", "tag": "The Board" },
+    { "id": "missions", "bars": 6, "energy": "full", "chapter": "Build", "tag": "Mission Control" },
+    { "id": "lead", "bars": 6, "energy": "full", "tag": "Lead missions" },
+    { "id": "factory", "bars": 7, "energy": "full", "tag": "Software Factory" },
+    { "id": "failover", "bars": 4, "energy": "full", "tag": "Failover" },
+    { "id": "review", "bars": 6, "energy": "lite", "chapter": "Review", "tag": "Review cockpit" },
+    { "id": "evals", "bars": 5, "energy": "lite", "tag": "Evals" },
+    { "id": "ship", "bars": 8, "energy": "peak", "chapter": "Ship", "tag": "Git · Diagrams · Recap · CLI" },
+    { "id": "agents", "bars": 5, "energy": "break" },
+    { "id": "cta", "bars": 5, "energy": "outro" }
+  ]
+}
