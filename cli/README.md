@@ -40,7 +40,7 @@ Claude's hooks and the MCP tools), both protected.
 
 ## Install
 
-Needs Node.js 22.5 or newer, on Linux, macOS or Windows 10/11 (Windows is new: tested in CI, tell us what breaks).
+Needs Node.js 22.16 or newer, on Linux, macOS or Windows 10/11 (Windows is new: tested in CI, tell us what breaks).
 
 ```bash
 npm i -g sldev-cli    # the package is sldev-cli; the command is sldev
@@ -57,7 +57,7 @@ npm i -g github:ben42-01/downloads.sldev.io#cli-v0.3.0   # a specific version
 From a checkout of the source repo, `npm run cli:pack` builds `dist/sldev-cli-<version>.tgz`, which installs with `npm i -g ./dist/sldev-cli-<version>.tgz`.
 
 The CLI is standalone: it does not need the sldev-io desktop app or Electron. It needs Node.js
-22.5+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS and Windows get a prebuilt binary.
+22.16+, plus a C++ toolchain on Linux (`build-essential`, Python 3), because node-pty compiles there; macOS and Windows get a prebuilt binary.
 
 On Windows the daemon listens on a named pipe instead of a Unix socket, notifications are Windows toasts,
 and repeat checks run in cmd.exe (a check that starts with a `.ps1` runs in PowerShell).
@@ -72,7 +72,7 @@ sldev ls
 sldev wait 2 --for needs-you
 sldev send 2 "yes"
 sldev new --allow-spawn 2 "Split the migration into parts and hand two of them to other agents"
-sldev stop                # stops the daemon and every agent in it
+sldev stop                # stops the daemon and every agent in it (a reboot doesn't: they resume)
 ```
 
 ### Briefs
@@ -178,6 +178,13 @@ every tab's screen and scrollback. Typing `exit` in a shell tab closes it. Shell
 and take `send`, `read` and `kill` like agents, but they aren't missions: the sldev MCP tools don't list
 them, and `sldev wait` without a pane waits for agents only.
 
+**Sessions survive a reboot** (or a daemon that crashed or was killed): the daemon keeps its panes in
+`sessions.json` in its folder, and the next `sldev` reopens each shell tab in its folder and resumes each agent's
+own session where it was (Claude Code by its session id, the others with their "continue the latest session").
+A prompt is never sent again, so an agent that hadn't started a session yet, a `--print` run, a pass of a repeat
+and an agent another agent started come back as ended, with why, and their files as they left them. Repeat loops
+themselves don't come back. `sldev stop` stops every agent on purpose, so it forgets them.
+
 ### Agents that start agents
 
 An agent in a pane can run `sldev` too. sldev gives every agent pane `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON`, and
@@ -265,7 +272,7 @@ work to another.
 The CLI keeps its own folder: `~/.config/sldev` on Linux (`$XDG_CONFIG_HOME/sldev` when that is set),
 `~/Library/Application Support/sldev` on macOS, `%APPDATA%\sldev` on Windows; `SLDEV_DATA_DIR` overrides it.
 Its config, user mission kinds (`missions/`), the project context index (`context/`) and the daemon's runtime
-files (socket, `daemon.log`, hook relay, MCP script) all live there. It shares code with the sldev-io app, not
+files (socket, `daemon.log`, `sessions.json`, hook relay, MCP script) all live there. It shares code with the sldev-io app, not
 state: it never reads the app's settings, and the two can run at the same time without answering each other's
 agents. The one time it looks at the app's folder is `sldev clean --orphans`, which reads the app's missions,
 runs and automations (read only) so it never removes a worktree the app uses (`SLDEV_APP_DATA_DIR` points it

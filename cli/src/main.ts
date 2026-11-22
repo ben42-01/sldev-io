@@ -71,7 +71,7 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
 Inside a pane, sldev knows which pane it runs in: ls, read and wait work on any pane, send and kill only
 on the agents that pane started, and the TUI, review, loops stop and stop not at all.
-  sldev stop                    stop the daemon and every agent in it
+  sldev stop                    stop the daemon and every agent in it, and forget them
   sldev config                  where the config file is and what it says (edit it by hand; keys in the README)
 
   sldev rules [status|init|sync [--overwrite <ids>]]   one .sldev/rules.md for every agent
@@ -87,7 +87,8 @@ on the agents that pane started, and the TUI, review, loops stop and stop not at
   sldev agents | sldev kinds                           what's installed, what kinds exist (project kinds:
                                                        .sldev-cli/kinds/*.md, the format of the app's .sldev/missions)
 
-Panes run in a background daemon (sldev serve), so they keep going when you detach.
+Panes run in a background daemon (sldev serve), so they keep going when you detach. After a reboot, the next
+sldev reopens shell tabs in their folders and resumes each agent's session (no prompt is sent again).
 .sldev-cli/ is the CLI's own project folder (git-ignored by its own .gitignore); the app never reads it, and the
 CLI never reads the app's .sldev/drafts. .sldev/memory.md and .sldev/rules.md are shared by both.
 SLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light)

@@ -209,12 +209,15 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   const addView = async (info: PaneInfo): Promise<void> => {
     if (views.has(info.id)) return
-    const view: View = { info, term: createTerm(120, 40) }
+    const snap = await client.request('screen', { pane: info.id }, 10_000).catch(() => ({ data: '', cols: undefined, rows: undefined }))
+    if (views.has(info.id)) return
+    // the snapshot is drawn at the pane's own size; sizeViews then fits it to this terminal
+    const view: View = { info, term: createTerm(snap.cols ?? 120, snap.rows ?? 40) }
     trackModes(view)
     views.set(info.id, view)
     if (!order.includes(info.id)) order.push(info.id)
     active ??= info.id
-    const { data } = await client.request('screen', { pane: info.id }, 10_000).catch(() => ({ data: '' }))
+    const { data } = snap
     // xterm parses a write later: wait for it, or a quiet pane (a shell at its prompt) stays blank until it prints again
     await new Promise<void>((r) => view.term.write(data, r))
   }

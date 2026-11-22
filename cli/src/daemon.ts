@@ -20,13 +20,14 @@ import { addWorktree, diffStat, gitBranch, head, isRepo, run } from '../../src/m
 import { memoryInfo } from '../../src/main/memory'
 import { closeContext, initContext, search } from '../../src/main/context'
 import { lineReader, MAX_SPAWN, WAIT_STATES, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type PaneOrigin, type Request, type Requests, type Response, type TabState } from './protocol'
-import { createTerm, screenText, termScreen, type Term } from './screen'
+import { createTerm, screenText, snapshot, termScreen, type Term } from './screen'
 import { Tracker } from './tracker'
 import { Loops, type PassStart } from './loops'
 import { desktopNotify } from './notify'
 import { readConfig } from './config'
 import { cliKinds, cliRoot } from './briefs'
 import { socketPath } from './paths'
+import { isLive, readSessions, restorePlan, sessionWriter } from './sessions'
 import { VERSION } from './version'
 
 /**
@@ -39,8 +40,6 @@ interface Pane {
   /** null for a plain shell tab */
   agent: AgentDef | null
   term: Term
-  /** the raw output, capped: a TUI that attaches replays it into its own screen */
-  history: string
   /** an agent's status; a shell has none */
   tracker?: Tracker
 }
@@ -73,7 +72,6 @@ interface PaneSpec {
   rows: number
 }
 
-const HISTORY_MAX = 512 * 1024
 const MAX_INLINE_PROMPT = 12_000
 const CONTEXT_HITS = 6
 
@@ -114,9 +112,13 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   const notify = o.notify ?? desktopNotify
   const instance = randomBytes(16).toString('hex')
 
+  const saved = sessionWriter(dir, () => ({ version: 1, nextId, tabs: { ...tabs, order: [...tabs.order] }, panes: [...panes.values()].map((p) => p.info) }))
+
   const broadcast = (e: DaemonEvent): void => {
     const line = JSON.stringify(e) + '\n'
     for (const c of clients) if (!c.destroyed) c.write(line)
+    // a pane, its status or its tab changed: the file follows (output alone changes nothing that's saved)
+    if (e.event !== 'output') saved.schedule()
   }
 
   const ptys = new PtyManager()
@@ -124,7 +126,6 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     data: (id, data) => {
       const p = panes.get(id)
       if (!p) return ptys.ack(id, data.length)
-      p.history = (p.history + data).slice(-HISTORY_MAX)
       p.term.write(data, () => ptys.ack(id, data.length))
       broadcast({ event: 'output', pane: id, data })
       p.tracker?.output()
@@ -212,8 +213,8 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   }
 
   /** A plain shell in its own tab: the user's $SHELL (Windows: PowerShell), through the same pty code as the agents. */
-  async function newShell(a: NewPaneArgs): Promise<PaneInfo> {
-    const id = String(nextId++)
+  async function newShell(a: NewPaneArgs, restored?: PaneInfo): Promise<PaneInfo> {
+    const id = restored?.id ?? String(nextId++)
     const now = Date.now()
     const repo = await isRepo(a.cwd)
     const top = repo ? (await run('git', ['rev-parse', '--show-toplevel'], a.cwd)).stdout.trim() : ''
@@ -230,9 +231,10 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       createdAt: now,
       updatedAt: now,
       agentName: name,
-      shell: true
+      shell: true,
+      ...(restored && { createdAt: restored.createdAt })
     }
-    const pane: Pane = { info, agent: null, term: createTerm(a.cols ?? 120, a.rows ?? 40), history: '' }
+    const pane: Pane = { info, agent: null, term: createTerm(a.cols ?? 120, a.rows ?? 40) }
     panes.set(id, pane)
     try {
       const { pid } = ptys.create(sink, id, { cwd: a.cwd, cols: a.cols ?? 120, rows: a.rows ?? 40 })
@@ -241,15 +243,16 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       panes.delete(id)
       throw new Error(`Could not start a shell: ${(err as Error).message}`)
     }
-    addTab(id)
+    if (!restored) addTab(id)
     broadcast({ event: 'pane', pane: pane.info })
     return pane.info
   }
 
-  function spawnPane(s: PaneSpec): PaneInfo {
-    const id = String(nextId++)
+  /** `restored`: a pane from before the daemon restarted, which comes back with its id and resumes its agent's session */
+  function spawnPane(s: PaneSpec, restored?: { info: PaneInfo; resume: string | true }): PaneInfo {
+    const id = restored?.info.id ?? String(nextId++)
     const now = Date.now()
-    const info: PaneInfo = {
+    const fresh: PaneInfo = {
       id,
       title: s.title,
       prompt: s.prompt,
@@ -272,12 +275,22 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       spawned: s.spawned,
       spawnedBy: s.spawnedBy
     }
+    const info: PaneInfo = restored
+      ? {
+          ...restored.info,
+          pid: undefined,
+          exitCode: undefined,
+          status: 'starting',
+          notification: 'Resumed after sldev restarted',
+          updatedAt: now,
+          history: pushStatus(restored.info.history, 'starting', now)
+        }
+      : fresh
     const term = createTerm(s.cols, s.rows, { bell: () => pane.tracker?.attention(), notify: (text) => pane.tracker?.attention(text) })
     const pane: Pane = {
       info,
       agent: s.agent,
       term,
-      history: '',
       tracker: new Tracker({
         agent: s.agent,
         get: () => pane.info,
@@ -291,8 +304,11 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       })
     }
     panes.set(id, pane)
-    const prompt = launchPrompt(id, s.prompt)
-    const argv = agentCommand(s.agent, s.options, prompt, s.title, { settingsPath: hook.settingsPath, mcp: s.agent.mcpArgs ? sldevMcp(hook.mcp, id) : undefined })
+    const mcp = s.agent.mcpArgs ? sldevMcp(hook.mcp, id) : undefined
+    // a resumed session already has its prompt: it's never sent twice
+    const argv = restored
+      ? agentCommand(s.agent, s.options, undefined, s.title, { settingsPath: hook.settingsPath, resume: restored.resume, mcp })
+      : agentCommand(s.agent, s.options, launchPrompt(id, s.prompt), s.title, { settingsPath: hook.settingsPath, mcp })
     const env = { SLDEV_MISSION_ID: id, SLDEV_CLI_DAEMON: instance, SLDEV_HOOK_PORT: String(hook.port), SLDEV_HOOK_TOKEN: hook.token, ...(s.spawnedBy ? noPushEnv(process.env) : {}) }
     try {
       const { pid } = ptys.create(sink, id, { cwd: s.cwd, command: argv, cols: s.cols, rows: s.rows, env })
@@ -302,7 +318,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       pane.tracker?.dispose()
       throw new Error(`Could not start ${s.agent.name}: ${(err as Error).message}`)
     }
-    addTab(id)
+    if (!restored) addTab(id)
     broadcast({ event: 'pane', pane: pane.info })
     return pane.info
   }
@@ -594,6 +610,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       }
       if (a.active !== undefined && (a.active === null || panes.has(a.active))) tabs.active = a.active
       if (typeof a.split === 'boolean') tabs.split = a.split
+      saved.schedule()
       return { ...tabs, order: [...tabs.order] }
     },
     rename: (a) => {
@@ -622,11 +639,54 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       focused.set(c, a.pane)
       return null
     },
-    screen: (a) => ({ data: paneFor(a.pane).history }),
+    screen: (a) => snapshot(paneFor(a.pane).term),
     stop: () => {
+      // every agent stopped on purpose: the next daemon starts empty
+      saved.forget()
       setTimeout(() => void close().then(() => process.exit(0)), 20)
       return null
     }
+  }
+
+  await restoreSessions()
+
+  /**
+   * The panes the last daemon left (a reboot, a crash, a killed process): shells reopen in their folder, agents
+   * resume their own session in theirs, and the rest are listed as they were, with why. Nothing is sent again.
+   */
+  async function restoreSessions(): Promise<void> {
+    const last = readSessions(dir)
+    if (!last) return
+    nextId = Math.max(nextId, last.nextId, ...last.panes.map((p) => Number(p.id) + 1).filter(Number.isFinite))
+    const size = { cols: 120, rows: 40 }
+    for (const info of last.panes) {
+      const def = info.shell ? undefined : findAgent(info.options.agent, custom)
+      const agent = def && def.id === info.options.agent && installedBin(def) ? def : undefined
+      let plan = restorePlan(info, agent)
+      try {
+        if (plan.how === 'shell') await newShell({ shell: true, brief: '', cwd: info.cwd, title: info.title, ...size }, info)
+        else if (plan.how === 'resume')
+          spawnPane(
+            { ...info, agent: agent!, prompt: info.prompt, options: info.options, ...size },
+            { info, resume: plan.resume }
+          )
+      } catch (err) {
+        plan = { how: 'ended', note: `Not resumed after sldev restarted: ${(err as Error).message}` }
+      }
+      if (plan.how !== 'ended') continue
+      const wasLive = isLive(info.status)
+      const pane: Pane = {
+        info: { ...info, pid: undefined, ...(wasLive && { status: 'ended', updatedAt: Date.now() }), ...(plan.note && { notification: plan.note }) },
+        agent: agent ?? null,
+        term: createTerm(size.cols, size.rows)
+      }
+      if (plan.note) pane.term.write(`\x1b[2m${plan.note}\x1b[0m\r\n`)
+      panes.set(info.id, pane)
+    }
+    tabs.order = [...last.tabs.order.filter((id) => panes.has(id)), ...[...panes.keys()].filter((id) => !last.tabs.order.includes(id))]
+    tabs.active = last.tabs.active && panes.has(last.tabs.active) ? last.tabs.active : (tabs.order[0] ?? null)
+    tabs.split = last.tabs.split
+    saved.schedule()
   }
 
   const server: Server = createServer((c) => {
@@ -671,6 +731,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   async function close(): Promise<void> {
     if (closed) return
     closed = true
+    saved.end()
     for (const p of panes.values()) p.tracker?.dispose()
     loops.dispose()
     ptys.killAll()
@@ -709,8 +770,6 @@ function spawnLimit(n: number | undefined): number | undefined {
   if (!Number.isInteger(n) || n < 1 || n > MAX_SPAWN) throw new Error(`--allow-spawn takes a number from 1 to ${MAX_SPAWN}`)
   return n
 }
-
-const isLive = (s: Mission['status']): boolean => s === 'starting' || s === 'working' || s === 'waiting' || s === 'needs-input'
 
 /**
  * A live daemon means this one doesn't start; a socket file left by one that died is removed. Windows named

@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { existsSync, mkdirSync, promises as fsp } from 'fs'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
 import { dirname, join } from 'path'
 import {
   CONTEXT_DIR,
@@ -58,13 +58,26 @@ export function closeContext(): void {
   dbs.clear()
 }
 
+/** Node's SQLite needs 22.13 (22.5–22.12 hide it behind a flag) and its FTS5 22.16; Electron's is newer than both */
+const tooOld = (why: string): string => `Project search needs Node.js 22.16 or newer (this is ${process.version}: ${why})`
+
+/**
+ * node:sqlite is loaded on first use, never at import: the CLI imports this module from every command, and a static
+ * import of a module that Node doesn't have stopped every `sldev` command on startup, not only search.
+ */
+function sqlite(): typeof import('node:sqlite') {
+  const mod = process.getBuiltinModule('node:sqlite')
+  if (!mod) throw new Error(tooOld('node:sqlite needs --experimental-sqlite'))
+  return mod
+}
+
 function open(root: string): DatabaseSync {
   const cached = dbs.get(root)
   if (cached) return cached
   if (!baseDir) throw new Error('The context index is not ready')
   mkdirSync(baseDir, { recursive: true })
   const file = join(baseDir, `${createHash('sha1').update(root).digest('hex').slice(0, 16)}.db`)
-  const db = new DatabaseSync(file)
+  const db = new (sqlite().DatabaseSync)(file)
   db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)')
   const v = db.prepare("SELECT value FROM meta WHERE key = 'schema'").get() as { value: string } | undefined
   if (v?.value !== String(SCHEMA)) {
@@ -74,8 +87,13 @@ function open(root: string): DatabaseSync {
         title TEXT NOT NULL, body TEXT NOT NULL, day TEXT, origin TEXT, source_time INTEGER);
       CREATE TABLE edges (node INTEGER NOT NULL, path TEXT NOT NULL, PRIMARY KEY (node, path));
       CREATE INDEX edges_path ON edges (path);
-      CREATE VIRTUAL TABLE fts USING fts5(title, body, paths, tokenize = 'porter unicode61');
     `)
+    try {
+      db.exec("CREATE VIRTUAL TABLE fts USING fts5(title, body, paths, tokenize = 'porter unicode61')")
+    } catch (err) {
+      db.close()
+      throw /fts5/i.test((err as Error).message) ? new Error(tooOld('its SQLite has no full-text search, FTS5')) : err
+    }
     db.prepare("INSERT INTO meta (key, value) VALUES ('schema', ?)").run(String(SCHEMA))
   }
   dbs.set(root, db)

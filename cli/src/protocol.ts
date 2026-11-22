@@ -102,7 +102,7 @@ export interface Requests {
   resize: [{ pane: string; cols: number; rows: number }, null]
   /** the TUI says which pane it shows, so the daemon doesn't send a desktop notification for it */
   focus: [{ pane: string | null }, null]
-  screen: [{ pane: string }, { data: string }]
+  screen: [{ pane: string }, { data: string; cols?: number; rows?: number }]
   stop: [Record<string, never>, null]
 }
 

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { connect, daemonEnv, type Client } from '../src/client'
 import { paneOrigin } from '../src/protocol'
 import { noPushEnv, startDaemon, type Daemon } from '../src/daemon'
+import { createTerm, screenText } from '../src/screen'
 import { removeTemp, useFakeAgents } from './fakePath'
 import type { PaneInfo } from '../src/protocol'
 
@@ -198,6 +199,13 @@ describe('sldev daemon', () => {
       text = (await c.request('read', { pane: shell.id })).text
     }
     expect(text).toContain('sldev-42')
+    // a TUI attaching gets the screen as it is, at the pane's own size, not the raw output to replay
+    await c.request('resize', { pane: shell.id, cols: 70, rows: 15 })
+    const snap = await c.request('screen', { pane: shell.id })
+    expect(snap).toMatchObject({ cols: 70, rows: 15 })
+    const view = createTerm(snap.cols!, snap.rows!)
+    await new Promise<void>((r) => view.write(snap.data, r))
+    expect(screenText(view, 15)).toContain('sldev-42')
     expect((await ls(shell.id)).status).toBe('waiting')
     // a second opinion needs an agent's changes
     await expect(c.request('review', { pane: shell.id, agent: 'codex' })).rejects.toThrow(/is a shell/)
