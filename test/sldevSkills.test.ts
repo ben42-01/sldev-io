@@ -21,6 +21,7 @@ describe('the skills teach formats the app reads', () => {
     const e = parseEval(example('sldev-eval', 'yaml'))
     expect(e.error).toBeUndefined()
     expect(e.spec!.checks.map((c) => c.type)).toEqual(['run', 'run', 'diff', 'judge'])
+    expect(e.spec!.role).toBe('Implementer')
   })
   it('the mission example is a valid draft', () => {
     const { draft } = parseMissionDraft(example('sldev-mission', 'markdown'))
