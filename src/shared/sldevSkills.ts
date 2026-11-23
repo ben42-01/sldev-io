@@ -11,7 +11,7 @@ import { parseRecipe } from './factory'
  */
 
 /** bumped when a skill's text changes, so projects with an older copy are offered the update */
-export const SKILLS_VERSION = 2
+export const SKILLS_VERSION = 3
 
 export const DRAFTS_DIR = '.sldev/drafts'
 /** where each skill is installed in a project: Claude Code reads .claude/skills, most other agents .agents/skills */
@@ -242,6 +242,7 @@ brief: |
   The last page of /api/items is missing its final item when the total is a multiple of the page size.
   Fix it and add a test that fails without the fix.
 base: 3f2c1ab       # a commit from before the fix, so there is something to do
+role: Implementer   # optional: the profile this measures, so a Lead's "auto" routes that role by it
 timeout: 20         # minutes
 checks:
   - run: npm test                       # must exit 0
@@ -255,6 +256,7 @@ checks:
 
 - \`name\`, \`brief\` (required): the brief is exactly what the agent is told, as you'd give it to a person.
 - \`checks\` (required, at least one): \`run\` (a command that must exit 0, with optional \`expect\`: text the output must contain), \`diff\` (the most changed lines allowed), \`judge\` (a rubric another agent grades the change against).
+- \`role\`: the name of the profile (\`.sldev/agents\`) this eval measures, e.g. Reviewer or Implementer. A Lead that delegates "auto" work in that role picks the best agent on these evals first. Leave it out for a general eval.
 - \`base\`: the branch or commit to start from (default: HEAD when the run starts). \`setup\`: the dependency install (detected by default). \`timeout\` in minutes (default 20).
 
 ## Good evals
