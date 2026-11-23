@@ -126,6 +126,8 @@ export interface AgentProfile {
   scope: 'builtin' | 'user' | 'project'
   /** project profiles: the .md file */
   path?: string
+  /** the team template it was installed from (its name), so the UI can group a team's roles */
+  team?: string
 }
 
 export interface RulesState {

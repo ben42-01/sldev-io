@@ -313,6 +313,8 @@ export interface MissionDraft {
   kind?: string
   brief?: string
   title?: string
+  /** an agent profile id to start with (a team role picked in the Agents panel) */
+  profile?: string
   /** editing a saved mission: the form starts from it and saving replaces it */
   saved?: SavedMission
 }
