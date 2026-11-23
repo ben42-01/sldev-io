@@ -5,6 +5,8 @@ import { Bookmark, ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, Stret
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { isLive, missionMemory, missions, type MissionDraft } from '../state/missions'
 import { withMemory } from '@shared/memory'
+import { applyProfile } from '@shared/profiles'
+import { getProfile } from '../state/profiles'
 import { createStore, useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
@@ -121,7 +123,11 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   // the id, not the object: a kind file edited while the form is open applies straight away
   const [kindId, setKindId] = useState(() => getKind(was?.kind ?? draft?.kind).id)
   const kind = kinds.find((k) => k.id === kindId) ?? getKind(kindId)
-  const [options, setOptions] = useState<AgentOptions>(() => was?.options ?? withAccess({ agent: workspace.get().defaultAgent }, kind))
+  const [options, setOptions] = useState<AgentOptions>(() => {
+    if (was?.options) return was.options
+    const o = withAccess({ agent: workspace.get().defaultAgent }, kind)
+    return draft?.profile ? applyProfile(o, getProfile(draft.profile)) : o
+  })
   const [isRepo, setIsRepo] = useState(false)
   /** the git check for the folder has answered (until then the folder hint stays quiet) */
   const [checked, setChecked] = useState(false)

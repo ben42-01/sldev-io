@@ -150,6 +150,13 @@ export const TEAM_TEMPLATES: TeamTemplate[] = [
   }
 ]
 
+/** The team template that has a role for every one of these agent specs ("QA", "QA@codex"), if one does. */
+export function teamProviding(specs: string[]): TeamTemplate | undefined {
+  const names = specs.map((s) => s.split('@')[0].trim().toLowerCase())
+  if (!names.length) return undefined
+  return TEAM_TEMPLATES.find((t) => names.every((n) => t.profiles.some((p) => p.name.toLowerCase() === n)))
+}
+
 /** A file a team install writes, relative to the project root. */
 export interface TeamFile {
   path: string
@@ -165,7 +172,8 @@ export function teamFiles(template: TeamTemplate, existing: Iterable<string>): {
   const have = new Set([...existing].map((f) => f.split(/[\\/]/).pop()!.toLowerCase()))
   const write: TeamFile[] = []
   const skipped: TeamFile[] = []
-  for (const profile of template.profiles) {
+  for (const role of template.profiles) {
+    const profile = { ...role, team: template.name }
     const name = `${profileSlug(profile.name)}.md`
     const file = { path: `.sldev/agents/${name}`, profile, text: serializeProfile(profile) }
     if (have.has(name)) skipped.push(file)
@@ -175,6 +183,14 @@ export function teamFiles(template: TeamTemplate, existing: Iterable<string>): {
     }
   }
   return { write, skipped }
+}
+
+/** What a team install did, for a toast: how many roles were written and, by name, which files were kept. */
+export function installSummary(team: string, written: string[], skipped: string[]): string {
+  const name = (p: string): string => p.split(/[\\/]/).pop() ?? p
+  const kept = skipped.length ? `kept ${skipped.map(name).join(', ')} (already there)` : ''
+  if (!written.length) return `${team} is already installed: ${kept}`
+  return `Installed ${team}: ${written.length} role${written.length === 1 ? '' : 's'} in .sldev/agents${kept ? ` · ${kept}` : ''}`
 }
 
 /** The options a profile sets; fields it leaves out keep what was picked. */
@@ -222,7 +238,8 @@ export function parseProfileFile(text: string, path: string): AgentProfile | nul
     effort: str('effort'),
     role: m[2].trim(),
     scope: 'project',
-    path
+    path,
+    ...(str('team') ? { team: str('team') } : {})
   }
 }
 
@@ -230,7 +247,7 @@ const clean = (o: Record<string, string | undefined>): Record<string, string> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== '')) as Record<string, string>
 
 export function serializeProfile(p: AgentProfile): string {
-  const meta = clean({ name: p.name, description: p.description, agent: p.agent, model: p.model, mode: p.permissionMode, effort: p.effort })
+  const meta = clean({ name: p.name, description: p.description, agent: p.agent, model: p.model, mode: p.permissionMode, effort: p.effort, team: p.team })
   return `---\n${stringify(meta).trimEnd()}\n---\n\n${p.role.trim()}\n`
 }
 

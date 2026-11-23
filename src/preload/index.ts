@@ -301,6 +301,8 @@ const api = {
     list: (root: string): Promise<AgentProfile[]> => ipcRenderer.invoke('profiles:list', root),
     save: (root: string, profile: AgentProfile): Promise<string> => ipcRenderer.invoke('profiles:save', root, profile),
     remove: (root: string, path: string): Promise<void> => ipcRenderer.invoke('profiles:remove', root, path),
+    /** installs a team template's roles into .sldev/agents; existing files are kept (skipped), never overwritten */
+    installTeam: (root: string, team: string): Promise<{ written: string[]; skipped: string[] }> => ipcRenderer.invoke('profiles:installTeam', root, team),
     export: (root: string, profile: AgentProfile, target: 'claude' | 'opencode'): Promise<string> => ipcRenderer.invoke('profiles:export', root, profile, target)
   },
   vault: {

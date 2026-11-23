@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { applyProfile, claudeSubagentFile, parseProfileFile, promptWithRole, serializeProfile, STARTER_PROFILES, TEAM_TEMPLATES, teamFiles } from '@shared/profiles'
+import { applyProfile, claudeSubagentFile, installSummary, parseProfileFile, promptWithRole, serializeProfile, STARTER_PROFILES, TEAM_TEMPLATES, teamFiles } from '@shared/profiles'
 import { installTeam, listProfiles } from '../src/main/profiles'
 import type { AgentProfile } from '@shared/types'
 import { agentCommand as agentArgv, commandText, findAgent } from '@renderer/lib/agents'
@@ -114,6 +114,20 @@ describe('team templates', () => {
     }
   })
 
+  it('team files record the team, so its roles can be grouped', () => {
+    for (const f of teamFiles(software, []).write) {
+      expect(f.text).toContain('team: Software team')
+      expect(parseProfileFile(f.text, `/p/${f.path}`)?.team).toBe('Software team')
+    }
+    expect(parseProfileFile('---\nname: Solo\n---\n\nYou work alone.\n', '/p/solo.md')).not.toHaveProperty('team')
+  })
+
+  it('the install toast names the files it kept', () => {
+    expect(installSummary('Software team', ['/p/a.md', '/p/b.md'], [])).toBe('Installed Software team: 2 roles in .sldev/agents')
+    expect(installSummary('Software team', ['/p/a.md'], ['/p/.sldev/agents/reviewer.md', 'C:\\p\\qa.md'])).toBe('Installed Software team: 1 role in .sldev/agents · kept reviewer.md, qa.md (already there)')
+    expect(installSummary('Software team', [], ['/p/x.md'])).toBe('Software team is already installed: kept x.md (already there)')
+  })
+
   it('skips roles whose file already exists', () => {
     const { write, skipped } = teamFiles(software, ['reviewer.md', '/p/.sldev/agents/qa.md', 'notes.md'])
     expect(skipped.map((f) => f.path)).toEqual(['.sldev/agents/reviewer.md', '.sldev/agents/qa.md'])
@@ -150,6 +164,7 @@ describe('installTeam', () => {
       const again = await installTeam(root, 'software')
       expect(again.written).toEqual([])
       expect(again.skipped).toHaveLength(6)
+      expect((await listProfiles(root)).filter((p) => p.team === 'Software team')).toHaveLength(5)
       await expect(installTeam(root, 'nope')).rejects.toThrow('Unknown team template')
     } finally {
       await rm(root, { recursive: true, force: true })

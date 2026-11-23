@@ -21,8 +21,12 @@ export function AgentOptionsFields({ value, onChange, showPrint = true, part }: 
   // options that only make sense for the previous agent are dropped on switch
   const pick = (id: string): void => (setCustom(false), onChange({ agent: id, model: undefined, permissionMode: undefined, effort: undefined }))
 
+  const project = profiles.filter((p) => p.scope === 'project')
+  const teams = [...new Set(project.flatMap((p) => (p.team ? [p.team] : [])))]
   const groups: [string, typeof profiles][] = [
-    ['This project', profiles.filter((p) => p.scope === 'project')],
+    // an installed team's roles sit together under the team's name
+    ...teams.map((t): [string, typeof profiles] => [t, project.filter((p) => p.team === t)]),
+    ['This project', project.filter((p) => !p.team)],
     ['Your profiles', profiles.filter((p) => p.scope === 'user')],
     ['Starters', profiles.filter((p) => p.scope === 'builtin')]
   ]
