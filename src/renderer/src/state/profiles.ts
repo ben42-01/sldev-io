@@ -23,6 +23,11 @@ export function useProfiles(): AgentProfile[] {
   return merge(user ?? [], proj)
 }
 
+/** Every profile a mission in `root` can use, read now: that project's, then the user's and the starters (root may not be the open project). */
+export async function profilesFor(root: string): Promise<AgentProfile[]> {
+  return merge(workspace.get().agentProfiles ?? [], await window.api.profiles.list(root).catch(() => project.get().root === root ? project.get().list : []))
+}
+
 export const getProfile = (id: string | undefined): AgentProfile | undefined => (id ? allProfiles().find((p) => p.id === id) : undefined)
 
 /** The role to hand the agent for these options, if a profile is picked. */

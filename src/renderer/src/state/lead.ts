@@ -1,13 +1,15 @@
 import { installedBin, stageMode } from '@shared/agents'
-import { DEFAULT_LEAD, canDelegate, routeAgent, waitText, workerBrief, workerDone, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, canDelegate, resolveRole, routeAgent, waitText, workerBrief, workerDone, type WorkerView } from '@shared/lead'
 import { renderKind } from '@shared/missionKinds'
-import type { Mission } from '@shared/types'
+import { applyProfile, promptWithRole } from '@shared/profiles'
+import type { AgentOptions, Mission } from '@shared/types'
 import { activatePanel, activePanelId, closePanel } from '../dock/dockApi'
 import { allAgents } from '../lib/agents'
 import { getAgent, refreshInstalledAgents } from './agents'
 import { evals } from './evals'
 import { getKind } from './missionKinds'
 import { followUpMission, getMission, missions, startMission, update } from './missions'
+import { profilesFor } from './profiles'
 import { workspace } from './workspace'
 
 /**
@@ -60,7 +62,7 @@ async function view(task: Mission, leadId: string): Promise<WorkerView> {
   const m = current(leadId, task.id) ?? task
   // follow-ups work in the task's worktree: the diff is always against where the task branched
   const diff = workerDone(m) && task.worktree ? await window.api.git.diffStat(m.cwd, task.worktree.base).then((d) => ({ files: d.files, lines: d.insertions + d.deletions })).catch(() => undefined) : undefined
-  return { id: task.id, title: task.title, agent: getAgent(m.options.agent).name, status: m.status, branch: (m.worktree ?? task.worktree)?.branch, report: m.report, diff, reported: m.delegate?.reported, merged: task.delegate?.merged }
+  return { id: task.id, title: task.title, agent: getAgent(m.options.agent).name, role: task.delegate?.role, status: m.status, branch: (m.worktree ?? task.worktree)?.branch, report: m.report, diff, reported: m.delegate?.reported, merged: task.delegate?.merged }
 }
 
 async function delegate(lead: Mission, args: Record<string, unknown>): Promise<Answer> {
@@ -74,31 +76,52 @@ async function delegate(lead: Mission, args: Record<string, unknown>): Promise<A
   if (no) return { error: no }
 
   await refreshInstalledAgents().catch(() => undefined)
-  const installed = allAgents(workspace.get().customAgents).filter((a) => installedBin(a)).map((a) => a.id)
+  const agents = allAgents(workspace.get().customAgents)
+  const installed = agents.filter((a) => installedBin(a)).map((a) => a.id)
   const asked = str(args.agent).trim().toLowerCase()
-  const named = asked && asked !== 'auto' ? allAgents(workspace.get().customAgents).find((a) => a.id === asked || a.name.toLowerCase() === asked) : undefined
+  const named = asked && asked !== 'auto' ? agents.find((a) => a.id === asked || a.name.toLowerCase() === asked) : undefined
   if (asked && asked !== 'auto' && !named) return { error: `No agent called "${asked}". Use auto, or one of: ${installed.join(', ')}.` }
-  const route = named ? { agent: named.id, model: undefined, why: 'chosen by the Lead' } : routeAgent(evals.get().runs.filter((r) => r.root === lead.root).flatMap((r) => r.attempts), installed, workspace.get().defaultAgent)
+  // a role is a profile: its role text, and its agent and model when it sets them (the Lead's own pick of agent wins)
+  const roleAsked = str(args.role).trim()
+  const role = roleAsked ? resolveRole(roleAsked, await profilesFor(lead.root), agents.map((a) => a.id)) : undefined
+  if (role && 'error' in role) return { error: role.error }
+  const profile = role?.profile
+  const route = named
+    ? { agent: named.id, model: undefined, why: 'chosen by the Lead' }
+    : role?.agent
+      ? { agent: role.agent, model: undefined, why: `the ${profile!.name} role's agent` }
+      : routeAgent(evals.get().runs.filter((r) => r.root === lead.root).flatMap((r) => r.attempts), installed, workspace.get().defaultAgent)
   const agent = getAgent(route.agent)
   const kind = getKind(['build', 'investigate', 'research', 'review'].includes(str(args.kind)) ? str(args.kind) : 'build')
+  // the profile's model only fits the agent it was written for (or any agent, when it names none)
+  const fromProfile: AgentOptions = profile && (!profile.agent || profile.agent === agent.id) ? applyProfile({ agent: agent.id }, profile) : { agent: agent.id }
   // the Lead's own work so far is in its branch: commit it, so workers start from it
   await window.api.git.commitAll(lead.cwd, 'lead: integrated so far').catch(() => undefined)
   const wbrief = workerBrief({ goal: lead.brief ?? lead.title, task: brief, criteria: str(args.criteria) })
+  const prompt = renderKind(kind, { title, brief: wbrief })
   const front = activePanelId()
   const m = await startMission({
-    prompt: renderKind(kind, { title, brief: wbrief }),
+    // the role travels in the prompt, for every agent: the profile may not be one the open project lists
+    prompt: profile ? promptWithRole(profile.role, prompt) : prompt,
     brief: wbrief,
     criteria: str(args.criteria) || undefined,
     title,
     root: lead.root,
-    // nobody approves tool calls in print mode: the factory's unattended mode, or the kind's read-only one
-    options: { agent: agent.id, model: route.model, print: true, permissionMode: kind.readOnly ? agent.readOnlyMode : stageMode(agent, workspace.get().factoryModes) },
+    // nobody approves tool calls in print mode: the factory's unattended mode, or the kind's read-only one (never the profile's)
+    options: {
+      agent: agent.id,
+      model: fromProfile.model ?? route.model,
+      effort: fromProfile.effort,
+      print: true,
+      permissionMode: kind.readOnly ? agent.readOnlyMode : stageMode(agent, workspace.get().factoryModes)
+    },
     worktree: true,
     base: lead.worktree.branch,
     kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly }
   }).finally(() => front && activatePanel(front))
-  update(m.id, { delegate: { lead: lead.id, why: route.why } })
-  return { text: `Started ${m.id}: ${agent.name}${route.model ? ` (${route.model})` : ''}, ${route.why}, on branch ${m.worktree?.branch ?? 'in place'}. Collect it with sldev_wait.` }
+  update(m.id, { delegate: { lead: lead.id, why: route.why, role: profile?.name } })
+  const model = m.options.model
+  return { text: `Started ${m.id}: ${agent.name}${model ? ` (${model})` : ''}${profile ? ` as ${profile.name}` : ''}, ${route.why}, on branch ${m.worktree?.branch ?? 'in place'}. Collect it with sldev_wait.` }
 }
 
 /** Resolves once one of the watched workers finishes, or after `seconds`. */
