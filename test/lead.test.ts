@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LEAD, LEAD_METHOD, canDelegate, leadRoles, resolveRole, routeAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, LEAD_METHOD, NO_ROLE, canDelegate, groupByRole, leadRoles, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
 import { STARTER_PROFILES } from '@shared/profiles'
 import type { AgentProfile } from '@shared/types'
 import { BUILTIN_KINDS, renderKind } from '@shared/missionKinds'
@@ -22,6 +22,31 @@ describe('routing', () => {
     const attempts = [at('codex', 'passed'), at('codex', 'passed'), at('claude', 'passed'), at('claude', 'failed')]
     expect(routeAgent(attempts, ['claude', 'codex'], 'claude')).toEqual({ agent: 'codex', model: undefined, why: 'best on your evals: 2/2 passed (codex)' })
     expect(routeAgent(attempts, ['claude'], 'claude').agent).toBe('claude')
+  })
+  const tagged = (agent: string, status: EvalAttempt['status'], role?: string, prompt?: { name: string; text: string }): EvalAttempt => ({ ...at(agent, status), ...(role ? { role } : {}), contestant: { agent, ...(prompt ? { prompt } : {}) } })
+  // codex is best overall, claude is the better reviewer
+  const mixed = [tagged('codex', 'passed'), tagged('codex', 'passed'), tagged('codex', 'failed', 'Reviewer'), tagged('claude', 'passed', 'Reviewer'), tagged('claude', 'failed')]
+  it('routes a role by the evals tagged with it, any case', () => {
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini')).toMatchObject({ agent: 'codex', why: 'best on your evals: 2/3 passed (codex)' })
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'reviewer')).toEqual({ agent: 'claude', model: undefined, why: 'best reviewer on your evals: 1/1 passed (claude)' })
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'Reviewer').why).toBe('best Reviewer on your evals: 1/1 passed (claude)')
+  })
+  it('falls back from the role to all evals, then to the default, and says which', () => {
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'QA')).toMatchObject({ agent: 'codex', why: 'best on your evals overall (no QA eval results yet): 2/3 passed (codex)' })
+    // the role's best isn't installed, nor did anything else of the role pass
+    expect(routeAgent(mixed, ['codex'], 'gemini', 'Reviewer')).toMatchObject({ agent: 'codex', why: expect.stringContaining('overall (no Reviewer eval results yet)') })
+    expect(routeAgent([tagged('codex', 'failed', 'QA')], ['codex'], 'gemini', 'QA')).toMatchObject({ agent: 'gemini', why: expect.stringContaining('your default agent') })
+  })
+  it('a profile that pins an agent, or the Lead\'s own pick, is never re-routed', () => {
+    const base = { attempts: mixed, installed: ['claude', 'codex'], fallback: 'gemini' }
+    expect(workerAgent({ ...base, role: { name: 'Reviewer', agent: 'codex' } })).toEqual({ agent: 'codex', why: "the Reviewer role's agent" })
+    expect(workerAgent({ ...base, named: 'gemini', role: { name: 'Reviewer' } })).toEqual({ agent: 'gemini', why: 'chosen by the Lead' })
+    expect(workerAgent({ ...base, role: { name: 'Reviewer' } })).toMatchObject({ agent: 'claude', why: expect.stringContaining('best Reviewer') })
+    expect(workerAgent(base).agent).toBe('codex')
+  })
+  it('ignores prompt variants for a role too', () => {
+    const a = [tagged('codex', 'passed', 'Reviewer', { name: 'p', text: 't' }), tagged('claude', 'passed')]
+    expect(routeAgent(a, ['claude', 'codex'], 'gemini', 'Reviewer')).toMatchObject({ agent: 'claude', why: expect.stringContaining('overall') })
   })
   it('falls back to the default without results', () => {
     expect(routeAgent([], ['codex'], 'claude')).toMatchObject({ agent: 'claude', why: expect.stringContaining('no eval results') })
@@ -81,5 +106,19 @@ describe('roles', () => {
     const t = waitText([w('m-1', 'ended', { role: 'Reviewer' })], [w('m-2', 'working', { role: 'QA' }), w('m-3', 'working')])
     expect(t).toContain('m-1 · Codex as Reviewer · finished')
     expect(t).toContain('m-2 (Codex as QA, Task m-2); m-3 (Codex, Task m-3)')
+  })
+})
+
+describe('groupByRole', () => {
+  const w = (id: string, startedAt: number, role?: string) => ({ id, startedAt, role })
+  it('groups workers by role, groups and workers in the order they started, "No role" last', () => {
+    const g = groupByRole([w('d', 4, 'QA'), w('a', 1), w('b', 2, 'Reviewer'), w('c', 3, 'QA'), w('e', 5, '  ')])
+    expect(g.map((x) => x.label)).toEqual(['Reviewer', 'QA', NO_ROLE])
+    expect(g.map((x) => x.workers.map((y) => y.id))).toEqual([['b'], ['c', 'd'], ['a', 'e']])
+    expect(g[2].role).toBeNull()
+  })
+  it('has no "No role" group when every worker has a role, and nothing for no workers', () => {
+    expect(groupByRole([w('a', 1, 'QA')]).map((x) => x.label)).toEqual(['QA'])
+    expect(groupByRole([])).toEqual([])
   })
 })

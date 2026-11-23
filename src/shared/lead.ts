@@ -46,13 +46,36 @@ export function canDelegate(limits: LeadLimits, workers: WorkerView[]): string |
 
 /**
  * Which agent takes a task when the Lead says "auto": the best of the installed agents on this
- * project's evals (pass rate, then partial credit, then speed), else the default. Explains why.
+ * project's evals (pass rate, then partial credit, then speed), else the default. With a role, evals
+ * tagged with that role (`role:` in the eval file) decide first, then all evals. Explains which was used.
+ * A profile that pins an agent never gets here: the caller uses the profile's agent.
  */
-export function routeAgent(attempts: EvalAttempt[], installed: string[], fallback: string): { agent: string; model?: string; why: string } {
+export function routeAgent(attempts: EvalAttempt[], installed: string[], fallback: string, role?: string): { agent: string; model?: string; why: string } {
   // prompt variants measure instructions, not agents: route by the plain attempts
-  const best = scoreboard(attempts.filter((a) => !a.contestant.prompt)).find((s) => installed.includes(s.contestant.agent))
-  if (!best || !best.passed) return { agent: fallback, why: 'your default agent (no eval results to route by yet)' }
-  return { agent: best.contestant.agent, model: best.contestant.model, why: `best on your evals: ${best.passed}/${best.attempts} passed (${contestantKey(best.contestant)})` }
+  const plain = attempts.filter((a) => !a.contestant.prompt)
+  const best = (list: EvalAttempt[]) => {
+    const s = scoreboard(list).find((x) => installed.includes(x.contestant.agent))
+    return s && s.passed ? s : undefined
+  }
+  const said = (s: NonNullable<ReturnType<typeof best>>, where: string) => ({ agent: s.contestant.agent, model: s.contestant.model, why: `${where}: ${s.passed}/${s.attempts} passed (${contestantKey(s.contestant)})` })
+  const r = role?.trim().toLowerCase()
+  if (r) {
+    const forRole = best(plain.filter((a) => a.role?.trim().toLowerCase() === r))
+    if (forRole) return said(forRole, `best ${role!.trim()} on your evals`)
+  }
+  const overall = best(plain)
+  if (overall) return said(overall, r ? `best on your evals overall (no ${role!.trim()} eval results yet)` : 'best on your evals')
+  return { agent: fallback, why: 'your default agent (no eval results to route by yet)' }
+}
+
+/**
+ * The agent a delegated worker runs on: the one the Lead named, else the role's profile's (a pinned agent,
+ * or "Role@cli"), which is never re-routed, else routing by the evals, for that role first.
+ */
+export function workerAgent(o: { named?: string; role?: { name: string; agent?: string }; attempts: EvalAttempt[]; installed: string[]; fallback: string }): { agent: string; model?: string; why: string } {
+  if (o.named) return { agent: o.named, why: 'chosen by the Lead' }
+  if (o.role?.agent) return { agent: o.role.agent, why: `the ${o.role.name} role's agent` }
+  return routeAgent(o.attempts, o.installed, o.fallback, o.role?.name)
 }
 
 const who = (w: Pick<WorkerView, 'agent' | 'role'>): string => (w.role ? `${w.agent} as ${w.role}` : w.agent)
@@ -116,3 +139,29 @@ export const LEAD_METHOD = [
   '5. When everything is in, end with a summary for the human: what was built, by whom, what was checked, and what is left. Do not push: the human reviews your branch.',
   'Tell the user your plan before you delegate when the goal is ambiguous.'
 ].join('\n')
+
+/** One branch of a Lead's org view: the workers in one role, or those without one (`role` null). */
+export interface RoleGroup<T> {
+  role: string | null
+  label: string
+  workers: T[]
+}
+
+export const NO_ROLE = 'No role'
+
+/**
+ * A Lead's workers as a small org chart: grouped by role, each group in the order its first worker
+ * started and its workers in the order they started; workers without a role come last, under "No role".
+ */
+export function groupByRole<T extends { role?: string; startedAt: number }>(workers: T[]): RoleGroup<T>[] {
+  const sorted = [...workers].sort((a, b) => a.startedAt - b.startedAt)
+  const groups = new Map<string | null, RoleGroup<T>>()
+  for (const w of sorted) {
+    const role = w.role?.trim() || null
+    let g = groups.get(role)
+    if (!g) groups.set(role, (g = { role, label: role ?? NO_ROLE, workers: [] }))
+    g.workers.push(w)
+  }
+  const none = groups.get(null)
+  return [...[...groups.values()].filter((g) => g.role !== null), ...(none ? [none] : [])]
+}

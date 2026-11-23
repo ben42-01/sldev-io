@@ -98,7 +98,8 @@ const recipes: DocPage = {
           </p>
           <FeatureGraph />
           <p>
-            Five recipes ship with the app: <b>Feature</b> (above), <b>Bug fix</b>, <b>Parallel feature</b>, <b>Bake-off</b> and <b>Fix CI</b>.
+            Six recipes ship with the app: <b>Feature</b> (above), <b>Bug fix</b>, <b>Parallel feature</b>, <b>Bake-off</b>, <b>Fix CI</b> and{' '}
+            <b>Software team</b>, which runs the roles of the Software team template (see below).
             Start with those. To change one, pick it in <b>New factory run</b> and choose <b>Copy to .sldev/factory to edit it</b>: the copy
             lives in your repository and replaces the built-in one.
           </p>
@@ -256,7 +257,8 @@ stages:
             </tbody>
           </table>
           <p>
-            The built-in profiles are <b>Spec writer</b>, <b>Implementer</b>, <b>Reviewer</b>, <b>Test writer</b> and <b>Fixer</b>. To make your
+            The built-in profiles are <b>Spec writer</b>, <b>Implementer</b>, <b>Reviewer</b>, <b>Test writer</b> and <b>Fixer</b>; the Software team
+            template adds <b>Product owner</b>, <b>Tech lead</b>, <b>QA</b> and <b>Release manager</b> to a project. To make your
             own, open the Agents settings and add a profile: a name, a role (instructions in Markdown) and optionally a CLI, model, permission mode
             and effort. Project profiles are saved as <code>.sldev/agents/&lt;name&gt;.md</code>, so they can be committed next to the recipes that
             use them.
@@ -458,6 +460,59 @@ stages:
       body: "{build.out}"
 `}</Code>
           <p>It's a good way to find out which agent suits your codebase, and for hard problems where one attempt often isn't enough.</p>
+        </>
+      )
+    },
+    {
+      id: 'team',
+      title: 'A recipe for your team',
+      body: (
+        <>
+          <p>
+            The built-in <b>Software team</b> recipe puts the roles of the Software team template to work, in the order a team would: the
+            product owner writes a short spec (you approve it), the implementer builds it, the reviewer and QA check it side by side, the
+            implementer fixes what they found, and the release manager drafts the pull request description. Nothing is pushed until you
+            click the pr stage.
+          </p>
+          <Code file="Software team (built-in)">{`
+name: Software team
+stages:
+  - id: spec
+    agent: Product owner
+    prompt: |
+      Write a short spec for this change, not board stories: {intent}
+      Save it to {out}. Don't change any code.
+    gate: approve
+  - id: build
+    agent: Implementer
+    prompt: Implement the spec in {spec.out}. Commit when the checks pass.
+  - id: review
+    needs: [build]
+    agent: Reviewer
+    prompt: Review this branch against {spec.out}. Write your findings to {out}.
+  - id: qa
+    needs: [build]
+    agent: QA
+    prompt: Run the checks, add missing tests, report to {out}.
+  - id: fix
+    needs: [review, qa]
+    agent: Implementer
+    prompt: Fix what {review.out} and {qa.out} found. Commit when done.
+  - id: release
+    agent: Release manager
+    prompt: Draft the PR description for {intent} in {out}.
+  - id: pr
+    pr:
+      title: "{intent}"
+      body: "{release.out}"
+`}</Code>
+          <p>
+            (Shortened here; pick it in <b>New factory run</b> and choose <b>Copy to .sldev/factory to edit it</b> to see the full prompts.)
+            Each agent stage names a role by its profile name. Product owner, QA and Release manager come only with the team, so if the
+            project doesn't have them the run form names the missing roles before anything starts and offers <b>Add a team</b>, which
+            writes the roles to <code>.sldev/agents</code> (files already there are kept). You can also pick another agent for those stages
+            in the form instead.
+          </p>
         </>
       )
     },
