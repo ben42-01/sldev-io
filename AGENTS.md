@@ -94,7 +94,8 @@ website/        the sldev site (Vercel): / is the family's home (src/App.tsx: ap
                   /docs guides from src/content/docs.tsx (keep the recipe guide in step with src/shared/factory.ts; a new guide
                   also needs website/docs/<id>/index.html, which test/docsPages.test.ts checks)
 marketing/promo/ the advert (about 2 min, Plan → Build → Review → Ship), animated with Remotion (own package.json; URL and colours read from website/,
-                  music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes
+                  music in public/ is git-ignored); see its README. Update a scene when the app UI it shows changes.
+                  Also narrated tutorial lessons (src/tutorials/: script.json per lesson, local Kokoro voice via `npm run voice`)
 test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in the CLI's own data folder, cli/src/paths.ts)
