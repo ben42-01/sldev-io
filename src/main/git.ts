@@ -241,6 +241,15 @@ export async function baseVersion(cwd: string, base: string, path: string): Prom
   return r.code === 0 ? r.stdout : ''
 }
 
+/** The files a branch changed since it left `base` (committed, uncommitted and new), for the board's "shares files" flag. */
+export async function changedFiles(cwd: string, base: string): Promise<string[]> {
+  if (!base || base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
+  const [tracked, untracked] = await Promise.all([git(['diff', '--name-only', '--no-renames', mergeBase, '--'], cwd), git(['ls-files', '--others', '--exclude-standard'], cwd)])
+  if (tracked.code !== 0) throw new Error(tracked.stderr.trim() || 'git diff failed')
+  return [...new Set([...tracked.stdout.split('\n'), ...untracked.stdout.split('\n')].filter(Boolean))].sort()
+}
+
 export async function diffStat(cwd: string, base: string): Promise<DiffStat> {
   const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
   const r = await git(['diff', '--shortstat', mergeBase], cwd)

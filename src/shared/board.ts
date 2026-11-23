@@ -65,6 +65,8 @@ export interface BoardItem {
   doneAt?: number
   /** the release notes it went out in (Mark as released) */
   released?: string
+  /** another card's PR was merged into this card's base while it waited in Review: re-check it. Local, never in the board file */
+  baseMoved?: BaseMovedFlag
   createdAt: number
   updatedAt: number
   /** position inside its column: lower is higher up */
@@ -133,7 +135,9 @@ export function followWork(i: BoardItem, state: WorkState, now: number): BoardIt
 export function moveItem(i: BoardItem, column: BoardColumn, now: number, order = now): BoardItem {
   const requeue = (column === 'ready' || column === 'backlog' || column === 'proposed') && i.column !== column && !!i.started && !isActive(i)
   const done = column === 'done' && i.column !== 'done' ? { doneAt: now } : column !== 'done' ? { doneAt: undefined, released: undefined } : {}
-  return { ...i, column, order, updatedAt: now, ...done, ...(requeue ? { started: undefined, state: undefined, spent: undefined } : {}) }
+  // the re-check flag belongs to the card waiting in Review; out of Review it means nothing
+  const moved = column !== i.column ? { baseMoved: undefined } : {}
+  return { ...i, column, order, updatedAt: now, ...done, ...moved, ...(requeue ? { started: undefined, state: undefined, spent: undefined } : {}) }
 }
 
 /** What the agent is told: the title, the details and the labels. */
@@ -204,13 +208,96 @@ export function issueCard(x: GhIssue): Pick<BoardItem, 'title' | 'body' | 'label
  */
 export function followPr(i: BoardItem, pr: { number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' }, now: number): BoardItem | null {
   const live = i.column === 'review' || i.column === 'progress'
-  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now, doneAt: now }
+  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now, doneAt: now, baseMoved: undefined }
   if (pr.state === 'CLOSED' && live && i.note !== `PR #${pr.number} closed without merging`) return { ...i, note: `PR #${pr.number} closed without merging`, updatedAt: now }
   return null
 }
 
 /** How often a card's pull request is checked while it waits in Review. */
 export const PR_POLL_MS = 5 * 60_000
+
+// ── the base moved: a merged PR flags the cards still in Review ──────────
+
+export interface BaseMovedFlag {
+  /** the base the merged cards went into ("master") */
+  base: string
+  /** the merged cards, by number */
+  cards: number[]
+  /** files this card changed that a merged card changed too */
+  files: string[]
+  /** this card was `after` a merged card */
+  after: boolean
+  /** this card's branch head when it was flagged: the flag clears once the branch moved on and has the base */
+  head?: string
+  at: number
+}
+
+/** What the board knows about a card's branch: its base, the files it changed (null: unknown), its head. */
+export interface BranchFacts {
+  base: string
+  files: string[] | null
+  head?: string | null
+}
+
+/** "origin/master", "refs/heads/master" and "master" are the same base. */
+export const sameBase = (a: string, b: string): boolean => {
+  const n = (x: string): string => x.trim().replace(/^refs\/(heads|remotes)\//, '').replace(/^origin\//, '')
+  return !!a && n(a) === n(b)
+}
+
+/**
+ * After `merged`'s PR went in, the other cards waiting in Review on the same base get the re-check flag (stronger
+ * when they share changed files with it or were `after` it). Only local state changes: no `updatedAt` bump, so the
+ * shared board file stays as it was. Cards whose branch is unknown (`facts` has no entry) are left alone.
+ */
+export function flagBaseMoved(items: BoardItem[], merged: BoardItem, mergedFacts: BranchFacts, facts: Record<string, BranchFacts>, now: number): BoardItem[] {
+  const theirs = new Set(mergedFacts.files ?? [])
+  return items.map((i) => {
+    const f = facts[i.id]
+    if (i.id === merged.id || i.root !== merged.root || i.column !== 'review' || !f || !sameBase(f.base, mergedFacts.base)) return i
+    const prev = i.baseMoved
+    const shared = (f.files ?? []).filter((x) => theirs.has(x))
+    const flag: BaseMovedFlag = {
+      base: prev?.base ?? f.base.replace(/^origin\//, ''),
+      cards: [...new Set([...(prev?.cards ?? []), merged.key])],
+      files: [...new Set([...(prev?.files ?? []), ...shared])].sort(),
+      after: !!prev?.after || !!i.blockedBy?.includes(merged.key),
+      // the newest head: a branch updated since an earlier flag must be updated again
+      head: f.head ?? prev?.head,
+      at: now
+    }
+    return { ...i, baseMoved: flag }
+  })
+}
+
+/** The flag goes once the branch moved on from where it was flagged and has every commit of its base again. */
+export const baseMovedCleared = (flag: BaseMovedFlag, head: string | null, behind: number): boolean => !!head && head !== flag.head && behind === 0
+
+/** Shared files or an `after` make it more than a heads-up. */
+export const baseMovedStrong = (flag: BaseMovedFlag): boolean => flag.files.length > 0 || flag.after
+
+/** The badge: "master moved: re-check". */
+export const baseMovedBadge = (flag: BaseMovedFlag): string => `${flag.base} moved: re-check`
+
+/** The badge's second half: "shares 2 files with #2", "was waiting for #2", or "#2 merged". */
+export function baseMovedShort(flag: BaseMovedFlag): string {
+  const keys = flag.cards.map((k) => `#${k}`).join(', ')
+  if (flag.files.length) return `shares ${flag.files.length} file${flag.files.length === 1 ? '' : 's'} with ${keys}`
+  if (flag.after) return `was waiting for ${keys}`
+  return `${keys} merged`
+}
+
+/** What happened, for the badge's line: which cards merged, and the files or `after` it shares with them. */
+export function baseMovedDetail(flag: BaseMovedFlag): string {
+  const keys = flag.cards.map((k) => `#${k}`).join(', ')
+  const parts = [`${keys} merged into ${flag.base}`]
+  if (flag.files.length) {
+    const shown = flag.files.slice(0, 3).join(', ')
+    parts.push(`shares ${flag.files.length} file${flag.files.length === 1 ? '' : 's'} with it: ${shown}${flag.files.length > 3 ? ` and ${flag.files.length - 3} more` : ''}`)
+  }
+  if (flag.after) parts.push('this card was waiting for it')
+  return `${parts.join('; ')}. Update the branch and run the checks.`
+}
 
 // ── stories: an agent turns a feature into well-defined cards ─────────────
 
@@ -551,6 +638,7 @@ export function mergeBoardFile(items: BoardItem[], root: string, file: BoardFile
       const next: BoardItem = { ...cur, ...c, root }
       for (const k of SHARED) if (!(k in c)) delete (next as unknown as Record<string, unknown>)[k]
       // a card moved back to a waiting column elsewhere forgets this machine's finished run, like moving it here
+      if (cur.column !== c.column) delete next.baseMoved
       if (cur.column !== c.column && (c.column === 'ready' || c.column === 'backlog' || c.column === 'proposed') && cur.started && !isActive(cur)) Object.assign(next, { started: undefined, state: undefined, spent: undefined })
       out = out.map((i) => (i.id === c.id ? next : i))
       changed = true

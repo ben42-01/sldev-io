@@ -1813,7 +1813,10 @@ const board: DocPage = {
         <p>
           <strong>Import GitHub issues</strong> lists open issues (filter by label) and makes cards with their labels and a link back; P1,
           urgent or critical labels come in as high priority. A card's factory run closes its issue with its pull request, and once that
-          pull request is merged (checked through your <code>gh</code> every few minutes) the card moves to Done.
+          pull request is merged (checked through your <code>gh</code> every few minutes) the card moves to Done. The other cards
+          still in Review on the same base then show <strong>main moved: re-check</strong>, and say so when they change the same
+          files as the merged one or were waiting for it. Its menu opens the card's Review tab, where Update and check merges the
+          base and runs the checks; the badge goes once the branch has the base again. Nothing is merged or run for you.
         </p>
       )
     }

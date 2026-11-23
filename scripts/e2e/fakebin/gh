@@ -23,8 +23,10 @@ if [ -n "$FAKE_GH_SHIP" ]; then
   fi
 fi
 # a mission card's PR, found by the branch it was pushed from: #21, in the state pr-state.txt says
+# (pr-state-<branch, / as ->.txt overrides it for one branch, so one card's PR can merge while another's stays open)
 if [ "$1 $2 $3" = "pr list --head" ]; then
-  echo "[{\"number\":21,\"state\":\"$(cat pr-state.txt 2>/dev/null || echo OPEN)\"}]"; exit 0
+  f="pr-state-$(printf '%s' "$4" | tr '/' '-').txt"; [ -f "$f" ] || f=pr-state.txt
+  echo "[{\"number\":21,\"state\":\"$(cat "$f" 2>/dev/null || echo OPEN)\"}]"; exit 0
 fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in

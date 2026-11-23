@@ -1,8 +1,10 @@
 // Board + GitHub: open issues come in as cards (with their labels), a card's factory run opens a PR
-// that closes its issue, and once the PR is merged the card moves to Done on its own.
+// that closes its issue, and once the PR is merged the card moves to Done on its own. Another card waiting
+// in Review on the same base is then flagged to re-check (sharing a file with the merged PR), and the flag
+// clears once its branch has the base again.
 const fs = require('fs')
 const path = require('path')
-const { execSync } = require('child_process')
+const { execFileSync, execSync } = require('child_process')
 
 const RECIPE = `name: E2E PR
 description: One agent, then a PR.
@@ -58,6 +60,19 @@ module.exports = async (h) => {
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('dialog[open] .board-import-list li')].some(l => l.textContent.includes('on the board') && l.querySelector('input').disabled)`), 5000), 'an imported issue is not offered twice')
   await h.click('dialog[open] .btn.ghost', 'Cancel')
 
+  // a second card runs as a Build mission in a worktree (the board's default work) and waits in Review
+  await h.click('[data-column="ready"] .board-add')
+  await h.setValue('.board-quick input', 'Add a health check')
+  await h.js(`document.querySelector('.board-quick').requestSubmit()`)
+  await h.until(async () => (await cards('ready')).includes('Add a health check'), 2000)
+  await h.js(`document.querySelector('.board-quick input')?.blur()`)
+  await h.js(`${card('Add a health check')}.querySelector('.board-card-foot .btn').click()`)
+  h.expect(await h.until(async () => (await cards('review')).includes('Add a health check'), 25000), 'the mission card finishes into Review')
+  const health = await h.js(`window.api.store.get('missions').then(s => s.missions.find(m => m.title.includes('Add a health check')))`)
+  h.expect(!!health?.worktree?.branch, `it worked in a worktree (${health?.worktree?.path})`)
+  // its own PR stays open while the other card's merges
+  fs.writeFileSync(path.join(h.fixture, `pr-state-${health.worktree.branch.replace(/\//g, '-')}.txt`), 'OPEN')
+
   // pick-up runs the PR recipe
   await h.click('.board-page .btn', 'at a time')
   await h.until(() => h.js(`!!document.querySelector('dialog[open] .board-form')`), 2000)
@@ -85,12 +100,57 @@ module.exports = async (h) => {
   await h.shot('3-review')
 
   // the PR gets merged on GitHub: the card moves to Done
+  const healthCard = () => h.js(`window.api.store.get('board').then(b => b.items.find(i => i.title === 'Add a health check'))`)
+  const before = await healthCard()
+  h.expect(!before.baseMoved && !(await h.js(`!!${card('Add a health check')}.querySelector('.board-moved')`)), 'no badge before anything merged')
+  // the run's change touches a file the mission's does too
+  fs.writeFileSync(path.join((await runs())[0].worktree.path, 'NOTES.md'), '# notes from the run\n')
   fs.writeFileSync(path.join(h.fixture, 'pr-state.txt'), 'MERGED')
   await menu('Login button does nothing on Safari', 'Check pull requests now')
   h.expect(await h.until(async () => (await cards('done')).includes('Login button does nothing on Safari'), 8000), 'a merged PR moves its card to Done')
   h.expect(await h.js(`${card('Login button does nothing on Safari')}.textContent.includes('PR #12 merged')`), 'and says so')
   await h.wait(300)
   await h.shot('4-merged')
+
+  // the other card in Review on the same base is told to re-check, and which file it shares with the merged PR
+  h.expect(await h.until(() => h.js(`${card('Add a health check')}?.querySelector('.board-moved.strong')?.textContent.includes('main moved: re-check')`), 8000), 'the card still in Review gets the badge')
+  const badge = await h.js(`${card('Add a health check')}.querySelector('.board-moved').textContent`)
+  h.expect(badge.includes('shares 1 file with #1'), `it says it shares a file with the merged card (${badge})`)
+  h.expect(await h.js(`${card('Add a health check')}.querySelector('.board-moved').title.includes('NOTES.md')`), 'and names the file')
+  const flagged = await healthCard()
+  h.expect(flagged.baseMoved?.files?.join() === 'NOTES.md' && flagged.updatedAt === before.updatedAt, 'the flag is local: the card itself is not changed (no updatedAt bump)')
+  h.expect(!(await cards('done')).includes('Add a health check'), 'its own open PR keeps it in Review')
+  await h.js(`${card('Add a health check')}.querySelector('.board-moved').scrollIntoView({ block: 'center' })`)
+  await h.wait(500)
+  await h.shot('5-base-moved')
+
+  // its menu offers the re-check, which opens the mission's Review tab
+  await menu('Add a health check', 'main moved: re-check')
+  h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.dv-tab')].some(t => t.textContent.includes('Review: ') && t.textContent.includes('health check'))`), 5000), 'the re-check opens the Review tab')
+  await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Board"]')
+  await h.until(() => h.js(`!!${card('Add a health check')}`), 3000)
+
+  // looking again before the branch changed keeps the badge
+  await boardMenu('Check pull requests now')
+  await h.wait(1500)
+  h.expect(await h.js(`!!${card('Add a health check')}.querySelector('.board-moved')`), 'the badge stays until the branch is updated')
+
+  // the merge lands on main, and the branch is updated with it (as Update and check does): the badge clears
+  const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'e2e', GIT_AUTHOR_EMAIL: 'e2e@e', GIT_COMMITTER_NAME: 'e2e', GIT_COMMITTER_EMAIL: 'e2e@e' } })
+  fs.writeFileSync(path.join(h.fixture, 'MERGED.md'), 'from PR #12\n')
+  git(h.fixture, 'add', 'MERGED.md')
+  git(h.fixture, 'commit', '-q', '-m', 'Login button fix (#12)')
+  git(health.worktree.path, 'add', '-A')
+  git(health.worktree.path, 'commit', '-q', '-m', 'Add a health check')
+  await boardMenu('Check pull requests now')
+  await h.wait(1500)
+  h.expect(await h.js(`!!${card('Add a health check')}.querySelector('.board-moved')`), 'a new commit while still behind main keeps the badge')
+  git(health.worktree.path, 'merge', '-q', '--no-edit', 'main')
+  await boardMenu('Check pull requests now')
+  h.expect(await h.until(() => h.js(`!${card('Add a health check')}.querySelector('.board-moved')`), 8000), 'the badge clears once the branch has main again')
+  h.expect(await h.until(async () => !(await healthCard()).baseMoved, 3000), 'and the flag is gone from the card')
+  await h.wait(300)
+  await h.shot('6-rechecked')
 }
 
 module.exports.env = { FAKE_GH_AUTHED: '1' }
