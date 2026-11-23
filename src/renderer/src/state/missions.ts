@@ -55,6 +55,12 @@ async function rereadReply(id: string): Promise<void> {
 
 const save = (): Promise<unknown> => window.api.store.set('missions', { missions: missions.get().list.slice(0, 200) })
 
+/** What a finished mission took (src/shared/lead.ts). Not a change to the mission: its updatedAt stays, as the board's `spent` does. */
+export function setSpent(id: string, spent: Mission['spent']): void {
+  missions.set((s) => ({ list: s.list.map((m) => (m.id === id ? { ...m, spent } : m)) }))
+  persist()
+}
+
 function persist(): void {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => void save(), 400)

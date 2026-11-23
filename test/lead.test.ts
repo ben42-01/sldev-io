@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LEAD, LEAD_METHOD, NO_ROLE, canDelegate, groupByRole, leadRoles, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, LEAD_METHOD, NO_ROLE, canDelegate, groupByRole, leadRoles, spentLine, spentTitle, sumSpent, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
 import { STARTER_PROFILES } from '@shared/profiles'
-import type { AgentProfile } from '@shared/types'
+import type { AgentProfile, MissionSpent } from '@shared/types'
 import { BUILTIN_KINDS, renderKind } from '@shared/missionKinds'
 import type { EvalAttempt } from '@shared/evals'
 
@@ -120,5 +120,42 @@ describe('groupByRole', () => {
   it('has no "No role" group when every worker has a role, and nothing for no workers', () => {
     expect(groupByRole([w('a', 1, 'QA')]).map((x) => x.label)).toEqual(['QA'])
     expect(groupByRole([])).toEqual([])
+  })
+})
+
+describe('spent per role', () => {
+  const m = (spent?: MissionSpent): { spent?: MissionSpent } => ({ spent })
+  const min = 60_000
+
+  it('sums each role from its measured workers and follow-ups', () => {
+    const groups = groupByRole([
+      { role: 'QA', startedAt: 1, passes: [m({ ms: 4 * min, tokens: 100_000, cost: 0.5 }), m({ ms: 2 * min, tokens: 20_000, cost: 0.1 })] },
+      { role: 'Reviewer', startedAt: 2, passes: [m({ ms: 3 * min, tokens: 400_000, cost: 1.2 })] },
+      { role: 'QA', startedAt: 3, passes: [m({ ms: 1 * min, tokens: 30_000, cost: 0.2 })] }
+    ])
+    const by = Object.fromEntries(groups.map((g) => [g.label, sumSpent(g.workers.flatMap((w) => w.passes))]))
+    expect(by.QA).toMatchObject({ ms: 7 * min, tokens: 150_000, measured: 3, timeOnly: 0, pending: 0 })
+    expect(by.QA.cost).toBeCloseTo(0.8)
+    expect(spentLine(by.QA)).toBe('7 min · 150k tokens · $0.80')
+    expect(spentLine(by.Reviewer)).toBe('3 min · 400k tokens · $1.20')
+    // the Lead's total: every worker, and the Lead itself
+    const total = sumSpent([m({ ms: 10 * min, tokens: 1_000_000, cost: 2 }), ...groups.flatMap((g) => g.workers.flatMap((w) => w.passes))])
+    expect(spentLine(total)).toBe('20 min · 1.6M tokens · $4.00')
+  })
+
+  it('shows nothing until one finishes, then counts the rest as unfinished', () => {
+    expect(spentLine(sumSpent([m(), m()]))).toBeNull()
+    expect(spentLine(sumSpent([m({ ms: 90_000, tokens: 1200 }), m()]))).toBe('2 min · 1k tokens · 1 unfinished')
+  })
+
+  it('says time only, and why, for agents without readable logs', () => {
+    const why = 'Cursor Agent keeps no token log sldev can read'
+    const only = sumSpent([m({ ms: 5 * min, noTokens: why }), m({ ms: 1 * min, noTokens: why })])
+    expect(spentLine(only)).toBe('6 min · time only')
+    expect(only.notes).toEqual([why])
+    expect(spentTitle(only)).toContain(`Time only: ${why}`)
+    // mixed: the tokens are a part, and the line says so
+    const mixed = sumSpent([m({ ms: 2 * min, tokens: 50_000 }), m({ ms: 2 * min, noTokens: why })])
+    expect(spentLine(mixed)).toBe('4 min · 50k tokens (1 time only)')
   })
 })

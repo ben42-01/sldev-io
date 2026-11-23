@@ -6,6 +6,9 @@
 const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
+const os = require('os')
+// Codex's session logs: an empty folder, never the real ~/.codex, so the Codex worker has its time only
+const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sldev-e2e-codex-'))
 
 module.exports = async (h) => {
   await h.openFixture({ rightPanelVisible: false })
@@ -67,6 +70,23 @@ module.exports = async (h) => {
   h.expect(/Refused: No role called "Designer"\. Roles: QA, .*Reviewer/.test(done.report), 'the unknown role was refused with the roles there are')
   h.expect(done.report.includes('Wait: names the QA role'), "sldev_wait names the worker's role")
   h.expect(await h.until(() => h.js(`document.querySelectorAll('.mission-card .lead-merged').length === 2`), 5000), 'the card marks both as merged')
+
+  // what each role took, measured when its workers finished: tokens from Claude's transcript, time only for Codex
+  const spent = await h.until(async () => {
+    const ws2 = await workers()
+    return ws2.every((w) => w.spent) && ws2
+  }, 10000)
+  h.expect(!!spent, 'every worker is measured once it finishes')
+  const cs = spent.find((w) => w.id === claude.id).spent
+  const xs = spent.find((w) => w.id === codex.id).spent
+  h.expect(cs.tokens === 45000 && cs.cost > 0 && cs.ms > 0, `the Claude worker's tokens come from its transcript (${JSON.stringify(cs)})`)
+  h.expect(!xs.tokens && xs.ms > 0 && /no Codex log with tokens/.test(xs.noTokens), `the Codex worker without a log has its time only, and why (${JSON.stringify(xs)})`)
+  const roleLine = (r) => `document.querySelector('.mission-card .lead-org-role[data-role="${r}"] .lead-spent')?.textContent ?? ''`
+  h.expect(await h.until(() => h.js(`${roleLine('No role')}.includes('45k tokens')`), 5000), `the role shows its time and tokens (${await h.js(roleLine('No role'))})`)
+  const qa = await h.js(roleLine('QA'))
+  h.expect(qa.includes('time only') && qa.includes('no Codex log with tokens found for this run'), `a role without logs shows time only, with the reason (${qa})`)
+  const total = await h.until(() => h.js(`(() => { const t = document.querySelector('.mission-card .lead-org-lead .lead-spent')?.textContent ?? ''; return t.startsWith('Total') && t })()`), 5000)
+  h.expect(!!total && total.includes('45k tokens (1 time only)'), `the Lead shows a total (${total})`)
   await h.wait(400)
   await h.shot('2-integrated')
 
@@ -74,3 +94,5 @@ module.exports = async (h) => {
   await h.click('.activitybar:not(.right) .activity-btn[aria-label^="Board"]')
   h.expect(await h.until(() => h.js(`!!document.querySelector('[data-column="review"] .board-card')`), 15000), 'the board card moves to Review when the Lead is done')
 }
+
+module.exports.env = { CODEX_HOME: codexHome }

@@ -344,12 +344,12 @@ export interface Spent {
   cost?: number
 }
 
-const dur = (ms: number): string => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))}s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 3_600_000).toFixed(1)} h`)
-const tok = (n: number): string => (n < 1000 ? `${n}` : n < 1_000_000 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1)}M`)
+export const durationText = (ms: number): string => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))}s` : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 3_600_000).toFixed(1)} h`)
+export const tokenText = (n: number): string => (n < 1000 ? `${n}` : n < 1_000_000 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1)}M`)
 
 /** "12 min · 3 agents · 840k tokens · $1.20" */
 export function spentText(s: Spent): string {
-  return [dur(s.ms), s.missions > 1 && `${s.missions} agents`, s.tokens ? `${tok(s.tokens)} tokens` : '', s.cost ? `$${s.cost < 0.01 ? '<0.01' : s.cost.toFixed(2)}` : ''].filter(Boolean).join(' · ')
+  return [durationText(s.ms), s.missions > 1 && `${s.missions} agents`, s.tokens ? `${tokenText(s.tokens)} tokens` : '', s.cost ? `$${s.cost < 0.01 ? '<0.01' : s.cost.toFixed(2)}` : ''].filter(Boolean).join(' · ')
 }
 
 /** The board's totals for a set of cards (Done this week, a release). */
