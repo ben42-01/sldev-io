@@ -4275,6 +4275,21 @@ body.resizing-y * {
 .recipe-checks .missing {
   text-decoration: line-through;
 }
+.missing-roles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--status-attention);
+  border-radius: var(--radius);
+  background: var(--tint);
+  font-size: 12px;
+}
+.missing-role {
+  margin-right: 8px;
+  font-weight: 600;
+}
 
 /* ── issue picker ──────────────────────────── */
 .issue-btn {

@@ -14,6 +14,7 @@ import {
   readyNodes,
   recordEvents,
   rejectNode,
+  missingAgents,
   resolveAgentSpec,
   resolveRun,
   retryNode,
@@ -146,7 +147,7 @@ export function previewImport(text: string): ImportPreview | { error: string } {
   const own = factory.get().recipes.filter((r) => !r.builtin)
   const duplicate = own.some((r) => r.text.trim() === b.recipeText.trim())
   const ids = allAgents(workspace.get().customAgents).map((a) => a.id)
-  const missing = [...new Set(b.recipe.nodes.flatMap((n) => n.agents))].filter((spec) => 'error' in resolveAgentSpec(spec, [...have, ...b.profiles], ids))
+  const missing = missingAgents(b.recipe, [...have, ...b.profiles], ids)
   return {
     recipe: b.recipe,
     name: duplicate ? b.recipe.name : freeName(b.recipe.name, own.map((r) => r.recipe.name)),
@@ -188,6 +189,12 @@ export async function importRecipe(root: string, text: string): Promise<{ name: 
 export function openPipeline(runId: string): void {
   const run = getRun(runId)
   if (run) openPanel('pipeline', `pipeline-${runId}`, `${run.recipe.name}: ${run.intent.slice(0, 40)}`, { runId })
+}
+
+/** The run form's check: agents and profiles the recipe (with the form's choices) names that this install doesn't have. */
+export function recipeMissing(recipe: Recipe, overrides: Record<string, StageOverride>): string[] {
+  const ids = allAgents(workspace.get().customAgents).map((a) => a.id)
+  return missingAgents(applyOverrides(recipe, overrides, workspace.get().defaultAgent), allProfiles(), ids)
 }
 
 /** Checks every agent spec up front, so a typo fails before anything starts. */

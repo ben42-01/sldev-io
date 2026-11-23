@@ -10,6 +10,7 @@ import {
   descendants,
   fill,
   layout,
+  missingAgents,
   needsOwnWorktree,
   newNodeRun,
   nodeFinished,
@@ -28,7 +29,7 @@ import {
   type FactoryRun,
   type Recipe
 } from '@shared/factory'
-import { STARTER_PROFILES } from '@shared/profiles'
+import { STARTER_PROFILES, TEAM_TEMPLATES, teamProviding } from '@shared/profiles'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 
 const FEATURE = `
@@ -255,6 +256,54 @@ describe('resolveRun', () => {
 describe('built-in recipes', () => {
   it('all parse', () => {
     for (const r of BUILTIN_RECIPES) expect(parseRecipe(r.text).error, r.slug).toBeUndefined()
+  })
+
+  describe('Software team', () => {
+    const recipe = parseRecipe(BUILTIN_RECIPES.find((b) => b.slug === 'software-team')!.text).recipe!
+    const team = TEAM_TEMPLATES.find((t) => t.id === 'software')!
+    const ids = ['claude', 'codex']
+    const node = (id: string) => recipe.nodes.find((n) => n.id === id)!
+
+    it('runs the roles in order, reviewer and QA side by side, and ends on the pr stage', () => {
+      expect(recipe.nodes.map((n) => [n.id, n.needs])).toEqual([
+        ['spec', []],
+        ['build', ['spec']],
+        ['review', ['build']],
+        ['qa', ['build']],
+        ['fix', ['review', 'qa']],
+        ['release', ['fix']],
+        ['pr', ['release']]
+      ])
+      expect(node('spec').approve).toBe(true)
+      expect(recipe.nodes.filter((n) => n.kind === 'pr').map((n) => n.id)).toEqual(['pr'])
+      expect(recipe.nodes.at(-1)!.kind).toBe('pr')
+      expect(node('pr').pr!.body).toBe('{release.out}')
+    })
+
+    it('names a team profile on every agent stage', () => {
+      const agentStages = recipe.nodes.filter((n) => n.kind === 'agent')
+      expect(agentStages.map((n) => n.agents)).toEqual([['Product owner'], ['Implementer'], ['Reviewer'], ['QA'], ['Implementer'], ['Release manager']])
+      for (const n of agentStages) {
+        const r = resolveAgentSpec(n.agents[0], team.profiles, ids)
+        expect('profile' in r && r.profile?.id.startsWith('team:software:'), n.id).toBe(true)
+      }
+    })
+
+    it('names the missing roles before a run, and the team that has them', () => {
+      const missing = missingAgents(recipe, STARTER_PROFILES, ids)
+      expect(missing).toEqual(['Product owner', 'QA', 'Release manager'])
+      expect(teamProviding(missing)?.id).toBe('software')
+      // installed team profiles come first, as the app merges them
+      expect(missingAgents(recipe, [...team.profiles, ...STARTER_PROFILES], ids)).toEqual([])
+    })
+  })
+})
+
+describe('teamProviding', () => {
+  it('finds the team with every role, ignoring case and @cli', () => {
+    expect(teamProviding(['qa@codex', 'Release manager'])?.id).toBe('software')
+    expect(teamProviding(['QA', 'Security reviewer'])).toBeUndefined()
+    expect(teamProviding([])).toBeUndefined()
   })
 })
 
