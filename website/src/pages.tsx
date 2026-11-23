@@ -13,7 +13,7 @@ import { LegalPage } from './components/LegalPage'
 import { FaqSection } from './components/Faq'
 import { AgentAgnostic, HowItWorks } from './components/Spotlight'
 import { WorkflowsSpotlight } from './components/Workflows'
-import { BoardSpotlight, EvalsSpotlight, LeadSpotlight } from './components/Team'
+import { BoardSpotlight, EvalsSpotlight, LeadSpotlight, TeamsSpotlight } from './components/Team'
 import { FailoverSpotlight } from './components/Failover'
 import { ContextSpotlight } from './components/ContextSpotlight'
 import { WhySection } from './components/Story'
@@ -42,12 +42,13 @@ const pages: Record<string, { title: string; render: () => React.JSX.Element }> 
               <span className="brand-text">nothing in the way.</span>
             </>
           }
-          lead="Agents from every vendor, working as one team on your machine: a Lead that delegates, a board they work from, evals that measure them, and everything around the terminal."
+          lead="Agents from every vendor, working as one team on your machine: a Lead that delegates to roles, a board they work from, evals that measure them, and everything around the terminal."
         />
         <FeatureGrid />
         <LeadSpotlight />
         <BoardSpotlight />
         <EvalsSpotlight />
+        <TeamsSpotlight />
         <WhySection />
         <FailoverSpotlight />
         <ContextSpotlight />

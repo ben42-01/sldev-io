@@ -218,3 +218,77 @@ checks:
     </section>
   )
 }
+
+const roles: Array<{ role: string; task: string; agent: string; state: 'done' | 'working' | 'back' | 'waits'; why?: string }> = [
+  { role: 'Product owner', task: 'Writes 3 stories', agent: 'claude', state: 'done' },
+  { role: 'Implementer', task: 'Invites API', agent: 'codex', state: 'done', why: 'best on Implementer evals' },
+  { role: 'Implementer', task: 'Invite email UI', agent: 'claude', state: 'done' },
+  { role: 'Reviewer', task: 'Review the API', agent: 'gemini', state: 'back', why: 'pinned in reviewer.md' },
+  { role: 'QA', task: 'e2e for invites', agent: 'claude', state: 'working' },
+  { role: 'Release manager', task: 'PR description', agent: 'codex', state: 'waits' }
+]
+
+const roleState = { done: ['t-green', '✓ done'], working: ['t-green', '● working'], back: ['t-amber', '↩ sent back'], waits: ['t-dim', '… waits'] } as const
+
+/** Teams: a software org of agent profiles (one Markdown file per role), led by a Lead, routed by evals, overseen by you. */
+export function TeamsSpotlight() {
+  const [ref, seen] = useSeen<HTMLDivElement>()
+  return (
+    <section className="section alt" id="teams">
+      <div className="container split">
+        <div>
+          <p className="eyebrow">Teams · new</p>
+          <h2>Hire a software team. Every role is an agent.</h2>
+          <p className="section-lead">
+            Add a team in one click: a product owner, tech lead, implementer, reviewer, QA and release manager, each a Markdown file in your
+            repo you can read, edit and commit. A Lead hands work to roles, your evals pick the best agent for each role, and the card shows
+            who did what and what it cost.
+          </p>
+          <ul className="checks">
+            <li><Check size={16} /> Any agent in any role: Claude reviews, Codex builds, Gemini tests, or the other way round</li>
+            <li><Check size={16} /> <span>Tag an eval with a <code>role</code> and that role goes to the agent that wins it</span></li>
+            <li><Check size={16} /> A team, not a zero-human company: you approve the stories, review the branch and push</li>
+          </ul>
+          <p className="spot-more">
+            <a className="more-link" href="/docs/teams">
+              Set up a team <ArrowRight size={15} />
+            </a>
+          </p>
+        </div>
+        <div className="code brand-frame org-mock" ref={ref} role="img" aria-label="An org chart: a Tech lead delegates to a Product owner, two Implementers, a Reviewer, QA and Release manager, each on a different agent; you approve, review and push">
+          <div className="code-h">Lead · Team invites · Software team</div>
+          <div className="org" key={seen}>
+            <div className="org-node org-lead ln-svg" style={{ '--i': 0 } as React.CSSProperties}>
+              <span className="org-role">Tech lead</span>
+              <span className="org-meta"><span className="t-purple">claude</span> · plans and delegates</span>
+            </div>
+            <div className="org-roles">
+              {roles.map((r, i) => {
+                const [tone, label] = roleState[r.state]
+                return (
+                  <div className="org-node ln-svg" key={r.role + r.task} style={{ '--i': i + 1 } as React.CSSProperties}>
+                    <span className="org-role">{r.role}</span>
+                    <span className="org-task">{r.task}</span>
+                    <span className="org-meta">
+                      <span className="t-blue">{r.agent}</span> <span className={tone}>{label}</span>
+                    </span>
+                    {r.why && <span className="org-why">{r.why}</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="org-you ln-svg" style={{ '--i': roles.length + 1 } as React.CSSProperties}>
+              <span>You</span>
+              <span className="art-chip">approve stories</span>
+              <span className="art-chip">review the branch</span>
+              <span className="art-chip">push</span>
+            </div>
+            <div className="org-spent ln-svg" style={{ '--i': roles.length + 2 } as React.CSSProperties}>
+              Spent · 22 min · 7 agents · $2.41
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}

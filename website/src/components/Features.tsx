@@ -1,5 +1,6 @@
 import {
   Wand2,
+  UsersRound,
   ArrowRightLeft,
   Boxes,
   Brain,
@@ -58,6 +59,7 @@ const groups: { id: GroupId; icon: LucideIcon; title: string; text: string }[] =
 
 const features: Feature[] = [
   { group: 'team', icon: Network, title: 'Lead missions', text: 'Give one agent a big goal. It splits it into tasks, delegates them to other agents running in parallel in their own worktrees, reviews each diff, sends work back, and merges the good branches with your tests as the check.' },
+  { group: 'team', icon: UsersRound, title: 'A software team in roles', text: 'Add a team in one click: product owner, tech lead, implementer, reviewer, QA and release manager, each a Markdown file you edit and commit. A Lead hands work to roles, your evals pick the best agent for each, and you still approve, review and push.' },
   { group: 'team', icon: SquareKanban, title: 'A board agents work from', text: 'Backlog, Proposed, Agent ready, In progress, Review, Done. Turn on pick-up and the factory takes approved cards itself, highest priority first; a merged pull request moves the card to Done.' },
   { group: 'team', icon: Wand2, title: 'Plan in the chat, launch in sldev', text: 'Add the sldev skills and any agent you plan with drafts the result for you: a mission with its acceptance criteria, board stories in order, a factory recipe or an eval. It shows up in sldev-io as a draft, and nothing starts until you launch it.' },
   { group: 'team', icon: Sparkles, title: 'Agents write the stories', text: 'Describe a feature and an agent reads the code, then writes stories with acceptance criteria and how to check them. Refine turns a vague card into one. You approve before any agent picks one up.' },
