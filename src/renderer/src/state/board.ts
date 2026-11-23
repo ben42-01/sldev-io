@@ -1,4 +1,4 @@
-import { PR_POLL_MS, approveItem, boardFileText, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
+import { PR_POLL_MS, approveItem, boardFileText, cardBrief, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
 import type { GhIssue, Mission } from '@shared/types'
 import { NO_TOKENS, addTokens, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
@@ -396,7 +396,7 @@ export async function startItem(id: string): Promise<void> {
     // cards build on each other: start from the upstream when an earlier card's PR merged there and the local branch is behind
     const branch = await window.api.git.branch(i.root).catch(() => null)
     const base = branch ? await window.api.git.freshBase(i.root, branch).catch(() => branch) : undefined
-    const started = await startAction(i.root, work, { intent: (text) => [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n'), title: `#${i.key} ${i.title}`, issue: i.issue?.number, base })
+    const started = await startAction(i.root, work, { intent: (text) => cardBrief(i, text), title: `#${i.key} ${i.title}`, issue: i.issue?.number, base })
     if ('error' in started) updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: started.error })
     else updateItem(id, { started: { type: started.type, id: started.id, at: now() }, note: undefined })
   } catch (e) {

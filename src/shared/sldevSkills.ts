@@ -11,7 +11,7 @@ import { parseRecipe } from './factory'
  */
 
 /** bumped when a skill's text changes, so projects with an older copy are offered the update */
-export const SKILLS_VERSION = 3
+export const SKILLS_VERSION = 4
 
 export const DRAFTS_DIR = '.sldev/drafts'
 /** where each skill is installed in a project: Claude Code reads .claude/skills, most other agents .agents/skills */
@@ -214,6 +214,7 @@ Placeholders in prompts and the PR: \`{intent}\` (what the user typed when start
 
 - Hand-offs between stages are files: a stage writes \`{out}\`, a later one reads \`{stage.out}\`.
 - Put a check (\`run\`) after every stage that changes code, with \`onFail\` back to it.
+- Work can land on \`{base}\` while the run works. Tell the last stage that changes code to finish by running \`git fetch\`, merging \`{base}\` (or its upstream, if that is newer), resolving conflicts and committing, so the check after it tests what the pull request will merge. Never push from a stage: the pr stage does that on the user's click.
 - Gate the steps a person should see (the spec, the review); not every stage.
 - Use the project's own scripts, read from package.json, the Makefile or whatever the project uses.
 

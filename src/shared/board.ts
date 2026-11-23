@@ -141,6 +141,15 @@ export function itemIntent(i: Pick<BoardItem, 'key' | 'title' | 'body' | 'labels
   return [`#${i.key} ${i.title}`, i.body.trim(), i.labels.length ? `Labels: ${i.labels.join(', ')}` : ''].filter(Boolean).join('\n\n')
 }
 
+/**
+ * The brief of a picked-up card: the work's own text, then the card. The closing lines come from the mission
+ * kind (`renderKind`), so a card built in a worktree also merges its base and re-runs the checks before it
+ * reports; a recipe's stages get this as `{intent}`.
+ */
+export function cardBrief(i: Pick<BoardItem, 'key' | 'title' | 'body' | 'labels'>, text = ''): string {
+  return [text.trim(), itemIntent(i)].filter(Boolean).join('\n\n')
+}
+
 /** "bug, UI ,  bug" → ["bug", "ui"] */
 export function parseLabels(text: string): string[] {
   return [...new Set(text.split(/[,\n]/).map((l) => l.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean))].slice(0, 8)

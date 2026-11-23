@@ -28,6 +28,16 @@ export interface MissionKind {
 const WORK_HERE = 'Work only in your current working folder.'
 const NO_EDITS = 'Do not create, modify or delete any files, and do not commit.'
 
+/**
+ * The last step of a worktree mission that changes code: work merged into the base while the agent worked
+ * isn't in its branch, so "the checks pass" can be stale by the time it reports. Filled into `{sync}`; an
+ * in-place mission is on the user's own checkout and must not merge anything, so there it is empty.
+ */
+export function syncStep(base?: string): string {
+  const b = base?.trim() ? `\`${base.trim()}\`` : 'the branch this worktree was made from'
+  return `Before you summarize, if you changed files, bring in what landed on ${b} while you worked: commit your work on this branch, run \`git fetch\`, merge ${b} (or its upstream, if that is newer), resolve any conflicts, re-run the checks and commit the merge. That is the one commit and merge this asks for; never push.`
+}
+
 export const BUILTIN_KINDS: MissionKind[] = [
   {
     id: 'build',
@@ -41,7 +51,7 @@ export const BUILTIN_KINDS: MissionKind[] = [
       'Mission: {title}',
       '{brief}',
       '{criteria}',
-      `${WORK_HERE}\nWhen finished, summarize what changed, the checks you ran, and the remaining risks, for human review. Do not commit, push or merge unless the task explicitly asks.`
+      `${WORK_HERE}\nWhen finished, summarize what changed, the checks you ran, and the remaining risks, for human review. Do not commit, push or merge unless the task explicitly asks.\n{sync}`
     ].join('\n\n')
   },
   {
@@ -73,6 +83,7 @@ export const BUILTIN_KINDS: MissionKind[] = [
       '{brief}',
       '{criteria}',
       `${WORK_HERE}\nFind the root cause before suggesting anything. Reproduce it if you can. Don't change project files unless the task asks for a fix; remove any temporary files or scripts you create.`,
+      '{sync}',
       'End with: the cause, the evidence (commands you ran, files and lines), the fix you recommend, and how confident you are.'
     ].join('\n\n')
   },
@@ -126,7 +137,7 @@ export const BUILTIN_KINDS: MissionKind[] = [
     readOnly: false,
     placeholder: 'e.g. Teams: users create a team, invite people by email, share projects with it, and owners remove members',
     scope: 'builtin',
-    template: ['Lead: {title}', '{brief}', '{criteria}', LEAD_METHOD].join('\n\n')
+    template: ['Lead: {title}', '{brief}', '{criteria}', LEAD_METHOD, '{sync}'].join('\n\n')
   },
   {
     id: 'freeform',
@@ -142,15 +153,19 @@ export const BUILTIN_KINDS: MissionKind[] = [
 
 export const DEFAULT_KIND = 'build'
 
-/** The first message of a mission of this kind. Empty placeholders drop their line. */
-export function renderKind(kind: Pick<MissionKind, 'template'>, o: { title: string; brief: string; criteria?: string }): string {
+/**
+ * The first message of a mission of this kind. Empty placeholders drop their line. `{sync}` (the
+ * merge-the-base step) is filled only for a worktree mission of a kind that isn't read-only.
+ */
+export function renderKind(kind: Pick<MissionKind, 'template'> & { readOnly?: boolean }, o: { title: string; brief: string; criteria?: string; worktree?: boolean; base?: string }): string {
   const criteria = o.criteria?.trim() ? `Acceptance criteria:\n${o.criteria.trim()}` : ''
-  const values: Record<string, string> = { title: o.title.trim(), brief: o.brief.trim(), criteria }
+  const sync = o.worktree && !kind.readOnly ? syncStep(o.base) : ''
+  const values: Record<string, string> = { title: o.title.trim(), brief: o.brief.trim(), criteria, sync }
   let text = kind.template.includes('{brief}') ? kind.template : `${kind.template.trim()}\n\n{brief}`
   // a line holding only a placeholder that is empty goes away with its line break
-  text = text.replace(/^[ \t]*\{(title|brief|criteria)\}[ \t]*$/gm, (m, k: string) => (values[k] ? m : '\u0000'))
+  text = text.replace(/^[ \t]*\{(title|brief|criteria|sync)\}[ \t]*$/gm, (m, k: string) => (values[k] ? m : '\u0000'))
   text = text.replace(/\u0000\n?/g, '')
-  text = text.replace(/\{(title|brief|criteria)\}/g, (_m, k: string) => values[k])
+  text = text.replace(/\{(title|brief|criteria|sync)\}/g, (_m, k: string) => values[k])
   return text.replace(/\n{3,}/g, '\n\n').trim()
 }
 
@@ -192,7 +207,7 @@ export function parseKindFile(text: string, path: string, scope: 'project' | 'us
 export function serializeKind(k: Pick<MissionKind, 'name' | 'description' | 'template' | 'worktree' | 'readOnly' | 'placeholder'>): string {
   const meta: Record<string, unknown> = { name: k.name, description: k.description || undefined, worktree: k.worktree, access: k.readOnly ? 'read' : 'write', placeholder: k.placeholder || undefined }
   for (const key of Object.keys(meta)) if (meta[key] === undefined) delete meta[key]
-  const help = '<!-- The first message a mission of this kind sends. {title}, {brief} and {criteria} are filled in; without {brief} the brief goes at the end. -->'
+  const help = '<!-- The first message a mission of this kind sends. {title}, {brief} and {criteria} are filled in; without {brief} the brief goes at the end. {sync} is the "merge the base branch, re-run the checks" step, filled in only for worktree missions. -->'
   return `---\n${stringify(meta).trimEnd()}\n---\n\n${help}\n\n${k.template.trim()}\n`
 }
 
