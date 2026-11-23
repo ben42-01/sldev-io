@@ -5,7 +5,7 @@ import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
-import type { MergeMethod, ShipStatus } from '@shared/ship'
+import type { BaseMoved, MergeMethod, ShipStatus } from '@shared/ship'
 import type {
   AgentProfile,
   RulesState,
@@ -160,6 +160,10 @@ const api = {
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
     /** merge `branch` locally in the main checkout, which must be on `into` */
     merge: (repo: string, branch: string, into?: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch, into),
+    /** the ship bar: commits on the base (or its upstream, fetched now and then) since the branch, and a trial merge's conflicts */
+    baseMoved: (cwd: string, base: string): Promise<BaseMoved> => ipcRenderer.invoke('git:baseMoved', cwd, base),
+    /** merge `ref` into the worktree's branch; a conflict is undone and its files returned. Never pushes */
+    mergeBaseInto: (cwd: string, ref: string): Promise<{ merged: boolean; conflicts: string[]; output: string }> => ipcRenderer.invoke('git:mergeBaseInto', cwd, ref),
     push: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:push', cwd, branch),
     pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },

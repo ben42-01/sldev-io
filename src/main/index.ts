@@ -252,6 +252,8 @@ function registerIpc(): void {
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
   ipcMain.handle('git:merge', (_e, repo: string, branch: string, into?: string) => git.merge(repo, String(branch), into ? String(into) : undefined))
+  ipcMain.handle('git:baseMoved', (_e, cwd: string, base: string) => git.baseMoved(cwd, String(base)))
+  ipcMain.handle('git:mergeBaseInto', (_e, cwd: string, ref: string) => git.mergeBaseInto(cwd, String(ref)))
   ipcMain.handle('git:push', (_e, cwd: string, branch: string) => git.push(cwd, branch))
   ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
 

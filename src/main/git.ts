@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
 import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
+import type { BaseMoved } from '@shared/ship'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
@@ -331,4 +332,80 @@ export async function graphLog(cwd: string, limit = 300): Promise<GraphLog> {
 export async function showCommit(cwd: string, sha: string): Promise<string> {
   if (!/^[0-9a-f]{7,64}$/.test(sha)) throw new Error(`Not a commit: "${sha}"`)
   return ok(['show', '--no-color', '--no-ext-diff', '--format=', '--first-parent', '-m', sha], cwd)
+}
+
+/** when each remote was last fetched for the ship bar, so a Review tab polling every 15 s doesn't fetch every time */
+const lastFetch = new Map<string, number>()
+const FETCH_EVERY_MS = 5 * 60_000
+
+/**
+ * How far the base moved since the branch in `cwd` left it, before anything is pushed: the commits on the base
+ * that HEAD doesn't have, and a trial merge (`git merge-tree --write-tree`, git 2.38+) that names the files that
+ * would conflict without touching the worktree, the index or any ref. The base is compared as it is on its
+ * upstream when the local branch is only behind it (fetched at most every 5 minutes), like `freshBase`.
+ */
+export async function baseMoved(cwd: string, base: string): Promise<BaseMoved> {
+  if (!base || base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  const remote = (await git(['config', '--get', `branch.${base}.remote`], cwd)).stdout.trim()
+  if (remote && remote !== '.') {
+    const key = `${(await git(['rev-parse', '--git-common-dir'], cwd)).stdout.trim()}\0${remote}`
+    if (Date.now() - (lastFetch.get(key) ?? 0) > FETCH_EVERY_MS) {
+      lastFetch.set(key, Date.now())
+      await git(['fetch', '--quiet', '--prune', remote], cwd, 60000)
+    }
+  }
+  const ref = await upstreamIfBehind(cwd, base)
+  const [count, log] = await Promise.all([
+    git(['rev-list', '--count', `HEAD..${ref}`, '--'], cwd),
+    git(['log', '--no-color', '--max-count=50', '--format=%H%x00%s', `HEAD..${ref}`, '--'], cwd)
+  ])
+  if (log.code !== 0 || count.code !== 0) throw new Error((log.stderr || count.stderr).trim() || `git log HEAD..${ref} failed`)
+  const commits = log.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [sha, subject = ''] = l.split('\0')
+      return { sha, subject }
+    })
+  const behind = Number(count.stdout.trim()) || commits.length
+  return { base, ref, behind, commits, conflicts: behind ? await trialMerge(cwd, ref) : [] }
+}
+
+/** `base`'s upstream when the local branch only lags it (no fetch here), else `base` itself */
+async function upstreamIfBehind(cwd: string, base: string): Promise<string> {
+  const upstream = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${base}@{upstream}`], cwd)).stdout.trim()
+  if (!upstream) return base
+  const [local, up] = await Promise.all([git(['rev-parse', base], cwd), git(['rev-parse', upstream], cwd)])
+  if (local.code !== 0 || up.code !== 0 || local.stdout.trim() === up.stdout.trim()) return base
+  return (await git(['merge-base', '--is-ancestor', base, upstream], cwd)).code === 0 ? upstream : base
+}
+
+/** Files that would conflict merging `ref` into HEAD, computed in memory; null when this git can't tell (before 2.38). */
+export async function trialMerge(cwd: string, ref: string): Promise<string[] | null> {
+  const r = await git(['merge-tree', '--write-tree', '--name-only', '--no-messages', ref, 'HEAD'], cwd)
+  // 0: clean, 1: conflicts; anything else (an old git without --write-tree) says nothing either way
+  if (r.code === 0) return []
+  if (r.code !== 1) return null
+  // the first line is the tree git would write; the conflicted files follow
+  return [...new Set(r.stdout.split('\n').slice(1).filter(Boolean))]
+}
+
+/**
+ * Merge `ref` (the base) into the branch checked out in the worktree `cwd`, for the ship bar's Update and check.
+ * Refused while tracked files have uncommitted changes. A conflict is undone (`merge --abort`) and its files
+ * returned, so the worktree is left exactly as it was. Nothing is pushed.
+ */
+export async function mergeBaseInto(cwd: string, ref: string): Promise<{ merged: boolean; conflicts: string[]; output: string }> {
+  if (!ref || ref.startsWith('-')) throw new Error(`Not a valid base: "${ref}"`)
+  const dirty = (await ok(['status', '--porcelain', '--untracked-files=no'], cwd)).split('\n').filter(Boolean)
+  if (dirty.length) throw new Error(`${dirty.length} changed file${dirty.length === 1 ? '' : 's'} not committed in the worktree. Commit them first, then update.`)
+  const r = await git(['merge', '--no-ff', '--no-edit', ref], cwd, 120000)
+  const output = (r.stdout + r.stderr).trim()
+  if (r.code === 0) return { merged: true, conflicts: [], output }
+  if (/CONFLICT|Automatic merge failed/.test(output)) {
+    const files = (await git(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.split('\n').filter(Boolean)
+    await git(['merge', '--abort'], cwd)
+    return { merged: false, conflicts: files, output }
+  }
+  throw new Error(output || 'git merge failed')
 }

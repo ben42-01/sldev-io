@@ -2837,6 +2837,46 @@ button.ship-pr:hover {
   white-space: pre-wrap;
   color: var(--status-error);
 }
+.ship-base {
+  border-top: 1px solid var(--border);
+}
+.ship-base-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.ship-base-row .spacer {
+  flex: 1;
+}
+.ship-base-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ship-base-conflicts {
+  color: var(--status-error);
+  white-space: nowrap;
+}
+.ship-update {
+  border-top: 1px solid var(--border);
+}
+.ship-update .ship-error {
+  max-height: 220px;
+  overflow: auto;
+  background: var(--code-bg);
+}
+.ship-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px 4px;
+  font-size: 12px;
+  min-width: 0;
+}
 .ship-runs {
   list-style: none;
   margin: 0;
