@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attemptStatus, cellTone, diffCheckResult, evalTemplate, judgePrompt, judgeResult, nextAttempts, parseEval, plannedAttempts, runCheckResult, scoreboard, scoreboardMarkdown, type EvalAttempt, type EvalRun } from '@shared/evals'
+import { attemptStatus, routableAttempts, cellTone, diffCheckResult, evalTemplate, judgePrompt, judgeResult, nextAttempts, parseEval, plannedAttempts, runCheckResult, scoreboard, scoreboardMarkdown, type EvalAttempt, type EvalRun } from '@shared/evals'
 
 describe('parseEval', () => {
   it('reads a brief, a base and every kind of check', () => {
@@ -34,6 +34,19 @@ checks:
     expect(parseEval('name: a\nbrief: b\nchecks:\n  - diff: -3').error).toContain('check 1: diff')
     expect(parseEval('name: a\nbrief: b\nchecks:\n  - lint: true').error).toContain('check 1: use run')
     expect(parseEval('name: [').error).toContain('Not valid YAML')
+  })
+  it('reads an optional role, and refuses one that is not a profile name', () => {
+    expect(parseEval('name: a\nbrief: b\nrole: " Reviewer "\nchecks: [npm test]').spec!.role).toBe('Reviewer')
+    expect(parseEval('name: a\nbrief: b\nchecks: [npm test]').spec).not.toHaveProperty('role')
+    for (const bad of ['role: [a, b]', 'role: ""', 'role: Reviewer@codex', 'role: 3']) expect(parseEval(`name: a\nbrief: b\n${bad}\nchecks: [npm test]`).error).toContain('role is the name of one profile')
+  })
+  it('tags attempts with their eval\'s role, also ones planned before roles', () => {
+    const specs = [{ name: 'r', brief: 'b', timeout: 1, checks: [], role: 'Reviewer' }, { name: 'g', brief: 'b', timeout: 1, checks: [] }]
+    let n = 0
+    const planned = plannedAttempts(specs, [{ agent: 'claude' }], 1, () => `a${n++}`)
+    expect(planned.map((a) => a.role)).toEqual(['Reviewer', undefined])
+    const old = planned.map(({ role: _, ...a }) => a)
+    expect(routableAttempts([{ specs, attempts: old }]).map((a) => a.role)).toEqual(['Reviewer', undefined])
   })
   it('the template is a valid eval', () => {
     expect(parseEval(evalTemplate('Fix it', 'Line one\nline two')).spec).toMatchObject({ name: 'Fix it', brief: 'Line one\nline two', timeout: 20, checks: [{ type: 'run', command: 'npm test' }] })

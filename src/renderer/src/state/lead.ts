@@ -1,5 +1,6 @@
 import { installedBin, stageMode } from '@shared/agents'
-import { DEFAULT_LEAD, canDelegate, resolveRole, routeAgent, waitText, workerBrief, workerDone, type WorkerView } from '@shared/lead'
+import { routableAttempts } from '@shared/evals'
+import { DEFAULT_LEAD, canDelegate, resolveRole, waitText, workerBrief, workerAgent, workerDone, type WorkerView } from '@shared/lead'
 import { renderKind } from '@shared/missionKinds'
 import { applyProfile, promptWithRole } from '@shared/profiles'
 import type { AgentOptions, Mission } from '@shared/types'
@@ -86,11 +87,13 @@ async function delegate(lead: Mission, args: Record<string, unknown>): Promise<A
   const role = roleAsked ? resolveRole(roleAsked, await profilesFor(lead.root), agents.map((a) => a.id)) : undefined
   if (role && 'error' in role) return { error: role.error }
   const profile = role?.profile
-  const route = named
-    ? { agent: named.id, model: undefined, why: 'chosen by the Lead' }
-    : role?.agent
-      ? { agent: role.agent, model: undefined, why: `the ${profile!.name} role's agent` }
-      : routeAgent(evals.get().runs.filter((r) => r.root === lead.root).flatMap((r) => r.attempts), installed, workspace.get().defaultAgent)
+  const route = workerAgent({
+    named: named?.id,
+    role: profile && { name: profile.name, agent: role?.agent },
+    attempts: routableAttempts(evals.get().runs.filter((r) => r.root === lead.root)),
+    installed,
+    fallback: workspace.get().defaultAgent
+  })
   const agent = getAgent(route.agent)
   const kind = getKind(['build', 'investigate', 'research', 'review'].includes(str(args.kind)) ? str(args.kind) : 'build')
   // the profile's model only fits the agent it was written for (or any agent, when it names none)
