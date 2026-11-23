@@ -193,13 +193,14 @@ export async function startAction(root: string, action: Action, ctx: StartContex
   const title = ctx.title.slice(0, 60)
   const agent = getAgent(action.agent || workspace.get().defaultAgent)
   const repo = await window.api.git.isRepo(root)
+  const worktree = kind.worktree && repo
   const m = await startMission({
-    prompt: renderKind(kind, { title, brief }),
+    prompt: renderKind(kind, { title, brief, worktree, base: ctx.base }),
     brief,
     title,
     root,
     options: { agent: agent.id, permissionMode: kind.readOnly ? agent.readOnlyMode : undefined },
-    worktree: kind.worktree && repo,
+    worktree,
     base: ctx.base,
     kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly }
   })

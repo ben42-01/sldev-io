@@ -62,7 +62,7 @@ export async function launchSaved(m: SavedMission, isRepo: boolean): Promise<voi
     await startRun({ recipe: compareRecipe(specs, { [specs[0]]: mine }), intent: m.brief, root: m.root, base: m.base ?? '', issue: m.issue })
     return
   }
-  const sent = renderKind(kind, { title, brief: m.brief, criteria: m.criteria ?? '' })
+  const sent = renderKind(kind, { title, brief: m.brief, criteria: m.criteria ?? '', worktree: isRepo && m.worktree, base: m.base })
   await startMission({ prompt: sent, brief: m.brief, criteria: m.criteria, title, root: m.root, options: m.options, worktree: isRepo && m.worktree, base: m.base, kind: { id: kind.id, name: kind.name, readOnly: kind.readOnly } })
 }
 

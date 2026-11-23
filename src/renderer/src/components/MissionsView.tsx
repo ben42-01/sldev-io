@@ -181,7 +181,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   const ready = !!prompt.trim() || briefOptional
   const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60) || (briefOptional ? 'Map this project' : '')
   /** exactly what the agent receives as its first message (the profile's role goes in separately) */
-  const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria })
+  const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria, worktree: worktree && isRepo, base })
   // startMission adds the memory line itself; this is only so the preview shows it
   const [memory, setMemory] = useState('')
   useEffect(() => {
@@ -421,7 +421,7 @@ function KindPicker({ kinds, value, onChange, root }: { kinds: MissionKind[]; va
           </select>
           <button type="button" className="btn sm" disabled={!name.trim()} onClick={() => void create()}>Create and edit</button>
           {error && <div className="form-error" role="alert">{error}</div>}
-          <div className="field-hint">A Markdown file: front matter for the defaults, then the prompt template with {'{title}'}, {'{brief}'} and {'{criteria}'}. It opens in your editor.</div>
+          <div className="field-hint">A Markdown file: front matter for the defaults, then the prompt template with {'{title}'}, {'{brief}'}, {'{criteria}'} and {'{sync}'} (merge the base and re-run the checks, worktree missions only). It opens in your editor.</div>
         </div>
       )}
     </div>

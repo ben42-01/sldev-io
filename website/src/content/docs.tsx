@@ -846,6 +846,11 @@ Security audit: {title}
 Look for injection, authentication mistakes, secrets in code and unsafe
 defaults. Do not change any files. List findings with file and line.
 `}</Code>
+          <p>
+            A kind that changes code can end with <code>{'{sync}'}</code>: in a worktree mission it becomes the last step of Build, Investigate and
+            Lead (fetch, merge the base branch, resolve conflicts, re-run the checks and commit, never push), so work that landed on the base while
+            the agent worked is checked too. In place, and for read-only kinds, it is left out.
+          </p>
         </>
       )
     },
