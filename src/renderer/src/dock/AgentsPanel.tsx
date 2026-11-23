@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Bot, NotebookText, Rocket, Search } from 'lucide-react'
+import { ArrowRight, Bot, NotebookText, Rocket, Search, Users } from 'lucide-react'
 import type { Mission } from '@shared/types'
 import type { TokenUsage } from '@shared/usage'
 import { missionSignal, needsYou } from '@shared/status'
@@ -13,6 +13,7 @@ import { tildify } from '../lib/paths'
 import { openMissionDetails } from '../components/MissionDetails'
 import { StatusDot } from '../components/StatusDot'
 import { Empty } from '../components/States'
+import { openAddTeam, TeamStrip } from '../components/AgentTeams'
 import { duration, tokens } from './DashboardPanel'
 
 export function openAgentsDashboard(): void {
@@ -99,6 +100,9 @@ export function AgentsPanel(): React.JSX.Element {
           <div className="muted small">{subtitle}</div>
         </div>
         <span className="grow" />
+        <button className="btn sm" onClick={() => openAddTeam()} title="Install a ready-made team of agent profiles into this project">
+          <Users size={13} /> Add a team
+        </button>
         <button className="btn sm" disabled={!counts.needs} onClick={() => nextNeedsYou()} title="Go to the next agent that needs you (Ctrl+Shift+J)">
           Next <ArrowRight size={13} />
         </button>
@@ -106,6 +110,8 @@ export function AgentsPanel(): React.JSX.Element {
           <Rocket size={13} /> New mission
         </button>
       </header>
+
+      <TeamStrip />
 
       <div className="board-filters">
         <div className="seg sm" role="group" aria-label="Filter agents">

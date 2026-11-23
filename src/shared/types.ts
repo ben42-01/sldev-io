@@ -126,6 +126,8 @@ export interface AgentProfile {
   scope: 'builtin' | 'user' | 'project'
   /** project profiles: the .md file */
   path?: string
+  /** the team template it was installed from (its name), so the UI can group a team's roles */
+  team?: string
 }
 
 export interface RulesState {
@@ -435,8 +437,8 @@ export interface Mission {
   factory?: { run: string; node: string }
   /** a Lead mission (kind 'lead'): how many workers it may start, and at once */
   lead?: { maxWorkers: number; parallel: number }
-  /** a worker a Lead started with sldev_delegate; the Lead was told it finished, and merged it */
-  delegate?: { lead: string; reported?: boolean; merged?: boolean; why?: string }
+  /** a worker a Lead started with sldev_delegate (in a profile's role); the Lead was told it finished, and merged it */
+  delegate?: { lead: string; reported?: boolean; merged?: boolean; why?: string; role?: string }
   /** an eval attempt's agent or judge: like a factory stage, it reports to its run, not to you */
   eval?: { run: string; attempt: string; judge?: boolean }
   /** a pass of a repeated mission (src/shared/repeat.ts): its automation (app) or loop (CLI), its number, the total (0 = open-ended) */

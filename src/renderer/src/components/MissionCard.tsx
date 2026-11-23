@@ -264,7 +264,7 @@ function LeadWorkers({ lead }: { lead: string }): React.JSX.Element | null {
           <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
             <StatusDot signal={signal} small />
             <span className="lead-worker-title">{task.title}</span>
-            <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{cur !== task ? ' · fixing' : ''}</span>
+            <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{task.delegate?.role ? ` · ${task.delegate.role}` : ''}{cur !== task ? ' · fixing' : ''}</span>
             {task.delegate?.merged && <span className="lead-merged" title="Merged into the Lead's branch"><GitMerge size={11} /></span>}
           </button>
         )
