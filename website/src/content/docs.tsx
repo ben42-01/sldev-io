@@ -277,6 +277,10 @@ Ignore style and naming.
             Using a cross-agent review is a cheap way to catch mistakes: let one CLI build and another review, for example{' '}
             <code>agent: Implementer@claude</code> and then <code>agent: Reviewer@codex</code>.
           </p>
+          <p>
+            For a whole set of roles at once (product owner, tech lead, implementer, reviewer, QA, release manager), install a{' '}
+            <a href="/docs/teams">team</a> from the Agents panel.
+          </p>
         </>
       )
     },
@@ -1244,7 +1248,7 @@ Continue:         aider --restore-chat-history
           <p>
             Skills also work as factory stages (<code>skill: our-spec</code>); see <a href="/docs/recipes#skills">your own skills and specs</a>.
             Agent profiles (a role like Reviewer, with its CLI and model) are covered under{' '}
-            <a href="/docs/recipes#agents">choosing agents</a>.
+            <a href="/docs/recipes#agents">choosing agents</a>, and a set of them as a software team under <a href="/docs/teams">teams</a>.
           </p>
         </>
       )
@@ -1351,6 +1355,10 @@ const lead: DocPage = {
             with feedback when it falls short, and merges the good branches into its own branch with your tests as the check. You review
             the Lead's branch at the end.
           </p>
+          <p>
+            With a <a href="/docs/teams">team</a> installed, the Lead can give each worker a role (Implementer, Reviewer, QA…), and its card
+            shows the workers by role.
+          </p>
         </>
       )
     },
@@ -1378,7 +1386,7 @@ const lead: DocPage = {
         <>
           <p>Only a Lead mission can call these; a worker that tries is told to do its own part.</p>
           <ul>
-            <li><code>sldev_delegate</code>: start a worker with a title, a brief, acceptance criteria, an agent (or <code>auto</code>) and a kind (build, investigate, research, review).</li>
+            <li><code>sldev_delegate</code>: start a worker with a title, a brief, acceptance criteria, an agent (or <code>auto</code>), a kind (build, investigate, research, review) and optionally a role, such as Reviewer (see <a href="/docs/teams#delegate">teams</a>).</li>
             <li><code>sldev_wait</code>: get the reports of workers that finished, with their branch and diff size. It returns within 45 seconds; the Lead calls it again while some are still running.</li>
             <li><code>sldev_mission_diff</code>: read a worker's diff.</li>
             <li><code>sldev_followup</code>: send a finished worker back with what to fix. It continues in the same branch.</li>
@@ -1408,6 +1416,196 @@ const lead: DocPage = {
           <li>Nothing is pushed. The Lead's branch waits for your review, like any mission's.</li>
           <li>It all runs on your machine, only while the app is open.</li>
         </ul>
+      )
+    }
+  ]
+}
+
+const teams: DocPage = {
+  id: 'teams',
+  title: 'Teams: agents in the roles of a software team',
+  summary:
+    'Install a team of agent profiles into your project, edit each role as a Markdown file, and let a Lead hand work to a role. Evals pick the best agent for each role, the Lead’s card shows who does what, and a recipe runs the whole team. You still approve, review and push.',
+  sections: [
+    {
+      id: 'what',
+      title: 'What a team is',
+      body: (
+        <>
+          <p>
+            A team is a set of <a href="/docs/recipes#agents">agent profiles</a>, one per role. A profile is a role written as instructions
+            (what this agent does and what it must not do), plus, if you like, the CLI, model and permission mode it runs on. The{' '}
+            <b>Software team</b> template has six roles:
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><b>Product owner</b></td><td>Turns goals into small stories with acceptance criteria. Read-only: it files stories, it doesn't write code.</td></tr>
+              <tr><td><b>Tech lead</b></td><td>Plans the work and delegates it. Edits files only to resolve conflicts between workers' branches.</td></tr>
+              <tr><td><b>Implementer</b></td><td>Writes the code for one piece of work and runs the project's checks.</td></tr>
+              <tr><td><b>Reviewer</b></td><td>Reviews a change against its brief and reports findings.</td></tr>
+              <tr><td><b>QA</b></td><td>Runs the build, tests and end-to-end checks, adds the tests that are missing, and reports product bugs instead of fixing them.</td></tr>
+              <tr><td><b>Release manager</b></td><td>Drafts release notes and pull request descriptions. Never pushes, tags or publishes.</td></tr>
+            </tbody>
+          </table>
+          <p>
+            A team works with any agent. The roles are just instructions, so the same role can run on Claude Code, Codex, Gemini CLI or any
+            other agent you have.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'install',
+      title: 'Install a team',
+      body: (
+        <>
+          <p>
+            Open the <b>Agents</b> panel and click <b>Add a team</b>. Pick a template and read each role before you install it: every role
+            opens to show its full instructions and the file it will be written to. <b>Install</b> writes one file per role to{' '}
+            <code>.sldev/agents/</code> in your project.
+          </p>
+          <p>
+            A role file that is already there is kept as it is and marked <i>kept</i>, so installing again never overwrites your edits. A team
+            that is fully installed says so.
+          </p>
+          <p>
+            The Agents panel then shows the team with a button per role. Click a role to open New mission with that profile already picked,
+            or pick it yourself in the mission form, where a team's roles are grouped under its name.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'roles',
+      title: 'Edit the roles',
+      body: (
+        <>
+          <p>
+            Each role is a Markdown file with front matter. Change the instructions to fit how your team works, pin a role to an agent and
+            model, and commit the folder so everyone who clones the project has the same team. <code>team:</code> is what groups the roles
+            together in the app.
+          </p>
+          <Code file=".sldev/agents/reviewer.md">{`
+---
+name: Reviewer
+description: Reviews a change against its brief and reports findings
+agent: codex
+team: Software team
+---
+You review a change; you don't rewrite it.
+Check it against the brief and its acceptance criteria, then report each
+finding with the file and line, why it matters and how to fix it.
+`}</Code>
+          <p>
+            Leave out <code>agent</code> and the role runs on whichever agent was chosen for the work. Add a role of your own (a Security
+            reviewer, a Docs writer) by adding a file with the same <code>team:</code> line, or from the Agents settings. Field by field,
+            profiles are described under <a href="/docs/recipes#agents">choosing agents</a>.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'delegate',
+      title: 'Delegate by role',
+      body: (
+        <>
+          <p>
+            A <a href="/docs/lead">Lead mission</a> is told the roles its project has, with what each one does. When it starts a worker
+            with <code>sldev_delegate</code>, it can give that worker a <code>role</code>: the worker gets the role's instructions and runs
+            on the role's agent and model, if the profile sets them.
+          </p>
+          <table className="docs-table">
+            <tbody>
+              <tr><td><code>role: Reviewer</code></td><td>The Reviewer role, on its own agent, or the best agent for it (see below)</td></tr>
+              <tr><td><code>role: Reviewer@gemini</code></td><td>The Reviewer role, run on Gemini CLI</td></tr>
+              <tr><td>no role</td><td>A plain worker, as before</td></tr>
+            </tbody>
+          </table>
+          <p>
+            A role that doesn't exist is refused with the list of roles there are, so nothing starts on a typo. Workers still run unattended
+            in their own worktrees, branched from the Lead's branch, and the Lead still reviews and merges them.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'routing',
+      title: 'The best agent for each role',
+      body: (
+        <>
+          <p>
+            Tag an <a href="/docs/evals">eval</a> with the role it measures, and a Lead routes that role by its results. When a worker in a
+            role has no agent of its own (the Lead says <code>auto</code> and the profile pins none), it goes to the installed agent that
+            did best on that role's evals, then on all evals, then to your default agent. The worker's card says which one decided.
+          </p>
+          <Code file=".sldev/evals/review-auth.yml">{`
+name: Spots the missing auth check
+role: Reviewer        # the profile this eval measures
+brief: |
+  Review the last commit. It adds an endpoint without an authorization check.
+checks:
+  - judge: Names the missing authorization check on the new endpoint.
+`}</Code>
+          <p>
+            A role that pins an agent (<code>agent:</code> in its file, or <code>Reviewer@codex</code>) always runs there; evals never
+            override what you set.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'org',
+      title: 'The org view and what the work took',
+      body: (
+        <>
+          <p>
+            In <a href="/docs/missions#control">Mission Control</a>, a Lead's card shows its workers as a small org chart: the Lead on top,
+            then a branch per role with each worker's task, state, agent and git branch. Workers without a role come last. Click a worker to
+            open its details; a merge mark shows what is already in the Lead's branch.
+          </p>
+          <p>
+            When the Lead runs for a <a href="/docs/board#spent">Board card</a>, the card shows what the work took once it finishes: the time,
+            how many agents worked on it (the Lead's workers and their follow-ups count), and for Claude Code and Codex the tokens and their
+            cost at API list prices. It is read from the agents' local logs; nothing is sent anywhere.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'recipe',
+      title: 'The Software team recipe',
+      body: (
+        <>
+          <p>
+            The built-in <b>Software team</b> <a href="/docs/recipes">factory recipe</a> runs the roles in the order a team would: the product
+            owner writes a short spec, which you approve; the implementer builds it; the reviewer and QA check it side by side; the
+            implementer fixes what they found; the release manager drafts the pull request description; and the pull request stage waits
+            for your click.
+          </p>
+          <p>
+            Pick it in <b>New factory run</b>. If the project doesn't have a role the recipe names, the form says which ones before anything
+            starts and offers <b>Add a team</b>, or you can put another agent on those stages. Copy it to <code>.sldev/factory</code> to change
+            the stages or prompts; see <a href="/docs/recipes#team">a recipe for your team</a>.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'you',
+      title: 'You stay in charge',
+      body: (
+        <>
+          <p>A team does the work in between. The decisions stay with a person:</p>
+          <ul>
+            <li><b>Approve</b>: stories the product owner writes land in Proposed, and only you move them to Agent ready. The recipe's spec waits for your approval.</li>
+            <li><b>Review</b>: workers' branches are merged into the Lead's branch, not yours, and that branch waits for your review like any mission's.</li>
+            <li><b>Push</b>: no role pushes, tags, publishes or opens a pull request on its own. The pull request stage runs only when you click it.</li>
+          </ul>
+          <Note>
+            Roles are instructions, not permissions. A read-only role is told not to edit files; to enforce it, give its profile a read-only
+            permission mode, and review what every role changed.
+          </Note>
+        </>
       )
     }
   ]
@@ -1660,4 +1858,4 @@ Keep the change as small as the task allows, and run the tests before you finish
   ]
 }
 
-export const docs: DocPage[] = [lead, board, evalsGuide, recipes, missions, context, workspace, agents, remote]
+export const docs: DocPage[] = [lead, teams, board, evalsGuide, recipes, missions, context, workspace, agents, remote]
