@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LEAD, LEAD_METHOD, canDelegate, routeAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, LEAD_METHOD, canDelegate, leadRoles, resolveRole, routeAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { STARTER_PROFILES } from '@shared/profiles'
+import type { AgentProfile } from '@shared/types'
 import { BUILTIN_KINDS, renderKind } from '@shared/missionKinds'
 import type { EvalAttempt } from '@shared/evals'
 
@@ -48,5 +50,36 @@ describe('what the Lead and its workers are told', () => {
     expect(p.startsWith('Lead: Teams\n\nBuild teams.')).toBe(true)
     for (const tool of ['sldev_delegate', 'sldev_wait', 'sldev_mission_diff', 'sldev_followup', 'sldev_integrate']) expect(LEAD_METHOD).toContain(tool)
     expect(p).toContain('Do not push')
+  })
+})
+
+describe('roles', () => {
+  const ids = ['claude', 'codex', 'gemini']
+  const qa: AgentProfile = { id: 'project:qa', name: 'QA', description: 'Tries it like a user', agent: 'codex', model: 'gpt-5', role: 'You test like a user.', scope: 'project' }
+  const profiles = [qa, ...STARTER_PROFILES]
+  it('resolves a profile by name, any case, and Profile@cli', () => {
+    expect(resolveRole('reviewer', profiles, ids)).toMatchObject({ profile: { name: 'Reviewer' }, agent: undefined })
+    expect(resolveRole('QA', profiles, ids)).toMatchObject({ profile: qa, agent: 'codex' })
+    expect(resolveRole('Reviewer@gemini', profiles, ids)).toMatchObject({ profile: { name: 'Reviewer' }, agent: 'gemini' })
+  })
+  it('refuses an unknown role, or an agent given as a role, with the roles there are', () => {
+    const r = resolveRole('Designer', profiles, ids)
+    expect(r).toEqual({ error: expect.stringContaining('No role called "Designer". Roles: QA, Implementer, Spec writer, Reviewer, Test writer, Fixer.') })
+    expect(resolveRole('codex', profiles, ids)).toEqual({ error: expect.stringContaining('No role called "codex"') })
+    expect(resolveRole('Reviewer@aider', profiles, ids)).toEqual({ error: expect.stringMatching(/^Unknown agent "aider" in "Reviewer@aider"\. Roles: QA/) })
+  })
+  it('the Lead is told the roles, with what each does and where it runs', () => {
+    const t = leadRoles(profiles)
+    expect(t).toContain('role in sldev_delegate')
+    expect(t).toContain('- QA: Tries it like a user (runs on codex gpt-5)')
+    expect(t).toContain('- Reviewer: Reviews a diff')
+    expect(leadRoles([qa, { ...qa, id: 'user:qa' }]).match(/- QA/g)).toHaveLength(1)
+    expect(leadRoles([])).toBe('')
+    expect(LEAD_METHOD).toContain('role')
+  })
+  it('sldev_wait names each worker\'s role', () => {
+    const t = waitText([w('m-1', 'ended', { role: 'Reviewer' })], [w('m-2', 'working', { role: 'QA' }), w('m-3', 'working')])
+    expect(t).toContain('m-1 · Codex as Reviewer · finished')
+    expect(t).toContain('m-2 (Codex as QA, Task m-2); m-3 (Codex, Task m-3)')
   })
 })

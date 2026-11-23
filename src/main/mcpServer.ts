@@ -113,6 +113,7 @@ export const MCP_TOOLS = [
         brief: { type: 'string', description: 'What to do, where, and any constraints' },
         criteria: { type: 'string', description: 'Acceptance criteria, one per line' },
         agent: { type: 'string', description: 'auto (best on this project\'s evals, the default), or claude, codex, gemini, …' },
+        role: { type: 'string', description: 'Optional: a profile name from your goal\'s list of roles, e.g. "Reviewer" (or "Reviewer@codex"). The worker gets that role and the profile\'s agent and model, if it sets them' },
         kind: { type: 'string', enum: ['build', 'investigate', 'research', 'review'], description: 'build (default) changes code; the others read and report' }
       },
       required: ['title', 'brief']
