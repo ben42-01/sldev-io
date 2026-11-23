@@ -3,13 +3,14 @@ import { routableAttempts } from '@shared/evals'
 import { DEFAULT_LEAD, canDelegate, resolveRole, waitText, workerBrief, workerAgent, workerDone, type WorkerView } from '@shared/lead'
 import { renderKind } from '@shared/missionKinds'
 import { applyProfile, promptWithRole } from '@shared/profiles'
-import type { AgentOptions, Mission } from '@shared/types'
+import type { AgentOptions, Mission, MissionSpent } from '@shared/types'
+import { segments, tokenTotal } from '@shared/usage'
 import { activatePanel, activePanelId, closePanel } from '../dock/dockApi'
 import { allAgents } from '../lib/agents'
 import { getAgent, refreshInstalledAgents } from './agents'
 import { evals } from './evals'
 import { getKind } from './missionKinds'
-import { followUpMission, getMission, missions, startMission, update } from './missions'
+import { followUpMission, getMission, missions, setSpent, startMission, update } from './missions'
 import { profilesFor } from './profiles'
 import { workspace } from './workspace'
 
@@ -209,4 +210,35 @@ async function integrate(lead: Mission, ids: string[], check: string): Promise<A
     lines.push(r.code === 0 ? `${check}: passed` : `${check}: FAILED (exit ${r.code ?? 'signal'})\n${tail}`)
   }
   return { text: lines.join('\n') || 'Nothing to merge.' }
+}
+
+// ── what each worker took ────────────────────────────────────────────
+
+const measuring = new Set<string>()
+
+/**
+ * A Lead's workers (and the Lead) are measured once, when they finish: the time they ran and, for agents whose
+ * logs sldev reads (tokenLog in src/shared/agents.ts), their tokens. Local logs only (src/main/usage.ts).
+ */
+missions.subscribe(() => {
+  for (const m of missions.get().list) {
+    if (m.spent || measuring.has(m.id) || !(m.delegate || m.kind?.id === 'lead') || !workerDone(m)) continue
+    measuring.add(m.id)
+    void measure(m).finally(() => measuring.delete(m.id))
+  }
+})
+
+async function measure(m: Mission): Promise<void> {
+  const agent = getAgent(m.options.agent)
+  const spent: MissionSpent = { ms: segments(m, Date.now()).reduce((n, s) => n + s.to - s.from, 0) }
+  if (!agent.tokenLog) spent.noTokens = `${agent.name} keeps no token log sldev can read`
+  else {
+    const got = await window.api.usage
+      .tokens([{ id: m.id, agent: agent.id, cwd: m.cwd, from: m.createdAt, to: m.updatedAt, transcriptPath: m.transcriptPath }])
+      .catch(() => ({}) as Record<string, null>)
+    const u = got[m.id]
+    if (u && tokenTotal(u)) Object.assign(spent, { tokens: tokenTotal(u), cost: u.cost || undefined })
+    else spent.noTokens = `no ${agent.name} log with tokens found for this run`
+  }
+  if (getMission(m.id)) setSpent(m.id, spent)
 }

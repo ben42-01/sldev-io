@@ -74,7 +74,12 @@ if (args.includes('-p')) {
   // NO_CHANGES: a repeat pass with nothing left to improve
   if (!prompt.includes('NO_CHANGES')) fs.appendFileSync(out ? `changes-${path.basename(out[1], '.md')}.md` : 'CHANGES.md', `claude: ${prompt.split('\n')[0]}\n`)
   sleep(800)
-  fire('Stop', {})
+  // WITH_USAGE: a transcript with token counts, like the real CLI keeps, for what a worker took
+  if (prompt.includes('WITH_USAGE')) {
+    const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
+    fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { id: 'msg_1', model: 'claude-sonnet-4-6', content: [{ type: 'text', text: 'Noted the change in CHANGES.md.' }], usage: { input_tokens: 12000, output_tokens: 3000, cache_read_input_tokens: 30000, cache_creation_input_tokens: 0 } } }) + '\n')
+    fire('Stop', { transcript_path: tp })
+  } else fire('Stop', {})
   console.log('done (print mode)')
   process.exit(0)
 }
@@ -94,7 +99,7 @@ if (ip.startsWith('Lead:')) {
   // a role the project doesn't have is refused (nothing starts); the QA profile brings its own agent
   const [refused, ...started] = tools(
     ['sldev_delegate', { title: 'Design it', brief: 'Draw the screens.', role: 'Designer' }],
-    ['sldev_delegate', { title: 'Write the changelog note', brief: 'Note the change in CHANGES.md.', criteria: '- CHANGES.md says what changed', agent: 'claude' }],
+    ['sldev_delegate', { title: 'Write the changelog note', brief: 'Note the change in CHANGES.md. WITH_USAGE', criteria: '- CHANGES.md says what changed', agent: 'claude' }],
     ['sldev_delegate', { title: 'Codex part', brief: 'Leave your mark in CODEX.md.', role: 'QA' }]
   )
   console.log('lead:', started.join(' | '))

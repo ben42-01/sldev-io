@@ -7340,6 +7340,35 @@ button.board-label:hover {
   font-size: 9.5px;
   letter-spacing: 0;
 }
+/* what a role (or the whole Lead) took: time, and tokens from local logs */
+.lead-spent {
+  display: block;
+  padding: 0 4px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.lead-org-lead .lead-spent {
+  padding: 1px 0 0;
+  font-weight: 400;
+  white-space: normal;
+}
+.lead-spent-label {
+  margin-right: 5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.lead-spent.time-only {
+  cursor: help;
+}
+.lead-spent-note {
+  display: block;
+  white-space: normal;
+  font-style: italic;
+}
 .lead-branch {
   display: inline-flex;
   align-items: center;

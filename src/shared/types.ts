@@ -391,6 +391,17 @@ export interface StatusChange {
   at: number
 }
 
+/** What a finished mission took: the time it ran and, from the agent's own log on this machine, its tokens. */
+export interface MissionSpent {
+  /** time it was running (starting, working, waiting or needing you) */
+  ms: number
+  tokens?: number
+  /** USD at API list prices, for the tokens with a known price */
+  cost?: number
+  /** why there are no tokens: the agent keeps no log sldev reads, or no log was found for this run */
+  noTokens?: string
+}
+
 export interface Mission {
   id: string
   title: string
@@ -439,6 +450,8 @@ export interface Mission {
   lead?: { maxWorkers: number; parallel: number }
   /** a worker a Lead started with sldev_delegate (in a profile's role); the Lead was told it finished, and merged it */
   delegate?: { lead: string; reported?: boolean; merged?: boolean; why?: string; role?: string }
+  /** what a Lead or one of its workers took, measured once it finished (src/shared/lead.ts) */
+  spent?: MissionSpent
   /** an eval attempt's agent or judge: like a factory stage, it reports to its run, not to you */
   eval?: { run: string; attempt: string; judge?: boolean }
   /** a pass of a repeated mission (src/shared/repeat.ts): its automation (app) or loop (CLI), its number, the total (0 = open-ended) */

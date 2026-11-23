@@ -1,6 +1,7 @@
 import { contestantKey, scoreboard, type EvalAttempt } from './evals'
 import { resolveAgentSpec } from './factory'
-import type { AgentProfile } from './types'
+import { durationText, tokenText } from './board'
+import type { AgentProfile, Mission } from './types'
 
 /**
  * A Lead mission plans a big goal and delegates the pieces to other agents (sldev_delegate), each in
@@ -164,4 +165,56 @@ export function groupByRole<T extends { role?: string; startedAt: number }>(work
   }
   const none = groups.get(null)
   return [...[...groups.values()].filter((g) => g.role !== null), ...(none ? [none] : [])]
+}
+
+/** What a group of missions took (a role's workers and their follow-ups, or a whole Lead), from what each measured when it finished. */
+export interface SpentSum {
+  ms: number
+  tokens: number
+  cost: number
+  /** missions measured so far */
+  measured: number
+  /** of those, how many have their time only (no tokens) */
+  timeOnly: number
+  /** missions not measured yet: still running, or about to be measured */
+  pending: number
+  /** why some have no tokens, each reason once */
+  notes: string[]
+}
+
+export function sumSpent(list: Array<Pick<Mission, 'spent'>>): SpentSum {
+  const out: SpentSum = { ms: 0, tokens: 0, cost: 0, measured: 0, timeOnly: 0, pending: 0, notes: [] }
+  for (const { spent: s } of list) {
+    if (!s) {
+      out.pending++
+      continue
+    }
+    out.measured++
+    out.ms += s.ms
+    out.cost += s.cost ?? 0
+    if (s.tokens) out.tokens += s.tokens
+    else {
+      out.timeOnly++
+      if (s.noTokens && !out.notes.includes(s.noTokens)) out.notes.push(s.noTokens)
+    }
+  }
+  return out
+}
+
+/**
+ * "12 min · 840k tokens · $1.20"; "3 min · time only" when none of them has tokens; "(1 time only)" when some
+ * don't, so a sum never passes for the whole; "· 1 unfinished" while some aren't measured. Null until one is.
+ */
+export function spentLine(s: SpentSum): string | null {
+  if (!s.measured) return null
+  const tokens = !s.tokens ? 'time only' : `${tokenText(s.tokens)} tokens${s.timeOnly ? ` (${s.timeOnly} time only)` : ''}`
+  const cost = s.tokens && s.cost ? `$${s.cost < 0.01 ? '<0.01' : s.cost.toFixed(2)}` : ''
+  return [durationText(s.ms), tokens, cost, s.pending ? `${s.pending} unfinished` : ''].filter(Boolean).join(' · ')
+}
+
+/** The hover text of a spend line: where the numbers come from, and why some have time only. */
+export function spentTitle(s: SpentSum): string {
+  const lines = ['Time each agent ran, and tokens from its own logs on this machine, at API list prices']
+  if (s.timeOnly) lines.push(...s.notes.map((n) => `Time only: ${n}`))
+  return lines.join('\n')
 }

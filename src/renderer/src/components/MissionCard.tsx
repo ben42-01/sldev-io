@@ -17,7 +17,7 @@ import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot, StatusPill } from './StatusDot'
 import { missionSignal } from '@shared/status'
-import { groupByRole } from '@shared/lead'
+import { groupByRole, spentLine, spentTitle, sumSpent, type SpentSum } from '@shared/lead'
 import { removeMissionFlow } from '../lib/removals'
 import { openMissionDetails } from './MissionDetails'
 import { TimeAgo } from './TimeAgo'
@@ -251,12 +251,15 @@ function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
     return groupByRole(
       tasks.map((t) => {
         let cur = t
-        for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) cur = next
-        return { task: t, cur, role: t.delegate?.role, startedAt: t.createdAt }
+        const passes = [t]
+        for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) passes.push((cur = next))
+        return { task: t, cur, passes, role: t.delegate?.role, startedAt: t.createdAt }
       })
     )
   }, [list, lead.id])
   const workers = groups.flatMap((g) => g.workers)
+  // what each role took, and the Lead's total: its workers' passes and the Lead itself
+  const total = sumSpent([lead, ...workers.flatMap((w) => w.passes)])
   if (!workers.length) return <div className="lead-workers empty muted small">No workers yet: the Lead is planning.</div>
   const merged = workers.filter((w) => w.task.delegate?.merged).length
   return (
@@ -270,6 +273,7 @@ function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
             <span className="lead-worker-agent">{getAgent(lead.options.agent).name}</span>
             <LeadBranch branch={lead.worktree?.branch} />
           </span>
+          <LeadSpent sum={total} label="Total" />
         </span>
       </div>
       <div className="lead-org">
@@ -279,6 +283,7 @@ function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
               {g.label}
               <span className="lead-org-count">{g.workers.length}</span>
             </div>
+            <LeadSpent sum={sumSpent(g.workers.flatMap((w) => w.passes))} />
             {g.workers.map(({ task, cur }) => (
               <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
                 <StatusDot signal={missionSignal(cur.status)} small />
@@ -296,6 +301,20 @@ function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
         ))}
       </div>
     </div>
+  )
+}
+
+/** What a role's workers, or the whole Lead, took so far; nothing until one of them has finished. */
+function LeadSpent({ sum, label }: { sum: SpentSum; label?: string }): React.JSX.Element | null {
+  const line = spentLine(sum)
+  if (!line) return null
+  return (
+    <span className={`lead-spent${sum.timeOnly ? ' time-only' : ''}`} title={spentTitle(sum)}>
+      {label && <span className="lead-spent-label">{label}</span>}
+      {line}
+      {/* the total's hover says why; a role says it under its numbers */}
+      {!label && sum.notes.map((n) => <span key={n} className="lead-spent-note">{n}</span>)}
+    </span>
   )
 }
 
