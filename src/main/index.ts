@@ -313,6 +313,7 @@ function registerIpc(): void {
   // agent profiles (project scope; user profiles live in settings)
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
+  ipcMain.handle('profiles:installTeam', (_e, root: string, team: string) => profiles.installTeam(root, team))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path, (p) => shell.trashItem(p)))
   ipcMain.handle('memory:info', (_e, root: string) => memory.memoryInfo(root))
   ipcMain.handle('memory:ensure', (_e, root: string) => memory.ensureMemory(root))

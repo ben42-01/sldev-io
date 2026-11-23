@@ -150,6 +150,13 @@ export const TEAM_TEMPLATES: TeamTemplate[] = [
   }
 ]
 
+/** The team template that has a role for every one of these agent specs ("QA", "QA@codex"), if one does. */
+export function teamProviding(specs: string[]): TeamTemplate | undefined {
+  const names = specs.map((s) => s.split('@')[0].trim().toLowerCase())
+  if (!names.length) return undefined
+  return TEAM_TEMPLATES.find((t) => names.every((n) => t.profiles.some((p) => p.name.toLowerCase() === n)))
+}
+
 /** A file a team install writes, relative to the project root. */
 export interface TeamFile {
   path: string

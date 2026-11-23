@@ -261,6 +261,11 @@ export function resolveAgentSpec(spec: string, profiles: AgentProfile[], agentId
   return { profile, agent: cli || profile.agent }
 }
 
+/** The recipe's agent specs that don't resolve here (a profile not installed, an unknown CLI), each once, in stage order. */
+export function missingAgents(r: Recipe, profiles: AgentProfile[], agentIds: string[]): string[] {
+  return [...new Set(r.nodes.flatMap((n) => n.agents))].filter((spec) => 'error' in resolveAgentSpec(spec, profiles, agentIds))
+}
+
 // ── placeholders ─────────────────────────────────────────────────
 
 export interface FillContext {

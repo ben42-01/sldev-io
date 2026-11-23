@@ -11,6 +11,13 @@ export async function loadProjectProfiles(root: string | null): Promise<void> {
   project.set({ root, list })
 }
 
+/** Installs a team template into the project and reloads its profiles. Existing role files are kept. */
+export async function installTeam(root: string, team: string): Promise<{ written: string[]; skipped: string[] }> {
+  const r = await window.api.profiles.installTeam(root, team)
+  await loadProjectProfiles(root)
+  return r
+}
+
 const merge = (user: AgentProfile[], proj: AgentProfile[]): AgentProfile[] => [...proj, ...user, ...STARTER_PROFILES]
 
 export function allProfiles(): AgentProfile[] {

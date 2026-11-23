@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClaudeAsset, Mission } from '@shared/types'
 import { missions } from '../state/missions'
-import { useProfiles } from '../state/profiles'
+import { installTeam, useProfiles } from '../state/profiles'
 import { useAgents } from '../state/agents'
 import { slugify } from '../lib/agents'
-import { BookOpen, Check, Factory, FilePlus2, Import, Play, Plus, Share2 } from 'lucide-react'
+import { BookOpen, Check, Factory, FilePlus2, Import, Play, Plus, Share2, Users } from 'lucide-react'
 import { isBakeoff, issueText, recipeTextWithOverrides, runtimeNames, seedableNodes, type FactoryRun, type Recipe, type RecipeNode, type StageAgentChoice, type StageOverride } from '@shared/factory'
 import type { AgentDef } from '../lib/agents'
 import { branchName } from '@shared/branch'
 import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
-import { factory, loadRecipes, openPipeline, recipeBundle, specAgent, startRun } from '../state/factory'
+import { factory, loadRecipes, openPipeline, recipeBundle, recipeMissing, specAgent, startRun } from '../state/factory'
+import { teamProviding } from '@shared/profiles'
+import { toast } from './Toast'
 import { openImport, openRecipes } from '../dock/RecipesPanel'
 import { createStore, useStore } from '../state/store'
 import { workspace } from '../state/workspace'
@@ -217,7 +219,11 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
     setSeed((s) => ({ ...s, node: s.source === 'mission' && s.mission && first ? first : '' }))
   }, [entry])
 
-  const ready = !!entry && !!intent.trim() && isRepo && !(seed.node && !(seed.source === 'file' ? seed.file.trim() : seed.mission))
+  // re-checked when profiles or custom agents change (a team installed from here, a profile added elsewhere)
+  const profiles = useProfiles()
+  const agents = useAgents()
+  const missing = useMemo(() => (entry ? recipeMissing(entry.recipe, overrides) : []), [entry, overrides, profiles, agents])
+  const ready = !!entry && !!intent.trim() && isRepo && !missing.length && !(seed.node && !(seed.source === 'file' ? seed.file.trim() : seed.mission))
   const submit = async (): Promise<void> => {
     if (!ready || busy) return
     setBusy(true)
@@ -300,6 +306,7 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
           </div>
         </>
       )}
+      {entry && missing.length > 0 && <MissingRoles missing={missing} root={projectRoot} />}
       {!isRepo && <div className="field-hint tone-error">The factory needs a git repository. Pick a folder inside one under "Start point and repository" below.</div>}
       {isRepo && <IssuePicker key={root} root={root} onPick={(i) => (setIntent(issueText(i)), setIssue(i.number))} />}
       <label className="field">
@@ -345,6 +352,46 @@ function NewRunForm({ root: projectRoot, draft, onDone }: { root: string; draft?
 }
 
 /** Copies the recipe bundle; the other person pastes it into Import recipe. */
+/**
+ * Roles the recipe names that this install doesn't have, said before anything starts. Profiles are read from the
+ * open project, so a team goes into its .sldev/agents; existing role files are kept.
+ */
+function MissingRoles({ missing, root }: { missing: string[]; root: string }): React.JSX.Element {
+  const team = teamProviding(missing)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const add = async (): Promise<void> => {
+    if (!team) return
+    setBusy(true)
+    setError('')
+    try {
+      const r = await installTeam(root, team.id)
+      toast(`Added ${team.name}: ${r.written.length} role${r.written.length === 1 ? '' : 's'} in .sldev/agents${r.skipped.length ? `, ${r.skipped.length} kept as they were` : ''}`)
+    } catch (e) {
+      setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="missing-roles" role="status" data-testid="missing-roles">
+      <div>
+        <span className="tone-attention">This recipe needs {missing.length === 1 ? 'a role' : 'roles'} this project doesn't have:</span>{' '}
+        {missing.map((m) => <b key={m} className="missing-role">{m}</b>)}
+      </div>
+      <div className="field-hint">
+        {team ? `They come with the ${team.name} template. ` : ''}Or pick another agent for those stages under Stages below.
+      </div>
+      {team && (
+        <button type="button" className="btn sm" disabled={busy} onClick={() => void add()}>
+          <Users size={12} /> {busy ? 'Adding…' : 'Add a team'}
+        </button>
+      )}
+      {error && <div className="field-hint tone-error">Couldn't add the team: {error}</div>}
+    </div>
+  )
+}
+
 function ShareLink({ text }: { text: () => string }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copy = (): void => {
