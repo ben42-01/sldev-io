@@ -1,4 +1,4 @@
-import { PR_POLL_MS, approveItem, boardFileText, cardBrief, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
+import { PR_POLL_MS, approveItem, baseMovedCleared, flagBaseMoved, sameBase, type BranchFacts, boardFileText, cardBrief, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
 import type { GhIssue, Mission } from '@shared/types'
 import { NO_TOKENS, addTokens, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
@@ -331,6 +331,7 @@ async function tick(): Promise<void> {
     sync()
     syncBoardFiles()
     await checkPrs()
+    await checkBaseMoved()
     for (const s of board.get().settings) {
       for (const i of nextPickups(board.get().items, s)) if (!starting.has(i.id)) await startItem(i.id)
     }
@@ -363,12 +364,65 @@ async function checkPrs(): Promise<void> {
     const cur = getItem(i.id)
     const next = pr && cur ? followPr(cur, pr, now()) : null
     if (next) setItems((items) => items.map((x) => (x.id === i.id ? next : x)))
+    if (next?.column === 'done') await flagOthers(i.id)
+  }
+}
+
+// ── the base moved: a merged PR flags the cards still in Review ──────────
+
+/** Where a card's work is: its run's or mission's worktree and the base it branched from (null when it ran in place). */
+function branchOf(i: BoardItem): { cwd: string; base: string } | null {
+  const w = workOf(i)
+  const wt = w?.run?.worktree ?? w?.mission?.worktree
+  return wt?.path && wt.base ? { cwd: wt.path, base: wt.base } : null
+}
+
+/**
+ * A card's PR merged: the other cards in Review on the same base get the re-check badge, told which files they share
+ * with it. Only local git is read (the worktrees); nothing is merged, run or pushed, and the shared file doesn't change.
+ */
+async function flagOthers(id: string): Promise<void> {
+  const merged = getItem(id)
+  const at = merged && branchOf(merged)
+  if (!merged || !at) return
+  const mergedFacts: BranchFacts = { base: at.base, files: await window.api.git.changedFiles(at.cwd, at.base).catch(() => null) }
+  const facts: Record<string, BranchFacts> = {}
+  for (const i of board.get().items) {
+    if (i.id === id || i.root !== merged.root || i.column !== 'review') continue
+    const b = branchOf(i)
+    if (!b || !sameBase(b.base, at.base)) continue
+    const [files, head] = await Promise.all([window.api.git.changedFiles(b.cwd, b.base).catch(() => null), window.api.git.head(b.cwd).catch(() => null)])
+    facts[i.id] = { base: b.base, files, head }
+  }
+  if (Object.keys(facts).length) setItems((items) => flagBaseMoved(items, merged, mergedFacts, facts, now()))
+}
+
+/** when each flagged card's branch was last looked at (not saved: a restart looks again) */
+const movedChecked = new Map<string, number>()
+const MOVED_CHECK_MS = 20_000
+
+/** A flagged card's badge goes once its branch moved on (Update and check merged the base) and is no longer behind it. */
+async function checkBaseMoved(): Promise<void> {
+  const t = now()
+  for (const i of board.get().items) {
+    if (!i.baseMoved || i.column !== 'review') continue
+    if (t - (movedChecked.get(i.id) ?? 0) < MOVED_CHECK_MS) continue
+    movedChecked.set(i.id, t)
+    const b = branchOf(i)
+    if (!b) continue
+    const head = await window.api.git.head(b.cwd).catch(() => null)
+    // the branch hasn't changed since it was flagged: still to re-check, no need to ask git more
+    if (!head || head === i.baseMoved.head) continue
+    const moved = await window.api.git.baseMoved(b.cwd, b.base).catch(() => null)
+    const cur = getItem(i.id)
+    if (moved && cur?.baseMoved && baseMovedCleared(cur.baseMoved, head, moved.behind)) setItems((items) => items.map((x) => (x.id === i.id ? { ...x, baseMoved: undefined } : x)))
   }
 }
 
 /** "Check pull requests now": forget when they were last asked about and ask again. */
 export function refreshPrs(): void {
   prChecked.clear()
+  movedChecked.clear()
   scheduleTick()
 }
 

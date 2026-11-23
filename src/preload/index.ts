@@ -156,6 +156,8 @@ const api = {
     /** one commit's own diff (a merge against its first parent) */
     showCommit: (cwd: string, sha: string): Promise<string> => ipcRenderer.invoke('git:showCommit', cwd, sha),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
+    /** the files a branch changed since `base` (committed, uncommitted and new) */
+    changedFiles: (cwd: string, base: string): Promise<string[]> => ipcRenderer.invoke('git:changedFiles', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
     /** merge `branch` locally in the main checkout, which must be on `into` */

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { baseMoved, mergeBaseInto, trialMerge } from '../src/main/git'
+import { baseMoved, changedFiles, mergeBaseInto, trialMerge } from '../src/main/git'
 
 describe('the base moved (ship bar)', () => {
   let tmp: string
@@ -82,5 +82,14 @@ describe('the base moved (ship bar)', () => {
     expect((await baseMoved(wt, 'master')).behind).toBe(0)
     // a merge commit with the branch's own commit as first parent
     expect(g(wt, 'log', '-1', '--format=%P').trim().split(' ')).toHaveLength(2)
+  })
+  it('lists the files the branch changed since its base, not the base\'s own (the board\'s shared-files flag)', async () => {
+    writeFileSync(join(wt, 'a.txt'), 'changed\n')
+    writeFileSync(join(wt, 'e.txt'), 'new\n')
+    expect(await changedFiles(wt, 'master')).toEqual(['a.txt', 'b.txt', 'e.txt'])
+    g(wt, 'checkout', '--', 'a.txt')
+    rmSync(join(wt, 'e.txt'))
+    expect(await changedFiles(wt, 'master')).toEqual(['b.txt'])
+    await expect(changedFiles(wt, '--bad')).rejects.toThrow(/Not a valid base/)
   })
 })

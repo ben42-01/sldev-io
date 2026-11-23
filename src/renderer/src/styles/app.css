@@ -6859,6 +6859,43 @@ button.board-label:hover {
   font-size: 10.5px;
   color: inherit;
 }
+.board-moved {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.board-moved svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--status-attention);
+}
+.board-moved b {
+  font-weight: 600;
+  color: var(--fg);
+}
+.board-moved:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.board-moved.strong {
+  border-color: color-mix(in oklch, var(--status-attention) 35%, transparent);
+  background: color-mix(in oklch, var(--status-attention) 8%, transparent);
+  color: var(--status-attention);
+}
+.board-moved:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
 .board-spent {
   font-size: 10.5px;
   color: var(--fg-muted);
