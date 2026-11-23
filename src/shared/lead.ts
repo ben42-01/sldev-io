@@ -116,3 +116,29 @@ export const LEAD_METHOD = [
   '5. When everything is in, end with a summary for the human: what was built, by whom, what was checked, and what is left. Do not push: the human reviews your branch.',
   'Tell the user your plan before you delegate when the goal is ambiguous.'
 ].join('\n')
+
+/** One branch of a Lead's org view: the workers in one role, or those without one (`role` null). */
+export interface RoleGroup<T> {
+  role: string | null
+  label: string
+  workers: T[]
+}
+
+export const NO_ROLE = 'No role'
+
+/**
+ * A Lead's workers as a small org chart: grouped by role, each group in the order its first worker
+ * started and its workers in the order they started; workers without a role come last, under "No role".
+ */
+export function groupByRole<T extends { role?: string; startedAt: number }>(workers: T[]): RoleGroup<T>[] {
+  const sorted = [...workers].sort((a, b) => a.startedAt - b.startedAt)
+  const groups = new Map<string | null, RoleGroup<T>>()
+  for (const w of sorted) {
+    const role = w.role?.trim() || null
+    let g = groups.get(role)
+    if (!g) groups.set(role, (g = { role, label: role ?? NO_ROLE, workers: [] }))
+    g.workers.push(w)
+  }
+  const none = groups.get(null)
+  return [...[...groups.values()].filter((g) => g.role !== null), ...(none ? [none] : [])]
+}
