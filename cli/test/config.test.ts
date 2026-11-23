@@ -43,7 +43,8 @@ describe('the CLI config file', () => {
         customAgents: [{ id: 'aider', name: 'Aider', command: 'aider --message {prompt}', printCommand: 'aider --yes -m {prompt}' }],
         failoverOrder: ['codex', 'gemini'],
         failoverAuto: true,
-        unattendedModes: { claude: 'acceptEdits', codex: '' }
+        unattendedModes: { claude: 'acceptEdits', codex: '' },
+        updateCheck: false
       })
     )
     expect(readConfig(d)).toEqual({
@@ -51,7 +52,8 @@ describe('the CLI config file', () => {
       customAgents: [{ id: 'aider', name: 'Aider', command: 'aider --message {prompt}', printCommand: 'aider --yes -m {prompt}' }],
       failoverOrder: ['codex', 'gemini'],
       failoverAuto: true,
-      unattendedModes: { claude: 'acceptEdits', codex: '' }
+      unattendedModes: { claude: 'acceptEdits', codex: '' },
+      updateCheck: false
     })
     expect(preferredEditor(d)).toBe('zed')
     expect(describeConfig(d)).toMatch(/^.*config\.json\n\{\n {2}"editor": "zed"/)
@@ -63,8 +65,9 @@ describe('the CLI config file', () => {
       customAgents: [{ id: 'x' }, { id: 'ok', command: 'ok {prompt}' }, 'nope'],
       failoverOrder: 'codex',
       failoverAuto: 'yes',
-      unattendedModes: { claude: 1, codex: 'full-auto' }
+      unattendedModes: { claude: 1, codex: 'full-auto' },
+      updateCheck: 'no'
     })
-    expect(c).toEqual({ editor: null, customAgents: [{ id: 'ok', name: 'ok', command: 'ok {prompt}' }], failoverOrder: [], failoverAuto: false, unattendedModes: { codex: 'full-auto' } })
+    expect(c).toEqual({ editor: null, customAgents: [{ id: 'ok', name: 'ok', command: 'ok {prompt}' }], failoverOrder: [], failoverAuto: false, unattendedModes: { codex: 'full-auto' }, updateCheck: true })
   })
 })

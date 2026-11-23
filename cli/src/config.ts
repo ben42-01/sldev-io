@@ -17,9 +17,11 @@ export interface CliConfig {
   failoverAuto: boolean
   /** permission mode per agent id for --print panes; missing: the agent's recommended one, "": the CLI's default */
   unattendedModes: Record<string, string>
+  /** once a day, ask the npm registry whether a newer sldev is out and say so in the TUI */
+  updateCheck: boolean
 }
 
-export const DEFAULT_CONFIG: CliConfig = { editor: null, customAgents: [], failoverOrder: [], failoverAuto: false, unattendedModes: {} }
+export const DEFAULT_CONFIG: CliConfig = { editor: null, customAgents: [], failoverOrder: [], failoverAuto: false, unattendedModes: {}, updateCheck: true }
 
 export const configPath = (dataDir: string): string => join(dataDir, 'config.json')
 
@@ -47,7 +49,8 @@ export function parseConfig(raw: unknown): CliConfig {
     failoverAuto: raw.failoverAuto === true,
     unattendedModes: isObject(raw.unattendedModes)
       ? Object.fromEntries(Object.entries(raw.unattendedModes).filter((e): e is [string, string] => str(e[1])))
-      : {}
+      : {},
+    updateCheck: raw.updateCheck !== false
   }
 }
 

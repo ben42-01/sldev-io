@@ -34,8 +34,10 @@ What it does that a plain multiplexer doesn't:
   every agent it starts.
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
 
-Nothing in the CLI talks to the network itself; the workflows view asks GitHub through your own `gh`, only
-while it's open. The daemon listens on a Unix socket (a named pipe on Windows) and a loopback port (for
+The CLI talks to the network itself only to check for updates: once a day at most, attaching asks the npm
+registry for sldev-cli's latest version and, when a newer one is out, says so once in a popup with the
+install command (`"updateCheck": false` in config.json or `SLDEV_NO_UPDATE_CHECK=1` turns it off; it's off
+in CI). The workflows view asks GitHub through your own `gh`, only while it's open. The daemon listens on a Unix socket (a named pipe on Windows) and a loopback port (for
 Claude's hooks and the MCP tools), both protected.
 
 ## Install
@@ -301,6 +303,7 @@ default, never an error.
 | `customAgents` | `[]` | agent CLIs of your own: `id`, `name`, `command` (`{prompt}` `{model}` `{name}` are filled in; the prompt is appended when `{prompt}` is missing), optional `printCommand` (for `--print`) and `resumeCommand` |
 | `failoverOrder` | `[]` | agents to continue on, in order, when one stops at its usage limit |
 | `failoverAuto` | `false` | use `failoverOrder` for every new pane; otherwise only `--failover` sets one |
+| `updateCheck` | `true` | once a day, ask the npm registry whether a newer sldev is out and say so when attached |
 | `unattendedModes` | `{}` | permission mode per agent id for `--print` panes; a missing agent gets its recommended one, `""` the agent's own default |
 
 ### Moving from sldev 0.4

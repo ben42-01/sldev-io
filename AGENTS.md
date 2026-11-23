@@ -240,8 +240,10 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   (`appDataDir`), read only. A daemon left by sldev 0.4 in `<app userData>/cli` is kept while it runs panes, else replaced. Panes survive a reboot through
   `<data>/sessions.json` (`cli/src/sessions.ts`, written on every change but output, not only on exit): the next daemon reopens
   shells in their folder and resumes agents only through their resume (`restorePlan`), never by sending the prompt again; print
-  runs, repeat passes and children come back ended. `sldev stop` forgets them. It makes no network requests of its own; the one exception is the workflows view
-  (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating
+  runs, repeat passes and children come back ended. `sldev stop` forgets them. Its only network requests are the update check
+  (`cli/src/updates.ts`: the TUI asks the npm registry for sldev-cli's `latest` at most once a day, cached in `<data>/update.json`,
+  each version announced once; off with `updateCheck: false`, `SLDEV_NO_UPDATE_CHECK` or `CI`; tests never pass the `update`
+  service) and the workflows view (`sldev workflows`, Ctrl-b w), which asks GitHub through the user's `gh`, and only while it's open. Another one means updating
   `/privacy` like the app. `sldev clean` never removes a worktree a live pane, an unfinished loop or the app (its missions,
   runs, automations) uses. No `sldev run`: the factory stays in the app.
   A request from inside a pane (the client sends `from` when `SLDEV_MISSION_ID` and `SLDEV_CLI_DAEMON`, the daemon's

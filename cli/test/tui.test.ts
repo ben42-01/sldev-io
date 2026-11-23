@@ -399,6 +399,20 @@ describe('keys in win32-input-mode (Windows Terminal)', () => {
   }, 30_000)
 })
 
+describe('a newer sldev', () => {
+  it('says so in a popup with the npm command, which any key closes without typing into the tab', async () => {
+    const t = await attachTui(100, 30, { update: async () => '9.9.9' })
+    let s = await t.textWith('Update available')
+    expect(s).toContain('sldev 9.9.9 is out')
+    expect(s).toContain('npm install -g sldev-cli@latest')
+    t.input.write('x')
+    s = await t.textWith(focused('second S'))
+    expect(s).not.toContain('Update available')
+    t.input.write('\x02d')
+    await t.tui
+  }, 30_000)
+})
+
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
 
 describe('tab layout', () => {

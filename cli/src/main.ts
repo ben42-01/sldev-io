@@ -93,7 +93,8 @@ sldev reopens shell tabs in their folders and resumes each agent's session (no p
 CLI never reads the app's .sldev/drafts. .sldev/memory.md and .sldev/rules.md are shared by both.
 SLDEV_THEME=terminal draws the tabs on your terminal's own background instead of the app's dark (or light)
 surfaces; NO_COLOR turns colours off.
-Nothing here talks to the network, except the workflows view, which asks GitHub through your gh.`
+Nothing here talks to the network but the update check (the npm registry, once a day when you attach;
+"updateCheck": false in the config turns it off) and the workflows view, which asks GitHub through your gh.`
 
 const script = (): string => resolve(process.argv[1] ?? '')
 
@@ -169,7 +170,7 @@ async function main(argv: string[]): Promise<void> {
   switch (cmd) {
     case undefined: {
       if (!process.stdout.isTTY || !process.stdin.isTTY) return fail('attaching needs a terminal; see sldev help')
-      return runTui(await client(), process.cwd(), undefined, defaultServices(() => preferredEditor(data)), data)
+      return runTui(await client(), process.cwd(), undefined, defaultServices(() => preferredEditor(data), data), data)
     }
     case 'help':
     case '-h':

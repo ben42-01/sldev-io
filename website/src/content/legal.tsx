@@ -87,7 +87,10 @@ const privacy: LegalPage = {
         only when you click them, the same way. That goes from your computer to GitHub, signed in as you; nothing goes to us.
       </p>
       <p>
-        The free sldev CLI makes no network requests of its own. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
+        The free sldev CLI makes one network request of its own: at most once a day, when you attach (<code>sldev</code>), it asks
+        the npm registry (registry.npmjs.org) for the latest version of the sldev-cli package, so it can tell you when a newer one is
+        out. That request carries nothing but the package name; npm sees your IP address, as with any npm install. Turn it off with
+        <code>"updateCheck": false</code> in the CLI's config.json or <code>SLDEV_NO_UPDATE_CHECK=1</code>. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
         attached) asks GitHub for your repository's recent workflow runs through your GitHub CLI when you open it, and every 15 seconds
         while it stays open; rerunning a run or opening it in the browser goes the same way. Nothing goes to us.
       </p>

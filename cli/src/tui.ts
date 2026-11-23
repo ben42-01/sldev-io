@@ -11,6 +11,8 @@ import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
 import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
+import { readConfig } from './config'
+import { INSTALL_COMMAND, markAnnounced, updateCheckOff, updateToAnnounce } from './updates'
 import { VERSION } from './version'
 
 /**
@@ -50,6 +52,13 @@ const HELP_ROWS: PopupRow[] = [
   { head: true, text: 'Session' },
   { key: 'd', text: 'detach: everything keeps running' },
   { key: '^b', text: 'send Ctrl-b to the tab' }
+]
+/** the popup when a newer sldev is out */
+const updateRows = (latest: string): PopupRow[] => [
+  { text: `sldev ${latest} is out; this is ${VERSION}.` },
+  { text: '' },
+  { head: true, text: 'Install it with' },
+  { key: '$', text: INSTALL_COMMAND }
 ]
 /** a spinner frame for working agents; only while one works */
 const SPIN_MS = 100
@@ -138,10 +147,18 @@ export interface TuiServices {
   copy?: (text: string) => Promise<boolean>
   /** edits a file in the terminal ($VISUAL, $EDITOR, else vi) until the editor exits; the TUI steps aside meanwhile */
   edit?: (file: string) => Promise<void>
+  /** a newer sldev to tell about once (updates.ts); missing in tests, so they never ask the registry */
+  update?: () => Promise<string | null>
 }
 
-export function defaultServices(preferred: () => string | null): TuiServices {
-  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard, edit: editInTerminal }
+export function defaultServices(preferred: () => string | null, dataDir = ''): TuiServices {
+  const update = async (): Promise<string | null> => {
+    if (!dataDir || updateCheckOff(process.env, readConfig(dataDir).updateCheck)) return null
+    const v = await updateToAnnounce(dataDir)
+    if (v) markAnnounced(dataDir, v)
+    return v
+  }
+  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard, edit: editInTerminal, update }
 }
 
 /** lines the wheel scrolls a tab's history by */
@@ -178,6 +195,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let runsView: RunsView | null = null
   let menu: Menu | null = null
   let help = false
+  /** a newer sldev is out: told once in a popup, closed by any key */
+  let update: string | null = null
   let loops = new Map<string, LoopInfo>()
   let frame: NodeJS.Timeout | null = null
   let restored = false
@@ -290,7 +309,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const l = layout(out.columns || 80, out.rows || 24, split)
     if (prompt) return at(3 + prompt.label.length + prompt.text.length, l.status.y) + '\x1b[?25h'
     const main = visible()[0] && views.get(visible()[0])
-    if (!main || menu || help || runsView || main.cursorHidden || scrolledBack(main)) return ''
+    if (!main || menu || help || update || runsView || main.cursorHidden || scrolledBack(main)) return ''
     const b = main.term.buffer.active
     return at(l.panes[0].x + Math.min(b.cursorX, l.panes[0].w - 1), l.panes[0].y + 1 + b.cursorY) + '\x1b[?25h'
   }
@@ -317,6 +336,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       })
     if (menu) s += stripColor(popup(area, menu.title, menu.rows, menu.sel, menu.footer))
     else if (help) s += stripColor(popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.'))
+    else if (update) s += stripColor(popup(area, 'Update available', updateRows(update), -1, 'Running tabs keep the old version until sldev stop.'))
     s += at(0, l.status.y) + stripColor(statusLine(cols))
     // every frame ends on a reset, so nothing between frames (a clear, the shell after exit) takes a fill
     out.write(s + RESET + cursor() + '\x1b[?2026l')
@@ -500,7 +520,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       return ` ${DIM}•${RESET} ` + fit(message, cols - 3)
     }
     if (menu) return hints(menu.hints, cols, ' ')
-    if (help) return hints([['any key', 'close']], cols, ' ')
+    if (help || update) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
     const right = rightStatus()
     const rw = cols >= 90 ? right.length : 0
@@ -707,7 +727,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       }
       return
     }
-    if (!menu && !help && !runsView) {
+    if (!menu && !help && !update && !runsView) {
       for (let i = 0; i < l.panes.length; i++) {
         const r = l.panes[i]
         const v = shown[i] ? views.get(shown[i]) : undefined
@@ -730,6 +750,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (!down || wheel || motion || (button & 3) !== 0) return
     sel = null
     if (help) return void (help = false)
+    if (update) return void (update = null)
     if (menu) return void (menu = null)
     if (y === l.tabs.y && x >= l.tabs.x) {
       const bx = x - l.tabs.x
@@ -851,7 +872,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       return s.slice(m[0].length)
     }
     // a prompt, the prefix's next key and the popups read keys themselves: decode an encoded one first
-    const w = (prompt || prefix || runsView || menu || help) && win32Key(s)
+    const w = (prompt || prefix || runsView || menu || help || update) && win32Key(s)
     if (w) {
       // a release, or a modifier on its own, leaves the prefix waiting for its key
       let k = w.text
@@ -876,8 +897,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       return s.slice(ch.length)
     }
     if (menu && !prefix) return menuKey(s)
-    if (help && !prefix) {
+    if ((help || update) && !prefix) {
       help = false
+      update = null
       // the key that closes it does nothing else, and a sequence (an arrow) goes with it
       return s[0] === '\x1b' ? '' : s.slice(1)
     }
@@ -894,6 +916,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       if (runsView) closeRuns()
       menu = null
       help = false
+      update = null
       if (c === '?') {
         help = true
         return s.slice(1)
@@ -1030,5 +1053,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   })
   sizeViews()
   draw()
+  // after the first frame, so a slow registry never holds up attaching; an open popup or prompt goes first
+  void services.update?.().then((v) => {
+    if (!v || restored || menu || help || prompt || runsView) return
+    update = v
+    schedule()
+  }).catch(() => undefined)
   return finished
 }
