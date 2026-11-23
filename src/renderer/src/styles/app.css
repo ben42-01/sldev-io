@@ -8847,3 +8847,122 @@ button.cg-pr:focus-visible {
 .ghs-activity .seg button {
   white-space: nowrap;
 }
+
+/* ── teams (Agents panel: installed teams, Add a team) ── */
+.team-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.team-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 8px 10px;
+}
+.team-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.team-group-head svg {
+  color: var(--fg-muted);
+}
+.team-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.team-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.team-template {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+.team-template > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.team-template:hover {
+  background: var(--surface-raised);
+}
+.team-template.on {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+.team-template:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
+}
+.team-preview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.team-role-preview {
+  border-bottom: 1px solid var(--border);
+}
+.team-role-preview:last-child {
+  border-bottom: 0;
+}
+.team-role-preview summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.team-role-preview summary::-webkit-details-marker {
+  display: none;
+}
+.team-role-preview summary:hover {
+  background: var(--surface-raised);
+}
+.team-role-preview summary .chip {
+  flex: none;
+}
+.team-caret {
+  flex: none;
+  color: var(--fg-subtle);
+  transition: transform 150ms;
+}
+.team-role-preview details[open] .team-caret {
+  transform: rotate(90deg);
+}
+.team-role-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.team-role-text {
+  margin: 0;
+  padding: 8px 12px 10px 30px;
+  font: 11.5px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+}
