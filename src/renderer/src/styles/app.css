@@ -4364,7 +4364,7 @@ body.resizing-y * {
 }
 .chip-check:hover {
   color: var(--fg);
-  border-color: var(--border-strong, var(--border));
+  border-color: var(--border-strong);
 }
 .chip-check.on {
   color: var(--fg);
@@ -7239,7 +7239,7 @@ button.board-label:hover {
 }
 .lead-worker {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
   min-width: 0;
   padding: 4px;
@@ -7251,8 +7251,20 @@ button.board-label:hover {
 .lead-worker:hover {
   background: var(--surface-raised);
 }
-.lead-worker-title {
+.lead-worker-body {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lead-worker-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lead-worker-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7266,6 +7278,81 @@ button.board-label:hover {
 .lead-merged {
   display: inline-flex;
   color: var(--status-done);
+}
+.lead-worker > .sdot,
+.lead-worker > .lead-merged,
+.lead-org-lead > .sdot {
+  margin-top: 5px;
+}
+.lead-org-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.lead-org-lead .lead-worker-title {
+  font-weight: 600;
+}
+/* the roles hang off the Lead like an org chart: a rule down the left, one tick per role */
+.lead-org {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 7px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-strong);
+}
+.lead-org-role {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lead-org-role::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 10px;
+  width: 7px;
+  border-top: 1px solid var(--border-strong);
+}
+.lead-org-role-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 1px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.lead-org-role.none .lead-org-role-name {
+  font-style: italic;
+}
+.lead-org-count {
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  font-size: 9.5px;
+  letter-spacing: 0;
+}
+.lead-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.lead-branch > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── review cockpit: the Review tab's walkthrough ───────────────────── */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LEAD, LEAD_METHOD, canDelegate, leadRoles, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, LEAD_METHOD, NO_ROLE, canDelegate, groupByRole, leadRoles, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
 import { STARTER_PROFILES } from '@shared/profiles'
 import type { AgentProfile } from '@shared/types'
 import { BUILTIN_KINDS, renderKind } from '@shared/missionKinds'
@@ -106,5 +106,19 @@ describe('roles', () => {
     const t = waitText([w('m-1', 'ended', { role: 'Reviewer' })], [w('m-2', 'working', { role: 'QA' }), w('m-3', 'working')])
     expect(t).toContain('m-1 · Codex as Reviewer · finished')
     expect(t).toContain('m-2 (Codex as QA, Task m-2); m-3 (Codex, Task m-3)')
+  })
+})
+
+describe('groupByRole', () => {
+  const w = (id: string, startedAt: number, role?: string) => ({ id, startedAt, role })
+  it('groups workers by role, groups and workers in the order they started, "No role" last', () => {
+    const g = groupByRole([w('d', 4, 'QA'), w('a', 1), w('b', 2, 'Reviewer'), w('c', 3, 'QA'), w('e', 5, '  ')])
+    expect(g.map((x) => x.label)).toEqual(['Reviewer', 'QA', NO_ROLE])
+    expect(g.map((x) => x.workers.map((y) => y.id))).toEqual([['b'], ['c', 'd'], ['a', 'e']])
+    expect(g[2].role).toBeNull()
+  })
+  it('has no "No role" group when every worker has a role, and nothing for no workers', () => {
+    expect(groupByRole([w('a', 1, 'QA')]).map((x) => x.label)).toEqual(['QA'])
+    expect(groupByRole([])).toEqual([])
   })
 })

@@ -17,6 +17,7 @@ import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot, StatusPill } from './StatusDot'
 import { missionSignal } from '@shared/status'
+import { groupByRole } from '@shared/lead'
 import { removeMissionFlow } from '../lib/removals'
 import { openMissionDetails } from './MissionDetails'
 import { TimeAgo } from './TimeAgo'
@@ -115,7 +116,7 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
       )}
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}
-      {m.kind?.id === 'lead' && <LeadWorkers lead={m.id} />}
+      {m.kind?.id === 'lead' && <LeadWorkers lead={m} />}
       {/* where it runs and what it changed share a line, so the footer has room for the actions in a narrow column */}
       <div className="mission-where">
         <span className="mission-branch" title={m.worktree?.path ?? m.cwd}>
@@ -240,35 +241,70 @@ export function ago(t: number): string {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-/** A Lead's workers inside its card: who does which part, how it's going, and whether it's merged. */
-function LeadWorkers({ lead }: { lead: string }): React.JSX.Element | null {
+/** A Lead's workers inside its card, as a small org chart: the Lead, then its workers by role, with status, agent and branch. */
+function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
   const list = useStore(missions, (s) => s.list)
-  const workers = useMemo(() => {
-    const mine = list.filter((x) => x.delegate?.lead === lead).sort((a, b) => a.createdAt - b.createdAt)
+  const groups = useMemo(() => {
+    const mine = list.filter((x) => x.delegate?.lead === lead.id).sort((a, b) => a.createdAt - b.createdAt)
     // a follow-up stands for its task: show the newest pass of each
     const tasks = mine.filter((x) => !(x.parent?.kind === 'follow-up' && mine.some((y) => y.id === x.parent!.id)))
-    return tasks.map((t) => {
-      let cur = t
-      for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) cur = next
-      return { task: t, cur }
-    })
-  }, [list, lead])
+    return groupByRole(
+      tasks.map((t) => {
+        let cur = t
+        for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) cur = next
+        return { task: t, cur, role: t.delegate?.role, startedAt: t.createdAt }
+      })
+    )
+  }, [list, lead.id])
+  const workers = groups.flatMap((g) => g.workers)
   if (!workers.length) return <div className="lead-workers empty muted small">No workers yet: the Lead is planning.</div>
   const merged = workers.filter((w) => w.task.delegate?.merged).length
   return (
     <div className="lead-workers" aria-label="Workers">
       <div className="lead-workers-head muted small">{workers.length} worker{workers.length === 1 ? '' : 's'}{merged ? ` · ${merged} merged` : ''}</div>
-      {workers.map(({ task, cur }) => {
-        const signal = missionSignal(cur.status)
-        return (
-          <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
-            <StatusDot signal={signal} small />
-            <span className="lead-worker-title">{task.title}</span>
-            <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{task.delegate?.role ? ` · ${task.delegate.role}` : ''}{cur !== task ? ' · fixing' : ''}</span>
-            {task.delegate?.merged && <span className="lead-merged" title="Merged into the Lead's branch"><GitMerge size={11} /></span>}
-          </button>
-        )
-      })}
+      <div className="lead-org-lead" data-lead={lead.id}>
+        <StatusDot signal={missionSignal(lead.status)} small />
+        <span className="lead-worker-body">
+          <span className="lead-worker-title">Lead</span>
+          <span className="lead-worker-meta">
+            <span className="lead-worker-agent">{getAgent(lead.options.agent).name}</span>
+            <LeadBranch branch={lead.worktree?.branch} />
+          </span>
+        </span>
+      </div>
+      <div className="lead-org">
+        {groups.map((g) => (
+          <div key={g.label} className={`lead-org-role${g.role ? '' : ' none'}`} data-role={g.label}>
+            <div className="lead-org-role-name">
+              {g.label}
+              <span className="lead-org-count">{g.workers.length}</span>
+            </div>
+            {g.workers.map(({ task, cur }) => (
+              <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
+                <StatusDot signal={missionSignal(cur.status)} small />
+                <span className="lead-worker-body">
+                  <span className="lead-worker-title">{task.title}</span>
+                  <span className="lead-worker-meta">
+                    <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{cur !== task ? ' · fixing' : ''}</span>
+                    <LeadBranch branch={cur.worktree?.branch ?? task.worktree?.branch} />
+                  </span>
+                </span>
+                {task.delegate?.merged && <span className="lead-merged" title="Merged into the Lead's branch"><GitMerge size={11} /></span>}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
+  )
+}
+
+function LeadBranch({ branch }: { branch?: string }): React.JSX.Element | null {
+  if (!branch) return null
+  return (
+    <span className="lead-branch" title={branch}>
+      <GitBranch size={10} />
+      <span>{branch}</span>
+    </span>
   )
 }
