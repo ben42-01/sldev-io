@@ -12,7 +12,7 @@ import { IssuePicker } from './IssuePicker'
 import { BUILTIN_RECIPES } from '@shared/recipes'
 import { openInEditor } from '../lib/actions'
 import { factory, loadRecipes, openPipeline, recipeBundle, recipeMissing, specAgent, startRun } from '../state/factory'
-import { teamProviding } from '@shared/profiles'
+import { installSummary, teamProviding } from '@shared/profiles'
 import { toast } from './Toast'
 import { openImport, openRecipes } from '../dock/RecipesPanel'
 import { createStore, useStore } from '../state/store'
@@ -366,7 +366,7 @@ function MissingRoles({ missing, root }: { missing: string[]; root: string }): R
     setError('')
     try {
       const r = await installTeam(root, team.id)
-      toast(`Added ${team.name}: ${r.written.length} role${r.written.length === 1 ? '' : 's'} in .sldev/agents${r.skipped.length ? `, ${r.skipped.length} kept as they were` : ''}`)
+      toast(installSummary(team.name, r.written, r.skipped), r.skipped.length ? 7000 : 3200)
     } catch (e) {
       setError(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''))
     } finally {
