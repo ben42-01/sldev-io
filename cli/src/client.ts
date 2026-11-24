@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { mkdirSync, openSync } from 'fs'
 import { createConnection, type Socket } from 'net'
 import { join } from 'path'
-import { lineReader, paneOrigin, type Command, type DaemonEvent, type PaneInfo, type Requests, type Response } from './protocol'
+import { lineReader, paneOrigin, type Command, type DaemonEvent, type NewPaneArgs, type PaneInfo, type Requests, type Response } from './protocol'
 import { socketPath } from './paths'
 import { VERSION } from './version'
 
@@ -48,7 +48,9 @@ export class Client {
       }, timeoutMs) : undefined
       const done = <T>(fn: (v: T) => void) => (v: T): void => (clearTimeout(timer), fn(v))
       this.pending.set(id, { resolve: done(resolve as (v: unknown) => void), reject: done(reject) })
-      this.sock.write(JSON.stringify(this.from ? { id, cmd, args, from: this.from } : { id, cmd, args }) + '\n')
+      // a new pane from a person's sldev carries its PATH: an agent installed since the daemon started is found
+      const sent = cmd === 'new' && !this.from && !(args as NewPaneArgs).path ? { ...(args as NewPaneArgs), path: process.env.PATH } : args
+      this.sock.write(JSON.stringify(this.from ? { id, cmd, args: sent, from: this.from } : { id, cmd, args: sent }) + '\n')
     })
   }
 

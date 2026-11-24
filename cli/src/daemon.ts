@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { chmodSync, existsSync, mkdirSync, promises as fsp, readFileSync, unlinkSync } from 'fs'
 import { createConnection, createServer, type Server, type Socket } from 'net'
-import { basename, join, resolve } from 'path'
+import { basename, delimiter, isAbsolute, join, resolve } from 'path'
 import { agentCommand, allAgents, findAgent, installedBin, setInstalledBins, sldevMcp, stageMode, type AgentDef } from '@shared/agents'
 import { branchName, cleanBranchName } from '@shared/branch'
 import { contextPointer } from '@shared/context'
@@ -99,7 +99,9 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   const settings = readConfig(o.dataDir)
   const custom: CustomAgent[] = settings.customAgents ?? []
   const agents = allAgents(custom)
-  setInstalledBins(agents.flatMap((a) => [a.bin, ...(a.aliases ?? [])]).filter((b) => b && findOnPath(b, process.env)))
+  /** which agent CLIs are on PATH; asked again when one isn't, since it may have been installed since */
+  const scanAgents = (): void => setInstalledBins(agents.flatMap((a) => [a.bin, ...(a.aliases ?? [])]).filter((b) => b && findOnPath(b, process.env)))
+  scanAgents()
   initContext(o.dataDir)
 
   const panes = new Map<string, Pane>()
@@ -336,6 +338,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   function agentFor(id: string | undefined): AgentDef {
     const a = findAgent(id, custom)
     if (id && a.id !== id) throw new Error(`Unknown agent "${id}". Known: ${agents.map((x) => x.id).join(', ')}`)
+    if (!installedBin(a)) scanAgents()
     if (!installedBin(a)) throw new Error(`${a.name} isn't installed${a.install ? ` (${a.install})` : ''}`)
     return a
   }
@@ -561,7 +564,11 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
   const handlers: { [C in Command]: (args: Requests[C][0], client: Socket, caller?: Pane) => Requests[C][1] | Promise<Requests[C][1]> } = {
     ping: () => ({ version: VERSION, pid: process.pid }),
     ls: () => [...panes.values()].map((p) => p.info),
-    new: (a, _c, caller) => (caller ? spawnChild(a, caller) : newPane(a)),
+    new: (a, _c, caller) => {
+      if (caller) return spawnChild(a, caller)
+      adoptPath(a.path)
+      return newPane(a)
+    },
     send: (a) => {
       const p = paneFor(a.pane)
       if (p.info.pid === undefined) throw new Error(`Pane ${p.info.id} has exited`)
@@ -610,6 +617,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       }
       if (a.active !== undefined && (a.active === null || panes.has(a.active))) tabs.active = a.active
       if (typeof a.split === 'boolean') tabs.split = a.split
+      if (typeof a.sidebar === 'number' && Number.isFinite(a.sidebar)) tabs.sidebar = Math.round(a.sidebar)
       saved.schedule()
       return { ...tabs, order: [...tabs.order] }
     },
@@ -686,6 +694,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
     tabs.order = [...last.tabs.order.filter((id) => panes.has(id)), ...[...panes.keys()].filter((id) => !last.tabs.order.includes(id))]
     tabs.active = last.tabs.active && panes.has(last.tabs.active) ? last.tabs.active : (tabs.order[0] ?? null)
     tabs.split = last.tabs.split
+    if (typeof last.tabs.sidebar === 'number') tabs.sidebar = last.tabs.sidebar
     saved.schedule()
   }
 
@@ -758,6 +767,18 @@ export const CHILD_ONLY = new Set<Command>(['send', 'kill', 'accept', 'input', '
  * still work): each remote's push URL is rewritten to a protocol git doesn't know. It comes after any
  * GIT_CONFIG_* the user already set. A guard against an unattended child pushing, not a sandbox.
  */
+/**
+ * The folders on the PATH of the sldev that asked (a person's, never a pane's) and not yet on the daemon's go
+ * after its own, so an agent installed into a folder a newer shell added is found and runs, and nothing the
+ * daemon already finds changes.
+ */
+export function adoptPath(path: string | undefined, env: NodeJS.ProcessEnv = process.env): void {
+  if (!path) return
+  const own = (env.PATH ?? '').split(delimiter).filter(Boolean)
+  const extra = [...new Set(path.split(delimiter).filter((d) => d && isAbsolute(d) && !own.includes(d)))]
+  if (extra.length) env.PATH = [...own, ...extra].join(delimiter)
+}
+
 export function noPushEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const n = Number(env.GIT_CONFIG_COUNT)
   const at = Number.isInteger(n) && n > 0 ? n : 0

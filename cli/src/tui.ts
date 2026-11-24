@@ -8,8 +8,8 @@ import { copyToClipboard, osc52 } from './clipboard'
 import { editInTerminal, openPane, type OpenResult } from './editor'
 import { briefNote, briefsDir, briefTitle, cliKinds, cliRoot, launchBrief, listBriefs, newBriefFile, shownDir, takeEditedBrief } from './briefs'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
-import type { DaemonEvent, LoopInfo, PaneInfo } from './protocol'
-import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, ruleLine, sidebar, SIDEBAR_W, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
+import type { DaemonEvent, LoopInfo, PaneInfo, TabState } from './protocol'
+import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, popupHit, ruleLine, sidebar, SIDEBAR_W, sidebarWidth, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
 import { readConfig } from './config'
 import { INSTALL_COMMAND, markAnnounced, updateCheckOff, updateToAnnounce } from './updates'
@@ -210,8 +210,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let bar: TabBar = { text: '', spans: [], plus: null }
   /** text being selected (or just copied) in a tab by dragging the mouse */
   let sel: { pane: string; s: Selection; dragging: boolean } | null = null
-  let side: Sidebar = { lines: [], hits: [] }
+  let side: Sidebar = { lines: [], hits: [], plus: null }
+  /** the sidebar's width, as its edge was last dragged to (the daemon keeps it), and whether it's being dragged */
+  let sideW = SIDEBAR_W
+  let sideDrag = false
   const home = homedir()
+  const lay = (): ReturnType<typeof layout> => layout(out.columns || 80, out.rows || 24, split, sideW)
 
   const activeIndex = (): number => Math.max(0, active === null ? 0 : order.indexOf(active))
 
@@ -224,7 +228,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   /** the daemon keeps the tabs, so the next attach finds them as they are now */
-  const saveTabs = (patch: { order?: string[]; active?: string | null; split?: boolean }): void => void client.request('tabs', patch).catch(() => undefined)
+  const saveTabs = (patch: Partial<TabState>): void => void client.request('tabs', patch).catch(() => undefined)
 
   const addView = async (info: PaneInfo): Promise<void> => {
     if (views.has(info.id)) return
@@ -242,7 +246,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   const sizeViews = (): void => {
-    const l = layout(out.columns || 80, out.rows || 24, split)
+    const l = lay()
     visible().forEach((id, i) => {
       const v = views.get(id)
       const r = l.panes[i]
@@ -267,11 +271,11 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   function chrome(): string {
     const cols = out.columns || 80
     const rows = out.rows || 24
-    const l = layout(cols, rows, split)
+    const l = lay()
     const shown = visible()
     let s = ''
     // the brand on the frame's surface, and the column over the divider with it
-    if (l.brand) s += at(0, 0) + onFill(SURFACE, ' ' + brandMark() + `${SUBTLE} ${fit(VERSION, SIDEBAR_W - 7)}${RESET}`) + onFill(SURFACE, ' ')
+    if (l.brand) s += at(0, 0) + onFill(SURFACE, ' ' + brandMark() + `${SUBTLE} ${fit(VERSION, l.brand.w - 7)}${RESET}`) + onFill(SURFACE, ' ')
     bar = tabBarLayout(
       order.flatMap((id) => {
         const v = views.get(id)
@@ -282,7 +286,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     s += at(l.tabs.x, l.tabs.y) + bar.text
     // the rule row: under the sidebar, the junction, then each pane's rule
     // a slim brand gradient under the name, as in the app
-    if (l.sidebar) s += at(0, 1) + onFill(SURFACE, gradient('─'.repeat(SIDEBAR_W)))
+    if (l.sidebar) s += at(0, 1) + onFill(SURFACE, gradient('─'.repeat(l.sidebar.w)))
     l.panes.forEach((r, i) => {
       const v = shown[i] ? views.get(shown[i]) : undefined
       if (l.panes.length > 1) {
@@ -299,14 +303,14 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       side = sidebar({ panes: [...views.values()].map((v) => v.info), order, active: shown[0] ?? null, shown, loops: [...loops.values()], frame: spin, home }, l.sidebar.w, l.sidebar.h)
       side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line))
       // the sidebar's edge: the brand top to bottom, softened, from the junction with the rule down
-      s += vEdge(SIDEBAR_W, 1, l.sidebar.h + 1, '┬')
+      s += vEdge(l.sidebar.w, 1, l.sidebar.h + 1, '┬')
     }
     return stripColor(s)
   }
 
   /** where the terminal's cursor goes: the prompt, else the tab's own cursor if it shows one */
   function cursor(): string {
-    const l = layout(out.columns || 80, out.rows || 24, split)
+    const l = lay()
     if (prompt) return at(3 + prompt.label.length + prompt.text.length, l.status.y) + '\x1b[?25h'
     const main = visible()[0] && views.get(visible()[0])
     if (!main || menu || help || update || runsView || main.cursorHidden || scrolledBack(main)) return ''
@@ -314,15 +318,18 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     return at(l.panes[0].x + Math.min(b.cursorX, l.panes[0].w - 1), l.panes[0].y + 1 + b.cursorY) + '\x1b[?25h'
   }
 
+  /** the panes' room under their rules, where the welcome card, the workflows view and the popups go */
+  const paneArea = (l: ReturnType<typeof layout>): Rect => ({ x: l.panes[0].x, y: l.panes[0].y + 1, w: l.panes[l.panes.length - 1].x + l.panes[l.panes.length - 1].w - l.panes[0].x, h: l.panes[0].h - 1 })
+
   function draw(): void {
     frame = null
     if (restored || suspended) return
     const cols = out.columns || 80
     const rows = out.rows || 24
-    const l = layout(cols, rows, split)
+    const l = lay()
     let s = '\x1b[?2026h\x1b[?25l' + chrome()
     const shown = visible()
-    const area: Rect = { x: l.panes[0].x, y: l.panes[0].y + 1, w: l.panes[l.panes.length - 1].x + l.panes[l.panes.length - 1].w - l.panes[0].x, h: l.panes[0].h - 1 }
+    const area = paneArea(l)
     if (runsView) s += stripColor(drawRuns(runsView, area))
     else if (!shown.length) s += stripColor(welcome(area))
     else
@@ -335,7 +342,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         if (i === 0 && l.panes[1]) s += stripColor(vEdge(r.x + r.w, r.y, r.h, '┬', PANE, SURFACE))
       })
     if (menu) s += stripColor(popup(area, menu.title, menu.rows, menu.sel, menu.footer))
-    else if (help) s += stripColor(popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls back, tabs and + take clicks.'))
+    else if (help) s += stripColor(popup(area, 'Keys · after Ctrl-b', HELP_ROWS, -1, 'Drag copies, the wheel scrolls; × or a middle click closes.'))
     else if (update) s += stripColor(popup(area, 'Update available', updateRows(update), -1, 'Running tabs keep the old version until sldev stop.'))
     s += at(0, l.status.y) + stripColor(statusLine(cols))
     // every frame ends on a reset, so nothing between frames (a clear, the shell after exit) takes a fill
@@ -652,11 +659,42 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     agents.forEach((a, i) => {
       const ok = !!installedBin(a)
       rows.push({ key: i < 9 ? String(i + 1) : '', text: a.name, note: ok ? '' : 'not installed', off: !ok })
-      pick.push(() => (ok ? newAgent(a) : void (message = a.install ? `${a.name} isn't installed: ${a.install}` : `${a.name} isn't installed`)))
+      pick.push(() => (ok ? newAgent(a) : notInstalled(a)))
     })
     menu = { title: 'New tab', footer: `in ${tailFit(tilde(newTabCwd(), home), 50).trimEnd()}`, hints: MENU_HINTS, rows, pick, sel: Math.max(0, rows.findIndex((r, i) => i > 0 && !r.off)) }
     help = false
     message = ''
+  }
+
+  /** Ctrl-b x, the tab's × or a middle click: a tab where something still runs asks first. */
+  function closeTab(id: string): void {
+    const info = views.get(id)?.info
+    const kill = (children?: boolean): void => void client.request('kill', { pane: id, children }).catch((err: Error) => ((message = err.message), schedule()))
+    // the tabs of agents this one started: closing them too (and stopping the ones still running) is a second question
+    const kids = [...views.values()].filter((v) => v.info.spawnedBy === id).map((v) => v.info.id)
+    const close = (): void => {
+      if (!kids.length) return kill()
+      ask(`Also close the ${kids.length === 1 ? 'tab' : `${kids.length} tabs`} of agents it started (${kids.join(', ')})? Running ones stop; files stay. (y/N) `, (text) => kill(/^y/i.test(text.trim()) || undefined))
+    }
+    // nothing runs in it any more: close it without asking
+    if (info?.pid === undefined) close()
+    else
+      ask(info.shell ? `Close tab ${id}? Its shell and anything running in it stop. (y/N) ` : `Close tab ${id}? Its agent stops; files stay. (y/N) `, (text) => {
+        if (/^y/i.test(text.trim())) close()
+      })
+  }
+
+  /** An agent that isn't installed: its install command goes to the clipboard, since the TUI holds the mouse. */
+  function notInstalled(a: AgentDef): void {
+    if (!a.install) return void ((message = `${a.name} isn't installed`), schedule())
+    const cmd = a.install
+    out.write(osc52(cmd))
+    void (services.copy ?? copyToClipboard)(cmd)
+      .catch(() => false)
+      .then((ok) => {
+        message = `${a.name} isn't installed. ${ok ? 'Copied' : 'Sent to the clipboard (OSC 52)'}: ${cmd} · run it in a shell tab (^b t), then pick ${a.name} again`
+        schedule()
+      })
   }
 
   /** Keys while the New tab popup is open; returns what is left. */
@@ -705,7 +743,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   /** A click: on a tab or + in the bar, a row of the sidebar, or inside a tab whose program reads the mouse. */
   function mouse(button: number, x: number, y: number, down: boolean): void {
-    const l = layout(out.columns || 80, out.rows || 24, split)
+    const l = lay()
     const wheel = (button & 64) !== 0
     const motion = (button & 32) !== 0
     const shown = visible()
@@ -725,6 +763,27 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         if (sel.s.a.x === sel.s.b.x && sel.s.a.y === sel.s.b.y) sel = null
         else copySelection(v, sel.s)
       }
+      return
+    }
+    // the sidebar's edge being dragged follows the mouse; the panes are resized once, on the release, since
+    // every resize makes the programs in them redraw
+    if (sideDrag) {
+      if (motion || !down) sideW = sidebarWidth(out.columns || 80, x)
+      if (!down) {
+        sideDrag = false
+        sizeViews()
+        saveTabs({ sidebar: sideW })
+      }
+      return
+    }
+    if (l.sidebar && down && !motion && !wheel && (button & 3) === 0 && x === l.sidebar.x + l.sidebar.w && y >= 1 && y < l.status.y && !menu && !help && !update) {
+      sideDrag = true
+      sel = null
+      return
+    }
+    // the wheel over a popup moves its pick
+    if (menu && wheel && down) {
+      menu.sel = Math.max(0, Math.min(menu.rows.length - 1, menu.sel + ((button & 1) === 0 ? -1 : 1)))
       return
     }
     if (!menu && !help && !update && !runsView) {
@@ -747,22 +806,37 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         return
       }
     }
-    if (!down || wheel || motion || (button & 3) !== 0) return
+    if (!down || wheel || motion) return
+    // the left button, and the middle one, which closes a tab as in a browser
+    const middle = (button & 3) === 1
+    if ((button & 3) !== 0 && !middle) return
     sel = null
     if (help) return void (help = false)
     if (update) return void (update = null)
-    if (menu) return void (menu = null)
-    if (y === l.tabs.y && x >= l.tabs.x) {
-      const bx = x - l.tabs.x
-      if (bar.plus && bx >= bar.plus.from && bx < bar.plus.to) return openMenu()
-      const hit = bar.spans.find((t) => bx >= t.from && bx < t.to)
-      if (hit && order[hit.index]) {
-        if (runsView) closeRuns()
-        focusTab(order[hit.index])
+    if (menu) {
+      const m = menu
+      // a row picks it (one that can't start says why), outside the box closes it
+      const hit = popupHit(paneArea(l), m.title, m.rows, m.footer, x, y)
+      if (hit === null) return void (menu = null)
+      if (hit >= 0 && m.pick[hit] && !middle) {
+        menu = null
+        m.pick[hit]()
       }
       return
     }
-    if (l.sidebar && x < l.sidebar.x + l.sidebar.w && y >= l.sidebar.y) {
+    if (y === l.tabs.y && x >= l.tabs.x) {
+      const bx = x - l.tabs.x
+      if (bar.plus && bx >= bar.plus.from && bx < bar.plus.to) return middle ? undefined : openMenu()
+      const hit = bar.spans.find((t) => bx >= t.from && bx < t.to)
+      const id = hit && order[hit.index]
+      if (!hit || !id) return
+      if (middle || (hit.close && bx >= hit.close.from && bx < hit.close.to)) return closeTab(id)
+      if (runsView) closeRuns()
+      focusTab(id)
+      return
+    }
+    if (l.sidebar && x < l.sidebar.x + l.sidebar.w && y >= l.sidebar.y && !middle) {
+      if (side.plus !== null && y - l.sidebar.y === side.plus) return openMenu()
       const id = side.hits[y - l.sidebar.y]
       if (id) {
         if (runsView) closeRuns()
@@ -830,8 +904,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   /** a pane this TUI started comes to the front */
   const started = (p: PaneInfo, what: string): void => {
     if (!order.includes(p.id)) order.push(p.id)
-    message = `Started ${what} ${p.id}`
+    // after focusTab, which clears the message line
     focusTab(p.id)
+    message = `Started ${what} ${p.id}`
   }
 
   const ask = (label: string, done: (text: string) => void, text = '', alt?: () => void): void => {
@@ -950,22 +1025,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
           },
           info?.title ?? ''
         )
-      } else if (c === 'x' && id) {
-        const info = views.get(id)?.info
-        const kill = (children?: boolean): void => void client.request('kill', { pane: id, children }).catch((err: Error) => ((message = err.message), schedule()))
-        // the tabs of agents this one started: closing them too (and stopping the ones still running) is a second question
-        const kids = [...views.values()].filter((v) => v.info.spawnedBy === id).map((v) => v.info.id)
-        const close = (): void => {
-          if (!kids.length) return kill()
-          ask(`Also close the ${kids.length === 1 ? 'tab' : `${kids.length} tabs`} of agents it started (${kids.join(', ')})? Running ones stop; files stay. (y/N) `, (text) => kill(/^y/i.test(text.trim()) || undefined))
-        }
-        // nothing runs in it any more: close it without asking
-        if (info?.pid === undefined) close()
-        else
-          ask(info.shell ? `Close tab ${id}? Its shell and anything running in it stop. (y/N) ` : `Close tab ${id}? Its agent stops; files stay. (y/N) `, (text) => {
-            if (/^y/i.test(text.trim())) close()
-          })
-      }
+      } else if (c === 'x' && id) closeTab(id)
       else if (c === PREFIX && id) void client.request('input', { pane: id, data: PREFIX })
       return s.slice(1)
     }
@@ -1018,7 +1078,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
 
   /** the size a new pane starts at, so it doesn't redraw as soon as it's shown */
   function paneSize(): { cols: number; rows: number } {
-    const r = layout(out.columns || 80, out.rows || 24, split).panes[0]
+    const r = lay().panes[0]
     return { cols: Math.max(20, r.w), rows: Math.max(5, r.h - 1) }
   }
 
@@ -1030,6 +1090,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     order = saved.order.filter((id) => panes.some((p) => p.id === id))
     active = saved.active
     split = saved.split
+    if (typeof saved.sidebar === 'number') sideW = saved.sidebar
   }
   for (const p of panes) await addView(p)
   if (active === null || !order.includes(active)) active = order[0] ?? null

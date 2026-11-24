@@ -169,7 +169,11 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 | `d` | detach; everything keeps running |
 | Ctrl-b | send a Ctrl-b to the tab |
 
-Tabs, `+` and the sidebar's rows take clicks. **Drag over a tab's text to copy it**: the selection stays inside
+Everything takes clicks: `+` on the tab bar or **+ New tab** at the top of the sidebar opens the New tab popup,
+whose rows a click picks (one that isn't installed copies its install command to the clipboard, since sldev
+holds the mouse); a tab or a sidebar row brings that tab to the front; the `×` on the tab in front, or a middle
+click on any tab, closes it (asking first while something runs in it). **Drag the sidebar's edge** to make it
+wider or narrower; the daemon remembers the width. **Drag over a tab's text to copy it**: the selection stays inside
 that tab (never the sidebar or the tab beside it) and goes to the clipboard when you let go, through wl-copy,
 xclip or xsel (pbcopy, clip on macOS and Windows) and OSC 52, which also works over SSH in terminals that allow it.
 The **wheel scrolls back** through a tab's history; typing goes back to the newest output. A program in a tab that

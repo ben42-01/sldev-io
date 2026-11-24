@@ -261,7 +261,7 @@ describe('sldev TUI tabs', () => {
     await t.textWith(focused('logs'))
     // Ctrl-b < moves the shell tab one place left
     t.input.write('\x02<')
-    await t.textWith(/› 2 logs\s+\S 3 second job/)
+    await t.textWith(/› 2 logs ×\s+\S 3 second job/)
     t.input.write('\x02d')
     await t.tui
 
@@ -269,7 +269,7 @@ describe('sldev TUI tabs', () => {
     expect((await c.request('tabs', {})).active).toBe(shellId)
     t = await attachTui(100, 30)
     s = await t.textWith('› 2 logs')
-    expect(t.bar()).toMatch(/\S 1 tidy up the tests\s+› 2 logs\s+\S 3 second job/)
+    expect(t.bar()).toMatch(/\S 1 tidy up the tests\s+› 2 logs ×\s+\S 3 second job/)
     expect(s).toMatch(focused('logs'))
     // the shell kept its screen while detached
     expect(s).toContain('tab-23')
@@ -455,14 +455,17 @@ describe('tab layout', () => {
       { title: 'review it', tone: 'attention' as const, active: false }
     ]
     const bar = tabBarLayout(tabs, 80)
-    expect(plain(bar.text)).toBe(' ⠹ 1 fix the parser  › 2 bash  ● 3 review it '.padEnd(77) + ' + ')
+    // the tab in front ends with a × that closes it
+    expect(plain(bar.text)).toBe(' ⠹ 1 fix the parser  › 2 bash ×  ● 3 review it '.padEnd(77) + ' + ')
     expect(bar.text).toContain(`\x1b[1;${TONE_SGR.attention}m●`)
     expect(bar.text).toContain(`\x1b[${TONE_SGR.working}m⠹`)
     expect(bar.text).not.toContain('\x1b[7m')
     expect(bar.text).not.toContain(';7m')
     // where each tab and the + sit, for clicks
     expect(bar.spans.map((s) => s.index)).toEqual([0, 1, 2])
-    expect(plain(bar.text).slice(bar.spans[1].from, bar.spans[1].to)).toBe(' › 2 bash ')
+    expect(plain(bar.text).slice(bar.spans[1].from, bar.spans[1].to)).toBe(' › 2 bash × ')
+    expect(plain(bar.text).slice(bar.spans[1].close!.from, bar.spans[1].close!.to)).toBe('× ')
+    expect(bar.spans[0].close).toBeUndefined()
     expect(bar.plus).toEqual({ from: 77, to: 80 })
     // too many to fit: the active tab stays, arrows say there are more, and the width holds
     const many = Array.from({ length: 12 }, (_, i) => ({ title: `session number ${i + 1}`, tone: 'done' as const, active: i === 9 }))
@@ -514,10 +517,10 @@ describe('agents started by agents', () => {
     ]
     expect(paneTree(panes).map((t) => `${t.pane.id}${t.child ? 'c' : ''}`)).toEqual(['1', '3c', '2', '4'])
     const rows = sidebar({ panes, order: ['1', '2', '3', '4'], active: '2', shown: ['2'] }, SIDEBAR_W, 20).lines.map(plain)
-    expect(rows[1]).toMatch(/^ APP +● 4$/)
-    expect(rows[2]).toMatch(/^ {2}⠋ 1 lead/)
-    expect(rows[4]).toMatch(/^ {2}└⠋ 3 part one/)
-    expect(rows[6]).toMatch(/2 other/)
+    expect(rows[2]).toMatch(/^ APP +● 4$/)
+    expect(rows[3]).toMatch(/^ {2}⠋ 1 lead/)
+    expect(rows[5]).toMatch(/^ {2}└⠋ 3 part one/)
+    expect(rows[7]).toMatch(/2 other/)
     expect(rows.join('\n')).not.toMatch(/APP-WT/)
   })
 })
@@ -534,17 +537,20 @@ describe('sidebar', () => {
     const rows = s.lines.map(plain)
     expect(rows.every((r) => r.length === SIDEBAR_W)).toBe(true)
     expect(s.lines.join('')).not.toContain('\x1b[7m')
-    expect(rows[0].trim()).toBe('')
-    expect(rows[1]).toMatch(/^ APP +● 2$/)
-    expect(rows[2]).toMatch(/^▌ ⠋ 2 fix the parser/)
-    expect(rows[3]).toMatch(/^▌ {3}Codex · working/)
-    expect(rows[4]).toMatch(/^ {2}› 1 zsh/)
-    expect(rows[5]).toMatch(/^ {4}\/w\/app/)
-    expect(rows[6].trim()).toBe('')
-    expect(rows[7]).toMatch(/^ SITE +● 1$/)
-    expect(rows[9]).toMatch(/Codex · needs you · rev/)
+    // the first row opens the New tab popup, and stays put
+    expect(rows[0]).toMatch(/^ \+ New tab +\^b c $/)
+    expect(s.plus).toBe(0)
+    expect(rows[1].trim()).toBe('')
+    expect(rows[2]).toMatch(/^ APP +● 2$/)
+    expect(rows[3]).toMatch(/^▌ ⠋ 2 fix the parser/)
+    expect(rows[4]).toMatch(/^▌ {3}Codex · working/)
+    expect(rows[5]).toMatch(/^ {2}› 1 zsh/)
+    expect(rows[6]).toMatch(/^ {4}\/w\/app/)
+    expect(rows[7].trim()).toBe('')
+    expect(rows[8]).toMatch(/^ SITE +● 1$/)
+    expect(rows[10]).toMatch(/Codex · needs you · rev/)
     // clicks on either row of a tab pick it
-    expect(s.hits.slice(0, 6)).toEqual([null, null, '1', '1', '2', '2'])
+    expect(s.hits.slice(0, 7)).toEqual([null, null, null, '1', '1', '2', '2'])
     // the footer counts the agents by state
     expect(rows.join('\n')).toMatch(/● 1 need you {2}● 1 working/)
   })
@@ -626,8 +632,8 @@ describe("the app's look: painted surfaces, the 256 fallback, the light ladder a
     expect(plain(bar)).toHaveLength(60)
     // the sidebar row in focus is raised, the others on the surface
     const s = sidebar({ panes: [pane('1', { title: 'one' }), pane('2', { title: 'two' })], order: ['1', '2'], active: '1', shown: ['1'] }, SIDEBAR_W, 10)
-    expect(s.lines[2].startsWith(R.RAISED)).toBe(true)
-    expect(s.lines[4].startsWith(R.SURFACE)).toBe(true)
+    expect(s.lines[3].startsWith(R.RAISED)).toBe(true)
+    expect(s.lines[5].startsWith(R.SURFACE)).toBe(true)
     // the key chips sit on the muted tone and read as before
     const h = R.hints([['c', 'new tab']], 30, ' ^b ')
     expect(h).toContain(R.MUTED)
@@ -753,6 +759,82 @@ describe('briefs in the TUI', () => {
     await t.textWith('The brief was empty, so nothing started')
     expect(readdirSync(dir).filter((f) => f.startsWith('.new-'))).toEqual([])
     for (const p of [hello, fromEditor]) await c.request('kill', { pane: p.id })
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
+})
+
+describe('mouse', () => {
+  /** an SGR click at a 0-based column and row: press and release */
+  const click = (x: number, y: number, button = 0): string => `\x1b[<${button};${x + 1};${y + 1}M\x1b[<${button};${x + 1};${y + 1}m`
+  /** where `text` is on the screen, 0-based */
+  const find = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    const y = rows.findIndex((r) => r.includes(text))
+    if (y < 0) throw new Error(`${text} isn't on the screen:\n${screen}`)
+    return { x: rows[y].indexOf(text), y }
+  }
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('opens New tab from the sidebar, picks a row, copies an install command, closes a tab with × and drags the sidebar', async () => {
+    // wide enough for a 40-column sidebar beside a 70-column pane
+    const t = await attachTui(120, 30)
+    let s = await t.textWith('+ New tab')
+    // the sidebar's + row opens the popup; a click on a row picks it
+    let at = find(s, '+ New tab')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('╭─ New tab')
+    at = find(s, 'Shell')
+    t.input.write(click(at.x, at.y))
+    const before = (await c.request('ls', {})).length
+    for (let i = 0; i < 50 && (await c.request('ls', {})).length === before; i++) await sleep(100)
+    const id = (await c.request('ls', {})).filter((p) => p.shell).map((p) => p.id).sort((a, b) => Number(b) - Number(a))[0]
+    s = await t.textWith(/› \d+ \S+ ×/)
+
+    // an agent that isn't installed: its install command goes to the clipboard (the TUI holds the mouse)
+    const savedPath = process.env.PATH
+    process.env.PATH = [join(__dirname, '../../scripts/e2e/fakebin'), '/nonexistent'].join(process.platform === 'win32' ? ';' : ':')
+    at = find(s, '+ New tab')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('╭─ New tab')
+    process.env.PATH = savedPath
+    at = find(s, 'Gemini')
+    t.input.write(click(at.x, at.y))
+    await t.textWith("Gemini CLI isn't installed. Copied")
+    expect(t.copied).toContain('npm i -g @google/gemini-cli')
+    // a click outside the popup closes it
+    t.input.write('\x02c')
+    await t.textWith('╭─ New tab')
+    t.input.write(click(108, 28))
+    await t.textWith(/^(?![\s\S]*╭─ New tab)/)
+
+    // the shell's tab is in front, with a × that closes it (a running shell asks first)
+    const bar = t.bar()
+    const x = bar.indexOf('×')
+    expect(x).toBeGreaterThan(0)
+    t.input.write(click(x, 0))
+    await t.textWith(`Close tab ${id}? Its shell`)
+    t.input.write('y\r')
+    await t.textWith(/^(?![\s\S]*Close tab)/)
+    for (let i = 0; i < 50 && (await c.request('ls', {})).some((p) => p.id === id); i++) await sleep(100)
+    expect((await c.request('ls', {})).some((p) => p.id === id)).toBe(false)
+
+    // the sidebar's edge drags; the daemon keeps the width for the next attach
+    t.input.write(`\x1b[<0;${SIDEBAR_W + 1};10M\x1b[<32;${SIDEBAR_W + 6};10M\x1b[<32;41;10M\x1b[<0;41;10m`)
+    s = await t.textWith('sldev')
+    for (let i = 0; i < 50 && (await c.request('tabs', {})).sidebar !== 40; i++) await sleep(100)
+    expect((await c.request('tabs', {})).sidebar).toBe(40)
+    await t.textWith(/^.{40}┬/m)
+    // and back, so the tests after this one find the default
+    t.input.write(`\x1b[<0;41;10M\x1b[<32;${SIDEBAR_W + 1};10M\x1b[<0;${SIDEBAR_W + 1};10m`)
+    await t.textWith(new RegExp(`^.{${SIDEBAR_W}}┬`, 'm'))
     t.input.write('\x02d')
     await t.tui
   }, 40_000)

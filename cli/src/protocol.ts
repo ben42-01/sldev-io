@@ -29,6 +29,8 @@ export interface TabState {
   order: string[]
   active: string | null
   split: boolean
+  /** the sidebar's width, once its edge was dragged */
+  sidebar?: number
 }
 
 export interface NewPaneArgs {
@@ -43,6 +45,8 @@ export interface NewPaneArgs {
   /** a branch or slug: the agent runs in a new git worktree; false: in place even when the kind would isolate it */
   worktree?: string | false
   cwd: string
+  /** the asking sldev's PATH: an agent installed after the daemon started can sit in a folder only a newer shell has on it */
+  path?: string
   model?: string
   mode?: string
   effort?: string

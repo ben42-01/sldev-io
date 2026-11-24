@@ -143,16 +143,17 @@ export function TerminalMockup({ version }: { version: string }) {
           {panes.map((p, i) => (
             <span key={p.n} className={`tui-tab${i === 0 ? ' active' : ''}`}>
               <span className={`tone-${p.tone}${p.tone === 'attention' ? ' breathe' : ''}`}>{glyph(p, spin)}</span> {p.n} {p.title}
+              {i === 0 && <span className="dim"> ×</span>}
             </span>
           ))}
-          <span className="tui-plus dim">+</span>
+          <span className="tui-plus accent">+</span>
         </div>
 
         {/* row 2: the gradient under the brand, the rule with the active tab underlined and the pane's details */}
         <div className="tui-brandline" />
         <div className="tui-rule">
-          {/* under the active tab, its marker to its title: ` ● 1 title ` less a column each side */}
-          <span className="tui-rule-heavy" style={{ width: `${active.title.length + 4}ch` }} />
+          {/* under the active tab, its marker to its ×: ` ● 1 title × ` less a column each side */}
+          <span className="tui-rule-heavy" style={{ width: `${active.title.length + 6}ch` }} />
           <span className="tui-rule-line" />
           <span className="tui-rule-info dim"> {details} </span>
           <span className="tui-rule-end" />
@@ -160,6 +161,9 @@ export function TerminalMockup({ version }: { version: string }) {
 
         {/* the sidebar */}
         <div className="tui-side">
+          <div className="tui-side-new">
+            <span className="accent">+</span> New tab <span className="dim">^b c</span>
+          </div>
           <div className="tui-side-body">
             {groups.map((g) => {
               const tone = rollup(g.list)
