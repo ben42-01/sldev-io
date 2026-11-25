@@ -6,7 +6,7 @@ import { VERSION } from './version'
  * The update check: once a day at most, the TUI asks the npm registry for sldev-cli's `latest` version. It's
  * the CLI's one network request of its own besides `gh` (on /privacy), sends nothing but the package name, and
  * is off with `"updateCheck": false` in config.json, `SLDEV_NO_UPDATE_CHECK=1`, or in CI. The answer is kept
- * in `<data>/update.json` with the version the popup last told about, so each new version is announced once.
+ * in `<data>/update.json` with the version last told about, so each new version gets its message once.
  */
 
 export const PACKAGE = 'sldev-cli'
@@ -20,7 +20,7 @@ interface UpdateState {
   checkedAt: number
   /** what it said `latest` was */
   latest: string | null
-  /** the version the popup last told about */
+  /** the version the message line last told about */
   shown: string | null
 }
 
@@ -82,10 +82,10 @@ export async function fetchLatest(fetchFn: typeof fetch = fetch): Promise<string
 }
 
 /**
- * A newer version to tell about now, or null: the registry is asked only when the last answer is a day old,
- * and a version already told about isn't told again.
+ * A newer version than this one, or null: the registry is asked only when the last answer is a day old.
+ * `first`: not told about yet, so the TUI says so on the message line once; its sidebar shows it every time.
  */
-export async function updateToAnnounce(dataDir: string, opts: { now?: number; fetchLatest?: () => Promise<string | null>; current?: string } = {}): Promise<string | null> {
+export async function updateToAnnounce(dataDir: string, opts: { now?: number; fetchLatest?: () => Promise<string | null>; current?: string } = {}): Promise<{ version: string; first: boolean } | null> {
   const now = opts.now ?? Date.now()
   const state = readState(dataDir)
   if (now - state.checkedAt >= DAY_MS || now < state.checkedAt) {
@@ -95,11 +95,11 @@ export async function updateToAnnounce(dataDir: string, opts: { now?: number; fe
     if (latest) state.latest = latest
     writeState(dataDir, state)
   }
-  if (!isNewer(state.latest, opts.current ?? VERSION) || state.shown === state.latest) return null
-  return state.latest
+  if (!isNewer(state.latest, opts.current ?? VERSION)) return null
+  return { version: state.latest, first: state.shown !== state.latest }
 }
 
-/** The popup was shown for `version`: don't show it again for that one. */
+/** The message line told about `version`: it isn't told again (the sidebar row stays). */
 export function markAnnounced(dataDir: string, version: string): void {
   writeState(dataDir, { ...readState(dataDir), shown: version })
 }

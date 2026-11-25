@@ -35,8 +35,9 @@ What it does that a plain multiplexer doesn't:
 - **Usage and cost** from the agents' own local logs: `sldev usage [--week]`.
 
 The CLI talks to the network itself only to check for updates: once a day at most, attaching asks the npm
-registry for sldev-cli's latest version and, when a newer one is out, says so once in a popup with the
-install command (`"updateCheck": false` in config.json or `SLDEV_NO_UPDATE_CHECK=1` turns it off; it's off
+registry for sldev-cli's latest version and, when a newer one is out, says so: once on the message line, then
+in a row at the bottom of the sidebar (and `↑` on the status bar) for as long as you're behind. A click on the row,
+or `Ctrl-b u`, copies the install command (`"updateCheck": false` in config.json or `SLDEV_NO_UPDATE_CHECK=1` turns it off; it's off
 in CI). The workflows view asks GitHub through your own `gh`, only while it's open. The daemon listens on a Unix socket (a named pipe on Windows) and a loopback port (for
 Claude's hooks and the MCP tools), both protected.
 
@@ -155,7 +156,7 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 
 | Ctrl-b then | does |
 | --- | --- |
-| `c` | a new tab: pick a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one; Ctrl-e writes a longer one in `$EDITOR` |
+| `c` | a new tab: pick the project it opens in (the ones your tabs work in, recent ones, or Other folder… to browse or type one, Tab completing it), then a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one; Ctrl-e writes a longer one in `$EDITOR` |
 | `t` | a new shell tab (`$SHELL`; PowerShell on Windows) in the folder of the tab in front |
 | `b` | the briefs waiting in `.sldev-cli/briefs`; Enter launches the one in focus |
 | `1`–`9` | that tab |
@@ -166,13 +167,19 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 | `s` | split: the tab in front and the next one side by side (needs 60 columns) |
 | `w` / `e` / `v` | workflows, the tab's folder in your editor, its changed files |
 | `?` | every key |
+| `u` | copy the command that updates sldev (when a newer one is out) |
 | `d` | detach; everything keeps running |
 | Ctrl-b | send a Ctrl-b to the tab |
 
+**Several projects in one sldev**: New tab starts with where the tab opens, so there's no need to quit and run
+sldev again from another folder. The sidebar groups tabs by project, and the `+` on a project's heading opens New
+tab there. Recent projects are kept in `projects.json` in sldev's data folder.
+
 Everything takes clicks: `+` on the tab bar or **+ New tab** at the top of the sidebar opens the New tab popup,
-whose rows a click picks (one that isn't installed copies its install command to the clipboard, since sldev
-holds the mouse); a tab or a sidebar row brings that tab to the front; the `×` on the tab in front, or a middle
-click on any tab, closes it (asking first while something runs in it). **Drag the sidebar's edge** to make it
+whose rows a click picks: a click acts at once, so an agent starts without asking for a brief (one that isn't
+installed copies its install command to the clipboard, since sldev holds the mouse). A tab or a sidebar row brings
+that tab to the front; a right click on either renames it; the `×` on the tab in front, or a middle click on any
+tab, closes it at once (`Ctrl-b x` asks first while something runs in it, and about the agents it started). **Drag the sidebar's edge** to make it
 wider or narrower; the daemon remembers the width. **Drag over a tab's text to copy it**: the selection stays inside
 that tab (never the sidebar or the tab beside it) and goes to the clipboard when you let go, through wl-copy,
 xclip or xsel (pbcopy, clip on macOS and Windows) and OSC 52, which also works over SSH in terminals that allow it.

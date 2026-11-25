@@ -171,7 +171,7 @@ export function TerminalMockup({ version }: { version: string }) {
                 <div key={g.project} className="tui-group">
                   <div className="tui-group-head">
                     <b className="dim">{g.project.toUpperCase()}</b> <span className={`tone-${tone}`}>{tone === 'neutral' ? ' ' : '●'}</span>{' '}
-                    <span className="dim">{g.list.length}</span>
+                    <span className="dim">{g.list.length}</span> <span className="accent">+</span>
                   </div>
                   {g.list
                     .slice()

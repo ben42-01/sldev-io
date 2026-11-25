@@ -24,15 +24,16 @@ describe('the update check', () => {
     let asked = 0
     let latest: string | null = '0.7.0'
     const ask = async (): Promise<string | null> => (asked++, latest)
-    expect(await updateToAnnounce(dir, { now: T, fetchLatest: ask, current: '0.6.1' })).toBe('0.7.0')
+    expect(await updateToAnnounce(dir, { now: T, fetchLatest: ask, current: '0.6.1' })).toEqual({ version: '0.7.0', first: true })
     markAnnounced(dir, '0.7.0')
-    expect(await updateToAnnounce(dir, { now: T + 1000, fetchLatest: ask, current: '0.6.1' })).toBeNull()
+    // told about: still newer (the sidebar keeps saying so), but not first any more
+    expect(await updateToAnnounce(dir, { now: T + 1000, fetchLatest: ask, current: '0.6.1' })).toEqual({ version: '0.7.0', first: false })
     expect(asked).toBe(1)
     // a day on, a newer one is told about; a failed ask keeps the last answer and still waits a day
     latest = '0.8.0'
-    expect(await updateToAnnounce(dir, { now: T + DAY, fetchLatest: ask, current: '0.6.1' })).toBe('0.8.0')
+    expect(await updateToAnnounce(dir, { now: T + DAY, fetchLatest: ask, current: '0.6.1' })).toEqual({ version: '0.8.0', first: true })
     latest = null
-    expect(await updateToAnnounce(dir, { now: T + 2 * DAY, fetchLatest: ask, current: '0.6.1' })).toBe('0.8.0')
+    expect((await updateToAnnounce(dir, { now: T + 2 * DAY, fetchLatest: ask, current: '0.6.1' }))?.version).toBe('0.8.0')
     expect(asked).toBe(3)
     expect(JSON.parse(readFileSync(join(dir, 'update.json'), 'utf8'))).toMatchObject({ checkedAt: T + 2 * DAY, latest: '0.8.0' })
     // already on it: nothing to say

@@ -1,7 +1,7 @@
 import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, sep } from 'path'
 import { PassThrough, Writable } from 'stream'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
@@ -399,15 +399,101 @@ describe('keys in win32-input-mode (Windows Terminal)', () => {
   }, 30_000)
 })
 
+describe('projects in New tab', () => {
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  const find = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    // the last match: the popup is drawn over the panes, and the sidebar is above it on the left
+    const y = rows.map((r, i) => (r.includes(text) ? i : -1)).filter((i) => i >= 0).pop() ?? -1
+    if (y < 0) throw new Error(`${text} isn't on the screen:\n${screen}`)
+    return { x: rows[y].lastIndexOf(text), y }
+  }
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('picks another project by browsing or typing a folder, opens a tab there, and remembers it', async () => {
+    const other = join(tmp, 'other')
+    mkdirSync(join(other, '.git'), { recursive: true })
+    const t = await attachTui(120, 40)
+    t.input.write('\x02c')
+    let s = await t.textWith('╭─ New tab')
+    expect(s).toMatch(/project/i)
+    expect(s).toMatch(/✓ +work/)
+
+    // Other folder…: the browser starts where the tab would open; Backspace goes up, a click goes in
+    t.input.write(click(find(s, 'Other folder').x, find(s, 'Other folder').y))
+    s = await t.textWith('╭─ Folder')
+    expect(s).toContain('Open here')
+    t.input.write('\x7f')
+    s = await t.textWith(/other\/ +git/)
+    t.input.write(click(find(s, 'other/').x, find(s, 'other/').y))
+    s = await t.textWith(/Open here +other/)
+    t.input.write(click(find(s, 'Open here').x, find(s, 'Open here').y))
+    s = await t.textWith(/✓ +other/)
+    expect(s).toMatch(/in .*other/)
+
+    // a shell from here opens in that project, which is remembered for next time
+    const known = new Set((await c.request('ls', {})).map((p) => p.id))
+    t.input.write(click(find(s, 't  Shell').x + 3, find(s, 't  Shell').y))
+    const added = async (): Promise<PaneInfo | undefined> => (await c.request('ls', {})).find((p) => !known.has(p.id))
+    for (let i = 0; i < 50 && !(await added()); i++) await sleep(100)
+    const shell = (await added())!
+    expect(shell.cwd).toBe(other)
+    expect(JSON.parse(readFileSync(join(data, 'projects.json'), 'utf8')).recent[0]).toBe(other)
+
+    // the project's heading in the sidebar opens New tab there
+    s = await t.textWith(/OTHER .*\+/)
+    t.input.write(click(2, find(s, 'OTHER').y))
+    s = await t.textWith('╭─ New tab')
+    expect(s).toMatch(/✓ +other/)
+
+    // typing a folder: Tab completes it
+    t.input.write(click(find(s, 'Other folder').x, find(s, 'Other folder').y))
+    s = await t.textWith('Type a path')
+    t.input.write(click(find(s, 'Type a path').x, find(s, 'Type a path').y))
+    await t.textWith('Folder: ')
+    t.input.write('\x7f'.repeat(200) + join(tmp, 'wo') + '\t')
+    await t.textWith(`Folder: ${join(tmp, 'work')}${sep}`)
+    t.input.write('\r')
+    s = await t.textWith(/✓ +work/)
+    t.input.write('\x1b')
+    await t.textWith(/^(?![\s\S]*╭─ New tab)/)
+
+    await c.request('kill', { pane: shell.id })
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
+})
+
 describe('a newer sldev', () => {
-  it('says so in a popup with the npm command, which any key closes without typing into the tab', async () => {
-    const t = await attachTui(100, 30, { update: async () => '9.9.9' })
-    let s = await t.textWith('Update available')
-    expect(s).toContain('sldev 9.9.9 is out')
-    expect(s).toContain('npm install -g sldev-cli@latest')
-    t.input.write('x')
-    s = await t.textWith(focused('second S'))
-    expect(s).not.toContain('Update available')
+  it('says so once on the message line, keeps a sidebar row, and copies the npm command from it or ^b u', async () => {
+    const t = await attachTui(100, 30, { update: async () => ({ version: '9.9.9', first: true }) })
+    let s = await t.textWith("sldev 9.9.9 is out (this is ")
+    // no popup in the way: keys still go where they did
+    expect(s).not.toContain('╭─ Update')
+    expect(s).toMatch(/↑ sldev 9\.9\.9 is out +copy/)
+    // the row copies the command (the TUI holds the mouse, so it can't be selected)
+    const rows = s.split('\n')
+    const y = rows.findIndex((r) => r.includes('↑ sldev 9.9.9'))
+    t.input.write(`\x1b[<0;3;${y + 1}M\x1b[<0;3;${y + 1}m`)
+    await t.textWith('Copied: npm install -g sldev-cli@latest')
+    expect(t.copied).toEqual(['npm install -g sldev-cli@latest'])
+    t.input.write('\x02u')
+    for (let i = 0; i < 30 && t.copied.length < 2; i++) await sleep(100)
+    expect(t.copied).toHaveLength(2)
+    t.input.write('\x02d')
+    await t.tui
+  }, 30_000)
+
+  it('without the sidebar, the status bar says it', async () => {
+    const t = await attachTui(95, 24, { update: async () => ({ version: '9.9.9', first: false }) })
+    await t.textWith(/↑ 9\.9\.9 \^b u/)
     t.input.write('\x02d')
     await t.tui
   }, 30_000)
@@ -517,7 +603,7 @@ describe('agents started by agents', () => {
     ]
     expect(paneTree(panes).map((t) => `${t.pane.id}${t.child ? 'c' : ''}`)).toEqual(['1', '3c', '2', '4'])
     const rows = sidebar({ panes, order: ['1', '2', '3', '4'], active: '2', shown: ['2'] }, SIDEBAR_W, 20).lines.map(plain)
-    expect(rows[2]).toMatch(/^ APP +● 4$/)
+    expect(rows[2]).toMatch(/^ APP +● 4 \+$/)
     expect(rows[3]).toMatch(/^ {2}⠋ 1 lead/)
     expect(rows[5]).toMatch(/^ {2}└⠋ 3 part one/)
     expect(rows[7]).toMatch(/2 other/)
@@ -541,13 +627,13 @@ describe('sidebar', () => {
     expect(rows[0]).toMatch(/^ \+ New tab +\^b c $/)
     expect(s.plus).toBe(0)
     expect(rows[1].trim()).toBe('')
-    expect(rows[2]).toMatch(/^ APP +● 2$/)
+    expect(rows[2]).toMatch(/^ APP +● 2 \+$/)
     expect(rows[3]).toMatch(/^▌ ⠋ 2 fix the parser/)
     expect(rows[4]).toMatch(/^▌ {3}Codex · working/)
     expect(rows[5]).toMatch(/^ {2}› 1 zsh/)
     expect(rows[6]).toMatch(/^ {4}\/w\/app/)
     expect(rows[7].trim()).toBe('')
-    expect(rows[8]).toMatch(/^ SITE +● 1$/)
+    expect(rows[8]).toMatch(/^ SITE +● 1 \+$/)
     expect(rows[10]).toMatch(/Codex · needs you · rev/)
     // clicks on either row of a tab pick it
     expect(s.hits.slice(0, 7)).toEqual([null, null, null, '1', '1', '2', '2'])
@@ -774,6 +860,9 @@ describe('mouse', () => {
     if (y < 0) throw new Error(`${text} isn't on the screen:\n${screen}`)
     return { x: rows[y].indexOf(text), y }
   }
+  /** the number a pane's tab shows */
+  const order = (id: string): number => tabNumbers.indexOf(id) + 1
+  let tabNumbers: string[] = []
   let savedShell: string | undefined
   beforeAll(() => {
     savedShell = process.env.SHELL
@@ -783,7 +872,7 @@ describe('mouse', () => {
     if (process.platform !== 'win32') process.env.SHELL = savedShell
   })
 
-  it('opens New tab from the sidebar, picks a row, copies an install command, closes a tab with × and drags the sidebar', async () => {
+  it('opens New tab from the sidebar, picks a row, copies an install command, renames and closes a tab, starts an agent, drags the sidebar', async () => {
     // wide enough for a 40-column sidebar beside a 70-column pane
     const t = await attachTui(120, 30)
     let s = await t.textWith('+ New tab')
@@ -797,6 +886,7 @@ describe('mouse', () => {
     for (let i = 0; i < 50 && (await c.request('ls', {})).length === before; i++) await sleep(100)
     const id = (await c.request('ls', {})).filter((p) => p.shell).map((p) => p.id).sort((a, b) => Number(b) - Number(a))[0]
     s = await t.textWith(/› \d+ \S+ ×/)
+    tabNumbers = (await c.request('tabs', {})).order
 
     // an agent that isn't installed: its install command goes to the clipboard (the TUI holds the mouse)
     const savedPath = process.env.PATH
@@ -815,16 +905,34 @@ describe('mouse', () => {
     t.input.write(click(108, 28))
     await t.textWith(/^(?![\s\S]*╭─ New tab)/)
 
-    // the shell's tab is in front, with a × that closes it (a running shell asks first)
-    const bar = t.bar()
+    // a right click on the tab renames it: the prompt starts with its name
+    let bar = t.bar()
+    t.input.write(click(bar.indexOf(` ${order(id)} `) + 2, 0, 2))
+    await t.textWith(`Rename tab ${id}: `)
+    t.input.write('\x7f'.repeat(20) + 'by mouse\r')
+    await t.textWith(/› \d+ by mouse ×/)
+
+    // the shell's tab is in front, with a × that closes it at once, though its shell still runs (^b x asks)
+    bar = t.bar()
     const x = bar.indexOf('×')
     expect(x).toBeGreaterThan(0)
     t.input.write(click(x, 0))
-    await t.textWith(`Close tab ${id}? Its shell`)
-    t.input.write('y\r')
-    await t.textWith(/^(?![\s\S]*Close tab)/)
     for (let i = 0; i < 50 && (await c.request('ls', {})).some((p) => p.id === id); i++) await sleep(100)
     expect((await c.request('ls', {})).some((p) => p.id === id)).toBe(false)
+    expect(await t.textWith(/^(?![\s\S]*Close tab)/)).not.toContain('(y/N)')
+
+    // an agent picked with the mouse starts at once, without asking for a brief
+    t.input.write('\x02c')
+    s = await t.textWith('╭─ New tab')
+    at = find(s, '2  Codex')
+    const known = new Set((await c.request('ls', {})).map((p) => p.id))
+    t.input.write(click(at.x, at.y))
+    const added = async (): Promise<PaneInfo | undefined> => (await c.request('ls', {})).find((p) => !known.has(p.id))
+    for (let i = 0; i < 50 && !(await added()); i++) await sleep(100)
+    const codex = (await added())!
+    expect(codex).toMatchObject({ agentName: 'Codex', brief: '' })
+    expect(await t.textWith(/Started Codex \d+/)).not.toContain('brief (Enter alone')
+    await c.request('kill', { pane: codex.id })
 
     // the sidebar's edge drags; the daemon keeps the width for the next attach
     t.input.write(`\x1b[<0;${SIDEBAR_W + 1};10M\x1b[<32;${SIDEBAR_W + 6};10M\x1b[<32;41;10M\x1b[<0;41;10m`)

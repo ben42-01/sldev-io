@@ -499,6 +499,10 @@ export interface Sidebar {
   hits: Array<string | null>
   /** the "+ New tab" row, for clicks (null when the sidebar has no room for it) */
   plus: number | null
+  /** the row saying a newer sldev is out, which copies the update command when clicked */
+  update: number | null
+  /** the project a heading row is for: a click opens New tab there */
+  projects: Array<string | null>
 }
 
 export interface SidebarInput {
@@ -511,6 +515,8 @@ export interface SidebarInput {
   loops?: LoopInfo[]
   frame?: number
   home?: string
+  /** a newer sldev on npm */
+  update?: string
 }
 
 /**
@@ -523,8 +529,8 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   const { order, active, shown, frame = 0, home = '' } = input
   const byId = new Map(input.panes.map((p) => [p.id, p]))
   const panes = order.flatMap((id) => byId.get(id) ?? [])
-  const rows: Array<{ text: string; hit: string | null; focus?: boolean }> = []
-  const push = (text: string, hit: string | null = null, focus = false): void => void rows.push({ text, hit, focus })
+  const rows: Array<{ text: string; hit: string | null; focus?: boolean; project?: string }> = []
+  const push = (text: string, hit: string | null = null, focus = false, project?: string): void => void rows.push({ text, hit, focus, project })
 
   // groups in the order their first tab comes
   const groups = new Map<string, PaneInfo[]>()
@@ -542,8 +548,9 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     const tone = rollup(list)
     const count = String(list.length)
     // like the app's labels: the project in capitals, quiet, with its most urgent state and its count
-    const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 3)
-    push(`${BOLD}${DIM}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET}`)
+    // and a + that opens New tab in it
+    const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 5)
+    push(`${BOLD}${DIM}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET} ${ACCENT}+${RESET}`, null, false, root)
     // agents first, then shells, each in tab order
     for (const { pane: p, child } of paneTree([...list.filter((x) => !x.shell), ...list.filter((x) => x.shell)])) {
       const n = order.indexOf(p.id) + 1
@@ -583,6 +590,9 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     foot.push(` ${ACCENT}↻${RESET} ${fit(l.name, w - 3)}`)
     foot.push(`   ${DIM}${fit(l.label, w - 3)}${RESET}`)
   }
+  // a newer sldev: one quiet row at the very bottom, there for as long as this one is older
+  const upd = input.update ? ` ${ACCENT}↑${RESET} ${fit(`sldev ${input.update} is out`, Math.max(0, w - 8))}${DIM}copy${RESET} ` : ''
+  if (upd) foot.push(upd)
   if (foot.length) foot.unshift(RULE + '─'.repeat(w) + RESET)
 
   // the first row, under the brand line, opens the New tab popup; it stays put while the tabs scroll
@@ -595,22 +605,26 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   const body = rows.slice(start, start + room)
   const lines: string[] = []
   const hits: Array<string | null> = []
+  const projects: Array<string | null> = []
   for (const line of head) {
     lines.push(onFill(SURFACE, pad(line, w)))
     hits.push(null)
+    projects.push(null)
   }
   for (let i = 0; i < h - head.length; i++) {
     const fromFoot = i - (h - head.length - footer.length)
     if (fromFoot >= 0) {
       lines.push(onFill(SURFACE, pad(footer[fromFoot], w)))
       hits.push(null)
+      projects.push(null)
     } else {
       // the tab in focus: both its rows on the raised tone, beside the accent bar
       lines.push(onFill(body[i]?.focus ? LIFT : SURFACE, pad(body[i]?.text ?? '', w)))
       hits.push(body[i]?.hit ?? null)
+      projects.push(body[i]?.project ?? null)
     }
   }
-  return { lines, hits, plus: head.length ? 0 : null }
+  return { lines, hits, projects, plus: head.length ? 0 : null, update: upd && footer.length ? h - 1 : null }
 }
 
 /** a pane's state in a word or two, for the sidebar's narrow second line */
@@ -677,6 +691,12 @@ export function box(x: number, y: number, w: number, h: number, body: string[], 
   return s
 }
 
+/** The first row a popup shows: rows that don't fit scroll so the one picked stays in view. */
+export function popupStart(count: number, shown: number, sel: number): number {
+  if (count <= shown || sel < 0) return 0
+  return Math.max(0, Math.min(sel - Math.floor(shown / 2), count - shown))
+}
+
 /** Where popup() puts its box in `r`, and how many of its rows fit; null when there's no room for it. */
 export function popupRect(r: Rect, title: string, rows: PopupRow[], footer = ''): (Rect & { shown: number }) | null {
   const w = Math.min(r.w - 2, 64, Math.max(36, ...rows.map((x) => width(x.text) + width(x.key ?? '') + width(x.note ?? '') + 10), width(title) + 6, width(footer) + 4))
@@ -686,11 +706,12 @@ export function popupRect(r: Rect, title: string, rows: PopupRow[], footer = '')
 }
 
 /** The popup row under a click: its index, -1 inside the box but on no row, null outside the box. */
-export function popupHit(r: Rect, title: string, rows: PopupRow[], footer: string, x: number, y: number): number | null {
+export function popupHit(r: Rect, title: string, rows: PopupRow[], footer: string, x: number, y: number, sel = -1): number | null {
   const b = popupRect(r, title, rows, footer)
   if (!b || x < b.x || x >= b.x + b.w || y < b.y || y >= b.y + b.h) return null
-  const i = y - b.y - 1
-  return x > b.x && x < b.x + b.w - 1 && i >= 0 && i < b.shown && !rows[i].head ? i : -1
+  const row = y - b.y - 1
+  const i = popupStart(rows.length, b.shown, sel) + row
+  return x > b.x && x < b.x + b.w - 1 && row >= 0 && row < b.shown && rows[i] && !rows[i].head ? i : -1
 }
 
 /** A box with rounded corners and a title, `w` wide, centred in `r`; returns its rows positioned with at(). */
@@ -701,7 +722,9 @@ export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, foo
   const keyW = Math.max(0, ...rows.map((x) => width(x.key ?? '')))
   const inner = w - 2
   const lines: string[] = []
-  rows.slice(0, h - 2 - (footer ? 2 : 0)).forEach((row, i) => {
+  const start = popupStart(rows.length, b.shown, sel)
+  rows.slice(start, start + b.shown).forEach((row, j) => {
+    const i = start + j
     // a heading like the app's field labels: capitals, quiet
     if (row.head) return void lines.push(' ' + BOLD + DIM + fit(painted() ? row.text.toUpperCase() : row.text, inner - 1) + RESET)
     const focus = i === sel
