@@ -331,13 +331,62 @@ svg.lucide {
   color: var(--fg);
   background: var(--bg-hover);
 }
-.titlebar-search {
-  -webkit-app-region: no-drag;
+.titlebar-center {
   margin: 0 auto;
   display: flex;
   align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* a fixed slot, right-aligned: a longer project name doesn't push the search box around */
+.titlebar-project-slot {
+  width: 200px;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+/* the open project; a click lists the others with what they have going */
+.titlebar-project {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--fg);
+  font-weight: 500;
+}
+.titlebar-project:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.titlebar-project > span:not(.sdot):not(.titlebar-elsewhere) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar-project svg {
+  flex-shrink: 0;
+  color: var(--fg-subtle);
+}
+.titlebar-elsewhere {
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--status-attention);
+  background: color-mix(in oklch, var(--status-attention) 16%, transparent);
+}
+.titlebar-search {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  width: min(480px, 50vw);
+  width: min(420px, 40vw);
   height: 24px;
   padding: 0 8px;
   border-radius: var(--radius);
@@ -9173,4 +9222,58 @@ button.cg-pr:focus-visible {
   white-space: pre-wrap;
   color: var(--fg-muted);
   background: var(--code-bg);
+}
+
+/* Mission Control → All projects: cards name their project, the list and grid group by it */
+.mission-project {
+  min-width: 0;
+  max-width: 140px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: none;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-project:not(.open):hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.mission-project.open {
+  cursor: default;
+}
+.mc-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.mc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mc-group-head .btn {
+  margin-left: auto;
+}
+/* missions in projects that aren't shown need you */
+.mc-elsewhere {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in oklch, var(--status-attention) 40%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--status-attention) 8%, transparent);
+  font-size: 12px;
+}
+.mc-elsewhere span:not(.sdot) {
+  flex: 1;
 }

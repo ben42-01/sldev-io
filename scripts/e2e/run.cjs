@@ -16,6 +16,9 @@ const out = path.join(repoRoot, '.e2e-out', name)
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out, { recursive: true })
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sldev-io-e2e-'))
+// keep painting while other windows cover this one: an occluded window stops rendering, and screenshots then show
+// an earlier screen (and rAF-driven layout waits)
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 app.setPath('userData', path.join(tmp, 'userdata'))
 // a scenario can set env before the app starts: module.exports.env = { SLDEV_E2E_VERSION: '1.0.0' }
 const scenario = require(path.join(__dirname, 'scenarios', `${name}.cjs`))
@@ -77,7 +80,11 @@ app.whenReady().then(async () => {
       while (!(v = await fn()) && Date.now() < end) await wait(everyMs)
       return v
     },
-    shot: async (file) => fs.writeFileSync(path.join(out, `${file}.png`), (await win.capturePage()).toPNG()),
+    shot: async (file) => {
+      // a frame for whatever the last step changed
+      await Promise.race([js('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))'), wait(1000)])
+      fs.writeFileSync(path.join(out, `${file}.png`), (await win.capturePage()).toPNG())
+    },
     key: (keyCode, modifiers = []) => {
       for (const type of ['keyDown', 'keyUp']) wc.sendInputEvent({ type, keyCode, modifiers })
     },

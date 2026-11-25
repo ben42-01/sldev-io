@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SkillsHint } from '../components/SkillsHint'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { ArrowRight, ChartGantt, ChevronDown, ClipboardList, Columns3, Factory, FlaskConical, LayoutGrid, List, Rocket, Satellite } from 'lucide-react'
+import { projectWork } from '@shared/projects'
 import type { Mission } from '@shared/types'
 import type { FactoryRun } from '@shared/factory'
 import { missionSignal } from '@shared/status'
@@ -19,8 +20,9 @@ import { nextNeedsYou } from '../state/attention'
 import { factory } from '../state/factory'
 import { isLive, missions } from '../state/missions'
 import { useStore } from '../state/store'
-import { updateSettings, workspace } from '../state/workspace'
+import { setRootFolder, updateSettings, workspace } from '../state/workspace'
 import { basename } from '../lib/paths'
+import { WorkDot } from '../components/ProjectWork'
 import { DashboardPanel } from './DashboardPanel'
 import { openPanel } from './dockApi'
 
@@ -67,13 +69,15 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
   const runs = useStore(factory, (s) => s.runs)
   // eval attempts report to their eval run (Mission Control → Evals), not here;
   // a Lead's workers show inside its card, not as missions of their own
-  const mine = useMemo(() => list.filter((m) => m.root === root && !m.eval && !m.delegate && !m.explains), [list, root])
+  const all = useStore(workspace, (w) => w.missionScope === 'all')
+  const work = useMemo(() => list.filter((m) => !m.eval && !m.delegate && !m.explains), [list])
+  const mine = useMemo(() => (all ? work : work.filter((m) => m.root === root)), [work, root, all])
   const live = mine.filter((m) => isLive(m.status))
   const needs = live.filter((m) => m.status === 'needs-input').length
   const myRuns = useMemo(() => runs.filter((r) => r.root === root), [runs, root])
   const activeRuns = myRuns.filter(runActive)
   const liveEvals = useEvalRuns(root).filter((r) => !r.finishedAt && !r.stopped).length
-  const subtitle = [root ? basename(root) : 'No folder open', `${live.length} live mission${live.length === 1 ? '' : 's'}`, needs && `${needs} need${needs === 1 ? 's' : ''} you`, activeRuns.length && `${activeRuns.length} factory run${activeRuns.length === 1 ? '' : 's'} going`]
+  const subtitle = [all ? 'All projects' : root ? basename(root) : 'No folder open', `${live.length} live mission${live.length === 1 ? '' : 's'}`, needs && `${needs} need${needs === 1 ? 's' : ''} you`, activeRuns.length && `${activeRuns.length} factory run${activeRuns.length === 1 ? '' : 's'} going`]
     .filter(Boolean)
     .join(' · ')
 
@@ -97,7 +101,7 @@ export function MissionControlPanel({ params }: IDockviewPanelProps<{ tab?: Cont
         </div>
       </header>
       <div className="mc-body" role="tabpanel">
-        {tab === 'missions' && <MissionsBoard root={root} mine={mine} needs={needs} />}
+        {tab === 'missions' && <MissionsBoard root={root} mine={mine} needs={needs} all={all} others={all ? [] : work.filter((m) => m.root !== root)} />}
         {tab === 'runs' && <RunsBoard root={root} runs={myRuns} />}
         {tab === 'evals' && <EvalsView root={root} />}
         {tab === 'usage' && <DashboardPanel />}
@@ -110,13 +114,57 @@ function runActive(r: FactoryRun): boolean {
   return r.status === 'running' || r.status === 'paused'
 }
 
-function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Mission[]; needs: number }): React.JSX.Element {
+/** The open project's missions, or every project's (`all`): cards then name their project, and the list and grid group by it. */
+function MissionsBoard({ root, mine, needs, all: everywhere, others }: { root: string | null; mine: Mission[]; needs: number; all: boolean; others: Mission[] }): React.JSX.Element {
   const layout = useStore(workspace, (w) => w.missionLayout)
   const sorted = useMemo(() => [...mine].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.updatedAt - a.updatedAt), [mine])
   const later = useSaved(root)
+  // what waits in the projects that aren't shown, so the activity bar's count is never a mystery here
+  const waiting = useMemo(() => [...projectWork(others).values()].filter((w) => w.needs), [others])
+  const waitingCount = waiting.reduce((n, w) => n + w.needs, 0)
+  // the open project first, then by name
+  const groups = useMemo(() => {
+    const by = new Map<string, Mission[]>()
+    for (const m of sorted) by.set(m.root, [...(by.get(m.root) ?? []), m])
+    return [...by.entries()].sort(([a], [b]) => (a === root ? -1 : b === root ? 1 : basename(a).localeCompare(basename(b))))
+  }, [sorted, root])
+  const groupWork = useMemo(() => projectWork(mine), [mine])
+  const card = (m: Mission, kind: 'large' | 'compact'): React.JSX.Element => <MissionCard key={m.id} mission={m} large={kind === 'large'} compact={kind === 'compact'} />
+  const grouped = (kind: 'large' | 'compact'): React.JSX.Element => (
+    <div className="mc-groups">
+      {groups.map(([p, ms]) => (
+        <section key={p} className="mc-group" aria-label={basename(p)}>
+          <h3 className="mc-group-head" title={p}>
+            <WorkDot work={groupWork.get(p)} />
+            {basename(p)}
+            <span className="seg-count">{ms.length}</span>
+            {p === root ? <span className="muted small">open</span> : <button className="btn sm ghost" onClick={() => setRootFolder(p)}>Switch to it</button>}
+          </h3>
+          <div className={kind === 'large' ? 'mission-grid' : 'mc-list'}>{ms.map((m) => card(m, kind))}</div>
+        </section>
+      ))}
+    </div>
+  )
   return (
     <div className="panel-page mc-page">
+      {waitingCount > 0 && (
+        <div className="mc-elsewhere" role="status">
+          <WorkDot work={waiting[0]} />
+          <span>
+            {waitingCount} mission{waitingCount === 1 ? '' : 's'} in {waiting.length === 1 ? basename(waiting[0].root) : `${waiting.length} other projects`} need{waitingCount === 1 ? 's' : ''} you
+          </span>
+          <button className="btn sm" onClick={() => updateSettings({ missionScope: 'all' })}>Show all projects</button>
+        </div>
+      )}
       <div className="board-filters">
+        <div className="seg sm" role="group" aria-label="Which projects">
+          <button type="button" className={everywhere ? '' : 'on'} aria-pressed={!everywhere} title={root ?? 'No folder open'} onClick={() => updateSettings({ missionScope: 'project' })}>
+            This project
+          </button>
+          <button type="button" className={everywhere ? 'on' : ''} aria-pressed={everywhere} title="Missions in every project, grouped by project" onClick={() => updateSettings({ missionScope: 'all' })}>
+            All projects
+          </button>
+        </div>
         <div className="seg sm" role="group" aria-label="Mission layout">
           {LAYOUTS.map((l) => (
             <button key={l.id} type="button" className={layout === l.id ? 'on' : ''} aria-pressed={layout === l.id} title={l.label} onClick={() => updateSettings({ missionLayout: l.id })}>
@@ -141,7 +189,7 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
           <div className="mc-saved-list">{later.map((m) => <SavedMissionRow key={m.id} saved={m} />)}</div>
         </section>
       )}
-      {!root ? (
+      {!root && !everywhere ? (
         <Empty big icon={<Rocket size={22} />} title="No folder open" hint="Open a project folder to launch agent missions in it." />
       ) : !mine.length && later.length ? null : !mine.length ? (
         <Empty
@@ -164,7 +212,7 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
                   <span className="seg-count">{all.length}</span>
                 </h3>
                 <div className="mc-column-body">
-                  {shown.map((m) => <MissionCard key={m.id} mission={m} />)}
+                  {shown.map((m) => <MissionCard key={m.id} mission={m} project={everywhere} />)}
                   {!all.length && (
                     <div className="mc-column-empty">
                       <span>{c.empty}</span>
@@ -178,10 +226,12 @@ function MissionsBoard({ root, mine, needs }: { root: string | null; mine: Missi
             )
           })}
         </div>
+      ) : everywhere ? (
+        grouped(layout === 'grid' ? 'large' : 'compact')
       ) : layout === 'grid' ? (
-        <div className="mission-grid">{sorted.map((m) => <MissionCard key={m.id} mission={m} large />)}</div>
+        <div className="mission-grid">{sorted.map((m) => card(m, 'large'))}</div>
       ) : (
-        <div className="mc-list">{sorted.map((m) => <MissionCard key={m.id} mission={m} compact />)}</div>
+        <div className="mc-list">{sorted.map((m) => card(m, 'compact'))}</div>
       )}
     </div>
   )
