@@ -133,6 +133,7 @@ const api = {
     /** fetch, then the upstream ("origin/master") when `branch` is only behind it, else `branch` */
     freshBase: (cwd: string, branch: string): Promise<string> => ipcRenderer.invoke('git:freshBase', cwd, branch),
     head: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:head', cwd),
+    commitsSince: (cwd: string, from: string): Promise<number | null> => ipcRenderer.invoke('git:commitsSince', cwd, from),
     isRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),
     branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),
     switch: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', cwd, branch),

@@ -693,3 +693,119 @@ export function targetOf(params: { target?: ReviewTarget; missionId?: string } |
   if (params?.target) return params.target
   return params?.missionId ? { kind: 'mission', id: params.missionId } : undefined
 }
+
+// ── re-review: what changed since the reviewer last looked ───────────
+
+/** A small, stable string hash (cyrb53): two hunks with the same key have the same changed lines. */
+function hash(s: string): string {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 2654435761)
+    h2 = Math.imul(h2 ^ c, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
+}
+
+/**
+ * What a hunk changes, without where: its file and its added and removed lines. Line numbers and the
+ * hunk's position in the file are left out, so a hunk that only moved (an earlier change grew, the branch
+ * was rebased) is still the same hunk, and one whose lines differ by a byte is not.
+ */
+export const hunkKey = (h: Pick<Hunk, 'path' | 'lines' | 'header'>): string =>
+  hash([h.path, ...h.lines.filter((l) => l.kind === 'add' || l.kind === 'del').map((l) => `${l.kind === 'add' ? '+' : '-'}${l.text}`), ...(h.lines.length ? [] : [h.header])].join('\n'))
+
+export const partKeys = (p: Pick<Part, 'hunks'>): string[] => [...new Set(p.hunks.map(hunkKey))].sort()
+
+export type Mark = NonNullable<ReviewState['marks']>[string]
+
+/**
+ * The reviewer's marks over the diff as it is now: a mark stays only while its part's hunks are the very
+ * ones it was given on. A part whose hunks changed loses its mark and says why; a mark made before marks
+ * kept their hunks stays (there is nothing to compare).
+ */
+export function carryMarks(parts: Array<Pick<Part, 'id' | 'hunks'>>, marks: Record<string, Mark> | undefined): { marks: Record<string, Mark>; changed: Record<string, 'approved' | 'sent back'> } {
+  const kept: Record<string, Mark> = {}
+  const changed: Record<string, 'approved' | 'sent back'> = {}
+  for (const p of parts) {
+    const m = marks?.[p.id]
+    if (!m) continue
+    if (!m.hunks || sameKeys(m.hunks, partKeys(p))) kept[p.id] = m
+    else changed[p.id] = m.note ? 'sent back' : 'approved'
+  }
+  return { marks: kept, changed }
+}
+
+const sameKeys = (a: string[], b: string[]): boolean => {
+  const x = [...new Set(a)].sort()
+  return x.length === b.length && x.every((k, i) => k === b[i])
+}
+
+/** A mark as it is saved: with the hunks it was made on, so a later diff can tell whether it still holds. */
+export function markOn(p: Pick<Part, 'hunks'>, mark: { ok?: boolean; note?: string }, head?: string, at = Date.now()): Mark {
+  return { ...mark, hunks: partKeys(p), head, at }
+}
+
+/** What the reviewer has seen, saved with every verdict: the whole diff's hunks and the commit it was on. */
+export function seenNow(hunks: Array<Pick<Hunk, 'path' | 'lines' | 'header'>>, head?: string, at = Date.now()): NonNullable<ReviewState['seen']> {
+  return { hunks: [...new Set(hunks.map(hunkKey))].sort(), head, at }
+}
+
+/**
+ * What the reviewer has seen after a verdict on one part. The first verdict takes the whole diff (it was all
+ * on screen). Later ones add the part's hunks, so other parts that changed stay in "Since last review" until
+ * they get a verdict too; once nothing in the diff is new, it starts again from the diff as it is now.
+ */
+export function nextSeen(seen: ReviewState['seen'], part: Pick<Part, 'hunks'>, all: Array<Pick<Hunk, 'path' | 'lines' | 'header'>>, head?: string, at = Date.now()): NonNullable<ReviewState['seen']> {
+  if (!seen) return seenNow(all, head, at)
+  const merged = new Set([...seen.hunks, ...partKeys(part)])
+  if (all.every((h) => merged.has(hunkKey(h)))) return seenNow(all, head, at)
+  return { hunks: [...merged].sort(), head: seen.head, at }
+}
+
+export interface SinceReview {
+  /** the parts with something new, each with only its new hunks */
+  parts: Part[]
+  noise: Hunk[]
+  /** hunks added or changed since, and hunks the reviewer saw that are gone */
+  fresh: number
+  gone: number
+}
+
+/**
+ * The change since the last review: only the hunks that weren't in the diff the reviewer last gave a verdict
+ * on. Comparing hunk contents, not commits, is what makes it work after a rebase or a force push (the old
+ * commits may not exist any more) and on uncommitted work. Null when nothing has been reviewed yet.
+ */
+export function sinceReview(c: Pick<Cockpit, 'parts' | 'noise'>, seen: ReviewState['seen']): SinceReview | null {
+  if (!seen) return null
+  const old = new Set(seen.hunks)
+  const now = new Set<string>()
+  let fresh = 0
+  const keep = (h: Hunk): boolean => {
+    const k = hunkKey(h)
+    now.add(k)
+    if (old.has(k)) return false
+    fresh++
+    return true
+  }
+  const parts: Part[] = []
+  for (const p of c.parts) {
+    const hunks = p.hunks.filter(keep)
+    if (hunks.length) parts.push({ ...p, hunks, lines: hunks.reduce((a, h) => a + h.additions + h.deletions, 0) })
+  }
+  const noise = c.noise.filter(keep)
+  return { parts, noise, fresh, gone: seen.hunks.filter((k) => !now.has(k)).length }
+}
+
+/** The banner's first words: how the head moved since the review (`commits` is null when the old head is no longer in its history). */
+export function movedText(seenHead: string | undefined, head: string | undefined, commits: number | null | undefined): string {
+  if (seenHead && head && seenHead !== head) {
+    if (commits === null) return 'The branch was rewritten since you reviewed'
+    if (commits) return `${commits} new commit${commits === 1 ? '' : 's'} since you reviewed`
+  }
+  return 'The change moved on since you reviewed'
+}

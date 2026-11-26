@@ -1,6 +1,6 @@
 import { stageMode } from '@shared/agents'
 import { parseDiff, type DiffFile } from '@shared/diff'
-import { askPrompt, hunksOf, parseWalkthrough, sendBackText, walkthroughPrompt, type Part, type ReviewSubject, type Walkthrough } from '@shared/review'
+import { askPrompt, hunksOf, markOn, nextSeen, parseWalkthrough, sendBackText, walkthroughPrompt, type Hunk, type Part, type ReviewSubject, type Walkthrough } from '@shared/review'
 import type { Mission, ReviewTarget } from '@shared/types'
 import { getAgent } from './agents'
 import { missionEnd, quietly } from './evals'
@@ -108,12 +108,20 @@ export async function settleReview(t: ReviewTarget): Promise<void> {
   for (const a of r.asks ?? []) if (a.a === undefined && !a.failed && done(a.mission)) await finishAsk(t, a.id)
 }
 
-export function markPart(t: ReviewTarget, part: string, mark: { ok?: boolean; note?: string } | null): void {
+/**
+ * A verdict on one part, kept with the hunks it was given on (so it lasts only while they don't change), and
+ * the whole diff as the reviewer saw it then (what "Since last review" compares against). `head` is the
+ * commit the change was at.
+ */
+export function markPart(t: ReviewTarget, part: Pick<Part, 'id' | 'hunks'>, mark: { ok?: boolean; note?: string } | null, all: Hunk[], head?: string): void {
   patchReview(t, (r) => {
     const marks = { ...r.marks }
-    if (mark) marks[part] = mark
-    else delete marks[part]
-    return { ...r, marks }
+    if (!mark) {
+      delete marks[part.id]
+      return { ...r, marks }
+    }
+    marks[part.id] = markOn(part, mark, head)
+    return { ...r, marks, seen: nextSeen(r.seen, part, all, head) }
   })
 }
 

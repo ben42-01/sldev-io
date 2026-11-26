@@ -43,6 +43,15 @@ export async function head(cwd: string): Promise<string | null> {
   return r.code === 0 ? r.stdout.trim() : null
 }
 
+/** How many commits HEAD has after `from`; null when `from` is gone or no longer in HEAD's history (a rebase, a reset). */
+export async function commitsSince(cwd: string, from: string): Promise<number | null> {
+  if (!/^[0-9a-f]{7,64}$/i.test(from)) return null
+  const anc = await git(['merge-base', '--is-ancestor', from, 'HEAD'], cwd)
+  if (anc.code !== 0) return null
+  const r = await git(['rev-list', '--count', `${from}..HEAD`], cwd)
+  return r.code === 0 ? Number(r.stdout.trim()) || 0 : null
+}
+
 export async function isRepo(cwd: string): Promise<boolean> {
   return (await git(['rev-parse', '--is-inside-work-tree'], cwd)).stdout.trim() === 'true'
 }

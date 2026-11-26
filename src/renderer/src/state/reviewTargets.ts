@@ -44,6 +44,13 @@ interface Resolver<T extends ReviewTarget> {
   patch(t: T, f: (r: ReviewState) => ReviewState): void
   /** what the helper agents are told about it */
   subject(t: T): ReviewSubject | undefined
+  /** the commit the change is at now, and how many commits came after `since` (null: `since` is no longer in its history) */
+  head(t: T, since?: string): Promise<ReviewHead>
+}
+
+export interface ReviewHead {
+  head?: string
+  commits?: number | null
 }
 
 // ── missions ──────────────────────────────────────────────────────────
@@ -98,6 +105,12 @@ const missionResolver: Resolver<Extract<ReviewTarget, { kind: 'mission' }>> = {
       // a worktree's base is a branch that may have moved on: the diff is from where they forked
       base: m.worktree ? `$(git merge-base ${base} HEAD)` : base
     }
+  },
+  async head(t, since) {
+    const m = getMission(t.id)
+    const head = m ? ((await window.api.git.head(m.cwd).catch(() => null)) ?? undefined) : undefined
+    if (!m || !head || !since || since === head) return { head, commits: 0 }
+    return { head, commits: await window.api.git.commitsSince(m.cwd, since).catch(() => undefined) }
   }
 }
 
@@ -169,6 +182,14 @@ const prResolver: Resolver<PrTarget> = {
       base: meta?.base ? `origin/${meta.base}` : 'HEAD',
       diff: `gh pr diff ${t.number}`
     }
+  },
+  async head(t, since) {
+    const meta = prReviews.get().meta[keyOf(t)]
+    const head = meta?.head || undefined
+    if (!head || !since || since === head) return { head, commits: 0 }
+    // gh lists the PR's commits: the ones after the reviewed head are new; a force push leaves it out
+    const i = meta?.commits?.indexOf(since) ?? -1
+    return { head, commits: !meta?.commits?.length ? undefined : i < 0 ? null : meta.commits.length - 1 - i }
   }
 }
 
@@ -183,6 +204,7 @@ export const getReviewSource = (t: ReviewTarget): ReviewSource | undefined => re
 export const readReviewDiff = (t: ReviewTarget): Promise<string> => resolver(t).read(t)
 export const patchReview = (t: ReviewTarget, f: (r: ReviewState) => ReviewState): void => resolver(t).patch(t, f)
 export const reviewSubject = (t: ReviewTarget): ReviewSubject | undefined => resolver(t).subject(t)
+export const reviewHead = (t: ReviewTarget, since?: string): Promise<ReviewHead> => resolver(t).head(t, since)
 
 /** Is an agent at work on the change right now (nothing to send back to yet)? */
 export const workingOn = (s: ReviewSource): boolean => !!s.mission && isLive(s.mission.status)

@@ -494,13 +494,17 @@ export interface GhPrReview {
   branch: string
   base: string
   diff: string
+  /** the PR's commits, oldest first: how many came after the head a review was done at */
+  commits?: string[]
 }
 
 export interface ReviewState {
   /** the walkthrough an agent wrote to a file under .sldev/runs; `diff` is what the diff looked like then */
   walk?: { file: string; mission: string; agent: string; status: 'writing' | 'ready' | 'failed'; at: number; note?: string; diff?: string }
-  /** by part id: looked good, or sent back with a note */
-  marks?: Record<string, { ok?: boolean; note?: string }>
+  /** by part id: looked good, or sent back with a note; `hunks` are the part's hunks it was made on (hunkKey), `head` the commit */
+  marks?: Record<string, { ok?: boolean; note?: string; hunks?: string[]; head?: string; at?: number }>
+  /** the diff as it was at the last verdict: its hunks (hunkKey) and head commit, for "Since last review" */
+  seen?: { hunks: string[]; head?: string; at: number }
   asks?: Array<{ id: string; part: string; q: string; file: string; mission: string; agent: string; a?: string; failed?: boolean; at: number }>
   /** the follow-up the marked parts went back in */
   sent?: { at: number; mission: string; parts: number }
