@@ -296,6 +296,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
+  ipcMain.handle('gh:prReview', (_e, cwd: string, n: number) => gh.prReview(cwd, n))
   ipcMain.handle('gh:stats', (_e, cwd: string) => gh.repoStats(cwd))
   ipcMain.handle('gh:activity', (_e, cwd: string, days: number) => gh.repoActivity(cwd, days))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
@@ -439,7 +440,8 @@ app.whenReady().then(async () => {
     automations: new JsonStore<StoreFiles['automations']>(userData(), 'automations', { automations: [] }),
     savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] }),
     board: new JsonStore<StoreFiles['board']>(userData(), 'board', { items: [], settings: [] }),
-    evals: new JsonStore<StoreFiles['evals']>(userData(), 'evals', { runs: [] })
+    evals: new JsonStore<StoreFiles['evals']>(userData(), 'evals', { runs: [] }),
+    prReviews: new JsonStore<StoreFiles['prReviews']>(userData(), 'prReviews', { reviews: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))

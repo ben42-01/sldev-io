@@ -84,7 +84,9 @@ const privacy: LegalPage = {
         The Review tab of a mission that works in its own branch asks GitHub through your GitHub CLI for that branch's pull request and
         its workflow runs: when the tab comes on screen, every 15 seconds while a run is going (every minute otherwise), and when you press
         Refresh; never while the tab is hidden. Pushing, opening a pull request, re-running a workflow and merging a pull request happen
-        only when you click them, the same way. That goes from your computer to GitHub, signed in as you; nothing goes to us.
+        only when you click them, the same way. A Review tab opened on a pull request reads that pull request (its title, description and
+        diff) through your GitHub CLI when it opens and when you press Refresh. That goes from your computer to GitHub, signed in as you;
+        nothing goes to us.
       </p>
       <p>
         The free sldev CLI makes one network request of its own: at most once a day, when you attach (<code>sldev</code>), it asks

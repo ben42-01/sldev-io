@@ -8,7 +8,8 @@ import { ShipBar } from '../components/ShipBar'
 import { ReviewListResizer, reviewListWidth } from '../components/PaneResizer'
 import { openFileAt, openInEditor } from '../lib/actions'
 import { scrollToTop } from '../lib/scroll'
-import { getMission, missionBase, refreshStats, useMission } from '../state/missions'
+import { readReviewDiff, targetOf, useReviewSource } from '../state/reviewTargets'
+import type { ReviewTarget } from '@shared/types'
 import { preferredEditor, updateSettings, workspace } from '../state/workspace'
 import { reviewFocus } from '../state/focus'
 import { useStore } from '../state/store'
@@ -16,8 +17,19 @@ import { Empty, Loading } from '../components/States'
 
 const MAX_LINES = 3000
 
-export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): React.JSX.Element {
-  const mission = useMission(props.params.missionId)
+/** A Review tab's params: a target, or (in layouts saved before targets) only the mission's id. */
+export type DiffPanelParams = { target?: ReviewTarget; missionId?: string }
+
+export function DiffPanel(props: IDockviewPanelProps<DiffPanelParams>): React.JSX.Element {
+  const { target: t, missionId } = props.params
+  const target = useMemo(() => targetOf({ target: t, missionId }), [t, missionId])
+  return target ? <ReviewPanel {...props} target={target} /> : <div className="panel-page muted">This review no longer exists.</div>
+}
+
+function ReviewPanel(props: IDockviewPanelProps<DiffPanelParams> & { target: ReviewTarget }): React.JSX.Element {
+  const { target } = props
+  const source = useReviewSource(target)
+  const mission = source?.mission
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -67,18 +79,15 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
   }, [focusOn, visible, props.api.id, props.containerApi])
 
   const load = useCallback(async () => {
-    const m = getMission(props.params.missionId)
-    if (!m) return
     setError('')
     try {
-      setFiles(parseDiff(await window.api.git.diff(m.cwd, missionBase(m))))
+      setFiles(parseDiff(await readReviewDiff(target)))
       setStamp((n) => n + 1)
-      void refreshStats(m.id)
     } catch (e) {
       setFiles([])
       setError(clean(e))
     }
-  }, [props.params.missionId])
+  }, [target])
 
   useEffect(() => void load(), [load])
 
@@ -91,9 +100,9 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
 
   const totals = useMemo(() => (files ?? []).reduce((a, f) => ({ add: a.add + f.additions, del: a.del + f.deletions }), { add: 0, del: 0 }), [files])
 
-  if (!mission) return <div className="panel-page muted">This mission no longer exists.</div>
-  const wt = mission.worktree
-  const base = missionBase(mission)
+  if (!source) return <div className="panel-page muted">This mission no longer exists.</div>
+  const wt = mission?.worktree
+  const { base, cwd } = source
 
   const act = async (label: string, fn: () => Promise<string | void>): Promise<void> => {
     setBusy(label)
@@ -127,8 +136,8 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
     requestAnimationFrame(() => scrollToTop(scroller.current?.querySelector(`[data-file="${CSS.escape(path)}"]`)))
   }
   const editorDiff = (f: DiffFile): void => {
-    if (!editor?.canDiff) return void openFileAt(`${mission.cwd}/${f.path}`)
-    void window.api.editors.diff(editor.id, mission.cwd, base, f.path, f.oldPath)
+    if (!editor?.canDiff || !base) return void openFileAt(`${cwd}/${f.path}`)
+    void window.api.editors.diff(editor.id, cwd, base, f.path, f.oldPath)
   }
 
   return (
@@ -143,9 +152,9 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
           {showFiles ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
         </button>}
         <div className="diff-title">
-          <strong title={mission.title}>{mission.title}</strong>
+          <strong title={source.title}>{source.title}</strong>
           <span className="muted">
-            {wt ? `${wt.branch} ← ${wt.base}` : 'changes since mission start'} · <span className="add">+{totals.add}</span> <span className="del">−{totals.del}</span> · {files?.length ?? 0} file{files?.length === 1 ? '' : 's'}
+            {source.caption} · <span className="add">+{totals.add}</span> <span className="del">−{totals.del}</span> · {files?.length ?? 0} file{files?.length === 1 ? '' : 's'}
             {files && files.length > 0 && view === 'files' ? ` · ${viewed.size}/${files.length} viewed` : ''}
           </span>
         </div>
@@ -178,21 +187,23 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
         <button className="icon-btn" title="Refresh" aria-label="Refresh" disabled={!!busy} onClick={() => void load()}>
           <RefreshCw size={14} />
         </button>
-        <button className="btn sm" title={`Open the ${wt ? 'worktree' : 'folder'} in ${editor?.name ?? 'your file manager'}`} onClick={() => void openInEditor(mission.cwd, undefined, true)}>
+        <button className="btn sm" title={`Open the ${wt ? 'worktree' : 'folder'} in ${editor?.name ?? 'your file manager'}`} onClick={() => void openInEditor(cwd, undefined, true)}>
           <ExternalLink size={13} /> Open in {editor?.name ?? 'folder'}
         </button>
-        <button className="btn sm" disabled={!!busy || !files?.length} onClick={() => setCommitMsg(commitMsg === null ? mission.title : null)}>
-          <GitCommitHorizontal size={13} /> Commit
-        </button>
+        {mission && (
+          <button className="btn sm" disabled={!!busy || !files?.length} onClick={() => setCommitMsg(commitMsg === null ? mission.title : null)}>
+            <GitCommitHorizontal size={13} /> Commit
+          </button>
+        )}
       </div>
-      {wt && <ShipBar mission={mission} wt={wt} visible={visible} stamp={stamp} onChanged={() => void load()} onCommit={() => setCommitMsg((m) => m ?? mission.title)} />}
-      {mission.criteria && view === 'files' && (
+      {mission && wt && <ShipBar mission={mission} wt={wt} visible={visible} stamp={stamp} onChanged={() => void load()} onCommit={() => setCommitMsg((m) => m ?? mission.title)} />}
+      {mission?.criteria && view === 'files' && (
         <details className="diff-criteria">
           <summary>Acceptance criteria</summary>
           <pre className="selectable">{mission.criteria}</pre>
         </details>
       )}
-      {commitMsg !== null && (
+      {mission && commitMsg !== null && (
         <form
           className="diff-commit"
           onSubmit={(e) => {
@@ -215,7 +226,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
         files === null ? (
           <Loading what="Reading the diff…" />
         ) : (
-          <ReviewCockpit mission={mission} files={files} layout={layout} />
+          <ReviewCockpit source={source} files={files} layout={layout} />
         )
       ) : (
       <div className="diff-body">
@@ -261,12 +272,12 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
                   </label>
                   {f.status !== 'deleted' && (
                     <>
-                      {editor?.canDiff && !f.binary && (
+                      {editor?.canDiff && base && !f.binary && (
                         <button className="btn sm ghost" title={`Open this file's diff in ${editor.name}`} onClick={() => editorDiff(f)}>
                           <FileDiff size={12} /> Diff in {editor.name}
                         </button>
                       )}
-                      <button className="icon-btn" title={`Open the file${editor ? ` in ${editor.name}` : ''}`} aria-label="Open the file" onClick={() => void openFileAt(`${mission.cwd}/${f.path}`, firstChange(f))}>
+                      <button className="icon-btn" title={`Open the file${editor ? ` in ${editor.name}` : ''}`} aria-label="Open the file" onClick={() => void openFileAt(`${cwd}/${f.path}`, firstChange(f))}>
                         <ExternalLink size={13} />
                       </button>
                     </>
@@ -279,7 +290,7 @@ export function DiffPanel(props: IDockviewPanelProps<{ missionId: string }>): Re
                     Show {f.lines.length} lines
                   </button>
                 ) : (
-                  <DiffLines lines={f.lines} layout={layout} open={(n) => void openFileAt(`${mission.cwd}/${f.path}`, n)} />
+                  <DiffLines lines={f.lines} layout={layout} open={(n) => void openFileAt(`${cwd}/${f.path}`, n)} />
                 )}
               </section>
             )

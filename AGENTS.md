@@ -195,6 +195,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
   kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
   is committed or pushed.
+  The tab reviews a `ReviewTarget` (a mission, or a PR: `{ kind: 'pr', number, root }`), resolved in one place,
+  `state/reviewTargets.ts` (diff, folder, base, where the state lives: on the mission, or `prReviews.json` with the PR's head);
+  components get a `ReviewSource` and never check the kind. Old layouts with only `missionId` still open.
 - **Ship bar** (`src/shared/ship.ts`, `components/ShipBar.tsx`, the Review tab of a worktree mission): checks come from the branch's
   Actions runs (`gh run list`), not `statusCheckRollup`, which fine-grained tokens can't read. GitHub is asked only while the tab is on
   screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge

@@ -22,6 +22,7 @@ import type {
   GhIssue,
   GhPrComment,
   GhPr,
+  GhPrReview,
   GhRepoInfo,
   GhRun,
   GhWorkflow,
@@ -201,6 +202,8 @@ const api = {
     rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
+    /** pull request `n` for the Review tab: title, body, head commit, branches and its diff */
+    prReview: (cwd: string, n: number): Promise<GhPrReview> => ipcRenderer.invoke('gh:prReview', cwd, n),
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prForBranch: (cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> => ipcRenderer.invoke('gh:prForBranch', cwd, branch),
