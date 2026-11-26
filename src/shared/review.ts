@@ -1,5 +1,6 @@
 import { acceptanceCriteria } from './board'
 import type { DiffFile, DiffLine } from './diff'
+import type { PrReview, ReviewState, ReviewTarget } from './types'
 
 /**
  * The review cockpit: a diff read by what each part is for, not by file name. An agent (any agent, in
@@ -369,7 +370,11 @@ export interface ReviewSubject {
   criteria: string[]
   /** git diff <base> shows the work */
   base: string
+  /** how to see the change when it isn't `git diff <base>` in this folder (a pull request: gh pr diff) */
+  diff?: string
 }
+
+const changeOf = (s: ReviewSubject): string => (s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\` plus untracked files in this folder`)
 
 /** What a walkthrough agent is asked: read-only, the JSON to one file. */
 export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string; hunks: number; lines: number }>, file: string): string {
@@ -379,7 +384,7 @@ export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string;
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 4000)}` : '',
     s.criteria.length ? `Acceptance criteria (numbered):\n${s.criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2500)}` : '',
-    `The change is \`git diff ${s.base}\` plus untracked files in this folder. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
+    `The change is ${changeOf(s)}. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
     [
       'Split the change into 2 to 8 parts in reading order: the core change first, then what it needs, then tests and the rest. For each part:',
       '- title: what it does, in a few words',
@@ -416,7 +421,7 @@ export function askPrompt(s: ReviewSubject, p: Pick<Part, 'title' | 'why' | 'hun
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 3000)}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2000)}` : '',
     `The reviewer is looking at this part, "${p.title}"${p.why ? ` (${p.why})` : ''}:\n\n\`\`\`diff\n${partText(p)}\n\`\`\``,
-    `The whole change is \`git diff ${s.base}\`; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
+    `The whole change is ${s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\``}; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
     `Write the answer as Markdown to ${file} (the one file you may create; do not change anything else and do not commit), then say in one line that it is written.`
   ]
     .filter(Boolean)
@@ -435,3 +440,26 @@ export function sendBackText(items: Array<{ part: Pick<Part, 'title' | 'hunks'>;
 
 /** The note a "Cut it" button writes for a part nobody asked for. */
 export const CUT_NOTE = 'Remove this part: it wasn\'t asked for. Keep the change to what the task needs.'
+
+// ── review state of pull requests (prReviews.json) ───────────────────
+
+/** A pull request's key: the repository it was opened in and its number. */
+export const prReviewKey = (root: string, number: number): string => `${root.replace(/\/+$/, '')}#${number}`
+
+export function findPrReview(list: PrReview[], root: string, number: number): PrReview | undefined {
+  const key = prReviewKey(root, number)
+  return list.find((r) => prReviewKey(r.root, r.number) === key)
+}
+
+/** The list with one PR's review state changed; `head` (when known) is the commit the marks are now about. */
+export function putPrReview(list: PrReview[], root: string, number: number, f: (r: ReviewState) => ReviewState, head?: string, at = Date.now()): PrReview[] {
+  const old = findPrReview(list, root, number)
+  const next: PrReview = { root: old?.root ?? root, number, head: head ?? old?.head, review: f(old?.review ?? {}), updatedAt: at }
+  return old ? list.map((r) => (r === old ? next : r)) : [...list, next]
+}
+
+/** A saved Review tab's params: newer ones carry a target, layouts saved before targets only a missionId. */
+export function targetOf(params: { target?: ReviewTarget; missionId?: string } | undefined): ReviewTarget | undefined {
+  if (params?.target) return params.target
+  return params?.missionId ? { kind: 'mission', id: params.missionId } : undefined
+}

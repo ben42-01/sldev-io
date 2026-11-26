@@ -60,6 +60,12 @@ describe('sessionWriter', () => {
   })
 })
 
+/** Windows PowerShell 5.1's `>>` writes UTF-16LE with a BOM; sh writes plain bytes. */
+function readLog(file: string): string {
+  const b = readFileSync(file)
+  return b[0] === 0xff && b[1] === 0xfe ? b.subarray(2).toString('utf16le') : b.toString('utf8')
+}
+
 describe('a daemon restarted (a reboot, a crash)', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'sldev-restart-'))
   const data = join(tmp, 'data')
@@ -92,10 +98,10 @@ describe('a daemon restarted (a reboot, a crash)', () => {
     const runtime = await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` })
     expect(runtime.command).toBe(`echo ran >> "${ran}"`)
     for (let i = 0; i < 100 && !existsSync(ran); i++) await new Promise((r) => setTimeout(r, 100))
-    expect(readFileSync(ran, 'utf8').trim()).toBe('ran')
+    expect(readLog(ran).trim()).toBe('ran')
     await c.request('kill', { pane: runtime.id })
     await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` }).then((p) => (runtimeId = p.id))
-    for (let i = 0; i < 100 && readFileSync(ran, 'utf8').trim().split(/\r?\n/).length < 2; i++) await new Promise((r) => setTimeout(r, 100))
+    for (let i = 0; i < 100 && readLog(ran).trim().split(/\r?\n/).length < 2; i++) await new Promise((r) => setTimeout(r, 100))
     await c.request('tabs', { active: shell.id, split: true })
     c.close()
     await first.close()

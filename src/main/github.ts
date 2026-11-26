@@ -2,7 +2,7 @@ import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
-import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
+import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, type MergeMethod, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
 import { activityCommits, run, status as gitStatus } from './git'
 
@@ -104,6 +104,14 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
     else checks.pending++
   }
   return { number: pr.number, title: pr.title, state: pr.state, url: pr.url, isDraft: pr.isDraft, checks }
+}
+
+/** Pull request `n` for the Review tab: what it says, where it goes and its diff. */
+export async function prReview(cwd: string, n: number): Promise<GhPrReview> {
+  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string }>(['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName'], cwd)
+  const d = await gh(['pr', 'diff', String(n)], cwd, 60000)
+  if (d.code !== 0) throw new Error(d.stderr.trim() || `gh pr diff ${n} failed`)
+  return { number: pr.number, title: pr.title ?? `#${n}`, body: pr.body ?? '', url: pr.url ?? '', head: pr.headRefOid ?? '', branch: pr.headRefName ?? '', base: pr.baseRefName ?? '', diff: d.stdout }
 }
 
 export async function listIssues(cwd: string, label?: string): Promise<GhIssue[]> {
