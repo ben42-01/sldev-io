@@ -246,6 +246,8 @@ function registerIpc(): void {
   ipcMain.handle('git:addWorktree', (_e, root: string, slug: string, base: string, opts?: git.AddWorktreeOptions) => git.addWorktree(root, slug, base, opts))
   ipcMain.handle('git:pruneWorktrees', (_e, cwd: string) => git.pruneWorktrees(cwd))
   ipcMain.handle('git:worktreeStatus', (_e, wt: WorktreeInfo) => git.worktreeStatus(wt))
+  ipcMain.handle('git:prWorktree', (_e, root: string, n: number, headSha?: string, remote?: string) => git.prWorktree(root, Number(n), headSha ? String(headSha) : undefined, remote ? String(remote) : undefined))
+  ipcMain.handle('git:removePrWorktree', (_e, root: string, n: number, opts?: { discard: boolean }) => git.removePrWorktree(root, Number(n), { discard: !!opts?.discard }))
   ipcMain.handle('git:removeWorktree', (_e, wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }) => git.removeWorktree(wt, opts))
   ipcMain.handle('git:graphLog', (_e, cwd: string, limit: number) => git.graphLog(cwd, limit))
   ipcMain.handle('git:showCommit', (_e, cwd: string, sha: string) => git.showCommit(cwd, sha))
@@ -305,6 +307,8 @@ function registerIpc(): void {
   ipcMain.handle('gh:ship', (_e, cwd: string, branch: string) => gh.shipStatus(cwd, String(branch)))
   ipcMain.handle('gh:mergePr', (_e, cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean) => gh.mergePr(cwd, Number(n), method, String(headSha), !!auto))
   ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
+  ipcMain.handle('gh:prs', (_e, cwd: string) => gh.openPrs(cwd))
+  ipcMain.handle('gh:prDetail', (_e, cwd: string, n: number) => gh.prDetail(cwd, Number(n)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes

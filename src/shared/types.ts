@@ -68,6 +68,8 @@ export interface AppSettings {
   diffLayout?: 'split' | 'unified'
   /** the Review tab opens on the walkthrough (the review cockpit) or on every file */
   reviewView?: 'walk' | 'files'
+  /** the walkthrough's parts: in review order (risky first, then not asked for, then by size) or by file (default review) */
+  reviewOrder?: 'review' | 'file'
   /** the sidebars hide while a review tab is on screen (default on) */
   reviewFocus?: boolean
   /** width of the Review tab's list (walkthrough parts, changed files), dragged by its edge */
