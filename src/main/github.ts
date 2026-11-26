@@ -108,10 +108,10 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
 
 /** Pull request `n` for the Review tab: what it says, where it goes and its diff. */
 export async function prReview(cwd: string, n: number): Promise<GhPrReview> {
-  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string }>(['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName'], cwd)
+  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string; commits?: Array<{ oid?: string }> }>(['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName,commits'], cwd)
   const d = await gh(['pr', 'diff', String(n)], cwd, 60000)
   if (d.code !== 0) throw new Error(d.stderr.trim() || `gh pr diff ${n} failed`)
-  return { number: pr.number, title: pr.title ?? `#${n}`, body: pr.body ?? '', url: pr.url ?? '', head: pr.headRefOid ?? '', branch: pr.headRefName ?? '', base: pr.baseRefName ?? '', diff: d.stdout }
+  return { number: pr.number, title: pr.title ?? `#${n}`, body: pr.body ?? '', url: pr.url ?? '', head: pr.headRefOid ?? '', branch: pr.headRefName ?? '', base: pr.baseRefName ?? '', diff: d.stdout, commits: (pr.commits ?? []).map((c) => c.oid ?? '').filter(Boolean) }
 }
 
 export async function listIssues(cwd: string, label?: string): Promise<GhIssue[]> {

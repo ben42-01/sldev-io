@@ -81,7 +81,9 @@ app.whenReady().then(async () => {
       return v
     },
     shot: async (file) => {
-      // a frame for whatever the last step changed
+      // a frame for whatever the last step changed; a window that lost focus (a mission's terminal opening) stops painting
+      if (!win.isFocused()) win.focus()
+      wc.invalidate()
       await Promise.race([js('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))'), wait(1000)])
       fs.writeFileSync(path.join(out, `${file}.png`), (await win.capturePage()).toPNG())
     },

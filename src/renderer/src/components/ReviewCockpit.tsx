@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, ExternalLink, Lightbulb, ListChecks, LoaderCircle, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
-import { buildCockpit, CUT_NOTE, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
+import { ArrowLeft, ArrowRight, Bot, Check, GitCommitHorizontal, History, ChevronDown, CircleHelp, CircleX, Circle, ExternalLink, Lightbulb, ListChecks, LoaderCircle, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { buildCockpit, carryMarks, CUT_NOTE, movedText, sinceReview, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
 import type { DiffFile } from '@shared/diff'
 import { allAgents } from '../lib/agents'
 import { openFileAt } from '../lib/actions'
@@ -8,7 +8,7 @@ import { scrollToTop } from '../lib/scroll'
 import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
 import { askAboutPart, diffSignature, explainChanges, markPart, readWalkthrough, sendBack, settleReview } from '../state/review'
-import { firstAgent, workingOn, type ReviewSource } from '../state/reviewTargets'
+import { firstAgent, reviewHead, workingOn, type ReviewHead, type ReviewSource } from '../state/reviewTargets'
 import { workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
@@ -42,6 +42,9 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
   const [asking, setAsking] = useState<{ part: string; q: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  /** "Since last review": only the hunks that changed since the last verdict */
+  const [since, setSince] = useState(false)
+  const [head, setHead] = useState<ReviewHead>({})
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null)
   const listWidth = useStore(workspace, (w) => reviewListWidth(w.reviewListWidth))
@@ -55,15 +58,38 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
     }
   }, [target, walkState?.status, walkState?.file])
 
+  const seenHead = review?.seen?.head
+  // the commit the change is at, read again with every new diff
+  useEffect(() => {
+    let live = true
+    void reviewHead(target, seenHead).then((h) => live && setHead(h))
+    return () => {
+      live = false
+    }
+  }, [target, files, seenHead])
+
   const criteria = source.criteria
   const c: Cockpit = useMemo(() => buildCockpit(files, walk, criteria), [files, walk, criteria])
   const stale = !!walk && !!walkState?.diff && walkState.diff !== diffSignature(files)
-  const parts = c.parts
+  const all = useMemo(() => [...c.parts.flatMap((p) => p.hunks), ...c.noise], [c])
+  // marks hold only while their part's hunks are the ones they were made on
+  const carry = useMemo(() => carryMarks(c.parts, review?.marks), [c, review?.marks])
+  const delta = useMemo(() => sinceReview(c, review?.seen), [c, review?.seen])
+  const moved = !!delta && (delta.fresh > 0 || delta.gone > 0)
+  const onlyNew = since && moved && !!delta
+  const parts = onlyNew ? delta.parts : c.parts
+  const noise = onlyNew ? delta.noise : c.noise
+  const fullOf = (p: Part): Part => c.parts.find((x) => x.id === p.id) ?? p
   const index = Math.min(sel, parts.length)
   const current: Part | undefined = parts[index]
-  const marks = review?.marks ?? {}
-  const back = parts.filter((p) => marks[p.id]?.note)
-  const seen = parts.filter((p) => marks[p.id]).reduce((a, p) => a + p.lines, 0)
+  const marks = carry.marks
+  const back = c.parts.filter((p) => marks[p.id]?.note)
+  const reviewed = c.parts.filter((p) => marks[p.id]).reduce((a, p) => a + p.lines, 0)
+  const changedParts = delta ? delta.parts.length : 0
+  // caught up: the next change opens on the whole diff again
+  useEffect(() => {
+    if (!moved) setSince(false)
+  }, [moved])
   const writing = walkState?.status === 'writing'
   const agentName = getAgent(source.agent).name
 
@@ -79,12 +105,13 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
     go(after >= 0 ? after : Math.min(parts.length, index + 1))
   }
   const ok = (p: Part): void => {
-    markPart(target, p.id, marks[p.id]?.ok ? null : { ok: true })
+    markPart(target, fullOf(p), marks[p.id]?.ok ? null : { ok: true }, all, head.head)
     if (!marks[p.id]?.ok) next()
   }
   const saveNote = (): void => {
     if (!editing) return
-    markPart(target, editing.part, editing.note.trim() ? { note: editing.note.trim() } : null)
+    const p = c.parts.find((x) => x.id === editing.part)
+    if (p) markPart(target, p, editing.note.trim() ? { note: editing.note.trim() } : null, all, head.head)
     setEditing(null)
     if (editing.note.trim()) next()
   }
@@ -235,10 +262,35 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
         </section>
       </header>
 
+      {moved && delta && (
+        <div className="rc-since" role="status">
+          <GitCommitHorizontal size={14} />
+          <span className="rc-since-text">
+            <strong>{movedText(seenHead, head.head, head.commits)}</strong>
+            {changedParts > 0 && ` · ${changedParts === 1 ? '1 part' : `${changedParts} parts`} changed`}
+            {delta.fresh > 0 && ` · ${delta.fresh === 1 ? '1 hunk' : `${delta.fresh} hunks`} to read`}
+            {delta.fresh === 0 && delta.gone > 0 && ` · ${delta.gone === 1 ? '1 hunk' : `${delta.gone} hunks`} you saw ${delta.gone === 1 ? 'is' : 'are'} gone`}
+          </span>
+          <span className="spacer" />
+          <button
+            className={`btn sm${onlyNew ? ' on' : ''}`}
+            aria-pressed={onlyNew}
+            title={onlyNew ? 'Show the whole change again' : 'Show only what changed since your last verdict'}
+            onClick={() => {
+              setSince(!onlyNew)
+              go(0)
+            }}
+          >
+            <History size={13} /> Since last review
+          </button>
+        </div>
+      )}
+
       <div className="rc-body">
         <nav className="rc-parts" aria-label="Parts in reading order" style={{ width: listWidth }}>
           {parts.map((p, i) => {
             const mk = marks[p.id]
+            const was = carry.changed[p.id]
             return (
               <button key={p.id} className={`rc-part-item${i === index ? ' on' : ''}${mk ? ' marked' : ''}`} onClick={() => go(i)} aria-current={i === index}>
                 <span className={`rc-num ${mk?.note ? 'back' : mk?.ok ? 'ok' : ''}`}>{mk?.note ? <Undo2 size={11} /> : mk?.ok ? <Check size={11} /> : i + 1}</span>
@@ -247,6 +299,7 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
                   <span className="rc-part-meta">
                     <span className={`rc-need ${p.need}`}>{NEED[p.need].label}</span>
                     <span>{p.lines} lines</span>
+                    {was && <span className="rc-changed" title={`Its hunks changed after you ${was === 'approved' ? 'approved' : 'sent back'} it`}>changed</span>}
                     {p.flags.length > 0 && (
                       <span className={`rc-flag-dot${p.flags.some((f) => f.id === 'secret' || f.id === 'tests') ? ' bad' : ''}`} title={p.flags.map((f) => f.label).join(', ')}>
                         <ShieldAlert size={11} /> {p.flags.length}
@@ -257,13 +310,14 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
               </button>
             )
           })}
-          {c.noise.length > 0 && (
+          {onlyNew && !parts.length && !noise.length && <p className="rc-since-empty muted">Nothing new to read: the change only lost hunks since you reviewed.</p>}
+          {noise.length > 0 && (
             <button className={`rc-part-item noise${index === parts.length ? ' on' : ''}`} onClick={() => go(parts.length)}>
               <span className="rc-num">~</span>
               <span className="rc-part-name">
                 <span className="rc-part-title">Noise</span>
                 <span className="rc-part-meta">
-                  {new Set(c.noise.map((h) => h.path)).size} files · {t.noise} lines, folded
+                  {new Set(noise.map((h) => h.path)).size} files · {noise.reduce((a, h) => a + h.additions + h.deletions, 0)} lines, folded
                 </span>
               </span>
             </button>
@@ -282,6 +336,8 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
               layout={layout}
               criteria={c.criteria}
               mark={marks[current.id]}
+              changed={carry.changed[current.id]}
+              partial={onlyNew ? { shown: current.hunks.length, of: fullOf(current).hunks.length } : undefined}
               editing={editing?.part === current.id ? editing.note : null}
               asking={asking?.part === current.id ? asking.q : null}
               onEdit={(note) => setEditing(note === null ? null : { part: current.id, note })}
@@ -293,17 +349,17 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
               onNext={() => go(index + 1)}
             />
           ) : (
-            <NoiseView id={NOISE_ID} hunks={c.noise} cwd={source.cwd} layout={layout} />
+            <NoiseView id={NOISE_ID} hunks={noise} cwd={source.cwd} layout={layout} />
           )}
         </div>
       </div>
 
       <footer className="rc-foot">
-        <div className="rc-progress" title={`${seen} of ${t.lines} lines have a verdict`}>
-          <div style={{ width: `${t.lines ? Math.round((seen / t.lines) * 100) : 0}%` }} />
+        <div className="rc-progress" title={`${reviewed} of ${t.lines} lines have a verdict`}>
+          <div style={{ width: `${t.lines ? Math.round((reviewed / t.lines) * 100) : 0}%` }} />
         </div>
         <span className="rc-foot-text">
-          Reviewed <strong>{seen.toLocaleString()}</strong> of {t.lines.toLocaleString()} lines
+          Reviewed <strong>{reviewed.toLocaleString()}</strong> of {t.lines.toLocaleString()} lines
           {t.noise > 0 ? ` · ${t.noise.toLocaleString()} lines of noise skipped` : ''}
           {review?.sent ? ' · sent back once already' : ''}
         </span>
@@ -315,7 +371,7 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
           <button className="btn primary sm" disabled={busy || workingOn(source)} title={workingOn(source) ? 'The agent is still working' : `One follow-up to ${agentName} with each part's note`} onClick={() => void send()}>
             <Undo2 size={13} /> Send {back.length === 1 ? '1 part' : `${back.length} parts`} back to {agentName}
           </button>
-        ) : parts.length > 0 && parts.every((p) => marks[p.id]?.ok) ? (
+        ) : c.parts.length > 0 && c.parts.every((p) => marks[p.id]?.ok) ? (
           <span className="rc-all-good">
             <Check size={13} /> Every part looks good
           </span>
@@ -333,6 +389,10 @@ interface PartViewProps {
   layout: 'split' | 'unified'
   criteria: Cockpit['criteria']
   mark?: { ok?: boolean; note?: string }
+  /** it had a verdict, and its hunks changed since */
+  changed?: 'approved' | 'sent back'
+  /** "Since last review": how many of its hunks are shown */
+  partial?: { shown: number; of: number }
   editing: string | null
   asking: string | null
   onEdit: (note: string | null) => void
@@ -360,6 +420,16 @@ function PartView(p: PartViewProps): React.JSX.Element {
         {part.serves.length > 0 && <span className="muted">meets {part.serves.map((s) => `#${s}`).join(', ')}</span>}
       </div>
       <h2 className="rc-part-h">{part.title}</h2>
+      {p.changed && (
+        <div className="rc-changed-note">
+          <History size={12} /> Changed since you {p.changed === 'approved' ? 'approved it' : 'sent it back'}: read it again.
+        </div>
+      )}
+      {p.partial && p.partial.shown < p.partial.of && (
+        <p className="rc-partial muted">
+          Showing {p.partial.shown} of {p.partial.of} hunks: only what changed since you reviewed. Your verdict covers the whole part.
+        </p>
+      )}
       {part.why && <p className="rc-why selectable">{part.why}</p>}
       {part.serves.length > 0 && (
         <ul className="rc-serves">

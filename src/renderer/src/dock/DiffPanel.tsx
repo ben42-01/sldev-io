@@ -12,6 +12,7 @@ import { readReviewDiff, targetOf, useReviewSource } from '../state/reviewTarget
 import type { ReviewTarget } from '@shared/types'
 import { preferredEditor, updateSettings, workspace } from '../state/workspace'
 import { reviewFocus } from '../state/focus'
+import { isLive, missions } from '../state/missions'
 import { useStore } from '../state/store'
 import { Empty, Loading } from '../components/States'
 
@@ -90,6 +91,15 @@ function ReviewPanel(props: IDockviewPanelProps<DiffPanelParams> & { target: Rev
   }, [target])
 
   useEffect(() => void load(), [load])
+
+  // an agent at work on this change (a follow-up after Send back, too) just finished: read the diff again
+  const cwd0 = source?.mission ? source.cwd : undefined
+  const agentHere = useStore(missions, (s) => !!cwd0 && s.list.some((m) => m.cwd === cwd0 && !m.explains && !m.eval && isLive(m.status)))
+  const wasHere = useRef(agentHere)
+  useEffect(() => {
+    if (wasHere.current && !agentHere) void load()
+    wasHere.current = agentHere
+  }, [agentHere, load])
 
   // a done message fades after a while; errors stay until the next action
   useEffect(() => {

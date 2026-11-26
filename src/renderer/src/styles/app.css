@@ -7697,6 +7697,54 @@ button.board-label:hover {
 .rc-key.noise::before {
   background: var(--border-strong);
 }
+.rc-since {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--tint);
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.rc-since > svg {
+  color: var(--status-review);
+  flex-shrink: 0;
+}
+.rc-since-text strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.rc-since .btn[aria-pressed='true'] {
+  background: var(--muted);
+  border-color: var(--status-review);
+  color: var(--fg);
+}
+.rc-since .btn[aria-pressed='true'] svg {
+  color: var(--status-review);
+}
+.rc-changed {
+  color: var(--status-attention);
+}
+.rc-changed-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  font-size: 12px;
+  color: var(--status-attention);
+}
+.rc-partial {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.rc-since-empty {
+  margin: 8px 12px;
+  font-size: 12px;
+}
 .rc-body {
   flex: 1;
   min-height: 0;
