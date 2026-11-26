@@ -5,6 +5,7 @@ import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, 
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
 import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
 import type { BaseMoved } from '@shared/ship'
+import { checkPrNumber, planPrWorktree, prFolder, prRef, type PrWorktree } from '@shared/prs'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
@@ -417,4 +418,65 @@ export async function mergeBaseInto(cwd: string, ref: string): Promise<{ merged:
     return { merged: false, conflicts: files, output }
   }
   throw new Error(output || 'git merge failed')
+}
+
+/** The main checkout of the repository `cwd` belongs to (also from inside one of its worktrees). */
+async function mainCheckout(cwd: string): Promise<string> {
+  const main = (await listWorktrees(cwd)).find((w) => w.isMain && !w.bare)
+  return main?.path ?? (await ok(['rev-parse', '--show-toplevel'], cwd)).trim()
+}
+
+const prWorktreePath = (top: string, n: number): string => join(dirname(top), '.sldev-worktrees', basename(top), prFolder(n))
+
+/**
+ * Check out the head of pull request `n` for review: fetch `pull/<n>/head` from `remote` (GitHub serves it for
+ * every PR, forks included) into refs/sldev/pr/<n>, outside the user's branches, then a detached worktree at
+ * ../.sldev-worktrees/<repo>/pr-<n>. Asked again at the same commit, the worktree is reused; when the PR has new
+ * commits, it is moved to them (not when files were changed there). `headSha` (gh's headRefOid from the list) is
+ * only compared: the fetched head is what GitHub has now, and `listedOther` says the list was out of date. Nothing is pushed, and the main checkout is never touched.
+ */
+export async function prWorktree(root: string, n: number, headSha?: string, remote = 'origin'): Promise<PrWorktree> {
+  checkPrNumber(n)
+  if (!remote || remote.startsWith('-')) throw new Error(`Not a remote: "${remote}"`)
+  const top = await mainCheckout(root)
+  const ref = prRef(n)
+  const f = await git(['fetch', '--quiet', '--no-tags', remote, `+refs/pull/${n}/head:${ref}`], top, 120000)
+  if (f.code !== 0) {
+    const why = f.stderr.trim().split('\n').pop() || 'git fetch failed'
+    throw new Error(/couldn't find remote ref/i.test(why) ? `${remote} has no pull request #${n}.` : `Couldn't fetch PR #${n} from ${remote}: ${why}`)
+  }
+  const sha = (await ok(['rev-parse', '--verify', `${ref}^{commit}`], top)).trim()
+  // the list the user picked from can be older than a push or a force push: what GitHub serves now wins
+  const listedOther = !!headSha && !sha.startsWith(headSha)
+  const path = prWorktreePath(top, n)
+  let existing = (await listWorktrees(top)).find((w) => w.path === path)
+  if (existing?.prunable || (existing && !existsSync(path))) {
+    await git(['worktree', 'prune'], top)
+    existing = undefined
+  }
+  if (!existing && existsSync(path)) throw new Error(`${path} already exists and isn't a worktree of this repository. Move it away, then check out PR #${n} again.`)
+  const dirty = existing ? (await ok(['status', '--porcelain', '--untracked-files=no'], path)).split('\n').filter(Boolean).length : 0
+  const plan = planPrWorktree(existing ? { head: existing.head, branch: existing.branch, dirty } : null, sha, n)
+  if (plan.do === 'refuse') throw new Error(plan.reason)
+  if (plan.do === 'create') {
+    mkdirSync(dirname(path), { recursive: true })
+    await ok(['worktree', 'add', '--detach', path, sha], top)
+    return { number: n, path, head: sha, repo: top, action: 'created', listedOther }
+  }
+  if (plan.do === 'move') await ok(['checkout', '--quiet', '--detach', sha], path)
+  return { number: n, path, head: sha, repo: top, action: plan.do === 'move' ? 'moved' : 'reused', listedOther }
+}
+
+/**
+ * Remove PR `n`'s review worktree and its fetched ref. Without `discard`, git refuses when the folder has
+ * changed or untracked files. Whether something still runs there is the caller's check, as for any worktree.
+ */
+export async function removePrWorktree(root: string, n: number, opts: { discard: boolean } = { discard: false }): Promise<void> {
+  checkPrNumber(n)
+  const top = await mainCheckout(root)
+  const path = prWorktreePath(top, n)
+  const listed = (await listWorktrees(top)).some((w) => w.path === path)
+  if (listed && existsSync(path)) await ok(['worktree', 'remove', ...(opts.discard ? ['--force'] : []), path], top)
+  else await git(['worktree', 'prune'], top)
+  await git(['update-ref', '-d', prRef(n)], top)
 }

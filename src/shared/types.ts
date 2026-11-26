@@ -261,6 +261,8 @@ export interface StoreFiles {
   board: { items: BoardItem[]; settings: BoardSettings[]; jobs?: StoryJob[] }
   /** eval suites run against agents (src/shared/evals.ts); the eval files themselves live in .sldev/evals */
   evals: { runs: EvalRun[] }
+  /** the Review tab's state for pull requests (a mission keeps its own on the mission), keyed by prReviewKey in src/shared/review.ts */
+  prReviews: { reviews: PrReview[] }
 }
 
 /** a mission written in the New mission form and kept to launch later (Save for later) */
@@ -467,6 +469,31 @@ export interface Mission {
   review?: ReviewState
   /** a helper of the review cockpit (a walkthrough or a question about another mission): hidden from the boards, no notifications */
   explains?: { mission: string }
+}
+
+/** What the Review tab reviews: a mission's change, or a pull request of the repository at `root`. */
+export type ReviewTarget = { kind: 'mission'; id: string } | { kind: 'pr'; number: number; root: string }
+
+/** A pull request's review state in prReviews.json; `head` is the commit the marks were made on. */
+export interface PrReview {
+  root: string
+  number: number
+  head?: string
+  review: ReviewState
+  updatedAt: number
+}
+
+/** A pull request as the Review tab reads it (gh pr view + gh pr diff). */
+export interface GhPrReview {
+  number: number
+  title: string
+  body: string
+  url: string
+  /** head commit, head branch and the branch it goes into */
+  head: string
+  branch: string
+  base: string
+  diff: string
 }
 
 export interface ReviewState {
