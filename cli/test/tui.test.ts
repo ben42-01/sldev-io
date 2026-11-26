@@ -550,7 +550,8 @@ describe('runtimes', () => {
 
     // next time it's listed first; Enter runs the one in focus
     t.input.write('\x02r')
-    s = await t.textWith(/1 +answer +echo sldev/)
+    // the list shows the command as typed: `echo sldev-…` in sh, `echo ("sldev-" …` in PowerShell
+    s = await t.textWith(/1 +answer +echo \(?"?sldev/)
     // x removes it, after asking
     t.input.write('x')
     await t.textWith(`Remove runtime answer (${cmd})? Tabs running it stay. (y/N)`)

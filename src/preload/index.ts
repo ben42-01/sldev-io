@@ -7,6 +7,7 @@ import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
 import type { BaseMoved, MergeMethod, ShipStatus } from '@shared/ship'
 import type { Use } from '@shared/review'
+import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
 import type {
   AgentProfile,
   RulesState,
@@ -23,6 +24,7 @@ import type {
   GhIssue,
   GhPrComment,
   GhPr,
+  GhPrReview,
   GhRepoInfo,
   GhRun,
   GhWorkflow,
@@ -151,6 +153,10 @@ const api = {
     /** git worktree prune: forget worktrees whose folders are gone */
     pruneWorktrees: (cwd: string): Promise<void> => ipcRenderer.invoke('git:pruneWorktrees', cwd),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
+    /** fetch pull/<n>/head into refs/sldev/pr/<n> and check it out detached in its own worktree (reused, or moved to new commits) */
+    prWorktree: (root: string, n: number, headSha?: string, remote?: string): Promise<PrWorktree> => ipcRenderer.invoke('git:prWorktree', root, n, headSha, remote),
+    /** remove PR n's review worktree and fetched ref; git refuses changed files unless `discard` */
+    removePrWorktree: (root: string, n: number, opts?: { discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removePrWorktree', root, n, opts),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
     /** every ref's last `limit` commits in topo order, for the commit graph */
     graphLog: (cwd: string, limit: number): Promise<GraphLog> => ipcRenderer.invoke('git:graphLog', cwd, limit),
@@ -204,6 +210,8 @@ const api = {
     rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
+    /** pull request `n` for the Review tab: title, body, head commit, branches and its diff */
+    prReview: (cwd: string, n: number): Promise<GhPrReview> => ipcRenderer.invoke('gh:prReview', cwd, n),
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prForBranch: (cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> => ipcRenderer.invoke('gh:prForBranch', cwd, branch),
@@ -211,6 +219,10 @@ const api = {
     ship: (cwd: string, branch: string): Promise<ShipStatus> => ipcRenderer.invoke('gh:ship', cwd, branch),
     /** gh pr merge, only while the PR head is still `headSha` */
     mergePr: (cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean): Promise<string> => ipcRenderer.invoke('gh:mergePr', cwd, n, method, headSha, auto),
+    /** open PRs, newest first; `error` instead of a throw when gh is missing, logged out or the folder isn't on GitHub */
+    prs: (cwd: string): Promise<OpenPrList> => ipcRenderer.invoke('gh:prs', cwd),
+    /** one PR with its body and the issues it closes */
+    prDetail: (cwd: string, n: number): Promise<PrDetail> => ipcRenderer.invoke('gh:prDetail', cwd, n),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),

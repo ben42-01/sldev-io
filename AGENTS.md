@@ -65,7 +65,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, Files tree, layered and tree layouts, Mermaid export), diagramLangs.ts (per-language import parsers and resolvers over one index), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
-                  review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing), gitGraph.ts (the commit graph: log parsing, lane layout, PR numbers),
+                  review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing), prs.ts (open PRs and PR detail from gh's JSON, the PR review worktree's create/reuse/move plan), gitGraph.ts (the commit graph: log parsing, lane layout, PR numbers),
                   gitStats.ts (the GitHub stats panel's activity charts: commits and PRs per local day/week),
                   sldevSkills.ts (sldev's own skills: their SKILL.md texts and versions, and the mission/story drafts agents leave in .sldev/drafts),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
@@ -195,6 +195,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
   kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
   is committed or pushed.
+  The tab reviews a `ReviewTarget` (a mission, or a PR: `{ kind: 'pr', number, root }`), resolved in one place,
+  `state/reviewTargets.ts` (diff, folder, base, where the state lives: on the mission, or `prReviews.json` with the PR's head);
+  components get a `ReviewSource` and never check the kind. Old layouts with only `missionId` still open.
 - **Ship bar** (`src/shared/ship.ts`, `components/ShipBar.tsx`, the Review tab of a worktree mission): checks come from the branch's
   Actions runs (`gh run list`), not `statusCheckRollup`, which fine-grained tokens can't read. GitHub is asked only while the tab is on
   screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge

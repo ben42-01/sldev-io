@@ -266,7 +266,7 @@ export async function removeMission(id: string, opts: { removeWorktree: boolean;
 export function reviewMission(id: string): void {
   const m = getMission(id)
   // a tab of its own, not a split: a diff needs the width (the tab hides the sidebars while it's shown)
-  if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { missionId: id })
+  if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { target: { kind: 'mission', id } })
 }
 
 /** A second agent reviews a mission's changes, read-only, in the same folder, with its brief and handoff. */

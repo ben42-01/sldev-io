@@ -1,5 +1,6 @@
 import { acceptanceCriteria } from './board'
 import type { DiffFile, DiffLine } from './diff'
+import type { PrReview, ReviewState, ReviewTarget } from './types'
 
 /**
  * The review cockpit: a diff read by what each part is for, not by file name. An agent (any agent, in
@@ -536,7 +537,11 @@ export interface ReviewSubject {
   criteria: string[]
   /** git diff <base> shows the work */
   base: string
+  /** how to see the change when it isn't `git diff <base>` in this folder (a pull request: gh pr diff) */
+  diff?: string
 }
+
+const changeOf = (s: ReviewSubject): string => (s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\` plus untracked files in this folder`)
 
 /** What a walkthrough agent is asked: read-only, the JSON to one file. */
 export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string; hunks: number; lines: number }>, file: string): string {
@@ -546,7 +551,7 @@ export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string;
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 4000)}` : '',
     s.criteria.length ? `Acceptance criteria (numbered):\n${s.criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2500)}` : '',
-    `The change is \`git diff ${s.base}\` plus untracked files in this folder. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
+    `The change is ${changeOf(s)}. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
     [
       'Split the change into 2 to 8 parts in reading order: the core change first, then what it needs, then tests and the rest. For each part:',
       '- title: what it does, in a few words',
@@ -583,7 +588,7 @@ export function askPrompt(s: ReviewSubject, p: Pick<Part, 'title' | 'why' | 'hun
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 3000)}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2000)}` : '',
     `The reviewer is looking at this part, "${p.title}"${p.why ? ` (${p.why})` : ''}:\n\n\`\`\`diff\n${partText(p)}\n\`\`\``,
-    `The whole change is \`git diff ${s.base}\`; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
+    `The whole change is ${s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\``}; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
     `Write the answer as Markdown to ${file} (the one file you may create; do not change anything else and do not commit), then say in one line that it is written.`
   ]
     .filter(Boolean)
@@ -602,3 +607,89 @@ export function sendBackText(items: Array<{ part: Pick<Part, 'title' | 'hunks'>;
 
 /** The note a "Cut it" button writes for a part nobody asked for. */
 export const CUT_NOTE = 'Remove this part: it wasn\'t asked for. Keep the change to what the task needs.'
+
+// ── review order and time ────────────────────────────────────────────
+
+/** Flags that send a part to the front: the spots where a missed line costs the most. */
+const RISKY: Partial<Record<FlagId, number>> = { secret: 6, tests: 5, suppressed: 4, auth: 3, money: 3, migration: 3 }
+
+/** Lines a reviewer reads in a minute, carefully (code review studies put it at 300 to 500 an hour). */
+export const LINES_PER_MINUTE = 8
+/** Minutes a risky flag adds to its part (a second look), and any other flag. */
+export const RISKY_FLAG_MINUTES = 2
+export const FLAG_MINUTES = 0.5
+
+const riskOf = (p: Pick<Part, 'flags'>): number => p.flags.reduce((a, f) => a + (RISKY[f.id] ?? 0), 0)
+
+/**
+ * The parts in the order to read them: risky flags first (the riskiest ahead), then parts nobody asked
+ * for, then the rest, biggest first in each. Ties keep the cockpit's own order. Noise isn't a part: it
+ * stays folded at the end.
+ */
+export function reviewOrder(c: Pick<Cockpit, 'parts'>): Part[] {
+  const tier = (p: Part): number => (riskOf(p) ? 0 : p.need === 'extra' ? 1 : 2)
+  return c.parts
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => tier(a.p) - tier(b.p) || riskOf(b.p) - riskOf(a.p) || b.p.lines - a.p.lines || a.i - b.i)
+    .map((x) => x.p)
+}
+
+/** The parts by the first file they touch, as a file list reads. */
+export function fileOrder(c: Pick<Cockpit, 'parts'>): Part[] {
+  const key = (p: Part): string => p.hunks.map((h) => `${h.path}\0${String(h.n).padStart(5, '0')}`).sort()[0] ?? ''
+  return c.parts
+    .map((p, i) => ({ p, i, k: key(p) }))
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i))
+    .map((x) => x.p)
+}
+
+/** Minutes to review one part: its lines at a set pace, plus a second look per flag. */
+export function partMinutes(p: Pick<Part, 'lines' | 'flags'>): number {
+  const flags = p.flags.reduce((a, f) => a + (RISKY[f.id] ? RISKY_FLAG_MINUTES : FLAG_MINUTES), 0)
+  return p.lines / LINES_PER_MINUTE + flags
+}
+
+/** Minutes for the whole review (noise is folded, so it isn't counted), and for the parts still without a verdict. */
+export function reviewMinutes(c: Pick<Cockpit, 'parts'>, done: (p: Part) => boolean = () => false): { total: number; left: number } {
+  let total = 0
+  let left = 0
+  for (const p of c.parts) {
+    const m = partMinutes(p)
+    total += m
+    if (!done(p)) left += m
+  }
+  return { total, left }
+}
+
+/** "about 12 min", "about 1 h 25 min", "under a minute". */
+export function formatMinutes(min: number): string {
+  if (min <= 0) return 'nothing to read'
+  if (min < 1) return 'under a minute'
+  if (min < 60) return `about ${Math.round(min)} min`
+  const m = Math.round(min / 5) * 5
+  const h = Math.floor(m / 60)
+  return `about ${h} h${m % 60 ? ` ${m % 60} min` : ''}`
+}
+
+// ── review state of pull requests (prReviews.json) ───────────────────
+
+/** A pull request's key: the repository it was opened in and its number. */
+export const prReviewKey = (root: string, number: number): string => `${root.replace(/\/+$/, '')}#${number}`
+
+export function findPrReview(list: PrReview[], root: string, number: number): PrReview | undefined {
+  const key = prReviewKey(root, number)
+  return list.find((r) => prReviewKey(r.root, r.number) === key)
+}
+
+/** The list with one PR's review state changed; `head` (when known) is the commit the marks are now about. */
+export function putPrReview(list: PrReview[], root: string, number: number, f: (r: ReviewState) => ReviewState, head?: string, at = Date.now()): PrReview[] {
+  const old = findPrReview(list, root, number)
+  const next: PrReview = { root: old?.root ?? root, number, head: head ?? old?.head, review: f(old?.review ?? {}), updatedAt: at }
+  return old ? list.map((r) => (r === old ? next : r)) : [...list, next]
+}
+
+/** A saved Review tab's params: newer ones carry a target, layouts saved before targets only a missionId. */
+export function targetOf(params: { target?: ReviewTarget; missionId?: string } | undefined): ReviewTarget | undefined {
+  if (params?.target) return params.target
+  return params?.missionId ? { kind: 'mission', id: params.missionId } : undefined
+}
