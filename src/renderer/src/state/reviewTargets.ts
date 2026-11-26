@@ -38,6 +38,8 @@ export interface ReviewSource {
   mission?: Mission
   /** the commit under review when the source knows it without asking git (a PR's head from gh) */
   head?: string
+  /** a pull request on GitHub: it can be approved, commented on and merged from the tab (where gh runs, its number) */
+  pr?: { number: number; root: string; url?: string }
 }
 
 /** Where Run checks runs: the folder with exactly the code under review, and the commit checked out there. */
@@ -177,7 +179,8 @@ function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefin
     criteria: prCriteria(body, meta?.issues),
     review: entry?.review ?? {},
     mission: undefined,
-    head: meta?.head
+    head: meta?.head,
+    pr: { number: t.number, root: t.root, url: meta?.url }
   }
 }
 

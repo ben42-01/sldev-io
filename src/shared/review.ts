@@ -846,3 +846,56 @@ export function movedText(seenHead: string | undefined, head: string | undefined
   }
   return 'The change moved on since you reviewed'
 }
+
+// ── notes as an inline pull request review ───────────────────────────
+
+/** Where a comment goes on GitHub: a line of the PR's head (RIGHT), or of its base for a removed line (LEFT). */
+export interface ReviewAnchor {
+  path: string
+  line: number
+  side: 'RIGHT' | 'LEFT'
+}
+
+/** A part's first changed line: the first added line, else (a deletion only) the first removed one, else the first line shown. */
+export function anchorOf(p: Pick<Part, 'hunks'>): ReviewAnchor | null {
+  for (const h of p.hunks) {
+    const add = h.lines.find((l) => l.kind === 'add' && l.newNo)
+    if (add) return { path: h.path, line: add.newNo!, side: 'RIGHT' }
+  }
+  for (const h of p.hunks) {
+    const del = h.lines.find((l) => l.kind === 'del' && l.oldNo)
+    if (del) return { path: h.path, line: del.oldNo!, side: 'LEFT' }
+  }
+  for (const h of p.hunks) {
+    const ctx = h.lines.find((l) => l.kind === 'ctx' && l.newNo)
+    if (ctx) return { path: h.path, line: ctx.newNo!, side: 'RIGHT' }
+  }
+  return null
+}
+
+export interface DraftComment extends ReviewAnchor {
+  part: string
+  title: string
+  body: string
+}
+
+/**
+ * The review the notes make: each part with a note becomes a comment on its first changed line. A note whose lines
+ * changed since it was written (its part's hunks aren't the ones it was made on), or that has no line to sit on,
+ * goes into the summary instead, with the part's title, so nothing written is lost.
+ */
+export function reviewDraft(parts: Array<Pick<Part, 'id' | 'title' | 'hunks'>>, marks: Record<string, Mark> | undefined): { comments: DraftComment[]; summary: string[] } {
+  const comments: DraftComment[] = []
+  const summary: string[] = []
+  const byId = new Map(parts.map((p) => [p.id, p]))
+  for (const [id, m] of Object.entries(marks ?? {})) {
+    const note = m.note?.trim()
+    if (!note) continue
+    const p = byId.get(id)
+    const holds = p && (!m.hunks || sameKeys(m.hunks, partKeys(p)))
+    const at = holds ? anchorOf(p) : null
+    if (p && at) comments.push({ ...at, part: id, title: p.title, body: note })
+    else summary.push(`${p?.title ?? 'A part that is gone'}: ${note}`)
+  }
+  return { comments, summary }
+}

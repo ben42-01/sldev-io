@@ -136,6 +136,43 @@ export function mergeBlock(pr: ShipPr, checks: ChecksSummary): string | null {
   return null
 }
 
+/**
+ * A pull request reviewed in the Review tab: merging is about the commit that was reviewed. New commits since
+ * (GitHub's head isn't the reviewed one) come first, since GitHub refuses --match-head-commit anyway.
+ */
+export function prMergeBlock(pr: ShipPr, checks: ChecksSummary, reviewed: string | undefined): string | null {
+  if (pr.state === 'MERGED') return `#${pr.number} is already merged`
+  if (pr.state === 'CLOSED') return `#${pr.number} is closed`
+  if (reviewed && pr.headSha && reviewed !== pr.headSha) return `New commits since you looked (${reviewed.slice(0, 7)} → ${pr.headSha.slice(0, 7)}): refresh the review first`
+  return mergeBlock(pr, checks)
+}
+
+export type ReviewEvent = 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'
+
+export const EVENT_LABEL: Record<ReviewEvent, string> = { APPROVE: 'Approve', REQUEST_CHANGES: 'Request changes', COMMENT: 'Comment' }
+
+/** One review as GitHub's REST API takes it (POST /repos/{owner}/{repo}/pulls/{n}/reviews), pinned to the reviewed commit. */
+export interface ReviewPayload {
+  event: ReviewEvent
+  body: string
+  commit_id?: string
+  comments: Array<{ path: string; line: number; side: 'RIGHT' | 'LEFT'; body: string }>
+}
+
+/** The payload, or why it can't be sent: GitHub wants a body for Request changes and Comment unless there are comments. */
+export function reviewPayload(event: ReviewEvent, body: string, comments: ReviewPayload['comments'], commit?: string): ReviewPayload | { error: string } {
+  const text = body.trim()
+  const lines = comments.filter((c) => c.body.trim() && c.path && c.line > 0).map((c) => ({ path: c.path, line: c.line, side: c.side, body: c.body.trim() }))
+  if (event !== 'APPROVE' && !text && !lines.length) return { error: event === 'REQUEST_CHANGES' ? 'Say what should change' : 'Write a comment first' }
+  if (commit && !/^[0-9a-f]{7,40}$/i.test(commit)) return { error: 'The reviewed commit is unknown; refresh and try again' }
+  return { event, body: text, ...(commit ? { commit_id: commit } : {}), comments: lines }
+}
+
+/** The summary of a review: the general text, then the notes that have no line to sit on. */
+export function reviewSummary(text: string, loose: string[]): string {
+  return [text.trim(), loose.length ? loose.map((l) => `- ${l}`).join('\n') : ''].filter(Boolean).join('\n\n')
+}
+
 export const METHOD_LABEL: Record<MergeMethod, string> = { squash: 'Squash and merge', merge: 'Create a merge commit', rebase: 'Rebase and merge' }
 
 export function isMergeMethod(v: unknown): v is MergeMethod {

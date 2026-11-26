@@ -93,8 +93,11 @@ const privacy: LegalPage = {
         is asked to review them) and your GitHub login through your GitHub CLI: when you open the Pull requests section of the
         Workflows tab or the "Review a pull request" command, every minute while that section stays open, and when you refresh it;
         never while the section is closed or the window is hidden. Opening one runs git fetch for that pull request's commits
-        from your remote and checks them out in a separate folder of its own. Nothing is pushed. That goes from your computer to GitHub
-        (or wherever your remote is), signed in as you; nothing goes to us.
+        from your remote and checks them out in a separate folder of its own, and reads the issues it closes for their acceptance
+        criteria. Nothing is pushed. While its Review tab is on screen, the pull request's state and its branch's workflow runs are
+        read every 15 to 60 seconds. Approving, requesting changes, commenting (your summary and the notes you wrote, on their
+        lines) and merging are each sent only when you click, after saying what will happen, as a review or merge of the commit you
+        reviewed. That goes from your computer to GitHub (or wherever your remote is), signed in as you; nothing goes to us.
       </p>
       <p>
         The free sldev CLI makes one network request of its own: at most once a day, when you attach (<code>sldev</code>), it asks

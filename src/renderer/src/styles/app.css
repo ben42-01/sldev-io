@@ -9545,3 +9545,63 @@ button.cg-pr:focus-visible {
   font-size: 10.5px;
   font-weight: 500;
 }
+
+/* Post review (a pull request): the notes as comments on their lines, each editable or left out */
+.post-review .seg {
+  align-self: flex-start;
+}
+.post-review .seg button {
+  white-space: nowrap;
+}
+.post-review-comments,
+.post-review-loose {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.post-review-loose {
+  gap: 2px;
+  margin-top: -4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.post-review-comments li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.post-review-comments li.off {
+  opacity: 0.55;
+}
+.post-review-comments li.off .mono {
+  text-decoration: line-through;
+}
+.post-review-at {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.post-review-at .mono {
+  font-family: var(--font-mono);
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.post-review-at .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

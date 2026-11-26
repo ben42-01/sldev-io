@@ -1,6 +1,8 @@
 import { stageMode } from '@shared/agents'
 import { parseDiff, type DiffFile } from '@shared/diff'
-import { askPrompt, hunksOf, markOn, nextSeen, parseWalkthrough, sendBackText, walkthroughPrompt, type Hunk, type Part, type ReviewSubject, type Walkthrough } from '@shared/review'
+import { askPrompt, buildCockpit, hunksOf, markOn, nextSeen, parseWalkthrough, reviewDraft, sendBackText, walkthroughPrompt, type DraftComment, type Hunk, type Part, type ReviewSubject, type Walkthrough } from '@shared/review'
+import { reviewPayload, reviewSummary, type ReviewEvent } from '@shared/ship'
+import { createStore } from './store'
 import type { Mission, ReviewTarget } from '@shared/types'
 import { getAgent } from './agents'
 import { missionEnd, quietly } from './evals'
@@ -160,4 +162,27 @@ export async function sendBack(t: ReviewTarget, items: Array<{ part: Part; note:
   const next = await followUpMission(m.id, sendBackText(items))
   if (next) patchReview(t, (r) => ({ ...r, sent: { at: now(), mission: next.id, parts: items.length } }))
   return next
+}
+
+// ── a pull request's review on GitHub ─────────────────────────────────
+
+/** The Post review dialog: which Review tab (by source key) it is open for, and with which event first. */
+export const postingReview = createStore<{ key: string | null; event: ReviewEvent }>({ key: null, event: 'COMMENT' })
+export const openPostReview = (key: string, event: ReviewEvent): void => postingReview.set({ key, event })
+export const closePostReview = (): void => postingReview.set({ key: null })
+
+/** What the notes on the parts make, as the cockpit shows them now (the walkthrough's parts, or the folders). */
+export async function draftReview(t: ReviewTarget, files: DiffFile[]): Promise<{ comments: DraftComment[]; summary: string[] }> {
+  const s = source(t)
+  const walk = await readWalkthrough(t).catch(() => null)
+  return reviewDraft(buildCockpit(files, walk, s.criteria).parts, s.review.marks)
+}
+
+/** One review on GitHub, on the commit that was reviewed, only from the dialog's click. */
+export async function postReview(t: ReviewTarget, event: ReviewEvent, text: string, loose: string[], comments: DraftComment[]): Promise<string> {
+  const s = source(t)
+  if (!s.pr) throw new Error('Only a pull request can get a review on GitHub')
+  const payload = reviewPayload(event, reviewSummary(text, loose), comments, s.head)
+  if ('error' in payload) throw new Error(payload.error)
+  return window.api.gh.postReview(s.pr.root, s.pr.number, payload)
 }

@@ -29,6 +29,20 @@ if [ "$1 $2 $3" = "pr list --head" ]; then
   echo "[{\"number\":21,\"state\":\"$(cat "$f" 2>/dev/null || echo OPEN)\"}]"; exit 0
 fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
+  # PR #128 in its Review tab's ship bar: state from pr-128-state.txt (OPEN), head from FAKE_GH_PR_128_HEAD, a passing
+  # run on that head; a posted review is saved to review-128.json, a merge's arguments to merge-128.txt (and it merges)
+  case "$1 $2 $3 $4 $5" in "pr view 128 --json number,title,state,"*)
+    echo "{\"number\":128,\"title\":\"Rate limit the API\",\"state\":\"$(cat pr-128-state.txt 2>/dev/null || echo OPEN)\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"mergeable\":\"MERGEABLE\",\"mergeStateStatus\":\"CLEAN\",\"reviewDecision\":\"REVIEW_REQUIRED\",\"baseRefName\":\"main\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\"}"; exit 0 ;;
+  esac
+  if [ "$1 $2 $3" = "run list --branch" ] && [ "$4" = "rate-limit" ]; then
+    echo "[{\"databaseId\":801,\"displayTitle\":\"Rate limit the API\",\"workflowName\":\"CI\",\"status\":\"completed\",\"conclusion\":\"success\",\"headBranch\":\"rate-limit\",\"event\":\"pull_request\",\"createdAt\":\"2026-11-21T10:00:00Z\",\"url\":\"https://github.com/acme/shop/actions/runs/801\",\"number\":90,\"headSha\":\"${FAKE_GH_PR_128_HEAD:-}\"}]"; exit 0
+  fi
+  if [ "$1 $2 $3 $4" = "api --method POST repos/{owner}/{repo}/pulls/128/reviews" ]; then
+    cp "$6" review-128.json; echo '{"id":1}'; exit 0
+  fi
+  if [ "$1 $2 $3" = "pr merge 128" ]; then
+    echo "$*" > merge-128.txt; echo MERGED > pr-128-state.txt; echo "Squashed and merged pull request #128"; exit 0
+  fi
   case "$1 $2" in
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;
     "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"},"stargazerCount":128,"forkCount":9,"issues":{"totalCount":17},"pullRequests":{"totalCount":4}}'; exit 0 ;;

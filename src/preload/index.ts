@@ -5,7 +5,7 @@ import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
-import type { BaseMoved, MergeMethod, ShipStatus } from '@shared/ship'
+import type { BaseMoved, MergeMethod, ReviewPayload, ShipPr, ShipRun, ShipStatus } from '@shared/ship'
 import type { Use } from '@shared/review'
 import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
 import type {
@@ -220,6 +220,8 @@ const api = {
     ship: (cwd: string, branch: string): Promise<ShipStatus> => ipcRenderer.invoke('gh:ship', cwd, branch),
     /** gh pr merge, only while the PR head is still `headSha` */
     mergePr: (cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean): Promise<string> => ipcRenderer.invoke('gh:mergePr', cwd, n, method, headSha, auto),
+    prShip: (cwd: string, n: number): Promise<{ pr: ShipPr | null; runs: ShipRun[]; error?: string }> => ipcRenderer.invoke('gh:prShip', cwd, n),
+    postReview: (cwd: string, n: number, payload: ReviewPayload): Promise<string> => ipcRenderer.invoke('gh:postReview', cwd, n, payload),
     /** open PRs, newest first; `error` instead of a throw when gh is missing, logged out or the folder isn't on GitHub */
     prs: (cwd: string): Promise<OpenPrList> => ipcRenderer.invoke('gh:prs', cwd),
     /** one PR with its body and the issues it closes */

@@ -5,6 +5,8 @@ import { parseDiff, type DiffFile } from '../lib/diff'
 import { DiffLines } from '../components/DiffTables'
 import { ReviewCockpit } from '../components/ReviewCockpit'
 import { ShipBar } from '../components/ShipBar'
+import { PrShipBar } from '../components/PrShipBar'
+import { PostReviewHost } from '../components/PostReviewDialog'
 import { ReviewListResizer, reviewListWidth } from '../components/PaneResizer'
 import { openFileAt, openInEditor } from '../lib/actions'
 import { scrollToTop } from '../lib/scroll'
@@ -207,6 +209,8 @@ function ReviewPanel(props: IDockviewPanelProps<DiffPanelParams> & { target: Rev
         )}
       </div>
       {mission && wt && <ShipBar mission={mission} wt={wt} visible={visible} stamp={stamp} onChanged={() => void load()} onCommit={() => setCommitMsg((m) => m ?? mission.title)} />}
+      {source?.pr && <PrShipBar source={source} visible={visible} stamp={stamp} onChanged={() => void load()} />}
+      {source?.pr && <PostReviewHost source={source} files={files} />}
       {mission?.criteria && view === 'files' && (
         <details className="diff-criteria">
           <summary>Acceptance criteria</summary>

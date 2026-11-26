@@ -215,6 +215,10 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge
   --match-head-commit` with the reviewed commit, after `confirmAction`, and changes nothing local. A local merge needs the main checkout
   on the base branch and undoes itself on a conflict.
+  A pull request's Review tab gets `components/PrShipBar.tsx` instead (the source has `pr`): its head branch's runs, Approve, Request
+  changes / Comment (`PostReviewDialog.tsx`: the parts' notes on their first changed line, `reviewDraft`/`anchorOf` in src/shared/review.ts,
+  notes whose lines changed go in the summary) and Merge, all one review or merge of the reviewed commit (`commit_id`, `--match-head-commit`)
+  through `gh api …/pulls/<n>/reviews`, on a click only; new commits since the review block merging until it is refreshed.
 - **sldev skills** (`src/shared/sldevSkills.ts`): they only ever create drafts. Missions and stories go through `.sldev/drafts/` (git-ignored),
   which the app takes in while it is open (saved missions, the board's Proposed column) and then empties; nothing an agent drafts
   launches or reaches Agent ready without a person. Recipes and evals are written where the app already reads them. Install never

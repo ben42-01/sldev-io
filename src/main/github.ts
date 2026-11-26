@@ -1,9 +1,10 @@
 import { promises as fsp } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
-import { pickPr, type MergeMethod, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
+import { pickPr, reviewPayload, type MergeMethod, type ReviewPayload, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
 import { checkPrNumber, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, PR_DETAIL_FIELDS, type OpenPrList, type PrDetail } from '@shared/prs'
 import { activityCommits, run, status as gitStatus } from './git'
 
@@ -314,6 +315,61 @@ export async function shipStatus(cwd: string, branch: string): Promise<ShipStatu
     return { ...local, pr, runs: shipRuns }
   } catch (e) {
     return { ...local, error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+/**
+ * Pull request `n` as the ship bar of its Review tab needs it: its state, mergeability, review decision and head,
+ * and the Actions runs of its head branch. Read-only.
+ */
+export async function prShip(cwd: string, n: number): Promise<{ pr: ShipPr | null; runs: ShipRun[]; error?: string }> {
+  const problem = await ghProblem(cwd)
+  if (problem) return { pr: null, runs: [], error: problem }
+  try {
+    const p = await ghJson<{ number: number; title?: string; state?: string; url?: string; isDraft?: boolean; mergeable?: string; mergeStateStatus?: string; reviewDecision?: string; baseRefName?: string; headRefOid?: string; headRefName?: string }>(
+      ['pr', 'view', String(n), '--json', 'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid,headRefName'],
+      cwd
+    )
+    const runs = p.headRefName ? await ghJson<Array<GhRun & { headSha?: string }>>(['run', 'list', '--branch', p.headRefName, '--limit', '30', '--json', `${RUN_FIELDS},headSha`], cwd, []) : []
+    const state = String(p.state ?? '').toUpperCase()
+    return {
+      pr: {
+        number: p.number,
+        title: p.title ?? '',
+        state: state === 'MERGED' || state === 'CLOSED' ? state : 'OPEN',
+        url: p.url ?? '',
+        isDraft: !!p.isDraft,
+        mergeable: String(p.mergeable ?? 'UNKNOWN').toUpperCase(),
+        mergeState: String(p.mergeStateStatus ?? 'UNKNOWN').toUpperCase(),
+        reviewDecision: String(p.reviewDecision ?? '').toUpperCase(),
+        base: p.baseRefName ?? '',
+        headSha: p.headRefOid ?? ''
+      },
+      runs: runs.map((r) => ({ id: r.databaseId, workflow: r.workflowName, title: r.displayTitle, status: r.status, conclusion: r.conclusion, event: r.event, url: r.url, createdAt: r.createdAt, headSha: r.headSha ?? '' }))
+    }
+  } catch (e) {
+    return { pr: null, runs: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+/**
+ * Posts one review on pull request `n` (approve, request changes or comment, with inline comments) through the
+ * user's gh: `gh api repos/{owner}/{repo}/pulls/<n>/reviews`. Only ever called on a click.
+ */
+export async function postPrReview(cwd: string, n: number, payload: ReviewPayload): Promise<string> {
+  if (!Number.isInteger(n) || n <= 0) throw new Error('Not a pull request number')
+  const checked = reviewPayload(payload.event, payload.body, payload.comments ?? [], payload.commit_id)
+  if ('error' in checked) throw new Error(checked.error)
+  const dir = await fsp.mkdtemp(join(tmpdir(), 'sldev-review-'))
+  const file = join(dir, 'review.json')
+  try {
+    await fsp.writeFile(file, JSON.stringify(checked))
+    const r = await gh(['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${n}/reviews`, '--input', file], cwd, 60000)
+    if (r.code !== 0) throw new Error(r.stderr.trim().split('\n').slice(-1)[0] || 'gh api failed')
+    const what = checked.event === 'APPROVE' ? 'Approved' : checked.event === 'REQUEST_CHANGES' ? 'Asked for changes on' : 'Commented on'
+    return `${what} #${n}${checked.comments.length ? ` with ${checked.comments.length} inline comment${checked.comments.length === 1 ? '' : 's'}` : ''}`
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true }).catch(() => undefined)
   }
 }
 

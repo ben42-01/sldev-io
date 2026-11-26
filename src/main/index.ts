@@ -4,7 +4,7 @@ import { arch, homedir, release, type as osType } from 'os'
 import { basename, isAbsolute, join } from 'path'
 import { DEFAULT_SETTINGS, type AppInfo, type AppSettings, type PtyCreateOptions, type StoreFiles } from '@shared/types'
 import { clampZoom, resolveTheme, THEME_ARG, titleBarHeight, WINDOW_COLORS, type ResolvedTheme } from '@shared/theme'
-import type { MergeMethod } from '@shared/ship'
+import type { MergeMethod, ReviewPayload } from '@shared/ship'
 import { PtyManager, setShellOverride, type PtySink } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
@@ -306,6 +306,8 @@ function registerIpc(): void {
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
   ipcMain.handle('gh:prState', (_e, cwd: string, n: number) => gh.prState(cwd, Number(n)))
   ipcMain.handle('gh:ship', (_e, cwd: string, branch: string) => gh.shipStatus(cwd, String(branch)))
+  ipcMain.handle('gh:prShip', (_e, cwd: string, n: number) => gh.prShip(cwd, Number(n)))
+  ipcMain.handle('gh:postReview', (_e, cwd: string, n: number, payload: ReviewPayload) => gh.postPrReview(cwd, Number(n), payload))
   ipcMain.handle('gh:mergePr', (_e, cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean) => gh.mergePr(cwd, Number(n), method, String(headSha), !!auto))
   ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
   ipcMain.handle('gh:prs', (_e, cwd: string) => gh.openPrs(cwd))

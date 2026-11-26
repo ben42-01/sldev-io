@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, GitCommitHorizontal, History, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageCircleQuestion, Network, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, GitCommitHorizontal, History, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageSquare, MessageCircleQuestion, Network, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
 import { blastRadius, buildCockpit, carryMarks, changedNames, CUT_NOTE, fileOrder, formatMinutes, hunksOf, LINES_PER_MINUTE, movedText, partMinutes, reviewMinutes, reviewOrder, sinceReview, type Cockpit, type Hunk, type Need, type Part, type Radius, type Use, type Walkthrough } from '@shared/review'
 import type { DiffFile } from '@shared/diff'
 import { allAgents } from '../lib/agents'
@@ -7,7 +7,7 @@ import { openFileAt } from '../lib/actions'
 import { scrollToTop } from '../lib/scroll'
 import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
-import { askAboutPart, diffSignature, explainChanges, markPart, readWalkthrough, sendBack, settleReview } from '../state/review'
+import { askAboutPart, diffSignature, explainChanges, markPart, openPostReview, readWalkthrough, sendBack, settleReview } from '../state/review'
 import { firstAgent, reviewHead, workingOn, type ReviewHead, type ReviewSource } from '../state/reviewTargets'
 import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -430,6 +430,10 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
         {back.length > 0 && source.mission ? (
           <button className="btn primary sm" disabled={busy || workingOn(source)} title={workingOn(source) ? 'The agent is still working' : `One follow-up to ${agentName} with each part's note`} onClick={() => void send()}>
             <Undo2 size={13} /> Send {back.length === 1 ? '1 part' : `${back.length} parts`} back to {agentName}
+          </button>
+        ) : back.length > 0 && source.pr ? (
+          <button className="btn primary sm" title={`One review on #${source.pr.number}: each part's note on its first changed line`} onClick={() => openPostReview(source.key, 'COMMENT')}>
+            <MessageSquare size={13} /> Post {back.length === 1 ? '1 note' : `${back.length} notes`} to #{source.pr.number}…
           </button>
         ) : c.parts.length > 0 && c.parts.every((p) => marks[p.id]?.ok) ? (
           <span className="rc-all-good">
