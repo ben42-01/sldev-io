@@ -2865,6 +2865,18 @@ button.ship-pr:hover {
 .ship-busy {
   font-size: 11.5px;
 }
+.ship-next {
+  border-top: 1px solid var(--border);
+}
+.ship-next-pr {
+  min-width: 0;
+  max-width: 100%;
+}
+.ship-next-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ship-split {
   display: inline-flex;
 }

@@ -1,7 +1,7 @@
 // The ship bar on a pull request's Review tab: checks from its head's Actions runs, and the reviewer's actions, each
 // only on a click and asked first. A note on a part becomes an inline comment on its first changed line in one review
 // (Request changes, with a summary), Approve posts an approving review, and Merge merges exactly the reviewed commit;
-// new commits since block it until the review is refreshed.
+// new commits since block it until the review is refreshed. After a merge the bar offers the next PR to review.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -91,11 +91,50 @@ module.exports = async (h) => {
   const args = fs.readFileSync(merged, 'utf8')
   h.expect(args.includes('--squash') && args.includes(`--match-head-commit ${second}`), `with the reviewed commit (${args.trim()})`)
   h.expect(await h.until(async () => (await bar()).includes('Merged'), 10000), 'the bar says it is merged')
+  // the next PR: #131 is a draft, so nothing else is waiting
+  const next = () => h.js(`document.querySelector('[data-testid="pr-next"]')?.textContent ?? ''`)
+  h.expect(await h.until(async () => (await next()).includes('Nothing else is waiting for you'), 8000), `an empty queue says so (${await next()})`)
+  h.expect(await h.js(`!!document.querySelector('[data-testid="pr-next"] .btn.ghost')`), 'and offers to close the tab')
   await h.wait(300)
   await h.shot('4-merged')
 
-  await h.js(`window.api.git.removePrWorktree(${JSON.stringify(h.fixture)}, 128, { discard: true })`)
+  // reopen it on the fake GitHub, with #131 ready for review, and merge again: the bar offers #131
+  fs.writeFileSync(path.join(h.fixture, 'pr-128-state.txt'), 'OPEN\n')
+  fs.rmSync(merged)
+  process.env.FAKE_GH_PR_131_DRAFT = 'false'
+  fs.writeFileSync(path.join(fork, 'cache.js'), 'export const cache = new Map()\n')
+  g(fork, 'add', '-A')
+  g(fork, 'commit', '-q', '-m', 'cache')
+  process.env.FAKE_GH_PR_131_HEAD = g(fork, 'rev-parse', 'HEAD')
+  g(fork, 'push', '-q', '--force', origin, `${process.env.FAKE_GH_PR_131_HEAD}:refs/pull/131/head`)
+  await h.click('[data-testid="pr-ship"] .icon-btn[aria-label="Refresh the pull request and checks"]')
+  h.expect(await h.until(async () => (await bar()).includes('Ready to merge'), 8000), `open again (${await bar()})`)
+  h.expect(!(await h.js(`!!document.querySelector('[data-testid="pr-next"]')`)), 'no offer while it is open')
+  await h.click('[data-testid="pr-ship"] .ship-split .btn', 'Squash & merge')
+  await h.until(() => h.js(`[...document.querySelectorAll('dialog[open]')].some(d => d.textContent.includes('Merge #128 into main'))`), 3000)
+  await h.click('dialog[open] .btn.primary', 'Merge')
+  h.expect(await h.until(async () => (await next()).includes('Next: #131 Try a new cache'), 10000), `after the merge the bar offers #131 (${await next()})`)
+  h.expect(await h.js(`document.activeElement?.classList.contains('ship-next-pr')`), 'focused, so Enter opens it')
+  await h.wait(300)
+  await h.shot('5-next')
+  await h.click('[data-testid="pr-next"] .ship-next-pr')
+  const tabs = (t) => h.js(`[...document.querySelectorAll('.dv-tab')].filter(x => x.textContent.includes(${JSON.stringify(t)})).length`)
+  h.expect(await h.until(async () => (await tabs('#131 Try a new cache')) === 1, 5000), 'one click opens #131 in its Review tab')
+  h.expect(await h.js(`!!document.querySelector('.dv-active-group .dv-active-tab')?.textContent.includes('#131')`), 'and focuses it')
+  h.expect((await tabs('#128 Rate limit the API')) === 1, "the merged PR's tab stays")
+  await h.wait(500)
+  await h.shot('6-opened-next')
+
+  // Close tab on the merged one
+  await h.click('.dv-tab', '#128')
+  await h.until(() => h.js(`!!document.querySelector('[data-testid="pr-next"] .btn.ghost')`), 5000)
+  await h.click('[data-testid="pr-next"] .btn.ghost', 'Close tab')
+  h.expect(await h.until(async () => (await tabs('#128 Rate limit the API')) === 0, 3000), 'Close tab closes the merged PR\'s tab')
+
+  for (const n of [128, 131]) await h.js(`window.api.git.removePrWorktree(${JSON.stringify(h.fixture)}, ${n}, { discard: true })`)
   delete process.env.FAKE_GH_PR_128_HEAD
+  delete process.env.FAKE_GH_PR_131_HEAD
+  delete process.env.FAKE_GH_PR_131_DRAFT
 }
 
 module.exports.env = { FAKE_GH_AUTHED: '1' }

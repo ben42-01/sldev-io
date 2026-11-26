@@ -214,6 +214,14 @@ export function reviewOrder(prs: OpenPr[], me: string | undefined, filter: PrFil
     .sort((a, b) => rank(a) - rank(b) || (a.createdAt === b.createdAt ? a.number - b.number : a.createdAt < b.createdAt ? -1 : 1))
 }
 
+/**
+ * The PR to offer after merging `done`: the first in review order that isn't `done`, isn't a draft and has no failing
+ * checks. Undefined when nothing else is waiting.
+ */
+export function nextToReview(prs: OpenPr[], me: string | undefined, done: number, changed: (p: OpenPr) => boolean = () => false): OpenPr | undefined {
+  return reviewOrder(prs, me, 'all', changed).find((p) => p.number !== done && !p.isDraft && p.checks !== 'failed')
+}
+
 /** The Review tab of PR `n`: its title as the tab's. */
 export const prTabTitle = (pr: { number: number; title: string }): string => `#${pr.number} ${pr.title}`.trim()
 
