@@ -87,6 +87,12 @@ const privacy: LegalPage = {
         only when you click them, the same way. That goes from your computer to GitHub, signed in as you; nothing goes to us.
       </p>
       <p>
+        Reviewing a pull request reads your repository's open pull requests (title, author, size, description and linked issues)
+        through your GitHub CLI when you open the list or refresh it, and checking one out for review runs git fetch for that pull
+        request's commits from your remote into a separate folder of its own. Nothing is pushed. That goes from your computer to GitHub
+        (or wherever your remote is), signed in as you; nothing goes to us.
+      </p>
+      <p>
         The free sldev CLI makes one network request of its own: at most once a day, when you attach (<code>sldev</code>), it asks
         the npm registry (registry.npmjs.org) for the latest version of the sldev-cli package, so it can tell you when a newer one is
         out. That request carries nothing but the package name; npm sees your IP address, as with any npm install. When you click Update now (or press Ctrl-b u), it runs your own npm in a new tab to install the

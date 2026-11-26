@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, type MergeMethod, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
+import { checkPrNumber, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, PR_DETAIL_FIELDS, type OpenPrList, type PrDetail } from '@shared/prs'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -308,4 +309,29 @@ export async function mergePr(cwd: string, n: number, method: MergeMethod, headS
   const r = await gh(['pr', 'merge', String(n), `--${method}`, '--match-head-commit', headSha, ...(auto ? ['--auto'] : [])], cwd, 60000)
   if (r.code !== 0) throw new Error(r.stderr.trim() || 'gh pr merge failed')
   return (r.stdout + r.stderr).trim() || (auto ? `#${n} will merge once its checks pass` : `Merged #${n}`)
+}
+
+/**
+ * The repository's open pull requests, newest first (at most OPEN_PR_LIMIT), with author, size, draft and review
+ * decision. Read-only `gh pr list`. Without gh, logged out, or outside a GitHub repository, `error` says which.
+ */
+export async function openPrs(cwd: string): Promise<OpenPrList> {
+  const problem = await ghProblem(cwd)
+  if (problem) return { prs: [], error: problem }
+  try {
+    const json = await ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, [])
+    return { prs: parseOpenPrs(json) }
+  } catch (e) {
+    return { prs: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+/** PR `n` with its body and the issues it closes (read-only `gh pr view`). Throws a readable reason. */
+export async function prDetail(cwd: string, n: number): Promise<PrDetail> {
+  checkPrNumber(n)
+  const problem = await ghProblem(cwd)
+  if (problem) throw new Error(problem)
+  const pr = parsePrDetail(await ghJson<unknown>(['pr', 'view', String(n), '--json', PR_DETAIL_FIELDS], cwd))
+  if (!pr) throw new Error(`GitHub has no pull request #${n} here.`)
+  return pr
 }
