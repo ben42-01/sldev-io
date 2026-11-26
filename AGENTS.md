@@ -36,7 +36,8 @@ src/main/       Electron main process (Node): everything privileged
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events and sldev MCP tool calls (token-protected)
   mcpServer.ts    the stdio MCP server agents start (script string, installed in userData); mcp.ts answers its tools
-  updater.ts      electron-updater from this repo's GitHub Releases (macOS: notify only until builds are signed)
+  updater.ts      electron-updater from this repo's GitHub Releases: Windows and the Linux AppImage update themselves, the .deb
+                  asks for the admin password (said first), macOS notifies only until signed; install kinds in src/shared/updates.ts
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   diagram.ts      code map (imports between folders: TS/JS, Python, Java/Kotlin/Scala, Go, C#, Rust, C/C++, Ruby, PHP), Files (folders

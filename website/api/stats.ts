@@ -5,7 +5,7 @@
  */
 import { assetPlatform, fetchReleases, type Release } from './download.js'
 
-/** The Intel and Apple Silicon builds count as one macOS. */
+/** The Intel and Apple Silicon builds count as one macOS, the AppImage and the .deb as one Linux. */
 export type StatsPlatform = 'windows' | 'mac' | 'linux'
 
 export interface DownloadStats {
@@ -24,7 +24,7 @@ export function summarize(releases: Release[]): DownloadStats {
     for (const a of r.assets) {
       const p = assetPlatform(a.name)
       if (!p) continue
-      platforms[p === 'mac-intel' ? 'mac' : p] += a.download_count
+      platforms[p === 'mac-intel' ? 'mac' : p === 'linux-appimage' ? 'linux' : p] += a.download_count
       downloads += a.download_count
     }
     out.push({ version: r.tag_name.replace(/^v/, ''), publishedAt: r.published_at, downloads })

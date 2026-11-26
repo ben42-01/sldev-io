@@ -1,13 +1,13 @@
 import { Check, Copy, Download as DownloadIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { DownloadStats } from '../../api/stats'
-import { detectPlatform, downloadHref, installCommand, platformLabels, type Platform } from '../lib/download'
+import { detectPlatform, downloadHref, installCommand, platformLabels, recommendedDownload, type Platform } from '../lib/download'
 
 /** "Download for Windows" on desktops we build for; otherwise a jump to the download section. */
 export function DownloadButton({ className = 'btn primary lg', size = 16 }: { className?: string; size?: number }) {
   const platform = detectPlatform()
   return platform ? (
-    <a className={className} href={downloadHref(platform)}>
+    <a className={className} href={downloadHref(recommendedDownload(platform))}>
       <DownloadIcon size={size} /> Download for {platformLabels[platform]}
     </a>
   ) : (
@@ -35,7 +35,15 @@ const cards: Card[] = [
       { platform: 'mac-intel', label: 'Intel (.dmg)' }
     ]
   },
-  { id: 'linux', name: 'Linux', note: 'Debian, Ubuntu and derivatives, x86_64', files: [{ platform: 'linux', label: 'Package (.deb)' }] }
+  {
+    id: 'linux',
+    name: 'Linux',
+    note: 'x86_64. The AppImage runs on most distros and updates itself, no password. The .deb (Debian, Ubuntu) asks for your password to update.',
+    files: [
+      { platform: 'linux-appimage', label: 'AppImage (recommended)' },
+      { platform: 'linux', label: 'Package (.deb)' }
+    ]
+  }
 ]
 
 export function CopyCommand() {
@@ -109,6 +117,10 @@ export function DownloadOptions() {
         )}
         <p className="install-label">macOS and Linux, from a terminal</p>
         <CopyCommand />
+        <p className="download-note">
+          On Linux this installs the AppImage into <code>~/Applications</code> with an app-menu entry, so updates need no password. For the
+          .deb instead, add <code>-s -- --deb</code> after <code>sh</code>.
+        </p>
         <p className="download-note">
           Builds aren't code-signed yet. Windows: <b>More info → Run anyway</b>. macOS: right-click the app and choose{' '}
           <b>Open</b> the first time (the terminal install skips this).

@@ -763,14 +763,27 @@ export interface AppInfo {
   stalls?: string[]
 }
 
+/**
+ * How this copy was installed, which decides what an update does (src/shared/updates.ts):
+ * dev: unpacked or development builds (no updates); appimage: a file the user owns, replaced in
+ * place with no password; deb: installed system-wide by dpkg, so installing needs an admin password;
+ * linux: any other Linux build (an extracted AppImage, a repackaged build) that can't update itself.
+ */
+export type InstallKind = 'dev' | 'windows' | 'mac' | 'appimage' | 'deb' | 'linux'
+
 export interface UpdateStatus {
-  /** unsupported: dev builds, and Linux installs that didn't come from the .deb */
+  /** unsupported: dev builds, and Linux installs that are neither the AppImage nor the .deb */
   state: 'unsupported' | 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
   /** the newer version, once one is found */
   version: string | null
   percent: number | null
-  /** macOS builds aren't signed yet, which Squirrel.Mac requires: the user downloads the new dmg */
+  /**
+   * the user downloads the new version from the website: unsigned macOS builds (Squirrel.Mac needs a
+   * signature), an AppImage in a folder the user can't write, and a .deb with no graphical password prompt
+   */
   manual: boolean
+  /** how this copy was installed */
+  install: InstallKind
   error: string | null
   checkedAt: number | null
 }
