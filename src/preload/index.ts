@@ -6,6 +6,7 @@ import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
 import type { BaseMoved, MergeMethod, ShipStatus } from '@shared/ship'
+import type { Use } from '@shared/review'
 import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
 import type {
   AgentProfile,
@@ -162,6 +163,8 @@ const api = {
     /** one commit's own diff (a merge against its first parent) */
     showCommit: (cwd: string, sha: string): Promise<string> => ipcRenderer.invoke('git:showCommit', cwd, sha),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
+    /** where names are used in the checkout (git grep -w, local, capped), for the review's blast radius */
+    uses: (cwd: string, names: string[]): Promise<{ uses: Use[]; capped: boolean }> => ipcRenderer.invoke('git:uses', cwd, names),
     /** the files a branch changed since `base` (committed, uncommitted and new) */
     changedFiles: (cwd: string, base: string): Promise<string[]> => ipcRenderer.invoke('git:changedFiles', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),

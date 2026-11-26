@@ -25,7 +25,7 @@ export interface Hunk {
   noise?: string
 }
 
-export type FlagId = 'auth' | 'money' | 'migration' | 'deps' | 'tests' | 'secret' | 'ci' | 'deletes' | 'suppressed' | 'unused'
+export type FlagId = 'auth' | 'money' | 'migration' | 'deps' | 'tests' | 'secret' | 'ci' | 'deletes' | 'suppressed' | 'unused' | 'signature'
 
 export interface Flag {
   id: FlagId
@@ -177,6 +177,8 @@ export function hunkFlags(h: Hunk): Flag[] {
   if (!test && (h.status === 'deleted' || h.deletions >= 150)) add('deletes', h.status === 'deleted' ? 'File deleted' : 'Large deletion', h.status === 'deleted' ? 'removes a whole file' : `removes ${h.deletions} lines`)
   const sup = added.find((t) => SUPPRESS.test(t))
   if (sup) add('suppressed', test && /\.(skip|only)\(/.test(sup) ? 'Test skipped' : 'Check silenced', `"${sup.trim().slice(0, 60)}"`)
+  const sig = signatureChanges(h)
+  if (sig.length) add('signature', 'Signature changed', `${sig.map((x) => x.name).slice(0, 3).join(', ')}${sig.length > 3 ? '…' : ''}: ${sig[0].why}, callers may need updating`)
   return flags
 }
 
@@ -209,6 +211,171 @@ export function unusedNew(hunks: Hunk[]): Array<{ name: string; hunk: string }> 
       return text.filter((t) => word.test(t)).length <= 1
     })
     .map(({ name, hunk }) => ({ name, hunk }))
+}
+
+// ── blast radius: callers of changed code the change left alone ──────
+
+/** The top-level name a line defines (exported for TS/JS, any def for Python, exported funcs for Go), or undefined. */
+export function definedName(path: string, text: string): string | undefined {
+  const m = EXPORTED.exec(text) ?? (/\.py$/.test(path) ? PY_DEF.exec(text) : null) ?? (/\.go$/.test(path) ? GO_FUNC.exec(text) : null)
+  return m && m[1].length > 2 ? m[1] : undefined
+}
+
+const reEsc = (s: string): string => s.replace(/[$]/g, '\\$')
+
+/**
+ * The parameter list of `name`'s definition starting at line `i`, read on one side of the hunk (old: removed
+ * and context lines, new: added and context lines), whitespace squeezed. Undefined when it isn't a function
+ * (a type, a class, a plain constant) or the list doesn't close within a few lines.
+ */
+function paramsAt(lines: DiffLine[], i: number, side: 'old' | 'new', name: string): string | undefined {
+  const skip = side === 'old' ? 'add' : 'del'
+  const text = lines
+    .slice(i)
+    .filter((l) => l.kind !== skip && l.kind !== 'hunk' && l.kind !== 'meta')
+    .slice(0, 12)
+    .map((l) => l.text)
+    .join('\n')
+  // types, interfaces and classes have no parameter list of their own (a class's bases aren't one)
+  if (new RegExp(`\\b(?:class|interface|type|enum)\\s+${reEsc(name)}(?![\\w$])`).test(text)) return undefined
+  const at = new RegExp(`(^|[^\\w$])${reEsc(name)}(?![\\w$])`).exec(text)
+  if (!at) return undefined
+  const rest = text.slice(at.index + at[0].length)
+  // a constant is a function only when an arrow or function expression is assigned
+  if (/^\s*[:=]/.test(rest) && !/^\s*(?::[^=]*)?=\s*(?:async\s*)?(?:function\b[^(]*)?(?:<[^>]*>)?\s*\(/.test(rest)) return undefined
+  const open = rest.indexOf('(')
+  if (open < 0 || /[{;]/.test(rest.slice(0, open))) return undefined
+  let depth = 0
+  for (let j = open; j < rest.length; j++) {
+    const c = rest[j]
+    if (c === '(' || c === '[' || c === '{' || c === '<') depth++
+    else if ((c === ')' || c === ']' || c === '}' || c === '>') && rest[j - 1] !== '=') depth--
+    if (depth === 0) return rest.slice(open + 1, j).replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*/g, '').replace(/\s+/g, ' ').replace(/\s*([,:=()<>[\]{}|?])\s*/g, '$1').replace(/,$/, '').trim()
+  }
+  return undefined
+}
+
+const paramCount = (p: string): number => {
+  if (!p) return 0
+  let depth = 0
+  let n = 1
+  for (const c of p) {
+    if ('([{<'.includes(c)) depth++
+    else if (')]}>'.includes(c)) depth--
+    else if (c === ',' && depth === 0) n++
+  }
+  return n
+}
+
+/** Functions whose parameter list a hunk changed (added, removed, renamed or retyped a parameter); a body-only change isn't one. */
+export function signatureChanges(h: Pick<Hunk, 'path' | 'lines' | 'noise'>): Array<{ name: string; before: string; after: string; why: string }> {
+  if (h.noise) return []
+  const out: Array<{ name: string; before: string; after: string; why: string }> = []
+  const dels = new Map<string, number>()
+  const adds = new Map<string, number>()
+  h.lines.forEach((l, i) => {
+    const n = l.kind === 'del' || l.kind === 'add' ? definedName(h.path, l.text) : undefined
+    if (n) (l.kind === 'del' ? dels : adds).has(n) || (l.kind === 'del' ? dels : adds).set(n, i)
+  })
+  // a parameter on its own line changes inside a definition whose first line is context
+  h.lines.forEach((l, i) => {
+    const n = l.kind === 'ctx' ? definedName(h.path, l.text) : undefined
+    if (n && !dels.has(n) && !adds.has(n)) (dels.set(n, i), adds.set(n, i))
+  })
+  for (const [name, di] of dels) {
+    const ai = adds.get(name)
+    if (ai === undefined) continue
+    const before = paramsAt(h.lines, di, 'old', name)
+    const after = paramsAt(h.lines, ai, 'new', name)
+    if (before === undefined || after === undefined || before === after) continue
+    const [b, a] = [paramCount(before), paramCount(after)]
+    out.push({ name, before, after, why: a > b ? `${a - b === 1 ? 'a parameter' : `${a - b} parameters`} added` : a < b ? `${b - a === 1 ? 'a parameter' : `${b - a} parameters`} removed` : 'its parameters changed' })
+  }
+  return out
+}
+
+export interface ChangedName {
+  name: string
+  /** the hunk that changed it */
+  hunk: string
+  path: string
+  /** signature: its parameters changed; removed: the definition is gone; body: it changed inside */
+  kind: 'signature' | 'removed' | 'body'
+}
+
+/**
+ * Names that existed before the change and that it changed: their signature, their body (the hunk sits in
+ * them, by git's @@ context or a definition line in the hunk) or removed them. New names aren't here
+ * (nothing outside the change can call them yet; unusedNew covers those), nor tests, docs and noise.
+ */
+export function changedNames(hunks: Hunk[]): ChangedName[] {
+  const out = new Map<string, ChangedName>()
+  const addedAnywhere = new Set<string>()
+  for (const h of hunks) for (const l of h.lines) if (l.kind === 'add') { const n = definedName(h.path, l.text); if (n) addedAnywhere.add(n) }
+  const put = (c: ChangedName): void => {
+    const was = out.get(c.name)
+    const rank = { signature: 2, removed: 1, body: 0 }
+    if (!was || rank[c.kind] > rank[was.kind]) out.set(c.name, c)
+  }
+  for (const h of hunks) {
+    if (h.noise || h.status === 'added' || isTest(h.path) || isDocs(h.path) || !h.lines.some((l) => l.kind === 'add' || l.kind === 'del')) continue
+    for (const s of signatureChanges(h)) put({ name: s.name, hunk: h.id, path: h.path, kind: 'signature' })
+    for (const l of h.lines) {
+      const n = definedName(h.path, l.text)
+      if (!n) continue
+      if (l.kind === 'del') put({ name: n, hunk: h.id, path: h.path, kind: addedAnywhere.has(n) ? 'body' : 'removed' })
+      else if (l.kind === 'ctx') put({ name: n, hunk: h.id, path: h.path, kind: 'body' })
+    }
+    // git names the enclosing function in the @@ line: the hunk changed its body
+    const ctx = definedName(h.path, /^@@[^@]*@@\s?(.*)$/.exec(h.header)?.[1] ?? '')
+    if (ctx) put({ name: ctx, hunk: h.id, path: h.path, kind: 'body' })
+  }
+  return [...out.values()]
+}
+
+/** One place a name is used: a line of `git grep`. */
+export interface Use {
+  path: string
+  line: number
+  text: string
+}
+
+/** `git grep -z -n` output: path NUL line NUL text. */
+export function parseGrep(out: string, max = 2000): Use[] {
+  const uses: Use[] = []
+  for (const row of out.split('\n')) {
+    const [path, line, ...text] = row.split('\0')
+    if (!path || !/^\d+$/.test(line ?? '')) continue
+    uses.push({ path: path.replace(/\\/g, '/'), line: Number(line), text: text.join('\0').slice(0, 300) })
+    if (uses.length >= max) break
+  }
+  return uses
+}
+
+export interface Radius {
+  name: string
+  hunk: string
+  kind: ChangedName['kind']
+  /** places outside its own definition */
+  uses: number
+  /** of those, on lines the change wrote */
+  changed: number
+  untouched: Use[]
+}
+
+const IMPORT_LINE = /^\s*(?:import\b|from\s+\S+\s+import\b|export\s+(?:type\s+)?\{[^}]*\}\s*from\b|(?:const|let|var)\s+\{[^}]*\}\s*=\s*require\(|use\s)/
+
+/** What `git grep` found per changed name: how many other places use it, how many the change touched, and the rest. */
+export function blastRadius(names: ChangedName[], hunks: Hunk[], found: Use[]): Radius[] {
+  const written = new Set<string>()
+  for (const h of hunks) for (const l of h.lines) if (l.kind === 'add' && l.newNo) written.add(`${h.path}:${l.newNo}`)
+  return names.map((n) => {
+    const word = new RegExp(`(^|[^\\w$])${reEsc(n.name)}([^\\w$]|$)`)
+    // an import isn't a caller: it needs no change when the parameters or the body do (it does when the name is gone)
+    const uses = found.filter((u) => word.test(u.text) && definedName(u.path, u.text) !== n.name && (n.kind === 'removed' || !IMPORT_LINE.test(u.text)))
+    const untouched = uses.filter((u) => !written.has(`${u.path}:${u.line}`))
+    return { name: n.name, hunk: n.hunk, kind: n.kind, uses: uses.length, changed: uses.length - untouched.length, untouched }
+  })
 }
 
 // ── the walkthrough an agent writes ──────────────────────────────────

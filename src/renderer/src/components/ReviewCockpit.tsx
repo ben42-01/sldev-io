@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
-import { buildCockpit, CUT_NOTE, fileOrder, formatMinutes, LINES_PER_MINUTE, partMinutes, reviewMinutes, reviewOrder, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
+import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageCircleQuestion, Network, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { blastRadius, buildCockpit, changedNames, CUT_NOTE, fileOrder, formatMinutes, hunksOf, LINES_PER_MINUTE, partMinutes, reviewMinutes, reviewOrder, type Cockpit, type Hunk, type Need, type Part, type Radius, type Use, type Walkthrough } from '@shared/review'
 import type { DiffFile } from '@shared/diff'
 import { allAgents } from '../lib/agents'
 import { openFileAt } from '../lib/actions'
@@ -59,6 +59,24 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
 
   const criteria = source.criteria
   const c: Cockpit = useMemo(() => buildCockpit(files, walk, criteria), [files, walk, criteria])
+  // blast radius: where the names this change touched are used, found once per version of the diff
+  const sig = useMemo(() => diffSignature(files), [files])
+  const real = useMemo(() => hunksOf(files).filter((h) => !h.noise), [files])
+  const changed = useMemo(() => changedNames(real), [real])
+  const [usesFound, setUsesFound] = useState<{ sig: string; uses: Use[]; capped: boolean } | null>(null)
+  useEffect(() => {
+    if (!changed.length) return
+    let live = true
+    void window.api.git
+      .uses(source.cwd, changed.map((n) => n.name))
+      .then((r) => live && setUsesFound({ sig, ...r }))
+      .catch(() => live && setUsesFound({ sig, uses: [], capped: false }))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source.cwd, sig])
+  const radius = useMemo(() => (usesFound && changed.length ? blastRadius(changed, real, usesFound.uses).filter((x) => x.uses > 0) : []), [usesFound, changed, real])
   const stale = !!walk && !!walkState?.diff && walkState.diff !== diffSignature(files)
   const ranked = useMemo(() => reviewOrder(c), [c])
   const parts = useMemo(() => (order === 'file' ? fileOrder(c) : ranked), [order, c, ranked])
@@ -312,6 +330,8 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
               layout={layout}
               criteria={c.criteria}
               mark={marks[current.id]}
+              radius={radius.filter((x) => current.hunks.some((h) => h.id === x.hunk))}
+              capped={!!usesFound?.capped}
               editing={editing?.part === current.id ? editing.note : null}
               asking={asking?.part === current.id ? asking.q : null}
               onEdit={(note) => setEditing(note === null ? null : { part: current.id, note })}
@@ -366,6 +386,8 @@ interface PartViewProps {
   layout: 'split' | 'unified'
   criteria: Cockpit['criteria']
   mark?: { ok?: boolean; note?: string }
+  radius: Radius[]
+  capped: boolean
   editing: string | null
   asking: string | null
   onEdit: (note: string | null) => void
@@ -443,6 +465,8 @@ function PartView(p: PartViewProps): React.JSX.Element {
           )}
         </div>
       )}
+
+      {p.radius.length > 0 && <BlastRadius radius={p.radius} capped={p.capped} cwd={source.cwd} />}
 
       {asks.length > 0 && (
         <div className="rc-asks">
@@ -558,6 +582,50 @@ function PartView(p: PartViewProps): React.JSX.Element {
         <HunkFile key={path} path={path} hunks={hunks} cwd={source.cwd} layout={p.layout} />
       ))}
     </article>
+  )
+}
+
+const SHOWN = 30
+
+/** Callers of what this part changed that the change didn't touch: where a changed signature or a removed name may still be used the old way. */
+function BlastRadius({ radius, capped, cwd }: { radius: Radius[]; capped: boolean; cwd: string }): React.JSX.Element {
+  return (
+    <section className="rc-blast" aria-label="Blast radius">
+      <div className="field-label">
+        <Network size={11} /> Blast radius
+      </div>
+      {radius.map((r) => {
+        const risky = r.kind !== 'body' && r.untouched.length > 0
+        return (
+          <details key={r.name} className={`rc-blast-name${risky ? ' risky' : ''}`} open={risky}>
+            <summary>
+              <code>{r.name}</code>
+              {r.kind === 'removed' ? ' was removed but ' : ' '}
+              {r.kind === 'removed' ? 'is still named in' : 'is used in'} {r.uses} other {r.uses === 1 ? 'place' : 'places'}, {r.changed} changed
+              {r.kind === 'signature' && <span className="rc-blast-kind">signature changed</span>}
+            </summary>
+            {r.untouched.length > 0 ? (
+              <ul>
+                {r.untouched.slice(0, SHOWN).map((u: Use) => (
+                  <li key={`${u.path}:${u.line}`}>
+                    <button className="rc-blast-use" title="Open in the editor" onClick={() => void openFileAt(`${cwd}/${u.path}`, u.line)}>
+                      <span className="mono rc-blast-at">
+                        {u.path}:{u.line}
+                      </span>
+                      <span className="mono rc-blast-text">{u.text.trim()}</span>
+                    </button>
+                  </li>
+                ))}
+                {r.untouched.length > SHOWN && <li className="muted">and {r.untouched.length - SHOWN} more</li>}
+              </ul>
+            ) : (
+              <p className="muted">Every place that uses it was changed too.</p>
+            )}
+          </details>
+        )
+      })}
+      {capped && <p className="muted">The search stopped early; there may be more.</p>}
+    </section>
   )
 }
 
