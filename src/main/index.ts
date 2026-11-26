@@ -249,6 +249,7 @@ function registerIpc(): void {
   ipcMain.handle('git:graphLog', (_e, cwd: string, limit: number) => git.graphLog(cwd, limit))
   ipcMain.handle('git:showCommit', (_e, cwd: string, sha: string) => git.showCommit(cwd, sha))
   ipcMain.handle('git:diff', (_e, cwd: string, base: string) => git.diff(cwd, base))
+  ipcMain.handle('git:uses', (_e, cwd: string, names: string[]) => git.uses(cwd, Array.isArray(names) ? names.map(String) : []))
   ipcMain.handle('git:changedFiles', (_e, cwd: string, base: string) => git.changedFiles(cwd, String(base)))
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
