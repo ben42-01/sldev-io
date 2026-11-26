@@ -3307,18 +3307,13 @@ body.resizing-y * {
 .wf-section + .wf-section {
   border-top: 1px solid var(--border);
 }
-/* the runs take the room; the workflow list keeps up to 40% while runs are open */
-.wf-section.runs.open {
-  flex: 1 1 0;
-}
-.wf-section.list.open {
+/* an open section is as tall as its rows and scrolls once they don't fit: nothing stretches into empty room, and the
+   workflow list keeps to 40% so the Runs header is never pushed to the bottom of the panel */
+.wf-section.open {
   flex: 0 1 auto;
 }
-.wf-section.list.open:has(+ .wf-section.runs.open) {
+.wf-section.list.open {
   max-height: 40%;
-}
-.wf-section.list.open:not(:has(+ .wf-section.runs.open)) {
-  flex: 1 1 0;
 }
 .wf-section-header {
   flex-shrink: 0;
@@ -3362,8 +3357,9 @@ body.resizing-y * {
 .wf-row:hover .icon-btn {
   opacity: 1;
 }
-.run-row {
-  padding-left: 12px;
+/* GitHub runs are list rows, not the factory's run cards (.run-row): many fit, each a line and its details */
+.gh-run-row {
+  padding: 4px 8px 4px 12px;
 }
 .run-icon {
   display: flex;
