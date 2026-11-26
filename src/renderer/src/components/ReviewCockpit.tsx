@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, ExternalLink, Lightbulb, ListChecks, LoaderCircle, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
-import { buildCockpit, criteriaOf, CUT_NOTE, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
+import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { buildCockpit, criteriaOf, CUT_NOTE, fileOrder, formatMinutes, LINES_PER_MINUTE, partMinutes, reviewMinutes, reviewOrder, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
 import type { DiffFile } from '@shared/diff'
 import type { Mission } from '@shared/types'
 import { allAgents } from '../lib/agents'
@@ -9,7 +9,7 @@ import { scrollToTop } from '../lib/scroll'
 import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
 import { askAboutPart, diffSignature, explainChanges, markPart, readWalkthrough, sendBack, settleReview } from '../state/review'
-import { workspace } from '../state/workspace'
+import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { DiffLines } from './DiffTables'
@@ -36,7 +36,8 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const review = mission.review
   const walkState = review?.walk
   const [walk, setWalk] = useState<Walkthrough | null>(null)
-  const [sel, setSel] = useState(0)
+  /** the part on screen, by id (NOISE_ID for the noise), so switching the order keeps it */
+  const [sel, setSel] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ part: string; note: string } | null>(null)
   const [asking, setAsking] = useState<{ part: string; q: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -44,6 +45,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null)
   const listWidth = useStore(workspace, (w) => reviewListWidth(w.reviewListWidth))
+  const order = useStore(workspace, (w) => w.reviewOrder ?? 'review')
 
   useEffect(() => void settleReview(mission.id), [mission.id])
   useEffect(() => {
@@ -57,17 +59,23 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const criteria = useMemo(() => criteriaOf(mission), [mission])
   const c: Cockpit = useMemo(() => buildCockpit(files, walk, criteria), [files, walk, criteria])
   const stale = !!walk && !!walkState?.diff && walkState.diff !== diffSignature(files)
-  const parts = c.parts
-  const index = Math.min(sel, parts.length)
+  const ranked = useMemo(() => reviewOrder(c), [c])
+  const parts = useMemo(() => (order === 'file' ? fileOrder(c) : ranked), [order, c, ranked])
+  const startHere = ranked[0]?.id
+  const found = sel === NOISE_ID ? parts.length : parts.findIndex((p) => p.id === sel)
+  // nothing picked yet (or the part is gone): open where the review starts
+  const index = found >= 0 ? found : Math.max(0, parts.findIndex((p) => p.id === startHere))
   const current: Part | undefined = parts[index]
   const marks = review?.marks ?? {}
+  const time = reviewMinutes(c, (p) => !!marks[p.id])
   const back = parts.filter((p) => marks[p.id]?.note)
   const seen = parts.filter((p) => marks[p.id]).reduce((a, p) => a + p.lines, 0)
   const writing = walkState?.status === 'writing'
   const agentName = getAgent(mission.options.agent).name
 
   const go = (i: number): void => {
-    setSel(Math.max(0, Math.min(parts.length, i)))
+    const j = Math.max(0, Math.min(c.noise.length ? parts.length : parts.length - 1, i))
+    setSel(j === parts.length ? NOISE_ID : (parts[j]?.id ?? null))
     setEditing(null)
     setAsking(null)
     requestAnimationFrame(() => scrollToTop(main.current))
@@ -217,6 +225,10 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
             <span>
               <strong>{t.lines.toLocaleString()}</strong> lines to read
             </span>
+            <span className="rc-time" title={`At about ${LINES_PER_MINUTE} lines a minute, plus a second look for each flagged spot; noise isn't counted`}>
+              <Clock size={11} /> <strong>{formatMinutes(time.total)}</strong>
+              {time.left < time.total && time.left > 0 ? ` · ${formatMinutes(time.left).replace(/^about /, '')} left` : ''}
+            </span>
             {(['asked', 'supports', 'extra'] as Need[]).map((n) =>
               t[n] ? (
                 <span key={n} className={`rc-key ${n}`}>
@@ -235,7 +247,17 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
       </header>
 
       <div className="rc-body">
-        <nav className="rc-parts" aria-label="Parts in reading order" style={{ width: listWidth }}>
+        <nav className="rc-parts" aria-label={order === 'file' ? 'Parts in file order' : 'Parts in review order'} style={{ width: listWidth }}>
+          {parts.length > 1 && (
+            <div className="seg sm rc-order" role="group" aria-label="Order of the parts">
+              <button type="button" className={order === 'review' ? 'on' : ''} aria-pressed={order === 'review'} title="Risky spots first, then what nobody asked for, then the biggest parts" onClick={() => updateSettings({ reviewOrder: 'review' })}>
+                <ArrowDownUp size={12} /> Review order
+              </button>
+              <button type="button" className={order === 'file' ? 'on' : ''} aria-pressed={order === 'file'} title="By the first file each part touches" onClick={() => updateSettings({ reviewOrder: 'file' })}>
+                <FileText size={12} /> File order
+              </button>
+            </div>
+          )}
           {parts.map((p, i) => {
             const mk = marks[p.id]
             return (
@@ -244,8 +266,14 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
                 <span className="rc-part-name">
                   <span className="rc-part-title">{p.title}</span>
                   <span className="rc-part-meta">
+                    {p.id === startHere && parts.length > 1 && (
+                      <span className="rc-start" title="Read this part first">
+                        <MapPin size={10} /> Start here
+                      </span>
+                    )}
                     <span className={`rc-need ${p.need}`}>{NEED[p.need].label}</span>
                     <span>{p.lines} lines</span>
+                    <span>{formatMinutes(partMinutes(p)).replace(/^about /, '~')}</span>
                     {p.flags.length > 0 && (
                       <span className={`rc-flag-dot${p.flags.some((f) => f.id === 'secret' || f.id === 'tests') ? ' bad' : ''}`} title={p.flags.map((f) => f.label).join(', ')}>
                         <ShieldAlert size={11} /> {p.flags.length}
@@ -278,6 +306,8 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
               part={current}
               n={index + 1}
               of={parts.length}
+              start={current.id === startHere && parts.length > 1}
+              last={index === parts.length - 1 && !c.noise.length}
               layout={layout}
               criteria={c.criteria}
               mark={marks[current.id]}
@@ -308,7 +338,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
         </span>
         <span className="spacer" />
         <span className="rc-keys muted">
-          <kbd>J</kbd>/<kbd>K</kbd> parts · <kbd>A</kbd> looks good · <kbd>S</kbd> send back · <kbd>Q</kbd> ask
+          <kbd>J</kbd>/<kbd>K</kbd> next/previous · <kbd>A</kbd> looks good · <kbd>S</kbd> send back · <kbd>Q</kbd> ask
         </span>
         {back.length > 0 ? (
           <button className="btn primary sm" disabled={busy || isLive(mission.status)} title={isLive(mission.status) ? 'The agent is still working' : `One follow-up to ${agentName} with each part's note`} onClick={() => void send()}>
@@ -329,6 +359,9 @@ interface PartViewProps {
   part: Part
   n: number
   of: number
+  /** the first part of the review order */
+  start: boolean
+  last: boolean
   layout: 'split' | 'unified'
   criteria: Cockpit['criteria']
   mark?: { ok?: boolean; note?: string }
@@ -352,6 +385,14 @@ function PartView(p: PartViewProps): React.JSX.Element {
       <div className="rc-part-head">
         <span className="muted">
           Part {p.n} of {p.of}
+        </span>
+        {p.start && (
+          <span className="rc-start" title="The review order puts this part first">
+            <MapPin size={11} /> Start here
+          </span>
+        )}
+        <span className="muted" title="Its lines at a reading pace, plus a second look for each flag">
+          {formatMinutes(partMinutes(part))}
         </span>
         <span className={`rc-need ${part.need}`} title={NEED[part.need].hint}>
           {NEED[part.need].label}
@@ -444,8 +485,8 @@ function PartView(p: PartViewProps): React.JSX.Element {
         <button className="icon-btn" disabled={p.n === 1} onClick={p.onPrev} title="Previous part (K)" aria-label="Previous part">
           <ArrowLeft size={14} />
         </button>
-        <button className="icon-btn" onClick={p.onNext} title="Next part (J)" aria-label="Next part">
-          <ArrowRight size={14} />
+        <button className="btn sm" disabled={p.last} onClick={p.onNext} title="Next part (J)">
+          Next <ArrowRight size={13} />
         </button>
       </div>
       {p.mark?.note && p.editing === null && (
