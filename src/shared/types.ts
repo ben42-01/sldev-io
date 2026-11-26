@@ -60,6 +60,8 @@ export interface AppSettings {
   rightPanelTab: RightTab
   /** how Mission Control lays out missions: status columns, a grid of cards, or one row each */
   missionLayout: 'columns' | 'grid' | 'list'
+  /** Mission Control's missions: the open project's, or every project's, grouped by project */
+  missionScope: 'project' | 'all'
   /** mission cards in the right sidebar: full cards or one compact row each */
   missionCards: 'cards' | 'compact'
   /** the review tab: old and new side by side, or one column */
@@ -168,6 +170,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   rightPanelVisible: true,
   rightPanelTab: 'overview',
   missionLayout: 'columns',
+  missionScope: 'project',
   missionCards: 'cards',
   terminalFontSize: 13,
   terminalFontFamily:

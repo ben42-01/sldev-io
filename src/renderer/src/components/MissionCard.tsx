@@ -9,7 +9,8 @@ import { acceptPass } from '../state/automations'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
-import { workspace } from '../state/workspace'
+import { setRootFolder, workspace } from '../state/workspace'
+import { basename } from '../lib/paths'
 import { useProfiles } from '../state/profiles'
 import { saveAsEval } from '../state/evals'
 import { openInEditor } from '../lib/actions'
@@ -27,7 +28,8 @@ export function MissionStatusPill({ status }: { status: Mission['status'] }): Re
 }
 
 /** `large` for wide boards; `compact` is one row (status, title, agent, time), the rest on hover and in the menu. */
-export function MissionCard({ mission: m, large = false, compact = false }: { mission: Mission; large?: boolean; compact?: boolean }): React.JSX.Element {
+/** `project`: say which project the mission is in (Mission Control's All projects columns). */
+export function MissionCard({ mission: m, large = false, compact = false, project = false }: { mission: Mission; large?: boolean; compact?: boolean; project?: boolean }): React.JSX.Element {
   const hasPanel = useStore(missions, (s) => !!s.panels[m.id])
   const live = isLive(m.status)
   const profileName = useProfiles().find((p) => p.id === m.options.profile)?.name
@@ -104,6 +106,7 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
+        {project && <ProjectChip root={m.root} />}
         {m.kind && m.kind.id !== 'build' && <span className="mission-kind">{m.kind.name}</span>}
         <span className="mission-agent">{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}</span>
         <TimeAgo t={m.updatedAt} className="mission-time" />
@@ -325,5 +328,15 @@ function LeadBranch({ branch }: { branch?: string }): React.JSX.Element | null {
       <GitBranch size={10} />
       <span>{branch}</span>
     </span>
+  )
+}
+
+/** The project a mission works in; a click opens that project. */
+function ProjectChip({ root }: { root: string }): React.JSX.Element {
+  const open = useStore(workspace, (w) => w.rootFolder === root)
+  return (
+    <button type="button" className={`mission-project${open ? ' open' : ''}`} title={open ? `${root} (open)` : `${root}\nClick to switch to this project`} onClick={() => !open && setRootFolder(root)}>
+      {basename(root)}
+    </button>
   )
 }
