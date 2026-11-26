@@ -21,7 +21,7 @@ import { Empty, Loading } from '../components/States'
 const MAX_LINES = 3000
 
 /** A Review tab's params: a target, or (in layouts saved before targets) only the mission's id. */
-export type DiffPanelParams = { target?: ReviewTarget; missionId?: string }
+export type DiffPanelParams = { target?: ReviewTarget; missionId?: string; /** when set (a new stamp each time), the walkthrough opens on "Since last review" */ sinceReview?: number }
 
 export function DiffPanel(props: IDockviewPanelProps<DiffPanelParams>): React.JSX.Element {
   const { target: t, missionId } = props.params
@@ -93,6 +93,13 @@ function ReviewPanel(props: IDockviewPanelProps<DiffPanelParams> & { target: Rev
   }, [target])
 
   useEffect(() => void load(), [load])
+
+  // asked again to open on "Since last review" (the tab was already open): read the diff again, the new commits are why
+  const sinceAsked = props.params.sinceReview
+  const firstAsk = useRef(sinceAsked)
+  useEffect(() => {
+    if (sinceAsked && sinceAsked !== firstAsk.current) void load()
+  }, [sinceAsked, load])
 
   // an agent at work on this change (a follow-up after Send back, too) just finished: read the diff again
   const cwd0 = source?.mission ? source.cwd : undefined
@@ -240,7 +247,7 @@ function ReviewPanel(props: IDockviewPanelProps<DiffPanelParams> & { target: Rev
         files === null ? (
           <Loading what="Reading the diff…" />
         ) : (
-          <ReviewCockpit source={source} files={files} layout={layout} />
+          <ReviewCockpit source={source} files={files} layout={layout} sinceAsked={props.params.sinceReview} />
         )
       ) : (
       <div className="diff-body">

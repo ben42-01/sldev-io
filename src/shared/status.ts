@@ -70,6 +70,11 @@ export function prChecksSignal(c: PrChecks): Signal {
   return sig('neutral', 'No checks on the head commit')
 }
 
+/** A PR I gave a verdict on: new commits since then want another look. */
+export function prSinceSignal(s: 'changed' | 'reviewed'): Signal {
+  return s === 'changed' ? sig('review', 'Changed since your review') : sig('neutral', 'Reviewed')
+}
+
 /** Ctrl+C, not a crash: the user stopped it. */
 export const wasInterrupted = (code: number | undefined): boolean => code !== undefined && INTERRUPTED.has(code)
 

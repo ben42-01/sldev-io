@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isMine, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, waitingForMe, withChecks } from '@shared/prs'
+import { isMine, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, sinceReviewed, waitingForMe, withChecks } from '@shared/prs'
 import { prChecksSignal, prReviewSignal } from '@shared/status'
 import { listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
 
@@ -94,6 +94,42 @@ describe('the review list', () => {
     // nobody signed in: just the oldest first
     expect(reviewOrder(list, undefined).map((p) => p.number)).toEqual([4, 1, 3, 5, 2])
     expect(list.map((p) => p.number)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('puts the ones changed since my review right after the ones waiting for me, even a draft', () => {
+    const list = [
+      pr(1, '2026-01-03T00:00:00Z'),
+      pr(2, '2026-01-01T00:00:00Z', { isDraft: true }),
+      pr(3, '2026-01-04T00:00:00Z', { reviewRequests: [{ login: 'ben' }] }),
+      pr(4, '2026-01-02T00:00:00Z'),
+      pr(5, '2026-01-05T00:00:00Z')
+    ]
+    const changed = new Set([5, 2])
+    expect(reviewOrder(list, 'ben', 'all', (p) => changed.has(p.number)).map((p) => p.number)).toEqual([3, 2, 5, 4, 1])
+  })
+
+  it('says whether a PR changed since my last verdict on it', () => {
+    const seen = (head?: string) => ({ hunks: [], head, at: 1 })
+    const reviews = [
+      { root: '/repo', number: 1, head: 'aaa', review: { seen: seen('aaa') }, updatedAt: 1 },
+      { root: '/repo/', number: 2, head: 'bbb', review: { seen: seen('bbb') }, updatedAt: 1 },
+      // opened, walkthrough written, no verdict yet
+      { root: '/repo', number: 3, head: 'ccc', review: {}, updatedAt: 1 },
+      // the verdict's own head wins over the entry's (which follows later reads)
+      { root: '/repo', number: 4, head: 'new', review: { seen: seen('old') }, updatedAt: 1 },
+      { root: '/repo', number: 5, head: 'eee', review: { seen: seen() }, updatedAt: 1 },
+      { root: '/other', number: 6, head: 'fff', review: { seen: seen('fff') }, updatedAt: 1 }
+    ]
+    expect(sinceReviewed({ number: 1, headSha: 'aaa' }, reviews, '/repo')).toBe('reviewed')
+    expect(sinceReviewed({ number: 2, headSha: 'b2' }, reviews, '/repo')).toBe('changed')
+    expect(sinceReviewed({ number: 3, headSha: 'c2' }, reviews, '/repo')).toBeUndefined()
+    expect(sinceReviewed({ number: 4, headSha: 'new' }, reviews, '/repo')).toBe('changed')
+    // no head on the verdict: the entry's
+    expect(sinceReviewed({ number: 5, headSha: 'e2' }, reviews, '/repo')).toBe('changed')
+    expect(sinceReviewed({ number: 6, headSha: 'f2' }, reviews, '/repo')).toBeUndefined()
+    expect(sinceReviewed({ number: 9, headSha: 'x' }, reviews, '/repo')).toBeUndefined()
+    // gh didn't say the head
+    expect(sinceReviewed({ number: 2, headSha: '' }, reviews, '/repo')).toBeUndefined()
   })
 
   it('"mine" is what I opened or am asked to review', () => {

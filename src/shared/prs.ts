@@ -1,7 +1,9 @@
 // A repository's open pull requests, read through the user's gh, and the detached worktree a PR's head is
 // checked out in for review. Pure: parsing gh's JSON and deciding what to do with an existing worktree.
 
+import { findPrReview } from './review'
 import { currentRuns, summarizeChecks, type ShipRun } from './ship'
+import type { PrReview } from './types'
 
 /** How many open PRs are asked for: enough for a review list, never a whole busy repository. */
 export const OPEN_PR_LIMIT = 50
@@ -185,9 +187,28 @@ export const waitingForMe = (pr: OpenPr, me: string | undefined): boolean => !!m
 /** "Mine": the ones I opened or am asked to review. */
 export const isMine = (pr: OpenPr, me: string | undefined): boolean => !!me && (pr.author.toLowerCase() === me.toLowerCase() || waitingForMe(pr, me))
 
-/** What to review first: the ones waiting for my review, then the oldest (it has waited longest), drafts last. */
-export function reviewOrder(prs: OpenPr[], me: string | undefined, filter: PrFilter = 'all'): OpenPr[] {
-  const rank = (p: OpenPr): number => (waitingForMe(p, me) ? 0 : p.isDraft ? 2 : 1)
+/**
+ * Where my review of a PR stands, from prReviews.json: `changed` when GitHub's head is no longer the commit of my
+ * last verdict (new commits or a force push since), `reviewed` when it still is, nothing when I never gave a verdict
+ * here (opening it, or a walkthrough alone, isn't a review) or nobody knows either commit.
+ */
+export type SinceReviewed = 'changed' | 'reviewed'
+
+export function sinceReviewed(pr: Pick<OpenPr, 'number' | 'headSha'>, reviews: PrReview[], root: string): SinceReviewed | undefined {
+  const saved = findPrReview(reviews, root, pr.number)
+  const seen = saved?.review.seen
+  if (!saved || !seen) return undefined
+  const head = seen.head ?? saved.head
+  if (!head || !pr.headSha) return undefined
+  return head === pr.headSha ? 'reviewed' : 'changed'
+}
+
+/**
+ * What to review first: the ones waiting for my review, then the ones that changed since my review (`changed`),
+ * then the oldest (it has waited longest), drafts last.
+ */
+export function reviewOrder(prs: OpenPr[], me: string | undefined, filter: PrFilter = 'all', changed: (p: OpenPr) => boolean = () => false): OpenPr[] {
+  const rank = (p: OpenPr): number => (waitingForMe(p, me) ? 0 : changed(p) ? 1 : p.isDraft ? 3 : 2)
   return prs
     .filter((p) => filter === 'all' || isMine(p, me))
     .sort((a, b) => rank(a) - rank(b) || (a.createdAt === b.createdAt ? a.number - b.number : a.createdAt < b.createdAt ? -1 : 1))

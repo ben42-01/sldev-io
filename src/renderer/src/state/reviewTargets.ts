@@ -7,7 +7,7 @@ import { createStore, useStore } from './store'
 import { prTabTitle } from '@shared/prs'
 import { openPanel } from '../dock/dockApi'
 import { toast } from '../components/Toast'
-import { workspace } from './workspace'
+import { updateSettings, workspace } from './workspace'
 
 /**
  * What the Review tab reviews, resolved per kind of target: a mission's change (its folder, its base, the
@@ -264,11 +264,13 @@ export const reviewTabId = (t: ReviewTarget): string => (t.kind === 'mission' ? 
 
 /**
  * Open PR `pr` of the project at `root` in a Review tab titled `#<n> <title>` (focused when it is already open), and
- * check its head out for review in the background.
+ * check its head out for review in the background. `sinceReview` opens the walkthrough on "Since last review".
  */
-export function openPrReview(root: string, pr: { number: number; title: string; headSha?: string }): void {
+export function openPrReview(root: string, pr: { number: number; title: string; headSha?: string }, opts: { sinceReview?: boolean } = {}): void {
   const t: PrTarget = { kind: 'pr', number: pr.number, root }
-  openPanel('diff', reviewTabId(t), prTabTitle(pr), { target: t })
+  if (opts.sinceReview && workspace.get().reviewView === 'files') updateSettings({ reviewView: 'walk' })
+  // a new stamp each time, so a tab that is already open turns the filter on again
+  openPanel('diff', reviewTabId(t), prTabTitle(pr), opts.sinceReview ? { target: t, sinceReview: Date.now() } : { target: t })
   if (!prReviews.get().worktrees[keyOf(t)]) void checkOutPr(t, pr.headSha)
 }
 
