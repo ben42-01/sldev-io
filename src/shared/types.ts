@@ -498,11 +498,13 @@ export interface GhPrReview {
   diff: string
   /** the PR's commits, oldest first: how many came after the head a review was done at */
   commits?: string[]
+  /** the issues it closes (at most 3), whose acceptance criteria are the PR's too */
+  issues?: Array<{ number: number; title: string; body: string }>
 }
 
 export interface ReviewState {
   /** the walkthrough an agent wrote to a file under .sldev/runs; `diff` is what the diff looked like then */
-  walk?: { file: string; mission: string; agent: string; status: 'writing' | 'ready' | 'failed'; at: number; note?: string; diff?: string }
+  walk?: { file: string; mission: string; agent: string; status: 'writing' | 'ready' | 'failed'; at: number; note?: string; diff?: string; head?: string }
   /** by part id: looked good, or sent back with a note; `hunks` are the part's hunks it was made on (hunkKey), `head` the commit */
   marks?: Record<string, { ok?: boolean; note?: string; hunks?: string[]; head?: string; at?: number }>
   /** the diff as it was at the last verdict: its hunks (hunkKey) and head commit, for "Since last review" */

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { criteriaOf, findPrReview, prReviewKey, putPrReview, type ReviewSubject } from '@shared/review'
+import { criteriaOf, findPrReview, prAsk, prCriteria, prReviewKey, putPrReview, type ReviewSubject } from '@shared/review'
 export { targetOf } from '@shared/review'
 import type { GhPrReview, Mission, PrReview, ReviewState, ReviewTarget } from '@shared/types'
 import { getMission, isLive, missionBase, refreshStats, update, useMission } from './missions'
@@ -174,7 +174,7 @@ function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefin
     cwd: worktree ?? t.root,
     root: t.root,
     ask: body || meta?.title || `Pull request #${t.number}`,
-    criteria: criteriaOf({ brief: body }),
+    criteria: prCriteria(body, meta?.issues),
     review: entry?.review ?? {},
     mission: undefined,
     head: meta?.head
@@ -211,8 +211,8 @@ const prResolver: Resolver<PrTarget> = {
     const meta = prReviews.get().meta[keyOf(t)]
     return {
       title: meta?.title ?? `Pull request #${t.number}`,
-      brief: meta?.body || undefined,
-      criteria: criteriaOf({ brief: meta?.body ?? '' }),
+      brief: meta ? prAsk(meta.title, meta.body, meta.issues) : undefined,
+      criteria: prCriteria(meta?.body ?? '', meta?.issues),
       base: meta?.base ? `origin/${meta.base}` : 'HEAD',
       diff: `gh pr diff ${t.number}`
     }

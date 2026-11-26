@@ -107,12 +107,22 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
   return { number: pr.number, title: pr.title, state: pr.state, url: pr.url, isDraft: pr.isDraft, checks }
 }
 
-/** Pull request `n` for the Review tab: what it says, where it goes and its diff. */
+/** Pull request `n` for the Review tab: what it says, the issues it closes, where it goes and its diff. */
 export async function prReview(cwd: string, n: number): Promise<GhPrReview> {
-  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string; commits?: Array<{ oid?: string }> }>(['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName,commits'], cwd)
-  const d = await gh(['pr', 'diff', String(n)], cwd, 60000)
+  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string; commits?: Array<{ oid?: string }>; closingIssuesReferences?: Array<{ number?: number; url?: string }> }>(
+    ['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName,commits,closingIssuesReferences'],
+    cwd
+  )
+  const [d, issues] = await Promise.all([gh(['pr', 'diff', String(n)], cwd, 60000), linkedIssues(cwd, pr.closingIssuesReferences ?? [])])
   if (d.code !== 0) throw new Error(d.stderr.trim() || `gh pr diff ${n} failed`)
-  return { number: pr.number, title: pr.title ?? `#${n}`, body: pr.body ?? '', url: pr.url ?? '', head: pr.headRefOid ?? '', branch: pr.headRefName ?? '', base: pr.baseRefName ?? '', diff: d.stdout, commits: (pr.commits ?? []).map((c) => c.oid ?? '').filter(Boolean) }
+  return { number: pr.number, title: pr.title ?? `#${n}`, body: pr.body ?? '', url: pr.url ?? '', head: pr.headRefOid ?? '', branch: pr.headRefName ?? '', base: pr.baseRefName ?? '', diff: d.stdout, commits: (pr.commits ?? []).map((c) => c.oid ?? '').filter(Boolean), issues }
+}
+
+/** The bodies of the (at most 3) issues a PR closes, by their URL so another repository's work too; one gh can't read is left out. */
+async function linkedIssues(cwd: string, refs: Array<{ number?: number; url?: string }>): Promise<Array<{ number: number; title: string; body: string }>> {
+  const read = refs.filter((r) => r.url && /^https:\/\/[^\s]+\/issues\/\d+$/.test(r.url)).slice(0, 3)
+  const got = await Promise.all(read.map((r) => ghJson<{ number?: number; title?: string; body?: string } | null>(['issue', 'view', r.url!, '--json', 'number,title,body'], cwd, null).catch(() => null)))
+  return got.flatMap((i) => (i?.number ? [{ number: i.number, title: i.title ?? '', body: i.body ?? '' }] : []))
 }
 
 export async function listIssues(cwd: string, label?: string): Promise<GhIssue[]> {

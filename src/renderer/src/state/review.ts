@@ -5,7 +5,7 @@ import type { Mission, ReviewTarget } from '@shared/types'
 import { getAgent } from './agents'
 import { missionEnd, quietly } from './evals'
 import { followUpMission, getMission, isLive, startMission } from './missions'
-import { getReviewSource, patchReview, readReviewDiff, reviewSubject, type ReviewSource } from './reviewTargets'
+import { checkFolder, getReviewSource, patchReview, readReviewDiff, reviewSubject, type ReviewSource } from './reviewTargets'
 import { workspace } from './workspace'
 
 /**
@@ -40,14 +40,16 @@ const subjectOf = (t: ReviewTarget): ReviewSubject => {
   return s
 }
 
-async function helper(s: ReviewSource, agentId: string, prompt: string, title: string): Promise<Mission> {
+async function helper(t: ReviewTarget, s: ReviewSource, agentId: string, prompt: string, title: string): Promise<Mission> {
   const agent = getAgent(agentId)
+  // in the code under review (a PR's own worktree, checked out first if it isn't yet), never someone's checkout by accident
+  const cwd = (await checkFolder(t).catch(() => null))?.path ?? s.cwd
   return quietly(() =>
     startMission({
       prompt,
       title: title.slice(0, 60),
       root: s.root,
-      cwd: s.cwd,
+      cwd,
       // it writes one file, so not the read-only mode (that can't write at all); the prompt says not to touch anything else
       options: { agent: agent.id, print: true, permissionMode: stageMode(agent, workspace.get().factoryModes) },
       worktree: false,
@@ -73,9 +75,9 @@ export async function explainChanges(t: ReviewTarget, agentId: string): Promise<
   const dir = runDir(s)
   await window.api.factory.prepare(dir)
   const file = `${dir}/walkthrough-${now().toString(36)}.json`
-  const h = await helper(s, agentId, walkthroughPrompt(subjectOf(t), [...counts.values()], file), `Walkthrough: ${s.title}`)
+  const h = await helper(t, s, agentId, walkthroughPrompt(subjectOf(t), [...counts.values()], file), `Walkthrough: ${s.title}`)
   inflight.add(h.id)
-  patchReview(t, (r) => ({ ...r, walk: { file, mission: h.id, agent: agentId, status: 'writing', at: now(), diff: diffSignature(files) } }))
+  patchReview(t, (r) => ({ ...r, walk: { file, mission: h.id, agent: agentId, status: 'writing', at: now(), diff: diffSignature(files), ...(s.head ? { head: s.head } : {}) } }))
   try {
     const end = await missionEnd(h.id, WALK_MS)
     await finishWalk(t, end === 'timeout' ? 'It took longer than 15 minutes' : undefined)
@@ -133,7 +135,7 @@ export async function askAboutPart(t: ReviewTarget, p: Part, question: string, a
   await window.api.factory.prepare(dir)
   const askId = now().toString(36)
   const file = `${dir}/ask-${askId}.md`
-  const h = await helper(s, agentId, askPrompt(subjectOf(t), p, question, file), `Ask: ${question}`)
+  const h = await helper(t, s, agentId, askPrompt(subjectOf(t), p, question, file), `Ask: ${question}`)
   inflight.add(h.id)
   patchReview(t, (r) => ({ ...r, asks: [...(r.asks ?? []), { id: askId, part: p.id, q: question.trim(), file, mission: h.id, agent: agentId, at: now() }] }))
   try {

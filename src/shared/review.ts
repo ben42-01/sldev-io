@@ -439,6 +439,43 @@ export function criteriaOf(m: { criteria?: string; brief?: string }): string[] {
   return lines.length ? lines : acceptanceCriteria(m.brief ?? '')
 }
 
+/** A pull request's linked issue, as far as the review needs it. */
+export interface LinkedIssue {
+  number: number
+  title: string
+  body: string
+}
+
+/** The open items of Markdown checklists anywhere in `text` ("- [ ] works offline"), ticked ones too. */
+export function checklist(text: string): string[] {
+  return [...text.matchAll(/^\s*[-*+]\s+\[[ xX]\]\s+(.+)$/gm)].map((m) => m[1].trim()).filter(Boolean)
+}
+
+/**
+ * What a pull request was asked to do: the "Acceptance criteria" list of its description, else its checklist, and the
+ * same from each issue it closes. Duplicates once.
+ */
+export function prCriteria(body: string, issues: LinkedIssue[] = []): string[] {
+  const of = (text: string): string[] => {
+    const listed = acceptanceCriteria(text)
+    return listed.length ? listed : checklist(text)
+  }
+  const seen = new Set<string>()
+  return [body, ...issues.map((i) => i.body)].flatMap(of).filter((c) => {
+    const k = c.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+/** The PR's description with the issues it closes, for the helpers' "what was asked". */
+export function prAsk(title: string, body: string, issues: LinkedIssue[] = []): string {
+  const parts = [body.trim() || title]
+  for (const i of issues.slice(0, 3)) parts.push(`Closes #${i.number}: ${i.title}${i.body.trim() ? `\n${i.body.trim().slice(0, 1500)}` : ''}`)
+  return parts.join('\n\n')
+}
+
 // ── the cockpit: the walkthrough over the real diff ──────────────────
 
 function slug(s: string): string {

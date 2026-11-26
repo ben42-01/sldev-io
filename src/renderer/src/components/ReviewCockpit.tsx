@@ -91,7 +91,9 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.cwd, sig])
   const radius = useMemo(() => (usesFound && changed.length ? blastRadius(changed, real, usesFound.uses).filter((x) => x.uses > 0) : []), [usesFound, changed, real])
-  const stale = !!walk && !!walkState?.diff && walkState.diff !== diffSignature(files)
+  // written for another diff, or (a PR) another head commit: say so, with Explain again
+  const movedFrom = walkState?.head && source.head && walkState.head !== source.head ? walkState.head : undefined
+  const stale = !!walk && ((!!walkState?.diff && walkState.diff !== diffSignature(files)) || !!movedFrom)
   const all = useMemo(() => [...c.parts.flatMap((p) => p.hunks), ...c.noise], [c])
   // marks hold only while their part's hunks are the ones they were made on
   const carry = useMemo(() => carryMarks(c.parts, review?.marks), [c, review?.marks])
@@ -244,7 +246,7 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
               {c.summary && <p className="rc-summary selectable">{c.summary}</p>}
               {stale && (
                 <div className="rc-stale">
-                  The change moved on since this was written.
+                  {movedFrom ? `Written for ${movedFrom.slice(0, 7)}; the change has moved on since.` : 'The change moved on since this was written.'}
                   <button className="btn sm" onClick={explainMenu}>
                     <RotateCcw size={12} /> Explain again
                   </button>

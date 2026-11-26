@@ -63,10 +63,14 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
   # a PR for its Review tab: title, description, head and the branches
   case "$1 $2 $4 $5" in "pr view --json number,title,body,url,headRefOid,headRefName,baseRefName"*)
     case "$3" in
-      128) echo "{\"number\":128,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/128\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\"}" ;;
+      128) echo "{\"number\":128,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/128\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\",\"closingIssuesReferences\":[{\"number\":42,\"url\":\"https://github.com/acme/shop/issues/42\"}]}" ;;
       *) echo "{\"number\":$3,\"title\":\"Try a new cache\",\"body\":\"\",\"url\":\"https://github.com/acme/shop/pull/$3\",\"headRefOid\":\"\",\"headRefName\":\"cache\",\"baseRefName\":\"main\"}" ;;
     esac; exit 0 ;;
   esac
+  # an issue a PR closes, read for its acceptance criteria
+  if [ "$1 $2" = "issue view" ] && [ "$3" = "https://github.com/acme/shop/issues/42" ]; then
+    printf '%s\n' '{"number":42,"title":"Too many requests","body":"Bots hammer the API.\n\n## Acceptance criteria\n- [ ] The 11th request in a minute gets a 429\n- [ ] Limits are per API key"}'; exit 0
+  fi
   # one PR with the issues it closes (the review list's detail)
   case "$1 $2 $3 $4 $5" in "pr view 128 --json "*closingIssuesReferences*)
     echo "{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\"},\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"body\":\"Adds a limiter. Fixes #42\",\"closingIssuesReferences\":[{\"number\":42,\"title\":\"Too many requests\",\"url\":\"https://github.com/acme/shop/issues/42\",\"repository\":{\"name\":\"shop\",\"owner\":{\"login\":\"acme\"}}}]}"; exit 0 ;;
