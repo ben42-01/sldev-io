@@ -499,8 +499,10 @@ export interface Sidebar {
   hits: Array<string | null>
   /** the "+ New tab" row, for clicks (null when the sidebar has no room for it) */
   plus: number | null
-  /** the row saying a newer sldev is out, which copies the update command when clicked */
-  update: number | null
+  /** the rows of the card saying a newer sldev is out, [from, to): a click on them updates */
+  update: { from: number; to: number } | null
+  /** the row of the footer's rule, where the sidebar's edge gets a ┤ */
+  rule: number | null
   /** the project a heading row is for: a click opens New tab there */
   projects: Array<string | null>
 }
@@ -560,14 +562,15 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
       const tree = child ? `${DIM}└${RESET}` : ''
       const title = ellipsis(p.title, w - 5 - num.length - (child ? 1 : 0))
       push(`${bar} ${tree}${marker(p, frame)} ${DIM}${num}${RESET} ${focus ? BOLD : ''}${title}${RESET}`, p.id, focus)
-      const sub = p.shell ? tilde(p.cwd, home) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
+      // a runtime's tab says what it ran, a plain shell where it is
+      const sub = p.shell ? (p.command ? `$ ${p.command}` : tilde(p.cwd, home)) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
       // the diff stat, only the parts that aren't zero
       const ins = !p.shell && p.stats?.insertions ? `+${p.stats.insertions}` : ''
       const del = !p.shell && p.stats?.deletions ? `-${p.stats.deletions}` : ''
       const stat = [ins, del].filter(Boolean).join(' ')
       const subW = w - 4 - (stat ? stat.length + 1 : 0)
       const statText = stat ? ' ' + [ins && `\x1b[32m${ins}${RESET}`, del && `\x1b[31m${del}${RESET}`].filter(Boolean).join(' ') : ''
-      push(`${bar}   ${DIM}${p.shell ? tailFit(sub, subW) : ellipsis(sub, subW)}${RESET}${statText}`, p.id, focus)
+      push(`${bar}   ${DIM}${p.shell && !p.command ? tailFit(sub, subW) : ellipsis(sub, subW)}${RESET}${statText}`, p.id, focus)
     }
   }
 
@@ -590,15 +593,16 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     foot.push(` ${ACCENT}↻${RESET} ${fit(l.name, w - 3)}`)
     foot.push(`   ${DIM}${fit(l.label, w - 3)}${RESET}`)
   }
-  // a newer sldev: one quiet row at the very bottom, there for as long as this one is older
-  const upd = input.update ? ` ${ACCENT}↑${RESET} ${fit(`sldev ${input.update} is out`, Math.max(0, w - 8))}${DIM}copy${RESET} ` : ''
-  if (upd) foot.push(upd)
   if (foot.length) foot.unshift(RULE + '─'.repeat(w) + RESET)
+  // a newer sldev: one card at the very bottom, its own fill and no lines of its own, with a button that updates
+  const card = input.update ? updateCard(input.update, w) : []
 
   // the first row, under the brand line, opens the New tab popup; it stays put while the tabs scroll
   const head = h >= 4 ? [` ${ACCENT}+${RESET} ${fit('New tab', Math.max(0, w - 8))}${DIM}^b c${RESET} `, ''] : []
   // rows that don't fit scroll so the one in focus stays in view; the footer goes first when it's tight
-  const footer = foot.length && h - head.length - foot.length >= 6 ? foot : []
+  const fits = (n: number): boolean => h - head.length - n >= 6
+  const cards = card.length && fits(card.length) ? card : []
+  const footer = [...(foot.length && fits(foot.length + cards.length) ? foot : []), ...cards]
   const room = Math.max(0, h - head.length - footer.length - (footer.length ? 1 : 0))
   const focusRow = rows.findIndex((r) => r.hit === active)
   const start = rows.length <= room ? 0 : Math.max(0, Math.min(focusRow - Math.floor(room / 2), rows.length - room))
@@ -614,7 +618,7 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   for (let i = 0; i < h - head.length; i++) {
     const fromFoot = i - (h - head.length - footer.length)
     if (fromFoot >= 0) {
-      lines.push(onFill(SURFACE, pad(footer[fromFoot], w)))
+      lines.push(onFill(fromFoot >= footer.length - cards.length ? LIFT : SURFACE, pad(footer[fromFoot], w)))
       hits.push(null)
       projects.push(null)
     } else {
@@ -624,7 +628,28 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
       projects.push(body[i]?.project ?? null)
     }
   }
-  return { lines, hits, projects, plus: head.length ? 0 : null, update: upd && footer.length ? h - 1 : null }
+  const footTop = h - footer.length
+  return {
+    lines,
+    hits,
+    projects,
+    plus: head.length ? 0 : null,
+    update: cards.length ? { from: h - cards.length, to: h } : null,
+    rule: footer.length > cards.length ? footTop : null
+  }
+}
+
+/** the update button's label, also what a test clicks */
+export const UPDATE_BUTTON = 'Update now'
+
+/** The update card's two rows: what's out, and a button (a chip on the muted tone) with its key. */
+function updateCard(version: string, w: number): string[] {
+  const bar = gradient('▌', 0, 0)
+  const title = ellipsis(`sldev ${version} is out`, Math.max(0, w - 4))
+  const key = '^b u'
+  const button = ` ${UPDATE_BUTTON} `
+  const gap = Math.max(1, w - 3 - button.length - key.length - 1)
+  return [`${bar} ${ACCENT}↑${RESET} ${BOLD}${title}${RESET}`, `${bar} ${MUTED}${BOLD}${button}${RESET}${' '.repeat(gap)}${DIM}${key}${RESET}`]
 }
 
 /** a pane's state in a word or two, for the sidebar's narrow second line */

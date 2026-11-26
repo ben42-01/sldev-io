@@ -10,7 +10,8 @@ import { editInTerminal, openPane, type OpenResult } from './editor'
 import { briefNote, briefsDir, briefTitle, cliKinds, cliRoot, launchBrief, listBriefs, newBriefFile, shownDir, takeEditedBrief } from './briefs'
 import { loadRuns, openRun, rerunFailed, runColumns } from './workflows'
 import type { DaemonEvent, LoopInfo, PaneInfo, TabState } from './protocol'
-import { ACCENT, at, box, brandMark, DIM, gradient, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, popupHit, ruleLine, sidebar, SIDEBAR_W, sidebarWidth, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
+import { addRuntime, checkName, listRuntimes, nameFrom, removeRuntime, runtimesFile, type Runtime } from './runtimes'
+import { ACCENT, at, box, brandMark, DIM, edgeColor, ellipsis, gradient, MUTED, isLightBackground, logo, LIFT, onFill, PANE, setLight, stripColor, SUBTLE, SURFACE, vEdge, width, drawTerm, fit, glyph, hints, layout, paneDetails, paneSignal, popup, popupHit, ruleLine, sidebar, SIDEBAR_W, sidebarWidth, tabBarLayout, tilde, TONE_SGR, tailFit, selectionText, type Cell, type PopupRow, type Rect, type Selection, type Sidebar, type TabBar } from './render'
 import { createTerm, type Term } from './screen'
 import { readConfig } from './config'
 import { INSTALL_COMMAND, markAnnounced, updateCheckOff, updateToAnnounce } from './updates'
@@ -20,7 +21,7 @@ import { VERSION } from './version'
  * `sldev` with no arguments: every session (an agent or a plain shell) is a tab along the top, numbered
  * 1, 2, 3 with a + for a new one; on wide terminals a sidebar groups them by project with each one's state.
  * One or two are shown, and the keyboard goes to the tab in focus. Ctrl-b is the prefix (n/p, 1-9, </> move,
- * s split, c new tab, t new shell, b briefs, , rename, x close, w workflows, e editor, v changed files, ? keys,
+ * s split, c new tab, t new shell, r runtimes, b briefs, , rename, x close, w workflows, e editor, v changed files, ? keys,
  * d detach); tabs, sidebar rows and + take clicks too. Detaching leaves every session running, and the
  * daemon keeps the tabs' order, names, the one in front and the split.
  */
@@ -30,10 +31,11 @@ const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 /** the hint bar, and what the prefix waits for */
 // the most useful first: a narrow terminal shows only the ones that fit
-const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['b', 'briefs'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
+const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['r', 'runtimes'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['b', 'briefs'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
 const RUNS_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'open in browser'], ['r', 'rerun failed jobs'], ['u', 'refresh'], ['Esc', 'close']]
 const MENU_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'start'], ['Esc', 'cancel']]
 const BRIEF_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'launch'], ['Esc', 'cancel']]
+const RUNTIME_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'run'], ['+', 'new'], ['x', 'remove'], ['Esc', 'cancel']]
 const FOLDER_HINTS: Array<[string, string]> = [['↑↓', 'pick'], ['Enter', 'open'], ['⌫', 'up'], ['Esc', 'back']]
 
 /** the next row up or down that isn't a heading, held at the ends */
@@ -46,6 +48,7 @@ const HELP_ROWS: PopupRow[] = [
   { head: true, text: 'Tabs' },
   { key: 'c', text: 'new tab: a project, then an agent or a shell' },
   { key: 't', text: 'shell in the folder of the tab in focus' },
+  { key: 'r', text: 'runtimes: run a saved command or a project script' },
   { key: 'b', text: 'briefs: launch one waiting in .sldev-cli/briefs' },
   { key: '1-9', text: 'go to tab' },
   { key: 'n p', text: 'next, previous tab' },
@@ -58,7 +61,7 @@ const HELP_ROWS: PopupRow[] = [
   { key: 'e', text: "the tab's folder in your editor" },
   { key: 'v', text: "the tab's changed files in your editor" },
   { head: true, text: 'Session' },
-  { key: 'u', text: 'copy the command that updates sldev' },
+  { key: 'u', text: 'update sldev: npm install in a new tab' },
   { key: 'd', text: 'detach: everything keeps running' },
   { key: '^b', text: 'send Ctrl-b to the tab' }
 ]
@@ -132,6 +135,8 @@ interface Menu {
   sel: number
   /** only Enter picks: no row has a key of its own */
   enterOnly?: boolean
+  /** keys of the popup's own that act on the row in focus (x removes a saved runtime) */
+  keys?: Record<string, (sel: number) => void>
   /** Backspace or ←: the folder browser goes up */
   back?: () => void
   /** Esc: the folder browser goes back to New tab instead of closing */
@@ -156,6 +161,8 @@ export interface TuiServices {
   edit?: (file: string) => Promise<void>
   /** a newer sldev (updates.ts), `first` when it wasn't told about yet; missing in tests, so they never ask the registry */
   update?: () => Promise<{ version: string; first: boolean } | null>
+  /** what updating runs in a new tab (npm install -g sldev-cli@latest); without it the command is copied instead */
+  updateCommand?: string
 }
 
 export function defaultServices(preferred: () => string | null, dataDir = ''): TuiServices {
@@ -165,7 +172,7 @@ export function defaultServices(preferred: () => string | null, dataDir = ''): T
     if (v?.first) markAnnounced(dataDir, v.version)
     return v
   }
-  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard, edit: editInTerminal, update }
+  return { runs: loadRuns, rerun: rerunFailed, openRun, open: (p, diff) => openPane(p, { diff, preferred: preferred() }), copy: copyToClipboard, edit: editInTerminal, update, updateCommand: INSTALL_COMMAND }
 }
 
 /** lines the wheel scrolls a tab's history by */
@@ -202,7 +209,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let runsView: RunsView | null = null
   let menu: Menu | null = null
   let help = false
-  /** a newer sldev is out: a row in the sidebar and the status bar say so, and copy the update command */
+  /** a newer sldev is out: a card in the sidebar and a chip on the status bar say so, and a click updates */
   let update: string | null = null
   let loops = new Map<string, LoopInfo>()
   let frame: NodeJS.Timeout | null = null
@@ -217,7 +224,9 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   let bar: TabBar = { text: '', spans: [], plus: null }
   /** text being selected (or just copied) in a tab by dragging the mouse */
   let sel: { pane: string; s: Selection; dragging: boolean } | null = null
-  let side: Sidebar = { lines: [], hits: [], projects: [], plus: null, update: null }
+  let side: Sidebar = { lines: [], hits: [], projects: [], plus: null, update: null, rule: null }
+  /** where the status bar's update chip was drawn, for clicks */
+  let statusUpdate: { from: number; to: number } | null = null
   /** the sidebar's width, as its edge was last dragged to (the daemon keeps it), and whether it's being dragged */
   let sideW = SIDEBAR_W
   let sideDrag = false
@@ -311,6 +320,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       side.lines.forEach((line, i) => (s += at(l.sidebar!.x, l.sidebar!.y + i) + line))
       // the sidebar's edge: the brand top to bottom, softened, from the junction with the rule down
       s += vEdge(l.sidebar.w, 1, l.sidebar.h + 1, '┬')
+      // the footer's rule meets the edge
+      if (side.rule !== null) s += at(l.sidebar.w, l.sidebar.y + side.rule) + SURFACE + edgeColor((side.rule + 1) / Math.max(1, l.sidebar.h)) + '┤' + RESET
     }
     return stripColor(s)
   }
@@ -338,7 +349,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     const shown = visible()
     const area = paneArea(l)
     if (runsView) s += stripColor(drawRuns(runsView, area))
-    else if (!shown.length) s += stripColor(welcome(area))
+    // a popup over an empty screen stands alone: the welcome card under it would be a box in a box
+    else if (!shown.length) s += stripColor(welcome(area, !menu && !help))
     else
       shown.forEach((id, i) => {
         const v = views.get(id)
@@ -357,7 +369,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   /** nothing open yet: what to do, in the pane area, as a card framed in the brand gradient */
-  function welcome(r: Rect): string {
+  function welcome(r: Rect, card = true): string {
     const lines = [
       ...logo(),
       '',
@@ -365,6 +377,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       '',
       `${ACCENT}^b c${RESET}  new tab: an agent or a shell, in any project`,
       `${ACCENT}^b t${RESET}  a shell here`,
+      `${ACCENT}^b r${RESET}  run a command: ls -lrt, npm run dev…`,
       `${ACCENT}^b ?${RESET}  every key`,
       '',
       `${DIM}or from another terminal:${RESET}`,
@@ -372,6 +385,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     ]
     let s = ''
     for (let i = 0; i < r.h; i++) s += at(r.x, r.y + i) + onFill(PANE, ' '.repeat(r.w))
+    if (!card) return s
     const textW = Math.max(...lines.map((l) => width(l.replace(/\x1b\[[0-9;]*m/g, ''))))
     // a row of air above and below, three columns either side
     const w = textW + 8
@@ -522,6 +536,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
   }
 
   function statusText(cols: number): string {
+    statusUpdate = null
     if (prompt) return ` ${ACCENT}›${RESET} ` + BOLD + fit(prompt.label, Math.min(prompt.label.length, cols - 3)) + RESET + fit(prompt.text, Math.max(0, cols - 3 - prompt.label.length))
     // waiting for the key after the prefix: amber, as anything that waits for you
     if (prefix) return hints(HINTS, cols, ` \x1b[1;${TONE_SGR.attention}m^b${RESET} `)
@@ -535,26 +550,42 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (menu) return hints(menu.hints, cols, ' ')
     if (help) return hints([['any key', 'close']], cols, ' ')
     if (runsView) return hints(RUNS_HINTS, cols, ' ')
-    const right = rightStatus()
-    const rw = cols >= 90 ? right.length : 0
-    return hints(HINTS, cols - rw, ` ${ACCENT}^b${RESET} `) + (rw ? `${DIM}${right}${RESET}` : '')
-  }
-
-  /** the bottom right: the focused tab's project and the time */
-  function rightStatus(): string {
     const id = visible()[0]
     const info = id ? views.get(id)?.info : undefined
     const project = info ? (info.root || info.cwd).replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''
     const d = new Date()
     const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    // a newer sldev, also where there's no sidebar to say so
-    const upd = update ? `↑ ${update} ^b u · ` : ''
-    return `${upd}${project ? `${project} · ` : ''}${time} `
+    // the bottom right: the focused tab's project and the time, and a newer sldev as a chip a click updates
+    // (also where there's no sidebar to say so); on a narrow terminal only the chip
+    const chip = update ? ` ↑ ${update} ` : ''
+    const rest = `${project ? `${project} · ` : ''}${time} `
+    const rw = (cols >= 90 ? rest.length : 0) + (chip ? chip.length + 1 : 0)
+    if (chip) statusUpdate = { from: cols - rw, to: cols - rw + chip.length }
+    const right = (chip ? `${MUTED}${BOLD}${chip}${RESET} ` : '') + (cols >= 90 ? `${DIM}${rest}${RESET}` : '')
+    return hints(HINTS, cols - rw, ` ${ACCENT}^b${RESET} `) + right
   }
 
-  /** ^b u or the sidebar's ↑ row: the update command to the clipboard, since the TUI holds the mouse */
-  function copyUpdate(): void {
+  /**
+   * ^b u, the sidebar's Update now or the status bar's ↑ chip: npm installs the new sldev in a tab of its own,
+   * so its output is there to read. The daemon (and so every open tab) keeps this version until sldev stop.
+   */
+  function runUpdate(): void {
     if (!update) return void ((message = `This is sldev ${VERSION}, the newest`), schedule())
+    const cmd = services.updateCommand
+    if (!cmd) return copyUpdate()
+    const version = update
+    client
+      .request('new', { shell: true, run: cmd, title: `update sldev`, brief: '', cwd: newTabCwd(), ...paneSize() })
+      .then((p) => {
+        started(p, 'update')
+        message = `Installing sldev ${version} in tab ${order.indexOf(p.id) + 1}. Open tabs keep ${VERSION}: once they're done, sldev stop, then sldev`
+        schedule()
+      })
+      .catch(fail)
+  }
+
+  /** the update command to the clipboard (when the TUI wasn't given one to run), since the TUI holds the mouse */
+  function copyUpdate(): void {
     out.write(osc52(INSTALL_COMMAND))
     void (services.copy ?? copyToClipboard)(INSTALL_COMMAND)
       .catch(() => false)
@@ -562,6 +593,91 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         message = `${ok ? 'Copied' : 'Sent to the clipboard (OSC 52)'}: ${INSTALL_COMMAND} · run it in a shell; open tabs keep ${VERSION} until sldev stop`
         schedule()
       })
+  }
+
+  /** A runtime in a tab of its own: a shell in its folder with the command typed in, so it ends at a prompt. */
+  const startRuntime = (r: Runtime): void => {
+    client
+      .request('new', { shell: true, run: r.command, title: r.name, brief: '', cwd: r.cwd, ...paneSize() })
+      .then((p) => {
+        started(p, 'runtime')
+        message = `Running ${r.name} in tab ${order.indexOf(p.id) + 1}: ${r.command}`
+        schedule()
+      })
+      .catch(fail)
+  }
+
+  /**
+   * Ctrl-b r, or Runtime… in New tab: the project's runtimes (the ones added here, then its scripts); Enter or a
+   * click runs one, + adds one (a command, then a name) and runs it, x removes a saved one.
+   */
+  async function openRuntimes(where = newTabCwd(), focus?: string): Promise<void> {
+    try {
+      const root = await cliRoot(where)
+      const list = await listRuntimes(root)
+      const rows: PopupRow[] = [{ key: '+', text: 'New runtime…', note: 'any command, kept for this project' }]
+      const pick: Menu['pick'] = [() => newRuntime(root, where)]
+      // the runtime on each row, for x
+      const of: Array<Runtime | null> = [null]
+      const saved = list.filter((r) => r.saved)
+      const found = list.filter((r) => !r.saved)
+      const head = (text: string): void => void (rows.push({ head: true, text }), pick.push(() => undefined), of.push(null))
+      const add = (r: Runtime, key: string, note: string): void => {
+        rows.push({ key, text: r.name, note: ellipsis(note, 30).trimEnd() })
+        pick.push(() => startRuntime(r))
+        of.push(r)
+      }
+      if (saved.length) head('Added')
+      saved.forEach((r, i) => add(r, i < 9 ? String(i + 1) : '', r.command))
+      if (found.length) head('In the project')
+      found.forEach((r) => add(r, '', r.group ?? r.command))
+      const keys: Menu['keys'] = {}
+      keys.x = (i) => {
+        const r = of[i]
+        if (!r?.saved) return void ((message = 'Only a runtime added here can be removed; the project\'s scripts come from its files'), schedule())
+        ask(`Remove runtime ${r.name} (${r.command})? Tabs running it stay. (y/N) `, (text) => {
+          if (!/^y/i.test(text.trim())) return void openRuntimes(where, r.name)
+          removeRuntime(root, r.name)
+            .then(() => ((message = `Removed runtime ${r.name}`), openRuntimes(where)))
+            .catch(fail)
+        })
+      }
+      const at = focus ? rows.findIndex((r) => !r.head && r.text === focus) : -1
+      menu = {
+        title: 'Runtimes',
+        footer: saved.length ? `added ones in ${tailFit(tilde(runtimesFile(root), home), 46).trimEnd()}` : `in ${tailFit(tilde(root, home), 50).trimEnd()}`,
+        hints: RUNTIME_HINTS,
+        rows,
+        pick,
+        keys,
+        sel: at >= 0 ? at : list.length ? rows.findIndex((r, i) => i > 0 && !r.head) : 0
+      }
+      help = false
+      schedule()
+    } catch (err) {
+      fail(err as Error)
+    }
+  }
+
+  /** + in Runtimes: the command, then its name (Enter takes one from the command); saved, then run at once. */
+  function newRuntime(root: string, where: string): void {
+    ask('New runtime, command: ', (command) => {
+      if (!command.trim()) return void openRuntimes(where)
+      const suggested = nameFrom(command)
+      ask(`Name (Enter: ${suggested}): `, (typed) => {
+        const name = typed.trim() || suggested
+        const problem = checkName(name)
+        if (problem) return fail(new Error(problem))
+        // kept relative to the project when the tab in focus works in a folder inside it, else at its top
+        const inside = where === root || where.startsWith(root.replace(/[\\/]+$/, '') + (process.platform === 'win32' ? '\\' : '/'))
+        addRuntime(root, { name, command, cwd: inside ? where : root })
+          .then(({ replaced, runtime }) => {
+            startRuntime({ name: runtime.name, command: runtime.command, cwd: inside ? where : root, saved: true })
+            if (replaced) message = `Replaced runtime ${name}; running it`
+          })
+          .catch(fail)
+      })
+    })
   }
 
   /** a new tab works where the tab in focus works (its worktree), else where sldev was attached */
@@ -701,6 +817,8 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     pick.push(() => undefined)
     rows.push({ key: 't', text: 'Shell', note: process.platform === 'win32' ? '' : (process.env.SHELL ?? '').split('/').pop() })
     pick.push(() => newShell(where))
+    rows.push({ key: 'r', text: 'Runtime…', note: 'a command or a project script' })
+    pick.push(() => void openRuntimes(where))
     const first = rows.length
     agents.forEach((a, i) => {
       const ok = !!installedBin(a)
@@ -820,6 +938,12 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       if (m.cancel && (s === '\x1b' || c === 'q')) m.cancel()
       return ''
     }
+    const own = m.keys?.[c]
+    if (own) {
+      menu = null
+      own(m.sel)
+      return s.slice(1)
+    }
     const i = c === '\r' ? m.sel : m.enterOnly ? -1 : m.rows.findIndex((r) => r.key === c)
     if (i >= 0) {
       menu = null
@@ -932,6 +1056,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       }
       return
     }
+    if (y === l.status.y && statusUpdate && x >= statusUpdate.from && x < statusUpdate.to && !prompt) return runUpdate()
     if (y === l.tabs.y && x >= l.tabs.x) {
       const bx = x - l.tabs.x
       if (bar.plus && bx >= bar.plus.from && bx < bar.plus.to) return middle || right ? undefined : openMenu()
@@ -948,7 +1073,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       const id = side.hits[y - l.sidebar.y]
       if (right) return id ? renameTab(id) : undefined
       if (side.plus !== null && y - l.sidebar.y === side.plus) return openMenu()
-      if (side.update !== null && y - l.sidebar.y === side.update) return copyUpdate()
+      if (side.update && y - l.sidebar.y >= side.update.from && y - l.sidebar.y < side.update.to) return runUpdate()
       const project = side.projects[y - l.sidebar.y]
       if (project) return openMenu(project)
       if (id) {
@@ -1107,7 +1232,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
       menu = null
       help = false
       if (c === 'u') {
-        copyUpdate()
+        runUpdate()
         return s.slice(1)
       }
       if (c === '?') {
@@ -1133,6 +1258,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
         return ''
       } else if (c === 'c' || c === '+') openMenu()
       else if (c === 't') newShell()
+      else if (c === 'r') void openRuntimes()
       else if (c === 'b') void openBriefs()
       else if (c === ',' && id) renameTab(id)
       else if (c === 'x' && id) closeTab(id)
@@ -1229,7 +1355,7 @@ export async function runTui(client: Client, cwd: string, io: TuiIo = { input: p
     if (!v || restored) return
     update = v.version
     // the message once per version; the sidebar row and the status bar keep it while this sldev is older
-    if (v.first && !prompt && !message) message = `sldev ${v.version} is out (this is ${VERSION}): ^b u or the sidebar's ↑ row copies the update command`
+    if (v.first && !prompt && !message) message = `sldev ${v.version} is out (this is ${VERSION}): click Update now or ^b u to install it`
     schedule()
   }).catch(() => undefined)
   return finished

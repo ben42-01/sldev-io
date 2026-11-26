@@ -31,7 +31,7 @@ const FOOT: Array<[Tone, string]> = [
   ['review', 'ready'],
   ['done', 'done']
 ]
-const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['b', 'briefs'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
+const HINTS: Array<[string, string]> = [['c', 'new tab'], ['t', 'shell'], ['r', 'runtimes'], ['1-9', 'go to'], ['?', 'all keys'], ['d', 'detach'], ['b', 'briefs'], ['s', 'split'], ['w', 'workflows'], ['n/p', 'next/prev'], ['e', 'editor']]
 
 type Line = { kind: 'prompt' | 'tool' | 'text' | 'ok' | 'blank'; text: string; extra?: string }
 

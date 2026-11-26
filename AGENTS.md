@@ -100,7 +100,8 @@ test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in the CLI's own data folder, cli/src/paths.ts)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the tabbed view (top tabs, grouped sidebar, popups; render.ts draws it);
-                  loops.ts the repeat loops (`sldev new --repeat`); briefs.ts the CLI's project folder `.sldev-cli/` (briefs launched by `sldev launch`/Ctrl-b b, project kinds in `kinds/`; the app never reads it, the CLI never touches `.sldev/drafts`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; skills.ts the CLI's own skills (sldev-conductor: an agent in an `--allow-spawn` pane runs others and merges their branches), installed by `sldev skills install` next to the app's; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
+                  loops.ts the repeat loops (`sldev new --repeat`); runtimes.ts the project's runtimes (`.sldev-cli/runtimes.json` plus src/main/runtimes.ts's detected scripts; started as a shell
+                  tab with the command typed in once its prompt is up, never again on restore: `sldev runtime`, Ctrl-b r); briefs.ts the CLI's project folder `.sldev-cli/` (briefs launched by `sldev launch`/Ctrl-b b, project kinds in `kinds/`; the app never reads it, the CLI never touches `.sldev/drafts`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; skills.ts the CLI's own skills (sldev-conductor: an agent in an `--allow-spawn` pane runs others and merges their branches), installed by `sldev skills install` next to the app's; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 
@@ -231,7 +232,7 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
-  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills), never the UI.
+  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills, runtimes), never the UI.
   Keep those modules free of `electron` imports (they take a data dir or a sink instead). The client checks the
   daemon's version on connect (`connect` in `cli/src/client.ts`): a daemon left by an older sldev is replaced when nothing
   runs in it, and the daemon answers every command, an unknown one with an error, because a silent one hung `sldev` after

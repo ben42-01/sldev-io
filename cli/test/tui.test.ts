@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, sep } from 'path'
 import { PassThrough, Writable } from 'stream'
@@ -472,31 +472,111 @@ describe('projects in New tab', () => {
 })
 
 describe('a newer sldev', () => {
-  it('says so once on the message line, keeps a sidebar row, and copies the npm command from it or ^b u', async () => {
-    const t = await attachTui(100, 30, { update: async () => ({ version: '9.9.9', first: true }) })
-    let s = await t.textWith("sldev 9.9.9 is out (this is ")
-    // no popup in the way: keys still go where they did
-    expect(s).not.toContain('╭─ Update')
-    expect(s).toMatch(/↑ sldev 9\.9\.9 is out +copy/)
-    // the row copies the command (the TUI holds the mouse, so it can't be selected)
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  const where = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    const y = rows.findIndex((r) => r.includes(text))
+    return { x: rows[y].indexOf(text), y }
+  }
+
+  it('says so once, shows one card with Update now, and a click runs the update in a tab of its own', async () => {
+    const before = new Set((await c.request('ls', {})).map((p) => p.id))
+    // the update command is a harmless echo: the test never runs npm
+    const t = await attachTui(100, 30, { update: async () => ({ version: '9.9.9', first: true }), updateCommand: 'echo sldev-update-ran' })
+    let s = await t.textWith('sldev 9.9.9 is out (this is ')
+    expect(s).toContain('click Update now or ^b u')
+    // one card, no rule or box of its own: the "is out" row and the button row under it
+    expect(s).toMatch(/↑ sldev 9\.9\.9 is out/)
+    expect(s).toMatch(/Update now +\^b u/)
     const rows = s.split('\n')
-    const y = rows.findIndex((r) => r.includes('↑ sldev 9.9.9'))
-    t.input.write(`\x1b[<0;3;${y + 1}M\x1b[<0;3;${y + 1}m`)
-    await t.textWith('Copied: npm install -g sldev-cli@latest')
-    expect(t.copied).toEqual(['npm install -g sldev-cli@latest'])
-    t.input.write('\x02u')
-    for (let i = 0; i < 30 && t.copied.length < 2; i++) await sleep(100)
-    expect(t.copied).toHaveLength(2)
+    const cardAt = rows.findIndex((r) => r.includes('↑ sldev 9.9.9 is out'))
+    expect(rows[cardAt - 1]).not.toMatch(/^─+/)
+    const at = where(s, 'Update now')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('sldev-update-ran')
+    expect(s).toMatch(/Installing sldev 9\.9\.9 in tab \d+/)
+    expect(s).toMatch(/\d+ update sldev/)
+    expect(t.copied).toEqual([])
+    const added = (await c.request('ls', {})).filter((p) => !before.has(p.id))
+    expect(added).toEqual([expect.objectContaining({ shell: true, title: 'update sldev', command: 'echo sldev-update-ran' })])
+    for (const p of added) await c.request('kill', { pane: p.id })
     t.input.write('\x02d')
     await t.tui
   }, 30_000)
 
-  it('without the sidebar, the status bar says it', async () => {
+  it('without the sidebar, a chip on the status bar says it, and ^b u copies the command when there is none to run', async () => {
     const t = await attachTui(95, 24, { update: async () => ({ version: '9.9.9', first: false }) })
-    await t.textWith(/↑ 9\.9\.9 \^b u/)
+    await t.textWith(/↑ 9\.9\.9 +\S/)
+    t.input.write('\x02u')
+    await t.textWith('Copied: npm install -g sldev-cli@latest')
+    expect(t.copied).toEqual(['npm install -g sldev-cli@latest'])
     t.input.write('\x02d')
     await t.tui
   }, 30_000)
+})
+
+describe('runtimes', () => {
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('adds a runtime from ^b r, runs it in a tab of its own, lists it next time and removes it with x', async () => {
+    // prints sldev-42, which the command itself doesn't contain
+    const cmd = process.platform === 'win32' ? 'echo ("sldev-" + (40+2))' : 'echo sldev-$((40+2))'
+    const before = new Set((await c.request('ls', {})).map((p) => p.id))
+    writeFileSync(join(work, 'package.json'), JSON.stringify({ scripts: { hello: 'echo hello' } }))
+    const t = await attachTui(120, 36)
+    t.input.write('\x02r')
+    let s = await t.textWith('╭─ Runtimes')
+    expect(s).toContain('New runtime…')
+    expect(s).toMatch(/hello +package\.json/)
+    t.input.write('+')
+    await t.textWith('New runtime, command: ')
+    t.input.write(cmd + '\r')
+    await t.textWith('Name (Enter: echo): ')
+    t.input.write('answer\r')
+    s = await t.textWith('sldev-42')
+    expect(s).toContain(`Running answer in tab`)
+    expect(s).toContain(`: ${cmd}`)
+    // the sidebar says what the tab ran
+    expect(s).toContain(`$ ${cmd.slice(0, 18)}`)
+    expect(JSON.parse(readFileSync(join(work, '.sldev-cli', 'runtimes.json'), 'utf8')).runtimes).toEqual([{ name: 'answer', command: cmd }])
+
+    // next time it's listed first; Enter runs the one in focus
+    t.input.write('\x02r')
+    s = await t.textWith(/1 +answer +echo sldev/)
+    // x removes it, after asking
+    t.input.write('x')
+    await t.textWith(`Remove runtime answer (${cmd})? Tabs running it stay. (y/N)`)
+    t.input.write('y\r')
+    s = await t.textWith('Removed runtime answer')
+    expect(s).not.toMatch(/1 +answer/)
+    expect(JSON.parse(readFileSync(join(work, '.sldev-cli', 'runtimes.json'), 'utf8')).runtimes).toEqual([])
+    t.input.write('\x1b')
+
+    // New tab has a way in too, and a click runs a project script at once
+    t.input.write('\x02c')
+    s = await t.textWith('Runtime…')
+    const rows = s.split('\n')
+    const y = rows.map((r, i) => (r.includes('Runtime…') ? i : -1)).filter((i) => i >= 0).pop()!
+    t.input.write(click(rows[y].lastIndexOf('Runtime…'), y))
+    s = await t.textWith(/hello +package\.json/)
+    const r2 = s.split('\n')
+    const hy = r2.map((r, i) => (/hello +package\.json/.test(r) ? i : -1)).filter((i) => i >= 0).pop()!
+    t.input.write(click(r2[hy].indexOf('hello'), hy))
+    await t.textWith(/Running hello in tab \d+: npm run hello/)
+
+    for (const p of (await c.request('ls', {})).filter((p) => !before.has(p.id))) await c.request('kill', { pane: p.id })
+    rmSync(join(work, 'package.json'))
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
 })
 
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
@@ -617,6 +697,24 @@ describe('sidebar', () => {
     pane('2', { title: 'zsh', shell: true, pid: 9, status: 'waiting', cwd: '/w/app' }),
     pane('3', { title: 'review', status: 'needs-input', root: '/w/site', cwd: '/w/site', worktree: { branch: 'review-1', path: '/w/site-wt', base: 'main' } as PaneInfo['worktree'] })
   ]
+
+  it('ends with one update card under the counts, its rows a click target, and says where the rule meets the edge', () => {
+    const s = sidebar({ panes, order: ['2', '1', '3'], active: '1', shown: ['1'], update: '9.9.9' }, SIDEBAR_W, 20)
+    const rows = s.lines.map(plain)
+    expect(rows.every((r) => r.length === SIDEBAR_W)).toBe(true)
+    expect(s.update).toEqual({ from: 18, to: 20 })
+    expect(rows[18]).toMatch(/^▌ ↑ sldev 9\.9\.9 is out/)
+    expect(rows[19]).toMatch(/^▌ +Update now +\^b u/)
+    // the counts keep their rule; the card has none of its own
+    expect(rows[s.rule!]).toMatch(/^─+$/)
+    expect(rows[s.rule! + 1]).toMatch(/need you/)
+    expect(s.rule! + 2).toBe(18)
+    // a shell tab started for a runtime says what it ran
+    const run = sidebar({ panes: [pane('4', { title: 'ls', shell: true, pid: 9, status: 'waiting', cwd: '/w/app', command: 'ls -lrt' })], order: ['4'], active: '4', shown: ['4'] }, SIDEBAR_W, 12)
+    expect(run.lines.map(plain).join('\n')).toContain('$ ls -lrt')
+    expect(run.update).toBeNull()
+    expect(run.rule).toBeNull()
+  })
 
   it('groups tabs by project, agents before shells, the one in focus with an accent bar and no reverse video', () => {
     const s = sidebar({ panes, order: ['2', '1', '3'], active: '1', shown: ['1'] }, SIDEBAR_W, 20)

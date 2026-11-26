@@ -81,23 +81,37 @@ describe('a daemon restarted (a reboot, a crash)', () => {
   })
 
   it('reopens shell tabs in their folder and resumes the agent’s own session, without its prompt', async () => {
+    let runtimeId = ''
     const first = await startDaemon({ dataDir: data, notify: () => undefined })
     let c = await connect({ dataDir: data, script: '', start: false })
     const agent = await c.request('new', { agent: 'claude', brief: 'Fix the greeting', worktree: false, cwd: repo })
     expect((await c.request('wait', { pane: agent.id, for: 'ready', timeout: 20 }))?.sessionId).toBe('sess-123')
     const shell = await c.request('new', { shell: true, brief: '', cwd: join(repo, 'src'), title: 'logs' })
+    // a runtime: its command is typed into the shell once, never again after the restart
+    const ran = join(tmp, 'ran.log')
+    const runtime = await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` })
+    expect(runtime.command).toBe(`echo ran >> "${ran}"`)
+    for (let i = 0; i < 100 && !existsSync(ran); i++) await new Promise((r) => setTimeout(r, 100))
+    expect(readFileSync(ran, 'utf8').trim()).toBe('ran')
+    await c.request('kill', { pane: runtime.id })
+    await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` }).then((p) => (runtimeId = p.id))
+    for (let i = 0; i < 100 && readFileSync(ran, 'utf8').trim().split(/\r?\n/).length < 2; i++) await new Promise((r) => setTimeout(r, 100))
     await c.request('tabs', { active: shell.id, split: true })
     c.close()
     await first.close()
     expect(readSessions(data)?.panes.map((p) => [p.id, p.status])).toEqual([
       [agent.id, 'waiting'],
-      [shell.id, 'waiting']
+      [shell.id, 'waiting'],
+      [runtimeId, 'waiting']
     ])
 
     const second = await startDaemon({ dataDir: data, notify: () => undefined })
     try {
       c = await connect({ dataDir: data, script: '', start: false })
-      const [a, s] = await c.request('attach', { cols: 80, rows: 24 })
+      const [a, s, r] = await c.request('attach', { cols: 80, rows: 24 })
+      // the runtime's tab is a shell again, its command not typed a second time
+      expect(r).toMatchObject({ id: runtimeId, title: 'mark', shell: true })
+      expect(r.command).toBeUndefined()
       expect(a).toMatchObject({ id: agent.id, title: agent.title, cwd: repo, notification: 'Resumed after sldev restarted' })
       expect(a.pid).toBeGreaterThan(0)
       expect(s).toMatchObject({ id: shell.id, title: 'logs', cwd: join(repo, 'src'), shell: true })
@@ -114,6 +128,8 @@ describe('a daemon restarted (a reboot, a crash)', () => {
       expect(runs[0]).toContain('Fix the greeting')
       expect(runs[1]).toEqual(expect.arrayContaining(['--resume', 'sess-123']))
       expect(runs[1]).not.toContain('Fix the greeting')
+      await new Promise((res) => setTimeout(res, 1000))
+      expect(readFileSync(join(tmp, 'ran.log'), 'utf8').trim().split(/\r?\n/)).toEqual(['ran', 'ran'])
       c.close()
     } finally {
       await second.close()

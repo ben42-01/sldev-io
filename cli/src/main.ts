@@ -14,6 +14,7 @@ import { loadRuns, runColumns } from './workflows'
 import { startDaemon } from './daemon'
 import { appDataDir, dataDir, legacyRuntimeDir } from './paths'
 import { describeConfig, readConfig } from './config'
+import { addRuntime, findRuntime, listRuntimes, nameFrom, removeRuntime, runtimesFile } from './runtimes'
 import { MAX_SPAWN, type LoopInfo, type PaneInfo, type WaitFor } from './protocol'
 import { memorySummary, projectRoot, recallNotes, rememberNote, rulesInit, rulesStatus, rulesSync, skillsCheck, skillsExport, skillsInstall, skillsStatus } from './repo'
 import { paneSignal, paneTree } from './render'
@@ -24,7 +25,7 @@ import { VERSION } from './version'
 const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
 
   sldev                         attach: every agent and shell as a tab, grouped by project, with its status
-                                (Ctrl-b c new tab, t shell, b briefs, 1-9 or n/p tabs, , rename, x close, s split,
+                                (Ctrl-b c new tab, t shell, r runtimes, b briefs, 1-9 or n/p tabs, , rename, x close, s split,
                                 w workflows, e editor, v changed files, ? every key, d detach; tabs take clicks)
   sldev new [options] "brief"   start an agent in a new pane (prints its id)
       --agent <id>              claude, codex, cursor, copilot, opencode, gemini (default claude)
@@ -50,6 +51,13 @@ const USAGE = `sldev ${VERSION}: run coding agents side by side in your terminal
       --agent <id>              it moves to .sldev-cli/briefs/launched/ with its pane id. A brief is Markdown:
                                 front matter (title, kind, agent, criteria: a "- " list, worktree: true|false,
                                 by) and the brief under it. A bad one is refused and stays where it is.
+  sldev runtime [ls] [--json]   the project's runtimes: commands you added, then its scripts (package.json,
+                                Makefile, justfile, Cargo, go, compose…); sldev rt is short for sldev runtime
+  sldev runtime add <name> <command…>   keep a command for this project (.sldev-cli/runtimes.json), run
+                                from this folder; the same name replaces it (sldev runtime add ls ls -lrt)
+  sldev runtime start <name>    run it in a new shell tab (prints its id); the tab stays a shell when it ends,
+                                and after a reboot it reopens as a shell without running it again
+  sldev runtime rm <name>       forget one you added
   sldev ls [--json]             panes with agent, status and branch
   sldev send <pane> "text"      type into a pane (Enter included; --no-enter to leave it out)
   sldev read <pane> [--lines n] the pane's screen as text
@@ -337,6 +345,48 @@ async function main(argv: string[]): Promise<void> {
       c.close()
       if (values.json) return void console.log(JSON.stringify(all, null, 2))
       return void console.log(all.length ? all.map(loopLine).join('\n') : 'No loops. Start one with sldev new --repeat 3 "…"')
+    }
+    case 'rt':
+    case 'runtime':
+    case 'runtimes': {
+      // add takes the command as it was typed: its own flags (ls -lrt) aren't sldev's, and a -- before it is fine
+      const raw = rest[0] === 'add' ? rest.filter((w, i) => !(w === '--' && i <= 2)) : null
+      const { values, positionals } = raw ? { values: { json: false }, positionals: raw } : opts({ json: { type: 'boolean' } })
+      const [sub = 'ls', name, ...words] = positionals
+      const root = await cliRoot(process.cwd())
+      if (sub === 'ls' || sub === 'list') {
+        const all = await listRuntimes(root)
+        if (values.json) return void console.log(JSON.stringify(all, null, 2))
+        if (!all.length) return void console.log('No runtimes here yet. Add one: sldev runtime add ls "ls -lrt"')
+        const w = Math.min(28, Math.max(...all.map((r) => r.name.length)))
+        const line = (r: (typeof all)[number]): string => `  ${r.name.padEnd(w)}  ${r.command}${r.cwd !== root ? `  (in ${relative(root, r.cwd) || '.'})` : ''}`
+        const saved = all.filter((r) => r.saved)
+        const groups = [...new Set(all.filter((r) => !r.saved).map((r) => r.group ?? ''))]
+        const parts = [...(saved.length ? [`added (${relative(process.cwd(), runtimesFile(root)) || runtimesFile(root)})\n${saved.map(line).join('\n')}`] : []), ...groups.map((g) => `${g}\n${all.filter((r) => !r.saved && r.group === g).map(line).join('\n')}`)]
+        return void console.log(parts.join('\n\n'))
+      }
+      if (sub === 'add') {
+        // sldev runtime add "ls -lrt" names it after the command
+        const command = (words.length ? words.join(' ') : name && /\s/.test(name) ? name : '').trim()
+        if (!name || !command) return fail('sldev runtime add <name> <command…>, for example: sldev runtime add ls ls -lrt')
+        const r = await addRuntime(root, { name: words.length ? name : nameFrom(command), command, cwd: process.cwd() })
+        return void console.log(`${r.replaced ? 'Replaced' : 'Added'} ${r.runtime.name}: ${r.runtime.command}${r.runtime.cwd ? ` (in ${r.runtime.cwd})` : ''}. Start it: sldev runtime start ${r.runtime.name}, or Ctrl-b r`)
+      }
+      if (sub === 'rm' || sub === 'remove') {
+        if (!name) return fail('sldev runtime rm <name>')
+        if (!(await removeRuntime(root, name))) return fail(`No runtime "${name}" was added here (the project's scripts come from its files). See sldev runtime ls.`)
+        return void console.log(`Removed ${name}`)
+      }
+      if (sub === 'start' || sub === 'run') {
+        if (!name) return fail('sldev runtime start <name>; sldev runtime ls lists them')
+        const r = findRuntime(await listRuntimes(root), name)
+        if (!r) return fail(`No runtime "${name}" here. See sldev runtime ls, or add it: sldev runtime add ${name} <command…>`)
+        const c = await client()
+        const p = await c.request('new', { shell: true, run: r.command, title: r.name, brief: '', cwd: r.cwd, cols: process.stdout.columns, rows: process.stdout.rows }).finally(() => c.close())
+        process.stderr.write(`running ${r.command} in tab ${p.id}; sldev attaches to it\n`)
+        return void console.log(p.id)
+      }
+      return fail('sldev runtime [ls|add <name> <command…>|start <name>|rm <name>]')
     }
     case 'ls': {
       const { values } = opts({ json: { type: 'boolean' } })

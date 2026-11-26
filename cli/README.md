@@ -23,6 +23,9 @@ What it does that a plain multiplexer doesn't:
   same from a script. `sldev clean` drops finished panes and removes their worktrees, asking first.
 - **Briefs written ahead of time** in `.sldev-cli/briefs/*.md`: `sldev briefs` lists them, `sldev launch <name>`
   (or Ctrl-b b, then Enter) starts one with its kind, agent, worktree and acceptance criteria. See [Briefs](#briefs).
+- **Runtimes.** Named commands of a project, run in a tab of their own: `sldev runtime add ls ls -lrt`, then
+  `sldev runtime start ls` or Ctrl-b r (the `+` there adds one: type the command, Enter for its name). The project's
+  own scripts (package.json, Makefile, justfile, Cargo, go, compose…) are listed after the ones you add. See [Runtimes](#runtimes).
 - **Second opinions.** `sldev review <pane> --agent claude` has another agent review a pane's changes, read-only.
 - **One set of rules** in `.sldev/rules.md`, written out as AGENTS.md, CLAUDE.md, GEMINI.md, Cursor and Copilot rules.
 - **sldev skills** (`sldev skills install`): any agent can draft a mission, board stories, a factory recipe or an eval
@@ -36,8 +39,9 @@ What it does that a plain multiplexer doesn't:
 
 The CLI talks to the network itself only to check for updates: once a day at most, attaching asks the npm
 registry for sldev-cli's latest version and, when a newer one is out, says so: once on the message line, then
-in a row at the bottom of the sidebar (and `↑` on the status bar) for as long as you're behind. A click on the row,
-or `Ctrl-b u`, copies the install command (`"updateCheck": false` in config.json or `SLDEV_NO_UPDATE_CHECK=1` turns it off; it's off
+in one card at the bottom of the sidebar (and a `↑` chip on the status bar) for as long as you're behind. A click on
+**Update now** (or the chip), or `Ctrl-b u`, runs `npm install -g sldev-cli@latest` in a new tab so you can watch it; the
+daemon and the tabs already open keep the old version until `sldev stop` (`"updateCheck": false` in config.json or `SLDEV_NO_UPDATE_CHECK=1` turns it off; it's off
 in CI). The workflows view asks GitHub through your own `gh`, only while it's open. The daemon listens on a Unix socket (a named pipe on Windows) and a loopback port (for
 Claude's hooks and the MCP tools), both protected.
 
@@ -130,6 +134,24 @@ The CLI and the app keep their inboxes apart: the CLI never reads or writes `.sl
 app never reads `.sldev-cli/`. `.sldev/memory.md` and `.sldev/rules.md` stay shared; they are plain project files
 any agent reads.
 
+### Runtimes
+
+A runtime is a command you run often in a project: `ls -lrt`, `npm run dev`, a deploy script. Starting one opens a
+shell tab in its folder and types the command there, so you see it run and the tab is a shell again when it ends
+(press ↑ and Enter to run it again). After a reboot the tab reopens as a shell; the command never runs again by itself.
+
+```bash
+sldev runtime add ls ls -lrt            # kept in .sldev-cli/runtimes.json, run from this folder
+sldev runtime add "npm run dev"         # named after the command: dev
+sldev runtime                           # the ones you added, then the project's scripts
+sldev runtime start ls                  # a new tab (prints its id); web:dev picks a script in web/
+sldev runtime rm ls
+```
+
+`sldev rt` is short for `sldev runtime`. Attached, **Ctrl-b r** (or **Runtime…** in New tab) lists them; Enter or
+a click runs one, `+` adds one (the command, then its name: Enter takes one from the command) and runs it, `x`
+removes one you added. A runtime tab's row in the sidebar says what it ran (`$ ls -lrt`).
+
 ### Tabs
 
 Attached, every session (an agent or a plain shell) is a tab along the top, numbered `1 2 3` with a `+` at the
@@ -158,6 +180,7 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 | --- | --- |
 | `c` | a new tab: pick the project it opens in (the ones your tabs work in, recent ones, or Other folder… to browse or type one, Tab completing it), then a shell or an agent (the ones not installed say how to get them), then type the brief, or nothing to start it without one; Ctrl-e writes a longer one in `$EDITOR` |
 | `t` | a new shell tab (`$SHELL`; PowerShell on Windows) in the folder of the tab in front |
+| `r` | runtimes: run a command you added or a project script in a new tab; `+` adds one, `x` removes one |
 | `b` | the briefs waiting in `.sldev-cli/briefs`; Enter launches the one in focus |
 | `1`–`9` | that tab |
 | `n` / `p` (or Tab, `o`) | next / previous tab |
@@ -167,7 +190,7 @@ Keys go to the tab in front; Ctrl-b is the prefix:
 | `s` | split: the tab in front and the next one side by side (needs 60 columns) |
 | `w` / `e` / `v` | workflows, the tab's folder in your editor, its changed files |
 | `?` | every key |
-| `u` | copy the command that updates sldev (when a newer one is out) |
+| `u` | update sldev (when a newer one is out): `npm install -g sldev-cli@latest` in a new tab |
 | `d` | detach; everything keeps running |
 | Ctrl-b | send a Ctrl-b to the tab |
 

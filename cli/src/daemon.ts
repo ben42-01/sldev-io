@@ -42,7 +42,14 @@ interface Pane {
   term: Term
   /** an agent's status; a shell has none */
   tracker?: Tracker
+  /** a runtime's command, waiting for its shell to print its prompt and go quiet before it's typed in */
+  typeIn?: { settle: () => void }
 }
+
+/** quiet after a shell's first output, its prompt is up and reading keys (typed before, the tty echoes it twice) */
+const PROMPT_QUIET_MS = 150
+/** a shell that prints nothing (no prompt) gets its command anyway */
+const PROMPT_WAIT_MS = 3000
 
 interface Waiter {
   pane?: string
@@ -131,6 +138,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       p.term.write(data, () => ptys.ack(id, data.length))
       broadcast({ event: 'output', pane: id, data })
       p.tracker?.output()
+      p.typeIn?.settle()
     },
     exit: (id, code) => {
       const p = panes.get(id)
@@ -234,6 +242,7 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       updatedAt: now,
       agentName: name,
       shell: true,
+      ...(a.run?.trim() && !restored && { command: a.run.trim() }),
       ...(restored && { createdAt: restored.createdAt })
     }
     const pane: Pane = { info, agent: null, term: createTerm(a.cols ?? 120, a.rows ?? 40) }
@@ -245,9 +254,32 @@ export async function startDaemon(o: DaemonOptions): Promise<Daemon> {
       panes.delete(id)
       throw new Error(`Could not start a shell: ${(err as Error).message}`)
     }
+    // a runtime: typed in as if by hand once the prompt is up, so the tab is a shell again when it ends; a
+    // restored tab never gets it, so nothing runs again after a reboot
+    if (pane.info.command) typeWhenReady(pane, pane.info.command)
     if (!restored) addTab(id)
     broadcast({ event: 'pane', pane: pane.info })
     return pane.info
+  }
+
+  /** Types `command` into a shell tab once its prompt is up: when its output has been quiet a moment, or after a wait. */
+  function typeWhenReady(p: Pane, command: string): void {
+    let quiet: NodeJS.Timeout | undefined
+    const type = (): void => {
+      clearTimeout(quiet)
+      clearTimeout(fallback)
+      p.typeIn = undefined
+      if (panes.get(p.info.id) === p && p.info.pid !== undefined) ptys.write(p.info.id, command + '\r')
+    }
+    const fallback = setTimeout(type, PROMPT_WAIT_MS)
+    fallback.unref?.()
+    p.typeIn = {
+      settle: () => {
+        clearTimeout(quiet)
+        quiet = setTimeout(type, PROMPT_QUIET_MS)
+        quiet.unref?.()
+      }
+    }
   }
 
   /** `restored`: a pane from before the daemon restarted, which comes back with its id and resumes its agent's session */

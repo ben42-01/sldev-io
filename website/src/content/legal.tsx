@@ -89,7 +89,8 @@ const privacy: LegalPage = {
       <p>
         The free sldev CLI makes one network request of its own: at most once a day, when you attach (<code>sldev</code>), it asks
         the npm registry (registry.npmjs.org) for the latest version of the sldev-cli package, so it can tell you when a newer one is
-        out. That request carries nothing but the package name; npm sees your IP address, as with any npm install. Turn it off with
+        out. That request carries nothing but the package name; npm sees your IP address, as with any npm install. When you click Update now (or press Ctrl-b u), it runs your own npm in a new tab to install the
+        new version; nothing runs until you do. Turn the check off with
         <code>"updateCheck": false</code> in the CLI's config.json or <code>SLDEV_NO_UPDATE_CHECK=1</code>. Its workflows view (<code>sldev workflows</code>, or Ctrl-b w when
         attached) asks GitHub for your repository's recent workflow runs through your GitHub CLI when you open it, and every 15 seconds
         while it stays open; rerunning a run or opening it in the browser goes the same way. Nothing goes to us.
