@@ -1722,12 +1722,22 @@ const board: DocPage = {
       id: 'pickup',
       title: 'Pick-up',
       body: (
-        <p>
-          Turn on <strong>Auto pick-up</strong> and choose what starts for a card (a factory recipe or a mission of a kind on an agent) and
-          how many at once. Pick-up takes Agent ready cards highest priority first, follows each run to Review, and flags a question or a
-          failure on the card. A card can have its own recipe, or start with a <a href="/docs/lead">Lead</a>. It runs only while the app is
-          open, and a recipe's pull request step still waits for your click.
-        </p>
+        <>
+          <p>
+            Turn on <strong>Auto pick-up</strong> and choose what starts for a card (a factory recipe or a mission of a kind on an agent) and
+            how many at once. Pick-up takes Agent ready cards highest priority first, follows each run to Review, and flags a question or a
+            failure on the card. A card can have its own recipe, or start with a <a href="/docs/lead">Lead</a>. It runs only while the app is
+            open, and a recipe's pull request step still waits for your click.
+          </p>
+          <p>
+            <strong>Wait until Done</strong> (on by default) keeps a card's slot taken while it sits in Review with its work not merged, so the
+            next card starts only once the last one's pull request merged (or you moved it to Done). Cards that start from a branch without the
+            last card's work end up conflicting with it; turn this off in the pick-up settings if your cards don't touch the same code and
+            you want them in parallel. Every card branches from the default branch as it is on your remote right after a fetch, never from
+            whatever branch your main checkout is on (set another branch under <strong>Start cards from</strong>). If the remote can't be
+            fetched, the card goes to Backlog with the reason instead of starting from an old copy.
+          </p>
+        </>
       )
     },
     {
@@ -1737,7 +1747,8 @@ const board: DocPage = {
         <>
           <p>
             A card can wait for others: set <strong>Waits for</strong> (card numbers) when you edit it. Pick-up skips it until every card it
-            waits for is Done, then starts it on its own, so "Create a team" goes before "Invite people to a team" without you watching.
+            waits for is Done and its pull request merged (one dragged to Done while its PR is still open keeps it waiting, and says so),
+            then starts it on its own, so "Create a team" goes before "Invite people to a team" without you watching.
             The card says what it waits for, and the one it waits for says what it unblocks. A loop is refused.
           </p>
           <p>
@@ -1921,4 +1932,95 @@ Keep the change as small as the task allows, and run the tests before you finish
   ]
 }
 
-export const docs: DocPage[] = [lead, teams, board, evalsGuide, recipes, missions, context, workspace, agents, remote]
+const pullRequests: DocPage = {
+  id: 'pull-requests',
+  title: 'Reviewing pull requests',
+  summary:
+    'The Review tab works on any pull request of your repository, not only on missions: the walkthrough, what changed since you last looked, where to start, what else the change touches, your checks on its code, and approving, asking for changes or merging, each on a click.',
+  sections: [
+    {
+      id: 'open',
+      title: 'Open a pull request',
+      body: (
+        <>
+          <p>
+            The <b>Pull requests</b> section of the right panel's Workflows tab lists the repository's open pull requests: number, title,
+            author, draft, size, age and the review decision. The ones waiting for your review come first, then the oldest. <b>Mine</b> keeps
+            the ones you opened or are asked to review. The list is read through your GitHub CLI while the section is open (every minute), never
+            in the background. <b>Review a pull request…</b> in the command palette searches the same list.
+          </p>
+          <p>
+            A click opens the pull request in a Review tab titled with its number (again, the same tab comes forward). Its head is checked out
+            in a worktree of its own next to the project, so files open from the pull request's code and your main checkout stays on its branch.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'walkthrough',
+      title: 'The walkthrough',
+      body: (
+        <>
+          <p>
+            Everything in <a href="/docs/missions#review">the walkthrough</a> works on a pull request. The ask is its description, and its
+            acceptance criteria come from its <i>Acceptance criteria</i> list or checklist and from the issues it closes. <b>Explain the change</b>{' '}
+            has an agent split it into parts (asked for, supports, not asked for, a simpler way, what could break), working in the pull request's
+            worktree and writing one file under your project's <code>.sldev/runs</code>; <b>Ask why</b> answers about one part. Every hunk is
+            still shown: the ones no part claims are listed as not in the walkthrough. When the pull request gets new commits, the walkthrough
+            says which commit it was written for, with <b>Explain again</b>.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'faster',
+      title: 'Read less, in the right order',
+      body: (
+        <ul>
+          <li>
+            <b>Since last review</b> shows only what changed since your last verdict, so a second look after the author pushed is a few hunks,
+            not the whole diff. It compares the code, not commits, so a rebase or a force push doesn't reset it, and a verdict only holds while
+            the lines it was given on are the same.
+          </li>
+          <li>
+            <b>Review order</b> puts the risky parts first, then what nobody asked for, marks where to <b>Start here</b>, and says how long the
+            whole read takes and each part.
+          </li>
+          <li>
+            <b>Blast radius</b>: for the names a change touched (functions, types, exports), how many other places in the code use them and the
+            change didn't touch. A changed signature is flagged, since those callers may now be wrong.
+          </li>
+          <li>
+            <b>Run checks</b> runs the project's typecheck and tests on exactly the code under review, in the pull request's worktree, after
+            installing its dependencies once. Each check runs in a terminal of its own; the result belongs to that commit and says Stale after a
+            new one. Useful when CI is slow, absent, or doesn't run for forks. Nothing runs without the click.
+          </li>
+        </ul>
+      )
+    },
+    {
+      id: 'act',
+      title: 'Approve, ask for changes, merge',
+      body: (
+        <>
+          <p>
+            The bar under the toolbar shows the pull request, the workflow runs on its head and whether it is ready to merge. <b>Approve</b>,{' '}
+            <b>Request changes…</b>, <b>Comment…</b> and <b>Squash &amp; merge</b> each happen only on your click and say first what they will
+            do, through your GitHub CLI and as you.
+          </p>
+          <p>
+            Notes you write on parts (<b>Send back…</b>, <kbd>S</kbd>) become comments on the part's first changed line. Request changes or
+            Comment opens one review with each comment to edit or leave out and a summary on top; a note whose lines changed since you wrote
+            it goes into the summary instead. The review is posted on the commit you reviewed.
+          </p>
+          <p>
+            Merging merges exactly the commit you reviewed (<code>gh pr merge --match-head-commit</code>): if the author pushed since, the bar
+            says so and merging waits until you refresh the review. Nothing in your checkouts changes.
+          </p>
+        </>
+      )
+    }
+  ]
+}
+
+export const docs: DocPage[] = [lead, teams, board, pullRequests, evalsGuide, recipes, missions, context, workspace, agents, remote]
