@@ -90,3 +90,11 @@ export const needsYou = (s: Signal): boolean => s.tone === 'attention' || s.tone
 
 /** A project-context note whose files changed or went away since it was written: worth a human look. */
 export const staleSignal = (s: ContextStale): Signal => sig('attention', s.why === 'missing' ? `${s.path} is gone` : `${s.path} changed since`)
+
+/** A pull request's review decision (gh's reviewDecision). */
+export function prReviewSignal(decision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null): Signal {
+  if (decision === 'APPROVED') return sig('done', 'Approved')
+  if (decision === 'CHANGES_REQUESTED') return sig('attention', 'Changes requested')
+  if (decision === 'REVIEW_REQUIRED') return sig('review', 'Needs review')
+  return sig('neutral', 'No review')
+}

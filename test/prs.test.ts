@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { parseOpenPrs, parsePrDetail, planPrWorktree } from '@shared/prs'
+import { isMine, parseOpenPrs, parsePrDetail, planPrWorktree, prTabTitle, reviewOrder, waitingForMe } from '@shared/prs'
+import { prReviewSignal } from '@shared/status'
 import { listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
 
 const RAW = {
@@ -40,6 +41,7 @@ describe('parseOpenPrs', () => {
         deletions: 8,
         changedFiles: 4,
         reviewDecision: 'CHANGES_REQUESTED',
+        requested: [],
         createdAt: '2026-11-20T10:00:00Z',
         updatedAt: '2026-11-21T10:00:00Z',
         body: 'Adds a limiter.',
@@ -69,6 +71,45 @@ describe('parseOpenPrs', () => {
   it('takes anything that is not a list as no PRs', () => {
     expect(parseOpenPrs(null)).toEqual([])
     expect(parseOpenPrs({ number: 1 })).toEqual([])
+  })
+})
+
+describe('the review list', () => {
+  const pr = (number: number, createdAt: string, more: Record<string, unknown> = {}) => parseOpenPrs([{ ...RAW, number, createdAt, ...more }])[0]
+
+  it('reads who is asked to review: users by login, teams by slug', () => {
+    const [p] = parseOpenPrs([{ ...RAW, reviewRequests: [{ __typename: 'User', login: 'ben' }, { __typename: 'Team', slug: 'core', name: 'Core' }, {}] }])
+    expect(p.requested).toEqual(['ben', 'core'])
+  })
+
+  it('puts the ones waiting for my review first, then the oldest, drafts last', () => {
+    const list = [
+      pr(1, '2026-01-03T00:00:00Z'),
+      pr(2, '2026-01-01T00:00:00Z', { isDraft: true }),
+      pr(3, '2026-01-04T00:00:00Z', { reviewRequests: [{ login: 'Ben' }] }),
+      pr(4, '2026-01-02T00:00:00Z'),
+      pr(5, '2026-01-05T00:00:00Z', { reviewRequests: [{ login: 'ben' }] })
+    ]
+    expect(reviewOrder(list, 'ben').map((p) => p.number)).toEqual([3, 5, 4, 1, 2])
+    // nobody signed in: just the oldest first
+    expect(reviewOrder(list, undefined).map((p) => p.number)).toEqual([4, 1, 3, 5, 2])
+    expect(list.map((p) => p.number)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('"mine" is what I opened or am asked to review', () => {
+    const list = [pr(1, 'a', { author: { login: 'ben' } }), pr(2, 'b', { reviewRequests: [{ login: 'ben' }] }), pr(3, 'c')]
+    expect(reviewOrder(list, 'ben', 'mine').map((p) => p.number)).toEqual([2, 1])
+    expect(reviewOrder(list, undefined, 'mine')).toEqual([])
+    expect(isMine(list[2], 'ben')).toBe(false)
+    expect(waitingForMe(list[0], 'ben')).toBe(false)
+  })
+
+  it('titles the tab #<n> <title> and colours the decision by state', () => {
+    expect(prTabTitle({ number: 7, title: 'Fix it' })).toBe('#7 Fix it')
+    expect(prReviewSignal('APPROVED').tone).toBe('done')
+    expect(prReviewSignal('CHANGES_REQUESTED').tone).toBe('attention')
+    expect(prReviewSignal('REVIEW_REQUIRED').tone).toBe('review')
+    expect(prReviewSignal(null)).toMatchObject({ tone: 'neutral', label: 'No review' })
   })
 })
 

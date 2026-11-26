@@ -4,7 +4,7 @@
 /** How many open PRs are asked for: enough for a review list, never a whole busy repository. */
 export const OPEN_PR_LIMIT = 50
 
-export const OPEN_PR_FIELDS = 'number,title,author,headRefName,headRefOid,baseRefName,isDraft,additions,deletions,changedFiles,reviewDecision,createdAt,updatedAt,body,url'
+export const OPEN_PR_FIELDS = 'number,title,author,headRefName,headRefOid,baseRefName,isDraft,additions,deletions,changedFiles,reviewDecision,reviewRequests,createdAt,updatedAt,body,url'
 export const PR_DETAIL_FIELDS = `${OPEN_PR_FIELDS},closingIssuesReferences`
 
 export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null
@@ -23,6 +23,8 @@ export interface OpenPr {
   deletions: number
   changedFiles: number
   reviewDecision: ReviewDecision
+  /** who is asked to review it and hasn't yet: user logins, and team names as "org/slug" */
+  requested: string[]
   createdAt: string
   updatedAt: string
   body: string
@@ -44,6 +46,8 @@ export interface PrDetail extends OpenPr {
 /** The open PRs, or why there are none to show: gh missing or logged out, not a GitHub repo, gh failing. */
 export interface OpenPrList {
   prs: OpenPr[]
+  /** the signed-in GitHub login, when gh says: "mine" and "waiting for my review" need it */
+  me?: string
   error?: string
 }
 
@@ -71,6 +75,14 @@ function decision(v: unknown): ReviewDecision {
   return s === 'APPROVED' || s === 'CHANGES_REQUESTED' || s === 'REVIEW_REQUIRED' ? s : null
 }
 
+function requests(v: unknown): string[] {
+  return (Array.isArray(v) ? v : []).flatMap((x): string[] => {
+    const r = obj(x)
+    const who = str(r.login) || str(r.slug) || str(r.name)
+    return who ? [who] : []
+  })
+}
+
 /** One PR from gh's JSON; null for something that isn't one (no number). */
 export function parseOpenPr(v: unknown): OpenPr | null {
   const r = obj(v)
@@ -89,6 +101,7 @@ export function parseOpenPr(v: unknown): OpenPr | null {
     deletions: num(r.deletions),
     changedFiles: num(r.changedFiles),
     reviewDecision: decision(r.reviewDecision),
+    requested: requests(r.reviewRequests),
     createdAt: str(r.createdAt),
     updatedAt: str(r.updatedAt),
     body: str(r.body),
@@ -150,3 +163,24 @@ export function planPrWorktree(existing: { head: string | null; branch: string |
     return { do: 'refuse', reason: `PR #${n} has new commits, but its worktree has ${existing.dirty} changed file${existing.dirty === 1 ? '' : 's'}. Commit or discard them, or remove the worktree, then check it out again.` }
   return { do: 'move' }
 }
+
+// ── the review list ─────────────────────────────────────────────────
+
+export type PrFilter = 'mine' | 'all'
+
+/** Asked to review it, by name (a team's request isn't counted: gh doesn't say who is in the team). */
+export const waitingForMe = (pr: OpenPr, me: string | undefined): boolean => !!me && pr.requested.some((r) => r.toLowerCase() === me.toLowerCase())
+
+/** "Mine": the ones I opened or am asked to review. */
+export const isMine = (pr: OpenPr, me: string | undefined): boolean => !!me && (pr.author.toLowerCase() === me.toLowerCase() || waitingForMe(pr, me))
+
+/** What to review first: the ones waiting for my review, then the oldest (it has waited longest), drafts last. */
+export function reviewOrder(prs: OpenPr[], me: string | undefined, filter: PrFilter = 'all'): OpenPr[] {
+  const rank = (p: OpenPr): number => (waitingForMe(p, me) ? 0 : p.isDraft ? 2 : 1)
+  return prs
+    .filter((p) => filter === 'all' || isMine(p, me))
+    .sort((a, b) => rank(a) - rank(b) || (a.createdAt === b.createdAt ? a.number - b.number : a.createdAt < b.createdAt ? -1 : 1))
+}
+
+/** The Review tab of PR `n`: its title as the tab's. */
+export const prTabTitle = (pr: { number: number; title: string }): string => `#${pr.number} ${pr.title}`.trim()

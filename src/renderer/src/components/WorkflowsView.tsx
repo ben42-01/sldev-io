@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { reviewOrder, waitingForMe, type OpenPr } from '@shared/prs'
+import { prReviewSignal } from '@shared/status'
 import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
 import { ChevronRight, CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
@@ -9,6 +11,10 @@ import { showContextMenu } from './ContextMenu'
 import { ago } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 import { showNotice } from './Modal'
+import { Empty, ErrorBanner, Loading } from './States'
+import { StatusPill } from './StatusDot'
+import { loadPullRequests, pullRequests } from '../state/pullRequests'
+import { openPrReview } from '../state/reviewTargets'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
@@ -93,8 +99,9 @@ export function WorkflowsView(): React.JSX.Element {
           )}
           {dispatching && <DispatchForm root={root} workflow={dispatching} defaultRef={repo.defaultBranch} onDone={(ran) => (setDispatching(null), ran && setTimeout(() => void loadRuns(), 2500))} />}
           </div>
-          {/* two sections, each scrolling on its own, so a long workflow list never buries the runs */}
+          {/* sections, each scrolling on its own, so a long workflow list never buries the runs */}
           <div className="wf-sections">
+            <PrSection root={root} />
             <Section id="list" label="Workflows" count={workflows.length}>
               <div className={`wf-row${!selected ? ' on' : ''}`} onClick={() => setSelected(null)}>All workflows</div>
               {workflows.map((w) => (
@@ -119,7 +126,7 @@ export function WorkflowsView(): React.JSX.Element {
   )
 }
 
-function Section({ id, label, count, children }: { id: 'list' | 'runs'; label: string; count?: number; children: React.ReactNode }): React.JSX.Element {
+function Section({ id, label, count, children }: { id: 'list' | 'runs' | 'prs'; label: string; count?: number; children: React.ReactNode }): React.JSX.Element {
   // closed until opened: the panel starts as two short headers (with counts), and each one remembers being opened
   const open = useStore(workspace, (w) => w.assetGroups[`workflows:${id}`] ?? false)
   const toggle = (): void => updateSettings({ assetGroups: { ...workspace.get().assetGroups, [`workflows:${id}`]: !open } })
@@ -132,6 +139,102 @@ function Section({ id, label, count, children }: { id: 'list' | 'runs'; label: s
       </button>
       {open && <div className="wf-section-body">{children}</div>}
     </section>
+  )
+}
+
+/** The header's count: the last list read, as filtered; nothing until the section was opened once. */
+function PrSection({ root }: { root: string }): React.JSX.Element {
+  const filter = useStore(workspace, (w) => w.prFilter ?? 'all')
+  const count = useStore(pullRequests, (s) => (s.root === root && s.list && !s.list.error ? reviewOrder(s.list.prs, s.list.me, filter).length : undefined))
+  return (
+    <Section id="prs" label="Pull requests" count={count}>
+      <PrList root={root} />
+    </Section>
+  )
+}
+
+const PR_POLL_MS = 60_000
+
+/** Mounted only while the section is open, so GitHub is asked only then: on open, every minute, and on Refresh; never while the window is hidden. */
+function PrList({ root }: { root: string }): React.JSX.Element {
+  const state = useStore(pullRequests, (s) => (s.root === root ? s : null))
+  const filter = useStore(workspace, (w) => w.prFilter ?? 'all')
+
+  useEffect(() => {
+    const tick = (): void => {
+      if (document.hidden) return
+      const s = pullRequests.get()
+      if (s.root === root && s.list && Date.now() - s.at < PR_POLL_MS - 1000) return
+      void loadPullRequests(root)
+    }
+    tick()
+    const t = setInterval(tick, PR_POLL_MS)
+    document.addEventListener('visibilitychange', tick)
+    return () => (clearInterval(t), document.removeEventListener('visibilitychange', tick))
+  }, [root])
+
+  const list = state?.list
+  const prs = useMemo(() => (list && !list.error ? reviewOrder(list.prs, list.me, filter) : []), [list, filter])
+  const me = list?.me
+
+  return (
+    <div className="pr-list">
+      <div className="pr-list-bar">
+        <div className="seg sm" role="group" aria-label="Whose pull requests">
+          <button type="button" className={filter === 'mine' ? 'on' : ''} aria-pressed={filter === 'mine'} disabled={!me} title={me ? `Opened by ${me} or waiting for ${me}'s review` : 'GitHub didn\'t say who you are'} onClick={() => updateSettings({ prFilter: 'mine' })}>
+            Mine
+          </button>
+          <button type="button" className={filter === 'all' ? 'on' : ''} aria-pressed={filter === 'all'} title="Every open pull request" onClick={() => updateSettings({ prFilter: 'all' })}>
+            Everyone's
+          </button>
+        </div>
+        <span className="spacer" />
+        <button className="icon-btn" title="Refresh pull requests" aria-label="Refresh pull requests" disabled={state?.loading} onClick={() => void loadPullRequests(root)}>
+          <RefreshCw size={13} className={state?.loading ? 'spin' : ''} />
+        </button>
+      </div>
+      {!list && <Loading what="Reading open pull requests…" />}
+      {list?.error && <ErrorBanner onRetry={() => void loadPullRequests(root)}>{list.error}</ErrorBanner>}
+      {list && !list.error && !prs.length && (
+        <Empty title={filter === 'mine' ? 'Nothing of yours is open' : 'No open pull requests'} hint={filter === 'mine' ? 'None you opened or are asked to review.' : 'Pull requests opened on GitHub show up here.'} />
+      )}
+      {prs.map((p) => <PrRow key={p.number} pr={p} root={root} asksMe={waitingForMe(p, me)} />)}
+    </div>
+  )
+}
+
+function PrRow({ pr: p, root, asksMe }: { pr: OpenPr; root: string; asksMe: boolean }): React.JSX.Element {
+  const open = (): void => openPrReview(root, { number: p.number, title: p.title, headSha: p.headSha })
+  return (
+    <div
+      className="rt-row pr-row"
+      role="button"
+      tabIndex={0}
+      data-pr={p.number}
+      title={`Review #${p.number} in a Review tab`}
+      onClick={open}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open())}
+      onContextMenu={(e) =>
+        showContextMenu(e, [
+          { label: 'Review', icon: <GitPullRequest size={13} />, run: open },
+          { label: 'Open in browser', icon: <ExternalLink size={13} />, run: () => void window.api.shell.openExternal(p.url) }
+        ])
+      }
+    >
+      <div className="rt-main">
+        <div className="rt-name" title={p.title}>
+          <span className="pr-num">#{p.number}</span> {p.title}
+        </div>
+        <div className="rt-meta">
+          {p.author}
+          {p.isDraft && <span className="pr-draft">Draft</span>}
+          {' · '}<span className="add">+{p.additions}</span> <span className="del">−{p.deletions}</span>
+          {' · '}{ago(Date.parse(p.createdAt))}
+          {asksMe && <> · <strong>asks you</strong></>}
+        </div>
+      </div>
+      <StatusPill signal={prReviewSignal(p.reviewDecision)} />
+    </div>
   )
 }
 

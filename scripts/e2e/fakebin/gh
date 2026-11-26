@@ -37,7 +37,7 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
       # the stats panel's activity chart asks for every state; FAKE_GH_ACTIVITY is the scenario's PR history
       case " $* " in *" --state all "*) echo "${FAKE_GH_ACTIVITY:-[]}"; exit 0 ;; esac
       # open PRs, with the fields of the review list; their heads are FAKE_GH_PR_<n>_HEAD (the scenario pushes refs/pull/<n>/head)
-      echo "[{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\",\"is_bot\":false},\"headRefName\":\"rate-limit\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":120,\"deletions\":8,\"changedFiles\":4,\"reviewDecision\":\"CHANGES_REQUESTED\",\"createdAt\":\"2026-11-20T10:00:00Z\",\"updatedAt\":\"2026-11-21T10:00:00Z\",\"body\":\"Adds a limiter. Fixes #42\"},{\"number\":131,\"title\":\"Try a new cache\",\"url\":\"https://github.com/acme/shop/pull/131\",\"isDraft\":true,\"author\":{\"login\":\"li\",\"is_bot\":false},\"headRefName\":\"cache\",\"headRefOid\":\"${FAKE_GH_PR_131_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":30,\"deletions\":2,\"changedFiles\":1,\"reviewDecision\":\"\",\"createdAt\":\"2026-11-22T10:00:00Z\",\"updatedAt\":\"2026-11-22T10:00:00Z\",\"body\":\"\"}]"; exit 0 ;;
+      echo "[{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\",\"is_bot\":false},\"headRefName\":\"rate-limit\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":120,\"deletions\":8,\"changedFiles\":4,\"reviewDecision\":\"CHANGES_REQUESTED\",\"reviewRequests\":[{\"__typename\":\"User\",\"login\":\"e2e\"}],\"createdAt\":\"2026-11-20T10:00:00Z\",\"updatedAt\":\"2026-11-21T10:00:00Z\",\"body\":\"Adds a limiter. Fixes #42\"},{\"number\":131,\"title\":\"Try a new cache\",\"url\":\"https://github.com/acme/shop/pull/131\",\"isDraft\":true,\"author\":{\"login\":\"li\",\"is_bot\":false},\"headRefName\":\"cache\",\"headRefOid\":\"${FAKE_GH_PR_131_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":30,\"deletions\":2,\"changedFiles\":1,\"reviewDecision\":\"\",\"reviewRequests\":[],\"createdAt\":\"2026-11-22T10:00:00Z\",\"updatedAt\":\"2026-11-22T10:00:00Z\",\"body\":\"\"}]"; exit 0 ;;
     "workflow list")
       printf '['
       for i in $(seq 1 24); do printf '{"id":%d,"name":"Job %02d","path":".github/workflows/job%d.yml","state":"active"},' "$((100 + i))" "$i" "$i"; done
@@ -54,6 +54,18 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
       echo '{"databaseId":999,"displayTitle":"Deploy to staging","workflowName":"Deploy","status":"in_progress","conclusion":"","headBranch":"main","event":"workflow_dispatch","createdAt":"2026-01-02T11:00:00Z","url":"https://github.com/acme/shop/actions/runs/999","number":212}]'
       exit 0 ;;
     "workflow run") echo "$*" > gh-dispatch-marker.txt; exit 0 ;;
+    # who is signed in (the review list's "mine" and "waiting for my review")
+    "api user") echo "e2e"; exit 0 ;;
+    # a PR's diff for its Review tab (FAKE_GH_LOG shows whether it was asked)
+    "pr diff")
+      printf 'diff --git a/limiter.js b/limiter.js\nnew file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/limiter.js\n@@ -0,0 +1,3 @@\n+// PR #%s\n+export const limit = 100\n+export const windowMs = 60000\n' "$3"; exit 0 ;;
+  esac
+  # a PR for its Review tab: title, description, head and the branches
+  case "$1 $2 $4 $5" in "pr view --json number,title,body,url,headRefOid,headRefName,baseRefName"*)
+    case "$3" in
+      128) echo "{\"number\":128,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/128\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\"}" ;;
+      *) echo "{\"number\":$3,\"title\":\"Try a new cache\",\"body\":\"\",\"url\":\"https://github.com/acme/shop/pull/$3\",\"headRefOid\":\"\",\"headRefName\":\"cache\",\"baseRefName\":\"main\"}" ;;
+    esac; exit 0 ;;
   esac
   # one PR with the issues it closes (the review list's detail)
   case "$1 $2 $3 $4 $5" in "pr view 128 --json "*closingIssuesReferences*)

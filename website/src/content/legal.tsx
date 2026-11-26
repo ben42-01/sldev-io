@@ -89,9 +89,11 @@ const privacy: LegalPage = {
         nothing goes to us.
       </p>
       <p>
-        Reviewing a pull request reads your repository's open pull requests (title, author, size, description and linked issues)
-        through your GitHub CLI when you open the list or refresh it, and checking one out for review runs git fetch for that pull
-        request's commits from your remote into a separate folder of its own. Nothing is pushed. That goes from your computer to GitHub
+        Reviewing a pull request reads your repository's open pull requests (title, author, size, description, linked issues and who
+        is asked to review them) and your GitHub login through your GitHub CLI: when you open the Pull requests section of the
+        Workflows tab or the "Review a pull request" command, every minute while that section stays open, and when you refresh it;
+        never while the section is closed or the window is hidden. Opening one runs git fetch for that pull request's commits
+        from your remote and checks them out in a separate folder of its own. Nothing is pushed. That goes from your computer to GitHub
         (or wherever your remote is), signed in as you; nothing goes to us.
       </p>
       <p>

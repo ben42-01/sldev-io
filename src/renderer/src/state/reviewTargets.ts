@@ -4,6 +4,9 @@ export { targetOf } from '@shared/review'
 import type { GhPrReview, Mission, PrReview, ReviewState, ReviewTarget } from '@shared/types'
 import { getMission, isLive, missionBase, refreshStats, update, useMission } from './missions'
 import { createStore, useStore } from './store'
+import { prTabTitle } from '@shared/prs'
+import { openPanel } from '../dock/dockApi'
+import { toast } from '../components/Toast'
 import { workspace } from './workspace'
 
 /**
@@ -118,8 +121,11 @@ const missionResolver: Resolver<Extract<ReviewTarget, { kind: 'mission' }>> = {
 
 type PrMeta = Omit<GhPrReview, 'diff'>
 
-/** prReviews.json, read once, and what gh said about each PR this session (by prReviewKey) */
-export const prReviews = createStore<{ list: PrReview[]; loaded: boolean; meta: Record<string, PrMeta> }>({ list: [], loaded: false, meta: {} })
+/**
+ * prReviews.json, read once, what gh said about each PR this session, and the folder each PR's head is checked
+ * out in for review (git:prWorktree), all by prReviewKey
+ */
+export const prReviews = createStore<{ list: PrReview[]; loaded: boolean; meta: Record<string, PrMeta>; worktrees: Record<string, string> }>({ list: [], loaded: false, meta: {}, worktrees: {} })
 
 let loading: Promise<void> | null = null
 export function loadPrReviews(): Promise<void> {
@@ -134,14 +140,17 @@ export function loadPrReviews(): Promise<void> {
 type PrTarget = Extract<ReviewTarget, { kind: 'pr' }>
 const keyOf = (t: PrTarget): string => prReviewKey(t.root, t.number)
 
-function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefined): ReviewSource {
+const prKey = (t: PrTarget): string => `pr-${t.number}-${t.root.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(-40)}`
+
+function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefined, worktree: string | undefined): ReviewSource {
   const body = meta?.body ?? ''
   return {
     target: t,
-    key: `pr-${t.number}-${t.root.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(-40)}`,
+    key: prKey(t),
     title: meta?.title ?? `Pull request #${t.number}`,
     caption: meta?.branch ? `#${t.number} · ${meta.branch} → ${meta.base}` : `#${t.number}`,
-    cwd: t.root,
+    // the PR's own files, once its head is checked out: files open there and the helpers read them there
+    cwd: worktree ?? t.root,
     root: t.root,
     ask: body || meta?.title || `Pull request #${t.number}`,
     criteria: criteriaOf({ brief: body }),
@@ -155,17 +164,20 @@ const prResolver: Resolver<PrTarget> = {
     const key = keyOf(t)
     const entry = useStore(prReviews, (s) => findPrReview(s.list, t.root, t.number))
     const meta = useStore(prReviews, (s) => s.meta[key])
+    const worktree = useStore(prReviews, (s) => s.worktrees[key])
     useEffect(() => void loadPrReviews(), [])
-    return useMemo(() => fromPr(t, entry, meta), [t, entry, meta])
+    return useMemo(() => fromPr(t, entry, meta, worktree), [t, entry, meta, worktree])
   },
   get(t) {
     const s = prReviews.get()
-    return fromPr(t, findPrReview(s.list, t.root, t.number), s.meta[keyOf(t)])
+    return fromPr(t, findPrReview(s.list, t.root, t.number), s.meta[keyOf(t)], s.worktrees[keyOf(t)])
   },
   async read(t) {
     await loadPrReviews()
     const { diff, ...meta } = await window.api.gh.prReview(t.root, t.number)
     prReviews.set((s) => ({ meta: { ...s.meta, [keyOf(t)]: meta } }))
+    // a tab restored from the layout has no checkout yet this session
+    if (!prReviews.get().worktrees[keyOf(t)]) void checkOutPr(t, meta.head)
     return diff
   },
   patch(t, f) {
@@ -191,6 +203,41 @@ const prResolver: Resolver<PrTarget> = {
     const i = meta?.commits?.indexOf(since) ?? -1
     return { head, commits: !meta?.commits?.length ? undefined : i < 0 ? null : meta.commits.length - 1 - i }
   }
+}
+
+const checkingOut = new Map<string, Promise<void>>()
+
+/**
+ * Check PR `t`'s head out in its own detached worktree (reused, or moved to new commits) so the review has the
+ * PR's files. The diff comes from GitHub either way, so a failed checkout (no remote, changed files there) only
+ * leaves the review in the main checkout, and says why once.
+ */
+function checkOutPr(t: PrTarget, headSha?: string): Promise<void> {
+  const key = keyOf(t)
+  const busy = checkingOut.get(key)
+  if (busy) return busy
+  const p = window.api.git
+    .prWorktree(t.root, t.number, headSha || undefined)
+    .then(
+      (wt) => prReviews.set((s) => ({ worktrees: { ...s.worktrees, [key]: wt.path } })),
+      (e) => toast(`PR #${t.number} wasn't checked out, so files open in the main checkout: ${String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')}`, 6000, 'error')
+    )
+    .finally(() => checkingOut.delete(key))
+  checkingOut.set(key, p)
+  return p
+}
+
+/** The Review tab's id for a target, so opening the same thing again focuses its tab. */
+export const reviewTabId = (t: ReviewTarget): string => (t.kind === 'mission' ? `diff-${t.id}` : `diff-${prKey(t)}`)
+
+/**
+ * Open PR `pr` of the project at `root` in a Review tab titled `#<n> <title>` (focused when it is already open), and
+ * check its head out for review in the background.
+ */
+export function openPrReview(root: string, pr: { number: number; title: string; headSha?: string }): void {
+  const t: PrTarget = { kind: 'pr', number: pr.number, root }
+  openPanel('diff', reviewTabId(t), prTabTitle(pr), { target: t })
+  if (!prReviews.get().worktrees[keyOf(t)]) void checkOutPr(t, pr.headSha)
 }
 
 // ── the one switch ────────────────────────────────────────────────────

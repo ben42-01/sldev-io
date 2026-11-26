@@ -25,6 +25,12 @@ describe('openPrs', () => {
     expect(list[list.indexOf('--json') + 1].split(',')).toEqual(expect.arrayContaining(['author', 'isDraft', 'reviewDecision', 'additions', 'headRefOid', 'body']))
   })
 
+  it('says who is signed in, and leaves it out when gh won\'t say', async () => {
+    run.mockImplementation(async (_c: string, args: string[]) => (args[0] === 'auth' ? ok('') : args[0] === 'api' ? ok('ben42-01\n') : ok([])))
+    expect(await openPrs('/repo')).toEqual({ prs: [], me: 'ben42-01' })
+    expect(ghCalls().find((a) => a[0] === 'api')).toEqual(['api', 'user', '--jq', '.login'])
+  })
+
   it('says gh is missing or logged out instead of throwing', async () => {
     run.mockResolvedValue(fail('spawn gh ENOENT'))
     expect(await openPrs('/repo')).toEqual({ prs: [], error: 'The GitHub CLI (gh) is not installed.' })

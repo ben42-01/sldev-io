@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import { visibleTerminalIds, activeTerminalId, closeActive, openPanel, openTerminal, splitActive } from '../dock/dockApi'
 import { isRightView, pickRootFolder, preferredEditor, refreshBranch, setRootFolder, updateSettings, workspace, type ViewId } from '../state/workspace'
 import { showPicker, type PickItem } from '../state/picker'
+import { showPrPicker } from '../state/pullRequests'
 import { openSetup } from '../state/setup'
 import { checkForUpdates, openSponsor, reportBug } from '../state/updates'
 import { openWhatsNew } from '../state/whatsNew'
@@ -232,6 +233,7 @@ export function staticCommands(): Command[] {
     { id: 'diagram.files', category: 'View', title: 'Open files diagram (folders and source files, any language)', run: () => openDiagrams('files') },
     { id: 'diagram.schema', category: 'View', title: 'Open database schema diagram (tables and foreign keys)', run: () => openDiagrams('schema') },
     { id: 'git.branch', category: 'Git', title: 'Switch branch…', run: showBranchPicker },
+    { id: 'git.reviewPr', category: 'Git', title: 'Review a pull request…', run: showPrPicker },
     { id: 'git.fetch', category: 'Git', title: 'Fetch (all remotes)', run: () => (showView('git'), void gitFetch()) },
     { id: 'git.stats', category: 'Git', title: 'GitHub stats (PRs, issues, releases, CI)', run: () => openGitHubStats('overview') },
     { id: 'git.graph', category: 'Git', title: 'Commit graph (branches, merges, PRs)', run: openCommitGraph },

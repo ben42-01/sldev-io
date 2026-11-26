@@ -70,6 +70,8 @@ export interface AppSettings {
   reviewView?: 'walk' | 'files'
   /** the walkthrough's parts: in review order (risky first, then not asked for, then by size) or by file (default review) */
   reviewOrder?: 'review' | 'file'
+  /** the Workflows tab's pull requests: the ones I opened or am asked to review, or everyone's (default all) */
+  prFilter?: 'mine' | 'all'
   /** the sidebars hide while a review tab is on screen (default on) */
   reviewFocus?: boolean
   /** width of the Review tab's list (walkthrough parts, changed files), dragged by its edge */

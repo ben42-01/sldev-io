@@ -319,16 +319,28 @@ export async function mergePr(cwd: string, n: number, method: MergeMethod, headS
   return (r.stdout + r.stderr).trim() || (auto ? `#${n} will merge once its checks pass` : `Merged #${n}`)
 }
 
+let me: { login: string; at: number } | null = null
+
+/** The signed-in login (`gh api user`), asked once per 10 minutes; undefined when gh won't say. */
+async function viewer(cwd: string): Promise<string | undefined> {
+  if (me && Date.now() - me.at < 600_000) return me.login
+  const r = await gh(['api', 'user', '--jq', '.login'], cwd)
+  const login = r.code === 0 ? r.stdout.trim() : ''
+  if (!/^[A-Za-z0-9-]+(\[bot\])?$/.test(login)) return undefined
+  me = { login, at: Date.now() }
+  return login
+}
+
 /**
  * The repository's open pull requests, newest first (at most OPEN_PR_LIMIT), with author, size, draft and review
- * decision. Read-only `gh pr list`. Without gh, logged out, or outside a GitHub repository, `error` says which.
+ * decision, and who is signed in (`me`). Read-only `gh pr list` and `gh api user`. Without gh, logged out, or outside a GitHub repository, `error` says which.
  */
 export async function openPrs(cwd: string): Promise<OpenPrList> {
   const problem = await ghProblem(cwd)
   if (problem) return { prs: [], error: problem }
   try {
-    const json = await ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, [])
-    return { prs: parseOpenPrs(json) }
+    const [json, me] = await Promise.all([ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, []), viewer(cwd)])
+    return { prs: parseOpenPrs(json), ...(me ? { me } : {}) }
   } catch (e) {
     return { prs: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
   }

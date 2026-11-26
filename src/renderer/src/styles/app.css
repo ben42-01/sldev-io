@@ -3315,6 +3315,40 @@ body.resizing-y * {
 .wf-section.list.open {
   max-height: 40%;
 }
+.wf-section.prs.open {
+  max-height: 50%;
+}
+/* the Workflows tab's open pull requests: a filter bar, then one row per PR with its review decision on the right */
+.pr-list-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 6px;
+}
+.pr-row {
+  cursor: pointer;
+  align-items: center;
+}
+.pr-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.pr-row .spill {
+  flex-shrink: 0;
+}
+.pr-num {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+.pr-draft {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--fg-muted);
+}
 .wf-section-header {
   flex-shrink: 0;
   padding-top: 6px;
