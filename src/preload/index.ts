@@ -131,7 +131,7 @@ const api = {
   git: {
     branch: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:branch', cwd),
     /** fetch, then the upstream ("origin/master") when `branch` is only behind it, else `branch` */
-    freshBase: (cwd: string, branch: string): Promise<string> => ipcRenderer.invoke('git:freshBase', cwd, branch),
+    pickupBase: (cwd: string, base?: string): Promise<{ ref: string; commit: string }> => ipcRenderer.invoke('git:pickupBase', cwd, base),
     head: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:head', cwd),
     commitsSince: (cwd: string, from: string): Promise<number | null> => ipcRenderer.invoke('git:commitsSince', cwd, from),
     isRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),

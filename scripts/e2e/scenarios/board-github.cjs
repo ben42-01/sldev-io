@@ -79,7 +79,11 @@ module.exports = async (h) => {
   await h.click('dialog[open] .board-form .seg button', 'Factory recipe')
   await h.wait(200)
   await h.setValue('dialog[open] .board-form select', 'E2E PR', `[...e.options].some(o => o.value === 'E2E PR')`)
+  // the health check card waits in Review with its PR open: with Wait until Done (the default) nothing more would
+  // start, so this board runs in parallel and takes the next card as soon as an agent finishes
+  await h.js(`[...document.querySelectorAll('dialog[open] label.check')].find(l => l.textContent.includes('Wait until Done')).querySelector('input').click()`)
   await h.click('dialog[open] .btn.primary', 'Save')
+  h.expect(await h.until(() => h.js(`window.api.store.get('board').then(b => b.settings[0]?.waitForDone === false)`), 2000), 'Wait until Done is off for this board')
   await h.click('.board-page .chip-check input')
   h.expect(await h.until(async () => (await cards('progress')).includes('Login button does nothing on Safari'), 10000), 'pick-up starts the card')
   h.expect(await h.until(async () => (await runs())?.[0]?.issue === 42, 5000), 'its run knows the issue (the PR closes it)')

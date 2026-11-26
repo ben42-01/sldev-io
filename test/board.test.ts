@@ -24,13 +24,14 @@ describe('nextPickups', () => {
     expect(nextPickups([busy, item()], on)).toEqual([])
     expect(nextPickups([busy, item()], { ...on, parallel: 2 })).toHaveLength(1)
   })
-  it('a question from the agent still holds the slot, a finished run frees it', () => {
+  it('a question from the agent still holds the slot; a finished run frees it once Done (or at once, waitForDone off)', () => {
     const asks = item({ column: 'progress', started: { type: 'mission', id: 'm', at: 1 }, state: 'needs-you' })
     const done = item({ column: 'review', started: { type: 'run', id: 'r', at: 1 }, state: 'finished' })
     expect(isActive(asks)).toBe(true)
     expect(isActive(done)).toBe(false)
     expect(nextPickups([asks, item()], on)).toEqual([])
-    expect(nextPickups([done, item()], on)).toHaveLength(1)
+    expect(nextPickups([done, item()], on)).toEqual([])
+    expect(nextPickups([done, item()], { ...on, waitForDone: false })).toHaveLength(1)
   })
   it('never starts an item twice, and only from Agent ready in its own project', () => {
     expect(nextPickups([item({ started: { type: 'run', id: 'r', at: 1 } }), item({ column: 'backlog' }), item({ root: '/other' })], { ...on, parallel: 5 })).toEqual([])
@@ -119,13 +120,16 @@ describe('GitHub', () => {
   })
   it('a merged pull request moves its card to Done', () => {
     expect(followPr(item({ column: 'review' }), { number: 12, state: 'MERGED' }, 9)).toMatchObject({ column: 'done', note: 'PR #12 merged' })
-    expect(followPr(item({ column: 'review' }), { number: 12, state: 'OPEN' }, 9)).toBeNull()
+    // an open one is only remembered on the card (not an edit), then nothing more
+    const open = followPr(item({ column: 'review' }), { number: 12, state: 'OPEN' }, 9)!
+    expect(open).toMatchObject({ column: 'review', pr: { number: 12, state: 'OPEN' } })
+    expect(followPr(open, { number: 12, state: 'OPEN' }, 10)).toBeNull()
   })
   it('a closed one only says so, once, and a card moved by hand stays', () => {
     const closed = followPr(item({ column: 'review' }), { number: 12, state: 'CLOSED' }, 9)!
     expect(closed).toMatchObject({ column: 'review', note: 'PR #12 closed without merging' })
     expect(followPr(closed, { number: 12, state: 'CLOSED' }, 10)).toBeNull()
-    expect(followPr(item({ column: 'backlog' }), { number: 12, state: 'MERGED' }, 9)).toBeNull()
+    expect(followPr(item({ column: 'backlog' }), { number: 12, state: 'MERGED' }, 9)).toMatchObject({ column: 'backlog' })
   })
 })
 

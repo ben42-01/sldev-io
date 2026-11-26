@@ -82,11 +82,27 @@ module.exports = async (h) => {
   await h.wait(500)
   await h.shot('3-picked-up')
 
-  // the fake agent finishes its turn: the card moves to Review and the next card is picked up
+  // the fake agent finishes its turn: the card moves to Review, and (wait until Done) keeps its slot there
   h.expect(await h.until(async () => (await cards('review')).includes('Rate-limit the API'), 15000), 'a finished mission moves its card to Review')
-  h.expect(await h.until(async () => (await cards('progress')).includes('Fix login typo') || (await cards('review')).includes('Fix login typo'), 10000), 'then the next card is picked up')
-  h.expect(await h.until(async () => (await cards('review')).length === 2, 15000), 'both end in Review')
   h.expect(await h.js(`${card('Rate-limit the API')}.querySelector('.board-work')?.textContent.includes('Build')`), 'the card names its mission')
+  await h.wait(2500)
+  h.expect((await cards('ready')).includes('Fix login typo'), 'the next card waits while the first is in Review')
+
+  // reviewed and merged: drag it to Done, and the next card is picked up
+  const drag = (title, column) =>
+    h.js(`(() => {
+      const dt = new DataTransfer()
+      const from = ${card(title)}
+      const to = document.querySelector('.board-column[data-column="${column}"]')
+      from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }))
+      to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+      from.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }))
+      return true })()`)
+  await drag('Rate-limit the API', 'done')
+  h.expect(await h.until(async () => (await cards('done')).includes('Rate-limit the API'), 2000), 'drag and drop moves a card to Done')
+  h.expect(await h.until(async () => (await cards('progress')).includes('Fix login typo') || (await cards('review')).includes('Fix login typo'), 10000), 'then the next card is picked up')
+  h.expect(await h.until(async () => (await cards('review')).includes('Fix login typo'), 15000), 'and ends in Review')
 
   // a card with its own recipe starts a factory run instead
   await h.click('.board-page .chip-check input')
@@ -114,20 +130,6 @@ module.exports = async (h) => {
   h.expect(await h.until(async () => (await cards('proposed')).includes('Add tests for the health check'), 3000), 'the agent filed a follow-up card in Proposed (sldev_board_add)')
   const filed = (await h.js(`window.api.store.get('board')`)).items.find((i) => i.title === 'Add tests for the health check')
   h.expect(filed?.priority === 'high' && filed.labels.join() === 'tests' && filed.body.includes('Filed by claude') && filed.by === 'claude', 'with its priority, labels and who filed it')
-
-  // drag a reviewed card to Done
-  const drag = (title, column) =>
-    h.js(`(() => {
-      const dt = new DataTransfer()
-      const from = ${card(title)}
-      const to = document.querySelector('.board-column[data-column="${column}"]')
-      from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }))
-      to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
-      to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
-      from.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }))
-      return true })()`)
-  await drag('Rate-limit the API', 'done')
-  h.expect(await h.until(async () => (await cards('done')).includes('Rate-limit the API'), 2000), 'drag and drop moves a card to Done')
 
   // back to Agent ready forgets the old work, so it can be picked up again
   await drag('Fix login typo', 'ready')

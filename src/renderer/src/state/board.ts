@@ -1,4 +1,4 @@
-import { PR_POLL_MS, approveItem, baseMovedCleared, flagBaseMoved, sameBase, type BranchFacts, boardFileText, cardBrief, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
+import { PR_POLL_MS, approveItem, baseMovedCleared, flagBaseMoved, sameBase, type BranchFacts, boardFileText, cardBrief, prDescription, defaultBoardSettings, followPr, followWork, issueCard, itemIntent, mergeBoardFile, moveItem, nextKey, nextPickups, unmergedDone, parseBoardFile, parseLessons, parseStories, resolveAfter, retroPrompt, storiesPrompt, type BoardColumn, type BoardItem, type BoardSettings, type Spent, type StoryJob, type WorkState } from '@shared/board'
 import type { FactoryRun } from '@shared/factory'
 import type { GhIssue, Mission } from '@shared/types'
 import { NO_TOKENS, addTokens, timeIn, tokenTotal, type TokenUsage } from '@shared/usage'
@@ -351,11 +351,13 @@ const prChecked = new Map<string, number>()
 async function checkPrs(): Promise<void> {
   const t = now()
   for (const i of board.get().items) {
-    if ((i.column !== 'review' && i.column !== 'progress') || !i.started?.id) continue
+    // a card dragged to Done while its PR is open: its dependents wait until that PR merges, so keep asking
+    const doneOpen = unmergedDone(i)
+    if ((i.column !== 'review' && i.column !== 'progress' && !doneOpen) || !i.started?.id) continue
     if (t - (prChecked.get(i.id) ?? 0) < PR_POLL_MS) continue
     const w = workOf(i)
-    const number = w?.run?.pr?.number
     const branch = w?.mission?.worktree?.branch
+    const number = w?.run?.pr?.number ?? (doneOpen && !branch ? i.pr?.number : undefined)
     if (!number && !branch) continue
     prChecked.set(i.id, t)
     const pr = number
@@ -364,7 +366,9 @@ async function checkPrs(): Promise<void> {
     const cur = getItem(i.id)
     const next = pr && cur ? followPr(cur, pr, now()) : null
     if (next) setItems((items) => items.map((x) => (x.id === i.id ? next : x)))
-    if (next?.column === 'done') await flagOthers(i.id)
+    if (next?.column === 'done' && cur?.column !== 'done') await flagOthers(i.id)
+    // the blocker's PR merged: its dependents can be picked up now
+    if (doneOpen && next?.pr?.state === 'MERGED') scheduleTick()
   }
 }
 
@@ -447,12 +451,12 @@ export async function startItem(id: string): Promise<void> {
   updateItem(id, { column: 'progress', order: now(), state: 'working', note: undefined, started: { type: work.type === 'recipe' ? 'run' : 'mission', id: '', at: now() } })
   // an item that can't start goes back to Backlog with the reason, or pick-up would retry it every tick
   try {
-    // cards build on each other: start from the upstream when an earlier card's PR merged there and the local branch is behind
-    const branch = await window.api.git.branch(i.root).catch(() => null)
-    const base = branch ? await window.api.git.freshBase(i.root, branch).catch(() => branch) : undefined
-    const started = await startAction(i.root, work, { intent: (text) => cardBrief(i, text), title: `#${i.key} ${i.title}`, issue: i.issue?.number, base })
+    // cards build on each other: always from the default branch as it is on the remote now (with every merged card),
+    // never from whatever the main checkout is on; a fetch that fails stops here (Backlog, with the reason)
+    const base = await window.api.git.pickupBase(i.root, s.base)
+    const started = await startAction(i.root, work, { intent: (text) => cardBrief(i, text), title: `#${i.key} ${i.title}`, issue: i.issue?.number, base: base.ref })
     if ('error' in started) updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: started.error })
-    else updateItem(id, { started: { type: started.type, id: started.id, at: now() }, note: undefined })
+    else updateItem(id, { started: { type: started.type, id: started.id, at: now(), base: base.commit }, note: undefined })
   } catch (e) {
     updateItem(id, { column: 'backlog', started: undefined, state: undefined, note: (e as Error).message.split('\n')[0] })
   } finally {

@@ -151,20 +151,41 @@ export async function remoteBranches(cwd: string): Promise<string[]> {
 }
 
 /**
- * Where new work on `branch` starts: its upstream ("origin/master") when the local branch is only behind
- * it, after fetching that remote, so a story started after an earlier one's PR merged on GitHub builds on
- * that work instead of on a stale local branch. A branch with commits of its own (ahead or diverged), one
- * without an upstream, or a fetch that fails (offline) stays as it is. The user's checkout is never touched.
+ * Where board pick-up starts a card: the project's default branch (`wanted` when set, else `<remote>/HEAD`, else
+ * main or master) as it is on the remote right after fetching it, never whatever branch the main checkout is on.
+ * The local branch name when it is exactly the remote's commit, else the remote-tracking ref (local is behind,
+ * ahead or diverged). A remote that can't be fetched is an error, never a silent stale start. A repository with
+ * no remote starts from its local default branch (or the current one).
  */
-export async function freshBase(cwd: string, branch: string): Promise<string> {
-  if (!branch || branch.startsWith('-')) return branch
-  const upstream = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`], cwd)).stdout.trim()
-  if (!upstream) return branch
-  const remote = (await git(['config', '--get', `branch.${branch}.remote`], cwd)).stdout.trim()
-  if (remote && remote !== '.') await git(['fetch', '--quiet', '--prune', remote], cwd, 60000)
-  const [local, up] = await Promise.all([git(['rev-parse', branch], cwd), git(['rev-parse', upstream], cwd)])
-  if (local.code !== 0 || up.code !== 0 || local.stdout.trim() === up.stdout.trim()) return branch
-  return (await git(['merge-base', '--is-ancestor', branch, upstream], cwd)).code === 0 ? upstream : branch
+export async function pickupBase(cwd: string, wanted?: string): Promise<{ ref: string; commit: string }> {
+  const name = wanted?.trim() || undefined
+  if (name?.startsWith('-')) throw new Error(`Not a valid base: "${name}"`)
+  const sha = async (ref: string): Promise<string | null> => {
+    const r = await git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd)
+    return r.code === 0 ? r.stdout.trim() : null
+  }
+  const remotes = (await git(['remote'], cwd)).stdout.split('\n').map((s) => s.trim()).filter(Boolean)
+  const remote = remotes.includes('origin') ? 'origin' : remotes[0]
+  if (remote) {
+    const f = await git(['fetch', '--quiet', '--prune', remote], cwd, 60000)
+    if (f.code !== 0) throw new Error(`Couldn't fetch ${remote}, so it didn't start from a possibly stale ${name ?? 'base'}: ${(f.stderr.trim().split('\n').pop() || `git fetch exited ${f.code}`).trim()}`)
+    let branch = name
+    if (!branch) {
+      const head = (await git(['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`], cwd)).stdout.trim()
+      if (head.startsWith(`${remote}/`)) branch = head.slice(remote.length + 1)
+      else for (const b of ['main', 'master']) if (!branch && (await sha(`refs/remotes/${remote}/${b}`))) branch = b
+    }
+    const up = branch ? await sha(`refs/remotes/${remote}/${branch}`) : null
+    if (branch && up) return { ref: (await sha(`refs/heads/${branch}`)) === up ? branch : `${remote}/${branch}`, commit: up }
+    if (name && !(await sha(`refs/heads/${name}`))) throw new Error(`There is no branch ${name} on ${remote} or here to start from`)
+  }
+  // no remote, or the remote doesn't have it: the local branch
+  let local = name
+  if (!local) for (const b of ['main', 'master']) if (!local && (await sha(`refs/heads/${b}`))) local = b
+  local ??= await currentRef(cwd)
+  const commit = await sha(local)
+  if (!commit) throw new Error(`There is no ${local} to start from`)
+  return { ref: local, commit }
 }
 
 /** A pull request goes into a branch on GitHub: "origin/master" (work started from the upstream) is "master" there. */
@@ -386,7 +407,7 @@ const FETCH_EVERY_MS = 5 * 60_000
  * How far the base moved since the branch in `cwd` left it, before anything is pushed: the commits on the base
  * that HEAD doesn't have, and a trial merge (`git merge-tree --write-tree`, git 2.38+) that names the files that
  * would conflict without touching the worktree, the index or any ref. The base is compared as it is on its
- * upstream when the local branch is only behind it (fetched at most every 5 minutes), like `freshBase`.
+ * upstream when the local branch is only behind it (fetched at most every 5 minutes).
  */
 export async function baseMoved(cwd: string, base: string): Promise<BaseMoved> {
   if (!base || base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)

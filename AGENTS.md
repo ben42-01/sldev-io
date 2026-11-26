@@ -167,13 +167,19 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   never more than the set number of cards at once, never pushes. Work only moves a card forward (Agent ready → In progress →
   Review); a card the human put in Backlog, Review or Done stays there. Moving a card back to Agent ready forgets its finished
   run so it can be picked up again; a card that can't start goes to Backlog with the reason, never retried every tick.
+  A card in Review whose work isn't merged keeps its slot (`holdsSlot`, "Wait until Done", on by default), so the next card
+  starts only once the last one's PR merged; parallel starts on stale bases made cards conflict four times. Each card branches
+  from the default branch as it is on the remote right after a fetch (`pickupBase` in src/main/git.ts; a base set in the pick-up
+  settings instead), never from the branch the main checkout is on; a fetch that fails sends the card to Backlog, never a stale
+  start. `started.base` records the commit.
   Cards an agent files or rewrites (`sldev_board_add`, `sldev_board_update`, the story-writing missions of Write stories and Refine)
   always land in Proposed, and only a person approves them into Agent ready, so agents can't feed pick-up themselves.
   Story missions are read-only; agents without the sldev tools write their stories to a JSON file under `.sldev/runs/`. A merged PR
   (asked through gh every 5 minutes for cards in Review, and on window focus at most every 30 s; a run's PR is recorded, a mission's
   is found by its worktree branch) moves its card to Done; Clear Done/Backlog (`clearColumnFlow`) deletes a column's cards with their
   worktrees after asking, and never while an agent is at work in one; imported issues are closed by their run's PR.
-  A card with `blockedBy` (card numbers; agents set it with `after`) isn't picked up until those are Done; manual Start can
+  A card with `blockedBy` (card numbers; agents set it with `after`) isn't picked up until those are Done and their PRs merged
+  (a card dragged to Done with its PR open still blocks, `unmergedDone`, and its PR keeps being asked about); manual Start can
   override from the menu. `spent` (time, agents, tokens from local logs) is measured once its work finishes and is not a change
   to the card (no `updatedAt` bump). Retros are read-only missions whose lessons go to `.sldev/memory.md` (sldev_remember, or a
   JSON file the app adds), never anywhere else.

@@ -65,9 +65,22 @@ module.exports = async (h) => {
   h.expect(pr.startsWith('## Create a team') && pr.includes('### What changed') && pr.includes('- [ ] POST /teams creates one') && pr.includes('### How to check') && pr.includes('Card #1'), `the description has the story, the report and criteria to tick:\n${pr}`)
   await h.shot('3-copied')
 
-  // Done unblocks the waiting card, and pick-up takes it
+  // Done while its PR is still open doesn't unblock: the waiting card says it waits for that PR
+  const team = (await stored()).find((i) => i.title === 'Create a team')
+  const branch = (await h.js(`window.api.store.get('missions').then(s => s.missions.find(m => m.id === ${JSON.stringify(team.started.id)}))`)).worktree.branch
   await menuOf('Create a team', 'Done')
-  h.expect(await h.until(async () => !(await cards('ready')).includes('Remove a member'), 12000), 'once its blocker is Done, pick-up starts the waiting card')
+  h.expect(await h.until(() => h.js(`${card('Remove a member')}?.querySelector('.board-waits')?.textContent.includes('#1 PR #21 not merged')`), 8000), "dragged to Done with its PR open, the blocker still holds: Waits for #1, PR #21 not merged")
+  h.expect((await cards('ready')).includes('Remove a member'), 'and the waiting card stays in Agent ready')
+  await h.wait(1500)
+  h.expect((await cards('done')).includes('Create a team'), 'the blocker stays in Done')
+  await h.shot('3b-waits-for-pr')
+
+  // the PR merges: pick-up takes the waiting card
+  fs.writeFileSync(path.join(h.fixture, `pr-state-${branch.replace(/\//g, '-')}.txt`), 'MERGED')
+  await h.click('.board-head-actions .btn', 'Board')
+  await h.wait(200)
+  await h.click('.ctx-menu .ctx-item', 'Check pull requests now')
+  h.expect(await h.until(async () => !(await cards('ready')).includes('Remove a member'), 12000), 'once its blocker\'s PR merged, pick-up starts the waiting card')
   await h.click('.board-page .chip-check input')
 
   // a retro saves a lesson to the project memory

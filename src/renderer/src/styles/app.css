@@ -6938,6 +6938,9 @@ button.board-label:hover {
   font-size: 10.5px;
   color: inherit;
 }
+.board-waits-pr {
+  color: var(--fg-muted);
+}
 .board-moved {
   display: flex;
   align-items: flex-start;

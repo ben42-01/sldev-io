@@ -43,8 +43,8 @@ export interface BoardItem {
   priority: BoardPriority
   /** this item's own work instead of the board's pick-up setting */
   work?: BoardWork
-  /** the run or mission started for it */
-  started?: { type: 'run' | 'mission'; id: string; at: number }
+  /** the run or mission started for it, and the base commit pick-up started it from */
+  started?: { type: 'run' | 'mission'; id: string; at: number; base?: string }
   /** the last state of that work, for the card */
   state?: WorkState
   /** why it couldn't start, or what happened to its work */
@@ -65,6 +65,8 @@ export interface BoardItem {
   doneAt?: number
   /** the release notes it went out in (Mark as released) */
   released?: string
+  /** its work's pull request as gh last said (a run's recorded one, or found by the mission's branch). Local, never in the board file */
+  pr?: { number: number; state: PrState }
   /** another card's PR was merged into this card's base while it waited in Review: re-check it. Local, never in the board file */
   baseMoved?: BaseMovedFlag
   createdAt: number
@@ -81,6 +83,10 @@ export interface BoardSettings {
   work: BoardWork
   /** how many items may be in progress at once by pick-up */
   parallel: number
+  /** a card in Review whose work isn't merged yet still takes its slot, so the next one starts from a base with it (default on) */
+  waitForDone?: boolean
+  /** the branch pick-up starts cards from (default: the remote's default branch, fetched first) */
+  base?: string
   /** keep the board in .sldev/board.json, to commit and share with the team */
   sync?: boolean
   /** cards deleted here while syncing, so a teammate's copy in the file doesn't bring them back */
@@ -105,13 +111,20 @@ export function columnItems(items: BoardItem[], column: BoardColumn): BoardItem[
 export const isActive = (i: BoardItem): boolean => !!i.started && (i.state === undefined || i.state === 'working' || i.state === 'needs-you')
 
 /**
+ * Whether an item takes one of pick-up's slots: its work is going, or (wait until Done, the default) it waits in
+ * Review with its work not merged yet. Starting the next card before that merges branches it from a base without
+ * it, and cards touching the same files then conflict.
+ */
+export const holdsSlot = (i: BoardItem, s: Pick<BoardSettings, 'waitForDone'>): boolean => isActive(i) || (s.waitForDone !== false && i.column === 'review' && !!i.started)
+
+/**
  * The items pick-up should start now: from Agent ready, by priority then position, as many as the
  * limit leaves room for. An item already started is never started twice.
  */
 export function nextPickups(items: BoardItem[], s: BoardSettings): BoardItem[] {
   if (!s.pickup) return []
   const mine = items.filter((i) => i.root === s.root)
-  const room = Math.max(0, s.parallel - mine.filter(isActive).length)
+  const room = Math.max(0, s.parallel - mine.filter((i) => holdsSlot(i, s)).length)
   if (!room) return []
   return mine
     .filter((i) => i.column === 'ready' && !i.started && !blockersOf(i, mine).length)
@@ -137,7 +150,7 @@ export function moveItem(i: BoardItem, column: BoardColumn, now: number, order =
   const done = column === 'done' && i.column !== 'done' ? { doneAt: now } : column !== 'done' ? { doneAt: undefined, released: undefined } : {}
   // the re-check flag belongs to the card waiting in Review; out of Review it means nothing
   const moved = column !== i.column ? { baseMoved: undefined } : {}
-  return { ...i, column, order, updatedAt: now, ...done, ...moved, ...(requeue ? { started: undefined, state: undefined, spent: undefined } : {}) }
+  return { ...i, column, order, updatedAt: now, ...done, ...moved, ...(requeue ? { started: undefined, state: undefined, spent: undefined, pr: undefined } : {}) }
 }
 
 /** What the agent is told: the title, the details and the labels. */
@@ -206,12 +219,20 @@ export function issueCard(x: GhIssue): Pick<BoardItem, 'title' | 'body' | 'label
  * What a pull request's state does to its card. Merged moves it to Done from Review or In progress
  * (the work is in); closed without merging only says so. A card already moved by hand stays.
  */
-export function followPr(i: BoardItem, pr: { number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' }, now: number): BoardItem | null {
+export function followPr(i: BoardItem, pr: { number: number; state: PrState }, now: number): BoardItem | null {
   const live = i.column === 'review' || i.column === 'progress'
-  if (pr.state === 'MERGED' && live) return { ...i, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now, doneAt: now, baseMoved: undefined }
-  if (pr.state === 'CLOSED' && live && i.note !== `PR #${pr.number} closed without merging`) return { ...i, note: `PR #${pr.number} closed without merging`, updatedAt: now }
+  const known = { pr: { number: pr.number, state: pr.state } }
+  if (pr.state === 'MERGED' && live) return { ...i, ...known, column: 'done', note: `PR #${pr.number} merged`, updatedAt: now, order: now, doneAt: now, baseMoved: undefined }
+  if (pr.state === 'CLOSED' && live && i.note !== `PR #${pr.number} closed without merging`) return { ...i, ...known, note: `PR #${pr.number} closed without merging`, updatedAt: now }
+  // only what gh said, not a change to the card (a Done card's PR merging later, an open one found)
+  if (i.pr?.number !== pr.number || i.pr.state !== pr.state) return { ...i, ...known }
   return null
 }
+
+export type PrState = 'OPEN' | 'MERGED' | 'CLOSED'
+
+/** A card in Done whose pull request is still open: dragged there by hand before it merged. Its dependents keep waiting. */
+export const unmergedDone = (x: BoardItem): boolean => x.column === 'done' && x.pr?.state === 'OPEN'
 
 /** How often a card's pull request is checked while it waits in Review. */
 export const PR_POLL_MS = 5 * 60_000
@@ -395,11 +416,17 @@ export function parseKeys(text: string): number[] {
   return [...new Set([...text.matchAll(/\d+/g)].map((m) => Number(m[0])).filter((n) => n > 0))].slice(0, 12)
 }
 
-/** The cards this one still waits for: those it is blocked by that aren't Done (a deleted card no longer blocks). */
+/**
+ * The cards this one still waits for: those it is blocked by that aren't Done, or are in Done while their pull
+ * request is still open (moved there by hand before it merged). A deleted card no longer blocks.
+ */
 export function blockersOf(i: Pick<BoardItem, 'root' | 'blockedBy'>, items: BoardItem[]): BoardItem[] {
   if (!i.blockedBy?.length) return []
-  return items.filter((x) => x.root === i.root && i.blockedBy!.includes(x.key) && x.column !== 'done')
+  return items.filter((x) => x.root === i.root && i.blockedBy!.includes(x.key) && (x.column !== 'done' || unmergedDone(x)))
 }
+
+/** Why a blocker still blocks, for the card: "#12" or "#12's PR #40 to merge". */
+export const blockerText = (x: BoardItem): string => (unmergedDone(x) ? `#${x.key}'s PR #${x.pr!.number} to merge` : `#${x.key}`)
 
 /** The cards waiting for this one, for the card's "unblocks" line. */
 export const dependentsOf = (i: Pick<BoardItem, 'root' | 'key'>, items: BoardItem[]): BoardItem[] => items.filter((x) => x.root === i.root && x.blockedBy?.includes(i.key))

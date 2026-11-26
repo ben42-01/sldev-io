@@ -2,7 +2,7 @@ import { clearColumnFlow } from '../lib/removals'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SkillsHint } from './SkillsHint'
 import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitMerge, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
-import { BOARD_COLUMNS, baseMovedBadge, baseMovedDetail, baseMovedShort, baseMovedStrong, blockersOf, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
+import { BOARD_COLUMNS, baseMovedBadge, baseMovedDetail, baseMovedShort, baseMovedStrong, blockerText, blockersOf, unmergedDone, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
 import { Modal, confirmAction } from './Modal'
@@ -243,7 +243,7 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
     ...(proposed ? [{ label: 'Approve for agents', icon: <Check size={13} />, run: () => approve([i.id]) }] : []),
     ...(refinable ? [{ label: 'Refine with an agent…', icon: <Sparkles size={13} />, run: () => openBoardDialog({ type: 'stories', card: i.id }) }] : []),
     ...(startable ? [
-      { label: waits.length ? `Start now, without waiting for ${waits.map((x) => `#${x.key}`).join(', ')}` : 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) },
+      { label: waits.length ? `Start now, without waiting for ${waits.map(blockerText).join(', ')}` : 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) },
       { label: 'Start with a Lead (it delegates the parts)', icon: <Network size={13} />, run: () => (updateItem(i.id, { work: { type: 'mission', kind: 'lead', brief: '' } }), void startItem(i.id)) }
     ] : []),
     ...(moved && recheck ? [{ label: reviewable ? `${moved.base} moved: re-check in the Review tab` : `${moved.base} moved: re-check in the pipeline`, icon: <GitMerge size={13} />, run: recheck }] : []),
@@ -307,8 +307,13 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
         </button>
       )}
       {waits.length > 0 && i.column !== 'done' && (
-        <div className="board-waits" title="Pick-up starts it once these are Done">
-          <Hourglass size={11} /> Waits for {waits.map((x) => <span key={x.id} className="board-key">#{x.key}</span>)}
+        <div className="board-waits" title="Pick-up starts it once these are Done and their pull requests merged">
+          <Hourglass size={11} /> Waits for {waits.map((x) => (
+            <span key={x.id}>
+              <span className="board-key">#{x.key}</span>
+              {unmergedDone(x) && <span className="board-waits-pr"> PR #{x.pr!.number} not merged</span>}
+            </span>
+          ))}
         </div>
       )}
       {unblocks.length > 0 && i.column !== 'done' && (
@@ -326,7 +331,7 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
             </button>
           ) : <span className="grow" />}
           {startable && (
-            <button className="btn sm" onClick={() => void startItem(i.id)} disabled={waits.length > 0} title={waits.length ? `Waits for ${waits.map((x) => `#${x.key}`).join(', ')} (start it anyway from the ⋯ menu)` : 'Start its run now'}>
+            <button className="btn sm" onClick={() => void startItem(i.id)} disabled={waits.length > 0} title={waits.length ? `Waits for ${waits.map(blockerText).join(', ')} (start it anyway from the ⋯ menu)` : 'Start its run now'}>
               <Play size={12} /> Start
             </button>
           )}
@@ -626,8 +631,10 @@ function PickupDialog({ root, onClose }: { root: string; onClose: () => void }):
   const current = useBoardSettings(root)
   const [work, setWork] = useState<BoardWork>(current.work)
   const [parallel, setParallel] = useState(current.parallel)
+  const [waitForDone, setWaitForDone] = useState(current.waitForDone !== false)
+  const [base, setBase] = useState(current.base ?? '')
   const save = (): void => {
-    saveBoardSettings({ ...current, root, work, parallel })
+    saveBoardSettings({ ...current, root, work, parallel, waitForDone, base: base.trim() || undefined })
     onClose()
   }
   return (
@@ -654,6 +661,16 @@ function PickupDialog({ root, onClose }: { root: string; onClose: () => void }):
             {[1, 2, 3, 4, 6].map((n) => <option key={n} value={n}>{n} card{n === 1 ? '' : 's'}</option>)}
           </select>
           <span className="field-hint">Auto pick-up starts the next Agent ready card (highest priority first) when one of these finishes. Only while the app is open, and nothing is pushed.</span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={waitForDone} onChange={(e) => setWaitForDone(e.target.checked)} />
+          <span>Wait until Done</span>
+        </label>
+        <span className="field-hint">A card in Review keeps its slot until its pull request merges (or you move it to Done), so the next card starts from a base that has its work. Off: the next card starts as soon as the agent finishes, which can conflict when cards touch the same files.</span>
+        <label className="field">
+          <span>Start cards from</span>
+          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the remote's default branch" spellCheck={false} />
+          <span className="field-hint">Fetched before each card starts, so it builds on every merged card. If it can't be fetched, the card goes to Backlog with the reason instead of starting from an old copy.</span>
         </label>
       </div>
     </Modal>
