@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MessageSquare, RefreshCw, ThumbsUp, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Check, ChevronDown, ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MessageSquare, RefreshCw, ThumbsUp, Undo2, X } from 'lucide-react'
 import { currentRuns, isMergeMethod, METHOD_LABEL, prMergeBlock, shipBusy, summarizeChecks, type MergeMethod, type ShipPr, type ShipRun } from '@shared/ship'
+import { nextToReview, sinceReviewed, type OpenPr } from '@shared/prs'
 import { ghRunSignal } from '@shared/status'
+import { closePanel } from '../dock/dockApi'
+import { loadPullRequests } from '../state/pullRequests'
 import { openPostReview, postReview } from '../state/review'
-import type { ReviewSource } from '../state/reviewTargets'
+import { openPrReview, prReviews, reviewTabId, type ReviewSource } from '../state/reviewTargets'
 import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
@@ -38,6 +41,10 @@ export function PrShipBar({ source, visible, stamp, onChanged }: Props): React.J
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState(false)
+  // after a merge seen here: the next PR to review (undefined: nothing waiting), asked for once, on the merge
+  const [next, setNext] = useState<{ pr?: OpenPr; error?: string } | null>(null)
+  const sawOpen = useRef(false)
+  const nextBtn = useRef<HTMLButtonElement>(null)
   const method = useStore(workspace, (w) => (isMergeMethod(w.mergeMethod) ? w.mergeMethod : 'squash'))
 
   const load = useCallback(async () => {
@@ -69,6 +76,24 @@ export function PrShipBar({ source, visible, stamp, onChanged }: Props): React.J
     const t = window.setInterval(() => void load(), fast ? FAST_MS : SLOW_MS)
     return () => window.clearInterval(t)
   }, [visible, fast, load])
+
+  // the list is read once, when this bar sees the PR go from open to merged (a merge here, or one that waited for checks)
+  const state = pr?.state
+  useEffect(() => {
+    if (state === 'OPEN') sawOpen.current = true
+    if (state !== 'MERGED' || !sawOpen.current) return
+    sawOpen.current = false
+    const root = pr0.root
+    const merged = pr0.number
+    void loadPullRequests(root).then((list) => {
+      if (list.error) return setNext({ error: list.error })
+      const reviews = prReviews.get().list
+      setNext({ pr: nextToReview(list.prs, list.me, merged, (p) => sinceReviewed(p, reviews, root) === 'changed') })
+    })
+  }, [state, pr0.root, pr0.number])
+  useEffect(() => {
+    if (next?.pr) nextBtn.current?.focus()
+  }, [next])
 
   const approve = async (): Promise<void> => {
     if (!pr) return
@@ -188,6 +213,21 @@ export function PrShipBar({ source, visible, stamp, onChanged }: Props): React.J
           </button>
         )}
       </div>
+      {next && state === 'MERGED' && (
+        <div className="ship-row ship-next" data-testid="pr-next">
+          {next.pr ? (
+            <button ref={nextBtn} type="button" className="btn sm primary ship-next-pr" title={`Review #${next.pr.number} next (Enter)`} onClick={() => openPrReview(pr0.root, { number: next.pr!.number, title: next.pr!.title, headSha: next.pr!.headSha })}>
+              <ArrowRight size={13} /> Next: #{next.pr.number} <span className="ship-next-title">{next.pr.title}</span>
+            </button>
+          ) : (
+            <span className="ship-why muted" title={next.error}>{next.error ? `Couldn't read the other pull requests: ${next.error}` : 'Nothing else is waiting for you'}</span>
+          )}
+          <span className="spacer" />
+          <button className="btn sm ghost" title="Close this Review tab" onClick={() => closePanel(reviewTabId(source.target))}>
+            <X size={13} /> Close tab
+          </button>
+        </div>
+      )}
       {error && pr && <pre className="ship-error selectable">{error}</pre>}
       {open && live && (
         <ul className="ship-runs" aria-label="Workflow runs">

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isMine, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, sinceReviewed, waitingForMe, withChecks } from '@shared/prs'
+import { isMine, nextToReview, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, sinceReviewed, waitingForMe, withChecks } from '@shared/prs'
 import { prChecksSignal, prReviewSignal } from '@shared/status'
 import { listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
 
@@ -106,6 +106,26 @@ describe('the review list', () => {
     ]
     const changed = new Set([5, 2])
     expect(reviewOrder(list, 'ben', 'all', (p) => changed.has(p.number)).map((p) => p.number)).toEqual([3, 2, 5, 4, 1])
+  })
+
+  it('offers the next PR after a merge: review order, not the merged one, no drafts, no failing checks', () => {
+    const list = [
+      { ...pr(1, '2026-01-01T00:00:00Z'), checks: 'failed' as const },
+      pr(2, '2026-01-02T00:00:00Z', { isDraft: true }),
+      { ...pr(3, '2026-01-03T00:00:00Z'), checks: 'running' as const },
+      pr(4, '2026-01-04T00:00:00Z', { reviewRequests: [{ login: 'ben' }] }),
+      pr(5, '2026-01-05T00:00:00Z')
+    ]
+    expect(nextToReview(list, 'ben', 9)?.number).toBe(4)
+    // the merged one is skipped even while gh still lists it
+    expect(nextToReview(list, 'ben', 4)?.number).toBe(3)
+    expect(nextToReview(list, undefined, 3)?.number).toBe(4)
+    // changed since my review comes before the oldest
+    expect(nextToReview(list, 'ben', 4, (p) => p.number === 5)?.number).toBe(5)
+    // a draft changed since my review is still a draft
+    expect(nextToReview(list, 'ben', 4, (p) => p.number === 2)?.number).toBe(3)
+    expect(nextToReview([list[0], list[1], list[3]], 'ben', 4)).toBeUndefined()
+    expect(nextToReview([], 'ben', 4)).toBeUndefined()
   })
 
   it('says whether a PR changed since my last verdict on it', () => {
