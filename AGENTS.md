@@ -201,6 +201,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Re-review compares hunk contents (`hunkKey`: file plus +/- lines, no line numbers), never commits, so it survives rebases,
   force pushes and uncommitted work: a mark keeps the hunks it was made on and holds only while they're the same (`carryMarks`),
   and `seen` (the diff at the last verdict, with its head) is what "Since last review" filters against.
+  Run checks (`src/shared/reviewChecks.ts`, `state/reviewChecks.ts`) runs only on its click, in the resolver's `checkFolder` (a PR's
+  own worktree, never the main checkout), installs dependencies once per worktree (`setupPlan`'s marker), runs each check in its own
+  terminal with `CI=1` (killed after 15 min), and keeps the result on the review keyed by head commit (and diff), so new commits make it stale.
 - **Ship bar** (`src/shared/ship.ts`, `components/ShipBar.tsx`, the Review tab of a worktree mission): checks come from the branch's
   Actions runs (`gh run list`), not `statusCheckRollup`, which fine-grained tokens can't read. GitHub is asked only while the tab is on
   screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge

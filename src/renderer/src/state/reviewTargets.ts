@@ -36,6 +36,18 @@ export interface ReviewSource {
   review: ReviewState
   /** only a mission's change can be committed, shipped and sent back to its agent */
   mission?: Mission
+  /** the commit under review when the source knows it without asking git (a PR's head from gh) */
+  head?: string
+}
+
+/** Where Run checks runs: the folder with exactly the code under review, and the commit checked out there. */
+export interface CheckFolder {
+  path: string
+  head: string
+  /** a worktree of its own: dependencies may be installed there (never in the user's main checkout) */
+  worktree: boolean
+  /** something to say about it ("checked out PR #128 at abc1234") */
+  note?: string
 }
 
 interface Resolver<T extends ReviewTarget> {
@@ -47,6 +59,8 @@ interface Resolver<T extends ReviewTarget> {
   patch(t: T, f: (r: ReviewState) => ReviewState): void
   /** what the helper agents are told about it */
   subject(t: T): ReviewSubject | undefined
+  /** the folder Run checks runs in, made ready (a PR's head checked out) */
+  checkFolder(t: T): Promise<CheckFolder>
   /** the commit the change is at now, and how many commits came after `since` (null: `since` is no longer in its history) */
   head(t: T, since?: string): Promise<ReviewHead>
 }
@@ -114,6 +128,13 @@ const missionResolver: Resolver<Extract<ReviewTarget, { kind: 'mission' }>> = {
     const head = m ? ((await window.api.git.head(m.cwd).catch(() => null)) ?? undefined) : undefined
     if (!m || !head || !since || since === head) return { head, commits: 0 }
     return { head, commits: await window.api.git.commitsSince(m.cwd, since).catch(() => undefined) }
+  },
+  async checkFolder(t) {
+    const m = getMission(t.id)
+    if (!m) throw new Error('That mission is gone')
+    const head = await window.api.git.head(m.cwd)
+    if (!head) throw new Error(`${m.cwd} is not a git checkout`)
+    return { path: m.cwd, head, worktree: !!m.worktree }
   }
 }
 
@@ -155,7 +176,8 @@ function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefin
     ask: body || meta?.title || `Pull request #${t.number}`,
     criteria: criteriaOf({ brief: body }),
     review: entry?.review ?? {},
-    mission: undefined
+    mission: undefined,
+    head: meta?.head
   }
 }
 
@@ -202,6 +224,13 @@ const prResolver: Resolver<PrTarget> = {
     // gh lists the PR's commits: the ones after the reviewed head are new; a force push leaves it out
     const i = meta?.commits?.indexOf(since) ?? -1
     return { head, commits: !meta?.commits?.length ? undefined : i < 0 ? null : meta.commits.length - 1 - i }
+  },
+  async checkFolder(t) {
+    // the PR's own worktree, at what GitHub has now: never the user's checkout
+    const wt = await window.api.git.prWorktree(t.root, t.number, prReviews.get().meta[keyOf(t)]?.head)
+    prReviews.set((s) => ({ worktrees: { ...s.worktrees, [keyOf(t)]: wt.path } }))
+    const note = wt.action === 'created' ? `Checked out #${t.number}` : wt.action === 'moved' ? `Moved #${t.number}'s worktree to its new commits` : undefined
+    return { path: wt.path, head: wt.head, worktree: true, note }
   }
 }
 
@@ -252,6 +281,7 @@ export const readReviewDiff = (t: ReviewTarget): Promise<string> => resolver(t).
 export const patchReview = (t: ReviewTarget, f: (r: ReviewState) => ReviewState): void => resolver(t).patch(t, f)
 export const reviewSubject = (t: ReviewTarget): ReviewSubject | undefined => resolver(t).subject(t)
 export const reviewHead = (t: ReviewTarget, since?: string): Promise<ReviewHead> => resolver(t).head(t, since)
+export const checkFolder = (t: ReviewTarget): Promise<CheckFolder> => resolver(t).checkFolder(t)
 
 /** Is an agent at work on the change right now (nothing to send back to yet)? */
 export const workingOn = (s: ReviewSource): boolean => !!s.mission && isLive(s.mission.status)

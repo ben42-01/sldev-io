@@ -71,6 +71,14 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2 $3 $4 $5" in "pr view 128 --json "*closingIssuesReferences*)
     echo "{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\"},\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"body\":\"Adds a limiter. Fixes #42\",\"closingIssuesReferences\":[{\"number\":42,\"title\":\"Too many requests\",\"url\":\"https://github.com/acme/shop/issues/42\",\"repository\":{\"name\":\"shop\",\"owner\":{\"login\":\"acme\"}}}]}"; exit 0 ;;
   esac
+  # the Review tab on a PR (gh pr view + gh pr diff): the head GitHub serves as refs/pull/<n>/head, diffed against main
+  case "$1 $2 $4 $5" in "pr view --json number,title,body,url,headRefOid,headRefName,baseRefName")
+    head=$(git ls-remote origin "refs/pull/$3/head" 2>/dev/null | cut -f1)
+    echo "{\"number\":$3,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/$3\",\"headRefOid\":\"$head\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\"}"; exit 0 ;;
+  esac
+  if [ "$1 $2" = "pr diff" ]; then
+    git fetch -q origin "+refs/pull/$3/head:refs/fake-gh/pr/$3" && git diff main "refs/fake-gh/pr/$3"; exit $?
+  fi
   [ "$1 $2 $3" = "pr view --json" ] && { echo '{"number":128,"title":"Rate limit the API","state":"OPEN","url":"https://github.com/acme/shop/pull/128","isDraft":false,"statusCheckRollup":[{"conclusion":"SUCCESS"},{"conclusion":"SUCCESS"},{"status":"IN_PROGRESS"}]}'; exit 0; }
 fi
 # a pull request's state (the board moves a merged one's card to Done): pr-state.txt in the repo, OPEN without it

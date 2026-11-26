@@ -510,6 +510,42 @@ export interface ReviewState {
   asks?: Array<{ id: string; part: string; q: string; file: string; mission: string; agent: string; a?: string; failed?: boolean; at: number }>
   /** the follow-up the marked parts went back in */
   sent?: { at: number; mission: string; parts: number }
+  /** the project's checks, run on a click in the folder under review (src/shared/reviewChecks.ts) */
+  checks?: ReviewChecks
+}
+
+/** One check of a Run checks: the command, run in its own terminal, and how it ended. */
+export interface ReviewCheck {
+  name: string
+  command: string
+  status: 'waiting' | 'running' | 'passed' | 'failed'
+  code?: number | null
+  timedOut?: boolean
+  /** the terminal was closed before the command finished */
+  closed?: boolean
+  /** the last lines of its output */
+  tail?: string
+  /** the terminal it runs in, for the full log (gone after a restart) */
+  panelId?: string
+}
+
+/** A Run checks on the review's folder: keyed by the commit it ran on, so a new commit makes it stale. */
+export interface ReviewChecks {
+  /** the commit checked out where the checks ran */
+  head: string
+  /** what the diff looked like then (uncommitted edits in a mission's folder change it without a commit) */
+  diff?: string
+  /** the folder they ran in: the PR's worktree, or the mission's */
+  path: string
+  at: number
+  status: 'running' | 'done'
+  /** dependencies installed first, once per worktree */
+  setup?: { command: string; ok: boolean; tail?: string }
+  results: ReviewCheck[]
+  /** optional checks the project doesn't have */
+  skipped: string[]
+  /** why it couldn't run at all */
+  error?: string
 }
 
 export interface ClaudeAsset {

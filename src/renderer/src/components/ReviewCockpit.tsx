@@ -14,6 +14,7 @@ import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { DiffLines } from './DiffTables'
 import { ReviewListResizer, reviewListWidth } from './PaneResizer'
+import { ReviewChecks } from './ReviewChecks'
 import { Empty } from './States'
 import { toast } from './Toast'
 
@@ -297,6 +298,7 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
           </div>
         </section>
       </header>
+      <ReviewChecks source={source} diff={sig} />
 
       {moved && delta && (
         <div className="rc-since" role="status">
