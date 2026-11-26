@@ -3336,6 +3336,24 @@ body.resizing-y * {
 .pr-row .spill {
   flex-shrink: 0;
 }
+/* "changed since your review": a pill that is a button, under the PR's meta line */
+.pr-since {
+  display: inline-flex;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pr-since:hover .spill {
+  background: color-mix(in oklch, currentColor 18%, transparent);
+}
+.pr-since:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
 .pr-checks {
   display: inline-flex;
   margin-right: 6px;

@@ -27,13 +27,23 @@ const NEED: Record<Need, { label: string; hint: string }> = {
 
 const NOISE_ID = '__noise'
 
+/** Each ask to open on "Since last review" counts once: a remount (Files and back, a restored layout) keeps the reviewer's choice. */
+const sinceTaken = new Set<number>()
+/** stamps from before this window loaded came back with a restored layout: not a new ask */
+const loadedAt = Date.now()
+function askSince(stamp: number | undefined): boolean {
+  if (!stamp || stamp < loadedAt || sinceTaken.has(stamp)) return false
+  sinceTaken.add(stamp)
+  return true
+}
+
 /**
  * The review cockpit: the diff in reading order, by what each part is for. Works on its own (parts by
  * folder, noise folded, risky spots flagged); with a walkthrough, an agent has said why each part is there,
  * whether it was asked for and if there is a simpler way. Each part gets a verdict, and what was sent back
  * goes to the agent that did the work as one follow-up.
  */
-export function ReviewCockpit({ source, files, layout }: { source: ReviewSource; files: DiffFile[]; layout: 'split' | 'unified' }): React.JSX.Element {
+export function ReviewCockpit({ source, files, layout, sinceAsked }: { source: ReviewSource; files: DiffFile[]; layout: 'split' | 'unified'; sinceAsked?: number }): React.JSX.Element {
   const review = source.review
   const target = source.target
   const walkState = review?.walk
@@ -45,7 +55,7 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   /** "Since last review": only the hunks that changed since the last verdict */
-  const [since, setSince] = useState(false)
+  const [since, setSince] = useState(() => askSince(sinceAsked))
   const [head, setHead] = useState<ReviewHead>({})
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null)
@@ -120,9 +130,18 @@ export function ReviewCockpit({ source, files, layout }: { source: ReviewSource;
   const back = c.parts.filter((p) => marks[p.id]?.note)
   const seen = c.parts.filter((p) => marks[p.id]).reduce((a, p) => a + p.lines, 0)
   const changedParts = delta ? delta.parts.length : 0
-  // caught up: the next change opens on the whole diff again
+  // asked from outside (the Pull requests list's "changed since your review"): on again, at the start
   useEffect(() => {
-    if (!moved) setSince(false)
+    if (!askSince(sinceAsked)) return
+    setSince(true)
+    setSel(null)
+  }, [sinceAsked])
+  // caught up: the next change opens on the whole diff again (only once it had moved: the review state and the
+  // diff may still be loading when the tab opens)
+  const wasMoved = useRef(moved)
+  useEffect(() => {
+    if (wasMoved.current && !moved) setSince(false)
+    wasMoved.current = moved
   }, [moved])
   const writing = walkState?.status === 'writing'
   const agentName = getAgent(source.agent).name

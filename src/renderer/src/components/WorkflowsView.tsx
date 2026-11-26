@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { reviewOrder, waitingForMe, type OpenPr } from '@shared/prs'
-import { prChecksSignal, prReviewSignal } from '@shared/status'
+import { reviewOrder, sinceReviewed, waitingForMe, type OpenPr, type SinceReviewed } from '@shared/prs'
+import { prChecksSignal, prReviewSignal, prSinceSignal } from '@shared/status'
 import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
-import { ChevronRight, CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
+import { ChevronRight, CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash, History } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
 import { openSetup } from '../state/setup'
 import { useStore } from '../state/store'
@@ -14,7 +14,7 @@ import { showNotice } from './Modal'
 import { Empty, ErrorBanner, Loading } from './States'
 import { StatusDot, StatusPill } from './StatusDot'
 import { loadPullRequests, pullRequests } from '../state/pullRequests'
-import { openPrReview } from '../state/reviewTargets'
+import { loadPrReviews, openPrReview, prReviews } from '../state/reviewTargets'
 
 const errText = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
@@ -173,8 +173,13 @@ function PrList({ root }: { root: string }): React.JSX.Element {
     return () => (clearInterval(t), document.removeEventListener('visibilitychange', tick))
   }, [root])
 
+  // my saved reviews (prReviews.json): which PRs changed since my last verdict
+  const reviews = useStore(prReviews, (s) => s.list)
+  useEffect(() => void loadPrReviews(), [])
+
   const list = state?.list
-  const prs = useMemo(() => (list && !list.error ? reviewOrder(list.prs, list.me, filter) : []), [list, filter])
+  const since = useMemo(() => new Map((list?.prs ?? []).map((p) => [p.number, sinceReviewed(p, reviews, root)])), [list, reviews, root])
+  const prs = useMemo(() => (list && !list.error ? reviewOrder(list.prs, list.me, filter, (p) => since.get(p.number) === 'changed') : []), [list, filter, since])
   const me = list?.me
 
   return (
@@ -198,13 +203,14 @@ function PrList({ root }: { root: string }): React.JSX.Element {
       {list && !list.error && !prs.length && (
         <Empty title={filter === 'mine' ? 'Nothing of yours is open' : 'No open pull requests'} hint={filter === 'mine' ? 'None you opened or are asked to review.' : 'Pull requests opened on GitHub show up here.'} />
       )}
-      {prs.map((p) => <PrRow key={p.number} pr={p} root={root} asksMe={waitingForMe(p, me)} />)}
+      {prs.map((p) => <PrRow key={p.number} pr={p} root={root} asksMe={waitingForMe(p, me)} since={since.get(p.number)} />)}
     </div>
   )
 }
 
-function PrRow({ pr: p, root, asksMe }: { pr: OpenPr; root: string; asksMe: boolean }): React.JSX.Element {
+function PrRow({ pr: p, root, asksMe, since }: { pr: OpenPr; root: string; asksMe: boolean; since?: SinceReviewed }): React.JSX.Element {
   const open = (): void => openPrReview(root, { number: p.number, title: p.title, headSha: p.headSha })
+  const openSince = (): void => openPrReview(root, { number: p.number, title: p.title, headSha: p.headSha }, { sinceReview: true })
   return (
     <div
       className="rt-row pr-row"
@@ -217,6 +223,7 @@ function PrRow({ pr: p, root, asksMe }: { pr: OpenPr; root: string; asksMe: bool
       onContextMenu={(e) =>
         showContextMenu(e, [
           { label: 'Review', icon: <GitPullRequest size={13} />, run: open },
+          ...(since === 'changed' ? [{ label: 'Review what changed since my review', icon: <History size={13} />, run: openSince }] : []),
           { label: 'Open in browser', icon: <ExternalLink size={13} />, run: () => void window.api.shell.openExternal(p.url) }
         ])
       }
@@ -233,6 +240,17 @@ function PrRow({ pr: p, root, asksMe }: { pr: OpenPr; root: string; asksMe: bool
           {' · '}{ago(Date.parse(p.createdAt))}
           {asksMe && <> · <strong>asks you</strong></>}
         </div>
+        {since === 'changed' && (
+          <button
+            type="button"
+            className="pr-since"
+            title={`New commits since your last review: open #${p.number} on what changed since then`}
+            onClick={(e) => (e.stopPropagation(), openSince())}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <StatusPill signal={prSinceSignal('changed')} />
+          </button>
+        )}
       </div>
       <StatusPill signal={prReviewSignal(p.reviewDecision)} />
     </div>
