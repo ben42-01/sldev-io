@@ -1,4 +1,4 @@
-import { DEFAULT_LEAD } from '@shared/lead'
+import { DEFAULT_LEAD, leadRoles } from '@shared/lead'
 import type { AgentOptions, HookEvent, Mission, MissionStatus, SavedMission } from '@shared/types'
 import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenTerminalOptions } from '../dock/dockApi'
 import { patchMission, pushStatus } from '@shared/missionHistory'
@@ -11,7 +11,7 @@ import { ASK_GENERIC, askLine } from '@shared/attention'
 import { playChime } from '../lib/sound'
 import { onTerminalEvent, restartTerminal, stopTerminal, terminalCursor, terminalStatus, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
-import { getProfile, roleFor } from './profiles'
+import { getProfile, profilesFor, roleFor } from './profiles'
 import { getKind } from './missionKinds'
 import { withMemory } from '@shared/memory'
 import { contextPointer } from '@shared/context'
@@ -54,6 +54,12 @@ async function rereadReply(id: string): Promise<void> {
 }
 
 const save = (): Promise<unknown> => window.api.store.set('missions', { missions: missions.get().list.slice(0, 200) })
+
+/** What a finished mission took (src/shared/lead.ts). Not a change to the mission: its updatedAt stays, as the board's `spent` does. */
+export function setSpent(id: string, spent: Mission['spent']): void {
+  missions.set((s) => ({ list: s.list.map((m) => (m.id === id ? { ...m, spent } : m)) }))
+  persist()
+}
 
 function persist(): void {
   clearTimeout(saveTimer)
@@ -141,6 +147,11 @@ const CONTEXT_HITS = 6
 export async function startMission(input: StartMissionInput): Promise<Mission> {
   if (!hook) hook = await window.api.missions.hookInfo()
   const agent = getAgent(input.options.agent)
+  // a Lead hears which roles (profiles) its workers can take on this project
+  if (input.kind?.id === 'lead') {
+    const roles = leadRoles(await profilesFor(input.root))
+    if (roles) input = { ...input, prompt: `${input.prompt.trim()}\n\n${roles}` }
+  }
   // the prompt stored on the mission is exactly what the agent got
   input = { ...input, prompt: withMemory(input.prompt, await missionMemory(input.root, agent.id, input.kind?.id, input.brief ?? input.prompt)) }
   const title = input.title?.trim() || input.prompt.trim().split('\n')[0].slice(0, 60) || `${agent.name} session`
@@ -255,7 +266,7 @@ export async function removeMission(id: string, opts: { removeWorktree: boolean;
 export function reviewMission(id: string): void {
   const m = getMission(id)
   // a tab of its own, not a split: a diff needs the width (the tab hides the sidebars while it's shown)
-  if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { missionId: id })
+  if (m) openPanel('diff', `diff-${id}`, `Review: ${m.title}`, { target: { kind: 'mission', id } })
 }
 
 /** A second agent reviews a mission's changes, read-only, in the same folder, with its brief and handoff. */
@@ -313,6 +324,8 @@ export interface MissionDraft {
   kind?: string
   brief?: string
   title?: string
+  /** an agent profile id to start with (a team role picked in the Agents panel) */
+  profile?: string
   /** editing a saved mission: the form starts from it and saving replaces it */
   saved?: SavedMission
 }

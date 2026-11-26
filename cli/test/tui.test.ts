@@ -1,7 +1,7 @@
 import { execFileSync } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, sep } from 'path'
 import { PassThrough, Writable } from 'stream'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { connect, type Client } from '../src/client'
@@ -261,7 +261,7 @@ describe('sldev TUI tabs', () => {
     await t.textWith(focused('logs'))
     // Ctrl-b < moves the shell tab one place left
     t.input.write('\x02<')
-    await t.textWith(/› 2 logs\s+\S 3 second job/)
+    await t.textWith(/› 2 logs ×\s+\S 3 second job/)
     t.input.write('\x02d')
     await t.tui
 
@@ -269,7 +269,7 @@ describe('sldev TUI tabs', () => {
     expect((await c.request('tabs', {})).active).toBe(shellId)
     t = await attachTui(100, 30)
     s = await t.textWith('› 2 logs')
-    expect(t.bar()).toMatch(/\S 1 tidy up the tests\s+› 2 logs\s+\S 3 second job/)
+    expect(t.bar()).toMatch(/\S 1 tidy up the tests\s+› 2 logs ×\s+\S 3 second job/)
     expect(s).toMatch(focused('logs'))
     // the shell kept its screen while detached
     expect(s).toContain('tab-23')
@@ -399,18 +399,185 @@ describe('keys in win32-input-mode (Windows Terminal)', () => {
   }, 30_000)
 })
 
+describe('projects in New tab', () => {
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  const find = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    // the last match: the popup is drawn over the panes, and the sidebar is above it on the left
+    const y = rows.map((r, i) => (r.includes(text) ? i : -1)).filter((i) => i >= 0).pop() ?? -1
+    if (y < 0) throw new Error(`${text} isn't on the screen:\n${screen}`)
+    return { x: rows[y].lastIndexOf(text), y }
+  }
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('picks another project by browsing or typing a folder, opens a tab there, and remembers it', async () => {
+    const other = join(tmp, 'other')
+    mkdirSync(join(other, '.git'), { recursive: true })
+    const t = await attachTui(120, 40)
+    t.input.write('\x02c')
+    let s = await t.textWith('╭─ New tab')
+    expect(s).toMatch(/project/i)
+    expect(s).toMatch(/✓ +work/)
+
+    // Other folder…: the browser starts where the tab would open; Backspace goes up, a click goes in
+    t.input.write(click(find(s, 'Other folder').x, find(s, 'Other folder').y))
+    s = await t.textWith('╭─ Folder')
+    expect(s).toContain('Open here')
+    t.input.write('\x7f')
+    s = await t.textWith(/other\/ +git/)
+    t.input.write(click(find(s, 'other/').x, find(s, 'other/').y))
+    s = await t.textWith(/Open here +other/)
+    t.input.write(click(find(s, 'Open here').x, find(s, 'Open here').y))
+    s = await t.textWith(/✓ +other/)
+    expect(s).toMatch(/in .*other/)
+
+    // a shell from here opens in that project, which is remembered for next time
+    const known = new Set((await c.request('ls', {})).map((p) => p.id))
+    t.input.write(click(find(s, 't  Shell').x + 3, find(s, 't  Shell').y))
+    const added = async (): Promise<PaneInfo | undefined> => (await c.request('ls', {})).find((p) => !known.has(p.id))
+    for (let i = 0; i < 50 && !(await added()); i++) await sleep(100)
+    const shell = (await added())!
+    expect(shell.cwd).toBe(other)
+    expect(JSON.parse(readFileSync(join(data, 'projects.json'), 'utf8')).recent[0]).toBe(other)
+
+    // the project's heading in the sidebar opens New tab there
+    s = await t.textWith(/OTHER .*\+/)
+    t.input.write(click(2, find(s, 'OTHER').y))
+    s = await t.textWith('╭─ New tab')
+    expect(s).toMatch(/✓ +other/)
+
+    // typing a folder: Tab completes it
+    t.input.write(click(find(s, 'Other folder').x, find(s, 'Other folder').y))
+    s = await t.textWith('Type a path')
+    t.input.write(click(find(s, 'Type a path').x, find(s, 'Type a path').y))
+    await t.textWith('Folder: ')
+    t.input.write('\x7f'.repeat(200) + join(tmp, 'wo') + '\t')
+    await t.textWith(`Folder: ${join(tmp, 'work')}${sep}`)
+    t.input.write('\r')
+    s = await t.textWith(/✓ +work/)
+    t.input.write('\x1b')
+    await t.textWith(/^(?![\s\S]*╭─ New tab)/)
+
+    await c.request('kill', { pane: shell.id })
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
+})
+
 describe('a newer sldev', () => {
-  it('says so in a popup with the npm command, which any key closes without typing into the tab', async () => {
-    const t = await attachTui(100, 30, { update: async () => '9.9.9' })
-    let s = await t.textWith('Update available')
-    expect(s).toContain('sldev 9.9.9 is out')
-    expect(s).toContain('npm install -g sldev-cli@latest')
-    t.input.write('x')
-    s = await t.textWith(focused('second S'))
-    expect(s).not.toContain('Update available')
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  const where = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    const y = rows.findIndex((r) => r.includes(text))
+    return { x: rows[y].indexOf(text), y }
+  }
+
+  it('says so once, shows one card with Update now, and a click runs the update in a tab of its own', async () => {
+    const before = new Set((await c.request('ls', {})).map((p) => p.id))
+    // the update command is a harmless echo: the test never runs npm
+    const t = await attachTui(100, 30, { update: async () => ({ version: '9.9.9', first: true }), updateCommand: 'echo sldev-update-ran' })
+    let s = await t.textWith('sldev 9.9.9 is out (this is ')
+    expect(s).toContain('click Update now or ^b u')
+    // one card, no rule or box of its own: the "is out" row and the button row under it
+    expect(s).toMatch(/↑ sldev 9\.9\.9 is out/)
+    expect(s).toMatch(/Update now +\^b u/)
+    const rows = s.split('\n')
+    const cardAt = rows.findIndex((r) => r.includes('↑ sldev 9.9.9 is out'))
+    expect(rows[cardAt - 1]).not.toMatch(/^─+/)
+    const at = where(s, 'Update now')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('sldev-update-ran')
+    expect(s).toMatch(/Installing sldev 9\.9\.9 in tab \d+/)
+    expect(s).toMatch(/\d+ update sldev/)
+    expect(t.copied).toEqual([])
+    const added = (await c.request('ls', {})).filter((p) => !before.has(p.id))
+    expect(added).toEqual([expect.objectContaining({ shell: true, title: 'update sldev', command: 'echo sldev-update-ran' })])
+    for (const p of added) await c.request('kill', { pane: p.id })
     t.input.write('\x02d')
     await t.tui
   }, 30_000)
+
+  it('without the sidebar, a chip on the status bar says it, and ^b u copies the command when there is none to run', async () => {
+    const t = await attachTui(95, 24, { update: async () => ({ version: '9.9.9', first: false }) })
+    await t.textWith(/↑ 9\.9\.9 +\S/)
+    t.input.write('\x02u')
+    await t.textWith('Copied: npm install -g sldev-cli@latest')
+    expect(t.copied).toEqual(['npm install -g sldev-cli@latest'])
+    t.input.write('\x02d')
+    await t.tui
+  }, 30_000)
+})
+
+describe('runtimes', () => {
+  const click = (x: number, y: number): string => `\x1b[<0;${x + 1};${y + 1}M\x1b[<0;${x + 1};${y + 1}m`
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('adds a runtime from ^b r, runs it in a tab of its own, lists it next time and removes it with x', async () => {
+    // prints sldev-42, which the command itself doesn't contain
+    const cmd = process.platform === 'win32' ? 'echo ("sldev-" + (40+2))' : 'echo sldev-$((40+2))'
+    const before = new Set((await c.request('ls', {})).map((p) => p.id))
+    writeFileSync(join(work, 'package.json'), JSON.stringify({ scripts: { hello: 'echo hello' } }))
+    const t = await attachTui(120, 36)
+    t.input.write('\x02r')
+    let s = await t.textWith('╭─ Runtimes')
+    expect(s).toContain('New runtime…')
+    expect(s).toMatch(/hello +package\.json/)
+    t.input.write('+')
+    await t.textWith('New runtime, command: ')
+    t.input.write(cmd + '\r')
+    await t.textWith('Name (Enter: echo): ')
+    t.input.write('answer\r')
+    s = await t.textWith('sldev-42')
+    expect(s).toContain(`Running answer in tab`)
+    expect(s).toContain(`: ${cmd}`)
+    // the sidebar says what the tab ran
+    expect(s).toContain(`$ ${cmd.slice(0, 18)}`)
+    expect(JSON.parse(readFileSync(join(work, '.sldev-cli', 'runtimes.json'), 'utf8')).runtimes).toEqual([{ name: 'answer', command: cmd }])
+
+    // next time it's listed first; Enter runs the one in focus
+    t.input.write('\x02r')
+    // the list shows the command as typed: `echo sldev-…` in sh, `echo ("sldev-" …` in PowerShell
+    s = await t.textWith(/1 +answer +echo \(?"?sldev/)
+    // x removes it, after asking
+    t.input.write('x')
+    await t.textWith(`Remove runtime answer (${cmd})? Tabs running it stay. (y/N)`)
+    t.input.write('y\r')
+    s = await t.textWith('Removed runtime answer')
+    expect(s).not.toMatch(/1 +answer/)
+    expect(JSON.parse(readFileSync(join(work, '.sldev-cli', 'runtimes.json'), 'utf8')).runtimes).toEqual([])
+    t.input.write('\x1b')
+
+    // New tab has a way in too, and a click runs a project script at once
+    t.input.write('\x02c')
+    s = await t.textWith('Runtime…')
+    const rows = s.split('\n')
+    const y = rows.map((r, i) => (r.includes('Runtime…') ? i : -1)).filter((i) => i >= 0).pop()!
+    t.input.write(click(rows[y].lastIndexOf('Runtime…'), y))
+    s = await t.textWith(/hello +package\.json/)
+    const r2 = s.split('\n')
+    const hy = r2.map((r, i) => (/hello +package\.json/.test(r) ? i : -1)).filter((i) => i >= 0).pop()!
+    t.input.write(click(r2[hy].indexOf('hello'), hy))
+    await t.textWith(/Running hello in tab \d+: npm run hello/)
+
+    for (const p of (await c.request('ls', {})).filter((p) => !before.has(p.id))) await c.request('kill', { pane: p.id })
+    rmSync(join(work, 'package.json'))
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
 })
 
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
@@ -455,14 +622,17 @@ describe('tab layout', () => {
       { title: 'review it', tone: 'attention' as const, active: false }
     ]
     const bar = tabBarLayout(tabs, 80)
-    expect(plain(bar.text)).toBe(' ⠹ 1 fix the parser  › 2 bash  ● 3 review it '.padEnd(77) + ' + ')
+    // the tab in front ends with a × that closes it
+    expect(plain(bar.text)).toBe(' ⠹ 1 fix the parser  › 2 bash ×  ● 3 review it '.padEnd(77) + ' + ')
     expect(bar.text).toContain(`\x1b[1;${TONE_SGR.attention}m●`)
     expect(bar.text).toContain(`\x1b[${TONE_SGR.working}m⠹`)
     expect(bar.text).not.toContain('\x1b[7m')
     expect(bar.text).not.toContain(';7m')
     // where each tab and the + sit, for clicks
     expect(bar.spans.map((s) => s.index)).toEqual([0, 1, 2])
-    expect(plain(bar.text).slice(bar.spans[1].from, bar.spans[1].to)).toBe(' › 2 bash ')
+    expect(plain(bar.text).slice(bar.spans[1].from, bar.spans[1].to)).toBe(' › 2 bash × ')
+    expect(plain(bar.text).slice(bar.spans[1].close!.from, bar.spans[1].close!.to)).toBe('× ')
+    expect(bar.spans[0].close).toBeUndefined()
     expect(bar.plus).toEqual({ from: 77, to: 80 })
     // too many to fit: the active tab stays, arrows say there are more, and the width holds
     const many = Array.from({ length: 12 }, (_, i) => ({ title: `session number ${i + 1}`, tone: 'done' as const, active: i === 9 }))
@@ -514,10 +684,10 @@ describe('agents started by agents', () => {
     ]
     expect(paneTree(panes).map((t) => `${t.pane.id}${t.child ? 'c' : ''}`)).toEqual(['1', '3c', '2', '4'])
     const rows = sidebar({ panes, order: ['1', '2', '3', '4'], active: '2', shown: ['2'] }, SIDEBAR_W, 20).lines.map(plain)
-    expect(rows[1]).toMatch(/^ APP +● 4$/)
-    expect(rows[2]).toMatch(/^ {2}⠋ 1 lead/)
-    expect(rows[4]).toMatch(/^ {2}└⠋ 3 part one/)
-    expect(rows[6]).toMatch(/2 other/)
+    expect(rows[2]).toMatch(/^ APP +● 4 \+$/)
+    expect(rows[3]).toMatch(/^ {2}⠋ 1 lead/)
+    expect(rows[5]).toMatch(/^ {2}└⠋ 3 part one/)
+    expect(rows[7]).toMatch(/2 other/)
     expect(rows.join('\n')).not.toMatch(/APP-WT/)
   })
 })
@@ -529,22 +699,43 @@ describe('sidebar', () => {
     pane('3', { title: 'review', status: 'needs-input', root: '/w/site', cwd: '/w/site', worktree: { branch: 'review-1', path: '/w/site-wt', base: 'main' } as PaneInfo['worktree'] })
   ]
 
+  it('ends with one update card under the counts, its rows a click target, and says where the rule meets the edge', () => {
+    const s = sidebar({ panes, order: ['2', '1', '3'], active: '1', shown: ['1'], update: '9.9.9' }, SIDEBAR_W, 20)
+    const rows = s.lines.map(plain)
+    expect(rows.every((r) => r.length === SIDEBAR_W)).toBe(true)
+    expect(s.update).toEqual({ from: 18, to: 20 })
+    expect(rows[18]).toMatch(/^▌ ↑ sldev 9\.9\.9 is out/)
+    expect(rows[19]).toMatch(/^▌ +Update now +\^b u/)
+    // the counts keep their rule; the card has none of its own
+    expect(rows[s.rule!]).toMatch(/^─+$/)
+    expect(rows[s.rule! + 1]).toMatch(/need you/)
+    expect(s.rule! + 2).toBe(18)
+    // a shell tab started for a runtime says what it ran
+    const run = sidebar({ panes: [pane('4', { title: 'ls', shell: true, pid: 9, status: 'waiting', cwd: '/w/app', command: 'ls -lrt' })], order: ['4'], active: '4', shown: ['4'] }, SIDEBAR_W, 12)
+    expect(run.lines.map(plain).join('\n')).toContain('$ ls -lrt')
+    expect(run.update).toBeNull()
+    expect(run.rule).toBeNull()
+  })
+
   it('groups tabs by project, agents before shells, the one in focus with an accent bar and no reverse video', () => {
     const s = sidebar({ panes, order: ['2', '1', '3'], active: '1', shown: ['1'] }, SIDEBAR_W, 20)
     const rows = s.lines.map(plain)
     expect(rows.every((r) => r.length === SIDEBAR_W)).toBe(true)
     expect(s.lines.join('')).not.toContain('\x1b[7m')
-    expect(rows[0].trim()).toBe('')
-    expect(rows[1]).toMatch(/^ APP +● 2$/)
-    expect(rows[2]).toMatch(/^▌ ⠋ 2 fix the parser/)
-    expect(rows[3]).toMatch(/^▌ {3}Codex · working/)
-    expect(rows[4]).toMatch(/^ {2}› 1 zsh/)
-    expect(rows[5]).toMatch(/^ {4}\/w\/app/)
-    expect(rows[6].trim()).toBe('')
-    expect(rows[7]).toMatch(/^ SITE +● 1$/)
-    expect(rows[9]).toMatch(/Codex · needs you · rev/)
+    // the first row opens the New tab popup, and stays put
+    expect(rows[0]).toMatch(/^ \+ New tab +\^b c $/)
+    expect(s.plus).toBe(0)
+    expect(rows[1].trim()).toBe('')
+    expect(rows[2]).toMatch(/^ APP +● 2 \+$/)
+    expect(rows[3]).toMatch(/^▌ ⠋ 2 fix the parser/)
+    expect(rows[4]).toMatch(/^▌ {3}Codex · working/)
+    expect(rows[5]).toMatch(/^ {2}› 1 zsh/)
+    expect(rows[6]).toMatch(/^ {4}\/w\/app/)
+    expect(rows[7].trim()).toBe('')
+    expect(rows[8]).toMatch(/^ SITE +● 1 \+$/)
+    expect(rows[10]).toMatch(/Codex · needs you · rev/)
     // clicks on either row of a tab pick it
-    expect(s.hits.slice(0, 6)).toEqual([null, null, '1', '1', '2', '2'])
+    expect(s.hits.slice(0, 7)).toEqual([null, null, null, '1', '1', '2', '2'])
     // the footer counts the agents by state
     expect(rows.join('\n')).toMatch(/● 1 need you {2}● 1 working/)
   })
@@ -626,8 +817,8 @@ describe("the app's look: painted surfaces, the 256 fallback, the light ladder a
     expect(plain(bar)).toHaveLength(60)
     // the sidebar row in focus is raised, the others on the surface
     const s = sidebar({ panes: [pane('1', { title: 'one' }), pane('2', { title: 'two' })], order: ['1', '2'], active: '1', shown: ['1'] }, SIDEBAR_W, 10)
-    expect(s.lines[2].startsWith(R.RAISED)).toBe(true)
-    expect(s.lines[4].startsWith(R.SURFACE)).toBe(true)
+    expect(s.lines[3].startsWith(R.RAISED)).toBe(true)
+    expect(s.lines[5].startsWith(R.SURFACE)).toBe(true)
     // the key chips sit on the muted tone and read as before
     const h = R.hints([['c', 'new tab']], 30, ' ^b ')
     expect(h).toContain(R.MUTED)
@@ -753,6 +944,104 @@ describe('briefs in the TUI', () => {
     await t.textWith('The brief was empty, so nothing started')
     expect(readdirSync(dir).filter((f) => f.startsWith('.new-'))).toEqual([])
     for (const p of [hello, fromEditor]) await c.request('kill', { pane: p.id })
+    t.input.write('\x02d')
+    await t.tui
+  }, 40_000)
+})
+
+describe('mouse', () => {
+  /** an SGR click at a 0-based column and row: press and release */
+  const click = (x: number, y: number, button = 0): string => `\x1b[<${button};${x + 1};${y + 1}M\x1b[<${button};${x + 1};${y + 1}m`
+  /** where `text` is on the screen, 0-based */
+  const find = (screen: string, text: string): { x: number; y: number } => {
+    const rows = screen.split('\n')
+    const y = rows.findIndex((r) => r.includes(text))
+    if (y < 0) throw new Error(`${text} isn't on the screen:\n${screen}`)
+    return { x: rows[y].indexOf(text), y }
+  }
+  /** the number a pane's tab shows */
+  const order = (id: string): number => tabNumbers.indexOf(id) + 1
+  let tabNumbers: string[] = []
+  let savedShell: string | undefined
+  beforeAll(() => {
+    savedShell = process.env.SHELL
+    if (process.platform !== 'win32') process.env.SHELL = '/bin/sh'
+  })
+  afterAll(() => {
+    if (process.platform !== 'win32') process.env.SHELL = savedShell
+  })
+
+  it('opens New tab from the sidebar, picks a row, copies an install command, renames and closes a tab, starts an agent, drags the sidebar', async () => {
+    // wide enough for a 40-column sidebar beside a 70-column pane
+    const t = await attachTui(120, 30)
+    let s = await t.textWith('+ New tab')
+    // the sidebar's + row opens the popup; a click on a row picks it
+    let at = find(s, '+ New tab')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('╭─ New tab')
+    at = find(s, 'Shell')
+    t.input.write(click(at.x, at.y))
+    const before = (await c.request('ls', {})).length
+    for (let i = 0; i < 50 && (await c.request('ls', {})).length === before; i++) await sleep(100)
+    const id = (await c.request('ls', {})).filter((p) => p.shell).map((p) => p.id).sort((a, b) => Number(b) - Number(a))[0]
+    s = await t.textWith(/› \d+ \S+ ×/)
+    tabNumbers = (await c.request('tabs', {})).order
+
+    // an agent that isn't installed: its install command goes to the clipboard (the TUI holds the mouse)
+    const savedPath = process.env.PATH
+    process.env.PATH = [join(__dirname, '../../scripts/e2e/fakebin'), '/nonexistent'].join(process.platform === 'win32' ? ';' : ':')
+    at = find(s, '+ New tab')
+    t.input.write(click(at.x + 2, at.y))
+    s = await t.textWith('╭─ New tab')
+    process.env.PATH = savedPath
+    at = find(s, 'Gemini')
+    t.input.write(click(at.x, at.y))
+    await t.textWith("Gemini CLI isn't installed. Copied")
+    expect(t.copied).toContain('npm i -g @google/gemini-cli')
+    // a click outside the popup closes it
+    t.input.write('\x02c')
+    await t.textWith('╭─ New tab')
+    t.input.write(click(108, 28))
+    await t.textWith(/^(?![\s\S]*╭─ New tab)/)
+
+    // a right click on the tab renames it: the prompt starts with its name
+    let bar = t.bar()
+    t.input.write(click(bar.indexOf(` ${order(id)} `) + 2, 0, 2))
+    await t.textWith(`Rename tab ${id}: `)
+    t.input.write('\x7f'.repeat(20) + 'by mouse\r')
+    await t.textWith(/› \d+ by mouse ×/)
+
+    // the shell's tab is in front, with a × that closes it at once, though its shell still runs (^b x asks)
+    bar = t.bar()
+    const x = bar.indexOf('×')
+    expect(x).toBeGreaterThan(0)
+    t.input.write(click(x, 0))
+    for (let i = 0; i < 50 && (await c.request('ls', {})).some((p) => p.id === id); i++) await sleep(100)
+    expect((await c.request('ls', {})).some((p) => p.id === id)).toBe(false)
+    expect(await t.textWith(/^(?![\s\S]*Close tab)/)).not.toContain('(y/N)')
+
+    // an agent picked with the mouse starts at once, without asking for a brief
+    t.input.write('\x02c')
+    s = await t.textWith('╭─ New tab')
+    at = find(s, '2  Codex')
+    const known = new Set((await c.request('ls', {})).map((p) => p.id))
+    t.input.write(click(at.x, at.y))
+    const added = async (): Promise<PaneInfo | undefined> => (await c.request('ls', {})).find((p) => !known.has(p.id))
+    for (let i = 0; i < 50 && !(await added()); i++) await sleep(100)
+    const codex = (await added())!
+    expect(codex).toMatchObject({ agentName: 'Codex', brief: '' })
+    expect(await t.textWith(/Started Codex \d+/)).not.toContain('brief (Enter alone')
+    await c.request('kill', { pane: codex.id })
+
+    // the sidebar's edge drags; the daemon keeps the width for the next attach
+    t.input.write(`\x1b[<0;${SIDEBAR_W + 1};10M\x1b[<32;${SIDEBAR_W + 6};10M\x1b[<32;41;10M\x1b[<0;41;10m`)
+    s = await t.textWith('sldev')
+    for (let i = 0; i < 50 && (await c.request('tabs', {})).sidebar !== 40; i++) await sleep(100)
+    expect((await c.request('tabs', {})).sidebar).toBe(40)
+    await t.textWith(/^.{40}┬/m)
+    // and back, so the tests after this one find the default
+    t.input.write(`\x1b[<0;41;10M\x1b[<32;${SIDEBAR_W + 1};10M\x1b[<0;${SIDEBAR_W + 1};10m`)
+    await t.textWith(new RegExp(`^.{${SIDEBAR_W}}┬`, 'm'))
     t.input.write('\x02d')
     await t.tui
   }, 40_000)

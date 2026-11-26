@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.4",
+    "date": null,
+    "changes": [
+      "Teams: install a Software team into your project from the Agents panel (Add a team): a product owner, tech lead, implementer, reviewer, QA and release manager, each a Markdown file in .sldev/agents you can edit and commit. Files already there are kept. Start a mission as any role in one click, or let a Lead hand work to a role. Evals tagged with a role pick the best agent for it, a Lead's card shows its workers by role, and the Software team recipe runs the roles from spec to pull request description. You still approve the stories and the spec, review the branch and push. The new Teams guide at /docs/teams walks through it.",
+      "GitHub Workflows panel: Workflows and Runs start closed, each with its count, so the panel opens as two short headers. An open section is only as tall as its rows, and a long workflow list keeps to 40% of the panel, so the Runs header is never pushed to the bottom. Runs are compact rows again instead of cards, so twice as many fit.",
+      "CLI 0.6.5: when a newer sldev is out, the sidebar shows one card with an Update now button. A click on it (or on the ↑ chip in the status bar, or Ctrl-b u) runs npm install -g sldev-cli@latest in a new tab, so you can watch it. Popups on an empty screen no longer sit on top of the welcome card.",
+      "CLI 0.6.5: runtimes, the commands you run often in a project. sldev runtime add ls ls -lrt keeps one in .sldev-cli/runtimes.json, and the project's own scripts (package.json, Makefile, justfile, Cargo, go, compose) are listed after it. Ctrl-b r (or Runtime… in New tab) runs one in a new tab, + adds one and x removes one; sldev runtime start <name> does the same from a script. The command is typed into a shell, so the tab is a shell again when it ends, and after a reboot it reopens without running anything."
+    ]
+  },
+  {
     "version": "1.0.3",
     "date": "2026-11-20",
     "changes": [

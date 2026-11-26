@@ -23,8 +23,10 @@ if [ -n "$FAKE_GH_SHIP" ]; then
   fi
 fi
 # a mission card's PR, found by the branch it was pushed from: #21, in the state pr-state.txt says
+# (pr-state-<branch, / as ->.txt overrides it for one branch, so one card's PR can merge while another's stays open)
 if [ "$1 $2 $3" = "pr list --head" ]; then
-  echo "[{\"number\":21,\"state\":\"$(cat pr-state.txt 2>/dev/null || echo OPEN)\"}]"; exit 0
+  f="pr-state-$(printf '%s' "$4" | tr '/' '-').txt"; [ -f "$f" ] || f=pr-state.txt
+  echo "[{\"number\":21,\"state\":\"$(cat "$f" 2>/dev/null || echo OPEN)\"}]"; exit 0
 fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in
@@ -34,7 +36,8 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
     "pr list")
       # the stats panel's activity chart asks for every state; FAKE_GH_ACTIVITY is the scenario's PR history
       case " $* " in *" --state all "*) echo "${FAKE_GH_ACTIVITY:-[]}"; exit 0 ;; esac
-      echo '[{"number":128,"title":"Rate limit the API","url":"https://github.com/acme/shop/pull/128","isDraft":false},{"number":131,"title":"Try a new cache","url":"https://github.com/acme/shop/pull/131","isDraft":true}]'; exit 0 ;;
+      # open PRs, with the fields of the review list; their heads are FAKE_GH_PR_<n>_HEAD (the scenario pushes refs/pull/<n>/head)
+      echo "[{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\",\"is_bot\":false},\"headRefName\":\"rate-limit\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":120,\"deletions\":8,\"changedFiles\":4,\"reviewDecision\":\"CHANGES_REQUESTED\",\"createdAt\":\"2026-11-20T10:00:00Z\",\"updatedAt\":\"2026-11-21T10:00:00Z\",\"body\":\"Adds a limiter. Fixes #42\"},{\"number\":131,\"title\":\"Try a new cache\",\"url\":\"https://github.com/acme/shop/pull/131\",\"isDraft\":true,\"author\":{\"login\":\"li\",\"is_bot\":false},\"headRefName\":\"cache\",\"headRefOid\":\"${FAKE_GH_PR_131_HEAD:-}\",\"baseRefName\":\"main\",\"additions\":30,\"deletions\":2,\"changedFiles\":1,\"reviewDecision\":\"\",\"createdAt\":\"2026-11-22T10:00:00Z\",\"updatedAt\":\"2026-11-22T10:00:00Z\",\"body\":\"\"}]"; exit 0 ;;
     "workflow list")
       printf '['
       for i in $(seq 1 24); do printf '{"id":%d,"name":"Job %02d","path":".github/workflows/job%d.yml","state":"active"},' "$((100 + i))" "$i" "$i"; done
@@ -51,6 +54,10 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
       echo '{"databaseId":999,"displayTitle":"Deploy to staging","workflowName":"Deploy","status":"in_progress","conclusion":"","headBranch":"main","event":"workflow_dispatch","createdAt":"2026-01-02T11:00:00Z","url":"https://github.com/acme/shop/actions/runs/999","number":212}]'
       exit 0 ;;
     "workflow run") echo "$*" > gh-dispatch-marker.txt; exit 0 ;;
+  esac
+  # one PR with the issues it closes (the review list's detail)
+  case "$1 $2 $3 $4 $5" in "pr view 128 --json "*closingIssuesReferences*)
+    echo "{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\"},\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"body\":\"Adds a limiter. Fixes #42\",\"closingIssuesReferences\":[{\"number\":42,\"title\":\"Too many requests\",\"url\":\"https://github.com/acme/shop/issues/42\",\"repository\":{\"name\":\"shop\",\"owner\":{\"login\":\"acme\"}}}]}"; exit 0 ;;
   esac
   [ "$1 $2 $3" = "pr view --json" ] && { echo '{"number":128,"title":"Rate limit the API","state":"OPEN","url":"https://github.com/acme/shop/pull/128","isDraft":false,"statusCheckRollup":[{"conclusion":"SUCCESS"},{"conclusion":"SUCCESS"},{"status":"IN_PROGRESS"}]}'; exit 0; }
 fi

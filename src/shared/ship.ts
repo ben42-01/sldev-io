@@ -1,3 +1,4 @@
+import { prNumber } from './gitGraph'
 import { ghRunSignal, type Signal } from './status'
 
 /**
@@ -144,5 +145,99 @@ export function isMergeMethod(v: unknown): v is MergeMethod {
 /** Worth asking again soon: a run is going, or GitHub hasn't worked out mergeability yet. */
 export const shipBusy = (s: ShipStatus | null, checks: ChecksSummary): boolean =>
   !!s && s.pr?.state === 'OPEN' && (checks.pending > 0 || s.pr.mergeable === 'UNKNOWN')
+
+// ── the base moved ───────────────────────────────────────────────
+// A branch can merge into its base without a git conflict and still break the build (two branches each
+// declaring the same function). GitHub only says BEHIND/CONFLICTING after a push; this says it before.
+
+export interface BaseCommit {
+  sha: string
+  subject: string
+}
+
+export interface BaseMoved {
+  /** the mission's base as recorded ("master") */
+  base: string
+  /** what was compared: the base, or its upstream ("origin/master") when the local one only lags it */
+  ref: string
+  /** commits on `ref` the branch doesn't have */
+  behind: number
+  /** the newest of them (at most 50), newest first */
+  commits: BaseCommit[]
+  /** files a merge of `ref` would conflict in ([] none); null when this git can't tell (before 2.38) */
+  conflicts: string[] | null
+}
+
+/** "#2 Add teams" for a PR's commit ("Add teams (#2)", "Merge pull request #2 from …"), else its subject. */
+export function baseCommitLabel(c: BaseCommit): string {
+  const n = prNumber(c.subject)
+  if (n === null) return c.subject
+  if (/^Merge pull request #/.test(c.subject)) return `#${n}`
+  return `#${n} ${c.subject.replace(/\s*\(#\d+\)\s*$/, '')}`
+}
+
+/** "master has 2 new commits since this branch: #2 Add teams, #3 Fix x", or null when it hasn't moved. */
+export function baseMovedLine(b: BaseMoved, shown = 3): string | null {
+  if (!b.behind) return null
+  const labels = b.commits.slice(0, shown).map(baseCommitLabel)
+  const rest = b.behind - labels.length
+  const list = labels.join(', ') + (rest > 0 ? ` and ${rest} more` : '')
+  return `${b.ref} has ${plural(b.behind, 'new commit')} since this branch: ${list}`
+}
+
+/** What the trial merge says, for the line's tone: amber when it moved, red when it would conflict. */
+export function baseMovedSignal(b: BaseMoved): Signal {
+  if (b.conflicts?.length) return { tone: 'error', label: `Conflicts with ${b.ref} in ${plural(b.conflicts.length, 'file')}`, pulse: false }
+  if (b.behind) return { tone: 'attention', label: b.conflicts ? `Merges cleanly; the build may still break` : `${b.ref} moved`, pulse: false }
+  return { tone: 'done', label: `Up to date with ${b.ref}`, pulse: false }
+}
+
+/** The project checks Update and check runs, as factory recipes name them: optional runtimes. */
+export const UPDATE_CHECKS = ['typecheck?', 'test?']
+
+export interface UpdateCheck {
+  name: string
+  command: string
+  code: number | null
+  output: string
+  timedOut?: boolean
+}
+
+export interface UpdateResult {
+  /** the base was merged into the worktree (a merge commit, or a fast-forward) */
+  merged: boolean
+  /** the merge conflicted in these files and was undone */
+  conflicts: string[]
+  checks: UpdateCheck[]
+  /** checks the project doesn't have */
+  skipped: string[]
+}
+
+export const checkPassed = (c: UpdateCheck): boolean => c.code === 0 && !c.timedOut
+
+export type UpdateVerdict = { ok: boolean; label: string }
+
+export function updateVerdict(r: UpdateResult, ref: string): UpdateVerdict {
+  if (r.conflicts.length) return { ok: false, label: `${ref} conflicts in ${plural(r.conflicts.length, 'file')}; the merge was undone` }
+  const failed = r.checks.filter((c) => !checkPassed(c))
+  if (failed.length) return { ok: false, label: `Merged ${ref}; ${failed.map((c) => c.name).join(' and ')} failed` }
+  if (!r.checks.length) return { ok: true, label: `Merged ${ref}; no typecheck or test to run in this project` }
+  return { ok: true, label: `Merged ${ref}; ${r.checks.map((c) => c.name).join(' and ')} passed` }
+}
+
+/** The last lines of a check's output: what an agent (or a person) needs to see why it failed. */
+export function tailOutput(out: string, max = 4000): string {
+  const t = out.trimEnd()
+  return t.length <= max ? t : `…${t.slice(-max)}`
+}
+
+/** The follow-up Send back gives the mission's own agent when the base moved and the branch no longer builds. */
+export function sendBackText(r: UpdateResult, ref: string, branch: string): string {
+  if (r.conflicts.length)
+    return `${ref} moved and this branch (${branch}) no longer merges into it: merging ${ref} conflicts in\n${r.conflicts.map((f) => `- ${f}`).join('\n')}\n\nMerge ${ref} into this branch, resolve the conflicts keeping both sides' intent, run the checks, and commit. Don't push; I push from the review.`
+  const failed = r.checks.filter((c) => !checkPassed(c))
+  const parts = failed.map((c) => `\`${c.command}\` ${c.timedOut ? 'timed out' : `exited with ${c.code ?? 'an error'}`}:\n\n\`\`\`\n${tailOutput(c.output)}\n\`\`\``)
+  return `${ref} moved and this no longer builds. I merged ${ref} into this branch (${branch}, committed locally) and ran the project checks:\n\n${parts.join('\n\n')}\n\nFix the cause, run the same checks again, and commit. Don't push; I push from the review.`
+}
 
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`

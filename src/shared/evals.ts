@@ -23,6 +23,8 @@ export interface EvalSpec {
   setup?: string
   /** minutes the agent gets before the attempt is stopped */
   timeout: number
+  /** the profile (by name) this eval measures, e.g. Reviewer: a Lead's "auto" routes that role by these results */
+  role?: string
   checks: EvalCheck[]
   /** the file it came from */
   path?: string
@@ -65,7 +67,10 @@ export function parseEval(text: string, path?: string): { spec?: EvalSpec; error
   const timeout = r.timeout === undefined ? DEFAULT_TIMEOUT : Number(r.timeout)
   if (!Number.isFinite(timeout) || timeout <= 0) return { error: 'timeout is in minutes, e.g. timeout: 20' }
   const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined)
-  return { spec: { name, description: str(r.description), brief, base: str(r.base), setup: str(r.setup), timeout, checks, path } }
+  if (r.role !== undefined && r.role !== null && (typeof r.role !== 'string' || !r.role.trim() || r.role.includes('@')))
+    return { error: 'role is the name of one profile (.sldev/agents), e.g. role: Reviewer' }
+  const role = typeof r.role === 'string' ? r.role.trim() : undefined
+  return { spec: { name, description: str(r.description), brief, base: str(r.base), setup: str(r.setup), timeout, checks, ...(role ? { role } : {}), path } }
 }
 
 /** A starting point for a new eval file. */
@@ -78,6 +83,7 @@ export function evalTemplate(name = 'My first eval', brief = 'Describe the task 
     indent,
     '# base: main          # a branch or commit to start from (default: HEAD when the suite starts)',
     '# setup: npm ci       # dependencies (default: detected, like factory runs)',
+    '# role: Reviewer      # the profile this measures: a Lead routes that role by these results',
     'timeout: 20           # minutes before the attempt is stopped',
     'checks:',
     '  - run: npm test     # must exit 0',
@@ -129,6 +135,8 @@ export type AttemptStatus = 'queued' | 'running' | 'checking' | 'passed' | 'fail
 export interface EvalAttempt {
   id: string
   eval: string
+  /** the eval's role when the run started (EvalSpec.role) */
+  role?: string
   contestant: Contestant
   status: AttemptStatus
   /** the agent's mission, and the worktree it worked in */
@@ -168,9 +176,16 @@ export function plannedAttempts(specs: EvalSpec[], contestants: Contestant[], re
   // round by round, so an early stop still gives every contestant a fair share
   for (let r = 0; r < repeat; r++)
     for (const s of specs)
-      for (const c of contestants) out.push({ id: newId(), eval: s.name, contestant: c, status: 'queued', checks: [] })
+      for (const c of contestants) out.push({ id: newId(), eval: s.name, ...(s.role ? { role: s.role } : {}), contestant: c, status: 'queued', checks: [] })
   return out
 }
+
+/** Every attempt of these runs, each with its eval's role (from the run's specs, for attempts planned before roles). */
+export const routableAttempts = (runs: Pick<EvalRun, 'specs' | 'attempts'>[]): EvalAttempt[] =>
+  runs.flatMap((r) => r.attempts.map((a) => {
+    const role = a.role ?? r.specs.find((s) => s.name === a.eval)?.role
+    return role ? { ...a, role } : a
+  }))
 
 export const attemptDone = (a: EvalAttempt): boolean => a.status === 'passed' || a.status === 'failed' || a.status === 'error' || a.status === 'stopped'
 

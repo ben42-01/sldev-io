@@ -5,7 +5,9 @@ import type { ContextHit, ContextStats } from '@shared/context'
 import type { DraftFile, SkillState } from '@shared/sldevSkills'
 import type { CodeGraph, SchemaGraph, StructureGraph } from '@shared/diagram'
 import type { GraphLog } from '@shared/gitGraph'
-import type { MergeMethod, ShipStatus } from '@shared/ship'
+import type { BaseMoved, MergeMethod, ShipStatus } from '@shared/ship'
+import type { Use } from '@shared/review'
+import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
 import type {
   AgentProfile,
   RulesState,
@@ -22,6 +24,7 @@ import type {
   GhIssue,
   GhPrComment,
   GhPr,
+  GhPrReview,
   GhRepoInfo,
   GhRun,
   GhWorkflow,
@@ -150,16 +153,28 @@ const api = {
     /** git worktree prune: forget worktrees whose folders are gone */
     pruneWorktrees: (cwd: string): Promise<void> => ipcRenderer.invoke('git:pruneWorktrees', cwd),
     worktreeStatus: (wt: WorktreeInfo): Promise<WorktreeStatus> => ipcRenderer.invoke('git:worktreeStatus', wt),
+    /** fetch pull/<n>/head into refs/sldev/pr/<n> and check it out detached in its own worktree (reused, or moved to new commits) */
+    prWorktree: (root: string, n: number, headSha?: string, remote?: string): Promise<PrWorktree> => ipcRenderer.invoke('git:prWorktree', root, n, headSha, remote),
+    /** remove PR n's review worktree and fetched ref; git refuses changed files unless `discard` */
+    removePrWorktree: (root: string, n: number, opts?: { discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removePrWorktree', root, n, opts),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
     /** every ref's last `limit` commits in topo order, for the commit graph */
     graphLog: (cwd: string, limit: number): Promise<GraphLog> => ipcRenderer.invoke('git:graphLog', cwd, limit),
     /** one commit's own diff (a merge against its first parent) */
     showCommit: (cwd: string, sha: string): Promise<string> => ipcRenderer.invoke('git:showCommit', cwd, sha),
     diff: (cwd: string, base: string): Promise<string> => ipcRenderer.invoke('git:diff', cwd, base),
+    /** where names are used in the checkout (git grep -w, local, capped), for the review's blast radius */
+    uses: (cwd: string, names: string[]): Promise<{ uses: Use[]; capped: boolean }> => ipcRenderer.invoke('git:uses', cwd, names),
+    /** the files a branch changed since `base` (committed, uncommitted and new) */
+    changedFiles: (cwd: string, base: string): Promise<string[]> => ipcRenderer.invoke('git:changedFiles', cwd, base),
     diffStat: (cwd: string, base: string): Promise<DiffStat> => ipcRenderer.invoke('git:diffStat', cwd, base),
     commitAll: (cwd: string, message: string): Promise<string> => ipcRenderer.invoke('git:commitAll', cwd, message),
     /** merge `branch` locally in the main checkout, which must be on `into` */
     merge: (repo: string, branch: string, into?: string): Promise<string> => ipcRenderer.invoke('git:merge', repo, branch, into),
+    /** the ship bar: commits on the base (or its upstream, fetched now and then) since the branch, and a trial merge's conflicts */
+    baseMoved: (cwd: string, base: string): Promise<BaseMoved> => ipcRenderer.invoke('git:baseMoved', cwd, base),
+    /** merge `ref` into the worktree's branch; a conflict is undone and its files returned. Never pushes */
+    mergeBaseInto: (cwd: string, ref: string): Promise<{ merged: boolean; conflicts: string[]; output: string }> => ipcRenderer.invoke('git:mergeBaseInto', cwd, ref),
     push: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:push', cwd, branch),
     pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
   },
@@ -195,6 +210,8 @@ const api = {
     rerun: (cwd: string, runId: number, failedOnly: boolean): Promise<void> => ipcRenderer.invoke('gh:rerun', cwd, runId, failedOnly),
     cancel: (cwd: string, runId: number): Promise<void> => ipcRenderer.invoke('gh:cancel', cwd, runId),
     pr: (cwd: string): Promise<GhPr | null> => ipcRenderer.invoke('gh:pr', cwd),
+    /** pull request `n` for the Review tab: title, body, head commit, branches and its diff */
+    prReview: (cwd: string, n: number): Promise<GhPrReview> => ipcRenderer.invoke('gh:prReview', cwd, n),
     issues: (cwd: string, label?: string): Promise<GhIssue[]> => ipcRenderer.invoke('gh:issues', cwd, label),
     prState: (cwd: string, n: number): Promise<'OPEN' | 'MERGED' | 'CLOSED' | null> => ipcRenderer.invoke('gh:prState', cwd, n),
     prForBranch: (cwd: string, branch: string): Promise<{ number: number; state: 'OPEN' | 'MERGED' | 'CLOSED' } | null> => ipcRenderer.invoke('gh:prForBranch', cwd, branch),
@@ -202,6 +219,10 @@ const api = {
     ship: (cwd: string, branch: string): Promise<ShipStatus> => ipcRenderer.invoke('gh:ship', cwd, branch),
     /** gh pr merge, only while the PR head is still `headSha` */
     mergePr: (cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean): Promise<string> => ipcRenderer.invoke('gh:mergePr', cwd, n, method, headSha, auto),
+    /** open PRs, newest first; `error` instead of a throw when gh is missing, logged out or the folder isn't on GitHub */
+    prs: (cwd: string): Promise<OpenPrList> => ipcRenderer.invoke('gh:prs', cwd),
+    /** one PR with its body and the issues it closes */
+    prDetail: (cwd: string, n: number): Promise<PrDetail> => ipcRenderer.invoke('gh:prDetail', cwd, n),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),
@@ -301,6 +322,8 @@ const api = {
     list: (root: string): Promise<AgentProfile[]> => ipcRenderer.invoke('profiles:list', root),
     save: (root: string, profile: AgentProfile): Promise<string> => ipcRenderer.invoke('profiles:save', root, profile),
     remove: (root: string, path: string): Promise<void> => ipcRenderer.invoke('profiles:remove', root, path),
+    /** installs a team template's roles into .sldev/agents; existing files are kept (skipped), never overwritten */
+    installTeam: (root: string, team: string): Promise<{ written: string[]; skipped: string[] }> => ipcRenderer.invoke('profiles:installTeam', root, team),
     export: (root: string, profile: AgentProfile, target: 'claude' | 'opencode'): Promise<string> => ipcRenderer.invoke('profiles:export', root, profile, target)
   },
   vault: {

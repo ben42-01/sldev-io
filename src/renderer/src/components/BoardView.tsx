@@ -1,8 +1,8 @@
 import { clearColumnFlow } from '../lib/removals'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SkillsHint } from './SkillsHint'
-import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
-import { BOARD_COLUMNS, blockersOf, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
+import { ArrowUp, ArrowDown, Bot, Brain, Check, CheckCheck, CircleDot, ClipboardCopy, Ellipsis, Factory, GitMerge, GitPullRequest, Hourglass, Link2, ListChecks, Play, Plus, RefreshCw, Network, Search, Settings2, Sparkles, SquareKanban, Tag, Trash2 } from 'lucide-react'
+import { BOARD_COLUMNS, baseMovedBadge, baseMovedDetail, baseMovedShort, baseMovedStrong, blockersOf, boardLabels, columnItems, dependentsOf, importableIssues, matchesItem, parseKeys, parseLabels, releaseNotes, spentText, spentTotal, unreleased, wouldCycle, type BoardColumn, type BoardItem, type BoardPriority, type BoardWork, type StoryJob, type WorkState } from '@shared/board'
 import { missionSignal, runSignal, type Signal } from '@shared/status'
 import { openMissionDetails } from './MissionDetails'
 import { Modal, confirmAction } from './Modal'
@@ -233,6 +233,9 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
   const retroBusy = !!i.retro && !i.retro.done
   // the mission whose change is up for review: the newest one that did the work (a follow-up, a takeover, the Lead)
   const reviewable = i.column === 'review' && i.started?.type === 'mission' ? missionsOf(i).filter((m) => !m.delegate && !m.explains && m.parent?.kind !== 'second-opinion').sort((a, b) => a.createdAt - b.createdAt).pop() : undefined
+  // another card's PR merged into this one's base: re-check it in its Review tab (Update and check), or its pipeline
+  const moved = i.column === 'review' ? i.baseMoved : undefined
+  const recheck = reviewable ? () => reviewMission(reviewable.id) : work?.open
   const copyPr = (): void =>
     void prDescriptionOf(i.id).then((md) => window.api.clipboard.writeText(md)).then(() => toast('Copied the pull request description'))
   const menu = (): MenuItem[] => [
@@ -243,6 +246,7 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
       { label: waits.length ? `Start now, without waiting for ${waits.map((x) => `#${x.key}`).join(', ')}` : 'Start now', icon: <Play size={13} />, run: () => void startItem(i.id) },
       { label: 'Start with a Lead (it delegates the parts)', icon: <Network size={13} />, run: () => (updateItem(i.id, { work: { type: 'mission', kind: 'lead', brief: '' } }), void startItem(i.id)) }
     ] : []),
+    ...(moved && recheck ? [{ label: reviewable ? `${moved.base} moved: re-check in the Review tab` : `${moved.base} moved: re-check in the pipeline`, icon: <GitMerge size={13} />, run: recheck }] : []),
     ...(reviewable ? [{ label: 'Review the change', icon: <ListChecks size={13} />, run: () => reviewMission(reviewable.id) }] : []),
     ...(work?.open ? [{ label: i.started?.type === 'run' ? 'Open pipeline' : 'Open mission', run: work.open }] : []),
     ...(i.started?.id || i.column === 'review' || i.column === 'done' ? [{ label: 'Copy as PR description', icon: <ClipboardCopy size={13} />, run: copyPr }] : []),
@@ -296,6 +300,12 @@ function Card({ item: i, all, onOpen }: { item: BoardItem; all: BoardItem[]; onO
       <button type="button" className="board-title" onClick={onOpen} title="Edit">{i.title}</button>
       {i.labels.length > 0 && <div className="board-card-labels">{i.labels.map((l) => <span key={l} className="board-label static">{l}</span>)}</div>}
       {i.note && <div className={`board-note${i.column === 'backlog' ? ' error' : ''}`}>{i.note}</div>}
+      {moved && (
+        <button type="button" className={`board-moved${baseMovedStrong(moved) ? ' strong' : ''}`} onClick={recheck} disabled={!recheck} title={`${baseMovedDetail(moved)}${recheck ? ' Click to open it.' : ''}`}>
+          <GitMerge size={11} />
+          <span><b>{baseMovedBadge(moved)}</b> · {baseMovedShort(moved)}</span>
+        </button>
+      )}
       {waits.length > 0 && i.column !== 'done' && (
         <div className="board-waits" title="Pick-up starts it once these are Done">
           <Hourglass size={11} /> Waits for {waits.map((x) => <span key={x.id} className="board-key">#{x.key}</span>)}

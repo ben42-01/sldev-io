@@ -331,13 +331,62 @@ svg.lucide {
   color: var(--fg);
   background: var(--bg-hover);
 }
-.titlebar-search {
-  -webkit-app-region: no-drag;
+.titlebar-center {
   margin: 0 auto;
   display: flex;
   align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* a fixed slot, right-aligned: a longer project name doesn't push the search box around */
+.titlebar-project-slot {
+  width: 200px;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+/* the open project; a click lists the others with what they have going */
+.titlebar-project {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--fg);
+  font-weight: 500;
+}
+.titlebar-project:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.titlebar-project > span:not(.sdot):not(.titlebar-elsewhere) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar-project svg {
+  flex-shrink: 0;
+  color: var(--fg-subtle);
+}
+.titlebar-elsewhere {
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--status-attention);
+  background: color-mix(in oklch, var(--status-attention) 16%, transparent);
+}
+.titlebar-search {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  width: min(480px, 50vw);
+  width: min(420px, 40vw);
   height: 24px;
   padding: 0 8px;
   border-radius: var(--radius);
@@ -2837,6 +2886,46 @@ button.ship-pr:hover {
   white-space: pre-wrap;
   color: var(--status-error);
 }
+.ship-base {
+  border-top: 1px solid var(--border);
+}
+.ship-base-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.ship-base-row .spacer {
+  flex: 1;
+}
+.ship-base-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ship-base-conflicts {
+  color: var(--status-error);
+  white-space: nowrap;
+}
+.ship-update {
+  border-top: 1px solid var(--border);
+}
+.ship-update .ship-error {
+  max-height: 220px;
+  overflow: auto;
+  background: var(--code-bg);
+}
+.ship-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px 4px;
+  font-size: 12px;
+  min-width: 0;
+}
 .ship-runs {
   list-style: none;
   margin: 0;
@@ -3218,18 +3307,13 @@ body.resizing-y * {
 .wf-section + .wf-section {
   border-top: 1px solid var(--border);
 }
-/* the runs take the room; the workflow list keeps up to 40% while runs are open */
-.wf-section.runs.open {
-  flex: 1 1 0;
-}
-.wf-section.list.open {
+/* an open section is as tall as its rows and scrolls once they don't fit: nothing stretches into empty room, and the
+   workflow list keeps to 40% so the Runs header is never pushed to the bottom of the panel */
+.wf-section.open {
   flex: 0 1 auto;
 }
-.wf-section.list.open:has(+ .wf-section.runs.open) {
+.wf-section.list.open {
   max-height: 40%;
-}
-.wf-section.list.open:not(:has(+ .wf-section.runs.open)) {
-  flex: 1 1 0;
 }
 .wf-section-header {
   flex-shrink: 0;
@@ -3273,8 +3357,9 @@ body.resizing-y * {
 .wf-row:hover .icon-btn {
   opacity: 1;
 }
-.run-row {
-  padding-left: 12px;
+/* GitHub runs are list rows, not the factory's run cards (.run-row): many fit, each a line and its details */
+.gh-run-row {
+  padding: 4px 8px 4px 12px;
 }
 .run-icon {
   display: flex;
@@ -4275,6 +4360,21 @@ body.resizing-y * {
 .recipe-checks .missing {
   text-decoration: line-through;
 }
+.missing-roles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--status-attention);
+  border-radius: var(--radius);
+  background: var(--tint);
+  font-size: 12px;
+}
+.missing-role {
+  margin-right: 8px;
+  font-weight: 600;
+}
 
 /* ── issue picker ──────────────────────────── */
 .issue-btn {
@@ -4349,7 +4449,7 @@ body.resizing-y * {
 }
 .chip-check:hover {
   color: var(--fg);
-  border-color: var(--border-strong, var(--border));
+  border-color: var(--border-strong);
 }
 .chip-check.on {
   color: var(--fg);
@@ -6804,6 +6904,43 @@ button.board-label:hover {
   font-size: 10.5px;
   color: inherit;
 }
+.board-moved {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.board-moved svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--status-attention);
+}
+.board-moved b {
+  font-weight: 600;
+  color: var(--fg);
+}
+.board-moved:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.board-moved.strong {
+  border-color: color-mix(in oklch, var(--status-attention) 35%, transparent);
+  background: color-mix(in oklch, var(--status-attention) 8%, transparent);
+  color: var(--status-attention);
+}
+.board-moved:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
 .board-spent {
   font-size: 10.5px;
   color: var(--fg-muted);
@@ -7224,7 +7361,7 @@ button.board-label:hover {
 }
 .lead-worker {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
   min-width: 0;
   padding: 4px;
@@ -7236,8 +7373,20 @@ button.board-label:hover {
 .lead-worker:hover {
   background: var(--surface-raised);
 }
-.lead-worker-title {
+.lead-worker-body {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lead-worker-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lead-worker-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7251,6 +7400,110 @@ button.board-label:hover {
 .lead-merged {
   display: inline-flex;
   color: var(--status-done);
+}
+.lead-worker > .sdot,
+.lead-worker > .lead-merged,
+.lead-org-lead > .sdot {
+  margin-top: 5px;
+}
+.lead-org-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.lead-org-lead .lead-worker-title {
+  font-weight: 600;
+}
+/* the roles hang off the Lead like an org chart: a rule down the left, one tick per role */
+.lead-org {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 7px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-strong);
+}
+.lead-org-role {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lead-org-role::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 10px;
+  width: 7px;
+  border-top: 1px solid var(--border-strong);
+}
+.lead-org-role-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 1px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.lead-org-role.none .lead-org-role-name {
+  font-style: italic;
+}
+.lead-org-count {
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  font-size: 9.5px;
+  letter-spacing: 0;
+}
+/* what a role (or the whole Lead) took: time, and tokens from local logs */
+.lead-spent {
+  display: block;
+  padding: 0 4px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.lead-org-lead .lead-spent {
+  padding: 1px 0 0;
+  font-weight: 400;
+  white-space: normal;
+}
+.lead-spent-label {
+  margin-right: 5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.lead-spent.time-only {
+  cursor: help;
+}
+.lead-spent-note {
+  display: block;
+  white-space: normal;
+  font-style: italic;
+}
+.lead-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.lead-branch > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── review cockpit: the Review tab's walkthrough ───────────────────── */
@@ -8846,4 +9099,283 @@ button.cg-pr:focus-visible {
 }
 .ghs-activity .seg button {
   white-space: nowrap;
+}
+
+/* ── teams (Agents panel: installed teams, Add a team) ── */
+.team-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.team-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 8px 10px;
+}
+.team-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.team-group-head svg {
+  color: var(--fg-muted);
+}
+.team-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.team-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.team-template {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+.team-template > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.team-template:hover {
+  background: var(--surface-raised);
+}
+.team-template.on {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+.team-template:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
+}
+.team-preview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.team-role-preview {
+  border-bottom: 1px solid var(--border);
+}
+.team-role-preview:last-child {
+  border-bottom: 0;
+}
+.team-role-preview summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.team-role-preview summary::-webkit-details-marker {
+  display: none;
+}
+.team-role-preview summary:hover {
+  background: var(--surface-raised);
+}
+.team-role-preview summary .chip {
+  flex: none;
+}
+.team-caret {
+  flex: none;
+  color: var(--fg-subtle);
+  transition: transform 150ms;
+}
+.team-role-preview details[open] .team-caret {
+  transform: rotate(90deg);
+}
+.team-role-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.team-role-text {
+  margin: 0;
+  padding: 8px 12px 10px 30px;
+  font: 11.5px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--fg-muted);
+  background: var(--code-bg);
+}
+
+/* Mission Control → All projects: cards name their project, the list and grid group by it */
+.mission-project {
+  min-width: 0;
+  max-width: 140px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: none;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-project:not(.open):hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.mission-project.open {
+  cursor: default;
+}
+.mc-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.mc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mc-group-head .btn {
+  margin-left: auto;
+}
+/* missions in projects that aren't shown need you */
+.mc-elsewhere {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in oklch, var(--status-attention) 40%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--status-attention) 8%, transparent);
+  font-size: 12px;
+}
+.mc-elsewhere span:not(.sdot) {
+  flex: 1;
+}
+
+/* review cockpit: blast radius (callers the change didn't touch) */
+.rc-blast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  max-width: 90ch;
+}
+.rc-blast .field-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rc-blast-name {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font-size: 12.5px;
+}
+.rc-blast-name.risky {
+  border-left: 2px solid var(--status-attention);
+}
+.rc-blast-name > summary {
+  padding: 7px 12px;
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+.rc-blast-name > summary code {
+  color: var(--fg);
+}
+.rc-blast-kind {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--status-attention);
+}
+.rc-blast-name ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 6px;
+}
+.rc-blast-name p {
+  margin: 0;
+  padding: 0 12px 8px;
+}
+.rc-blast-use {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: 11.5px;
+  text-align: left;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.rc-blast-use:hover {
+  background: var(--tint);
+  color: var(--fg);
+}
+.rc-blast-use:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.rc-blast-at {
+  flex-shrink: 0;
+  color: var(--fg);
+}
+.rc-blast-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rc-order {
+  align-self: stretch;
+  display: flex;
+  margin: 0 2px 6px;
+}
+.rc-order button {
+  flex: 1;
+  justify-content: center;
+}
+.rc-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rc-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  color: var(--fg);
+  font-size: 10.5px;
+  font-weight: 500;
 }

@@ -120,7 +120,8 @@ export function WorkflowsView(): React.JSX.Element {
 }
 
 function Section({ id, label, count, children }: { id: 'list' | 'runs'; label: string; count?: number; children: React.ReactNode }): React.JSX.Element {
-  const open = useStore(workspace, (w) => w.assetGroups[`workflows:${id}`] ?? true)
+  // closed until opened: the panel starts as two short headers (with counts), and each one remembers being opened
+  const open = useStore(workspace, (w) => w.assetGroups[`workflows:${id}`] ?? false)
   const toggle = (): void => updateSettings({ assetGroups: { ...workspace.get().assetGroups, [`workflows:${id}`]: !open } })
   return (
     <section className={`wf-section ${id}${open ? ' open' : ''}`} data-section={id}>
@@ -151,7 +152,7 @@ function RunRow({ run: r, root, onChange }: { run: GhRun; root: string; onChange
   const act = (fn: () => Promise<void>): void => void fn().then(onChange, (e) => void showNotice('That didn\'t work', errText(e)))
   return (
     <div
-      className="rt-row run-row"
+      className="rt-row gh-run-row"
       onDoubleClick={() => (active ? watch() : logs())}
       onContextMenu={(e) =>
         showContextMenu(e, [

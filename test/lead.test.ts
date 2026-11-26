@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LEAD, LEAD_METHOD, canDelegate, routeAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { DEFAULT_LEAD, LEAD_METHOD, NO_ROLE, canDelegate, groupByRole, leadRoles, spentLine, spentTitle, sumSpent, resolveRole, routeAgent, workerAgent, waitText, workerBrief, type WorkerView } from '@shared/lead'
+import { STARTER_PROFILES } from '@shared/profiles'
+import type { AgentProfile, MissionSpent } from '@shared/types'
 import { BUILTIN_KINDS, renderKind } from '@shared/missionKinds'
 import type { EvalAttempt } from '@shared/evals'
 
@@ -20,6 +22,31 @@ describe('routing', () => {
     const attempts = [at('codex', 'passed'), at('codex', 'passed'), at('claude', 'passed'), at('claude', 'failed')]
     expect(routeAgent(attempts, ['claude', 'codex'], 'claude')).toEqual({ agent: 'codex', model: undefined, why: 'best on your evals: 2/2 passed (codex)' })
     expect(routeAgent(attempts, ['claude'], 'claude').agent).toBe('claude')
+  })
+  const tagged = (agent: string, status: EvalAttempt['status'], role?: string, prompt?: { name: string; text: string }): EvalAttempt => ({ ...at(agent, status), ...(role ? { role } : {}), contestant: { agent, ...(prompt ? { prompt } : {}) } })
+  // codex is best overall, claude is the better reviewer
+  const mixed = [tagged('codex', 'passed'), tagged('codex', 'passed'), tagged('codex', 'failed', 'Reviewer'), tagged('claude', 'passed', 'Reviewer'), tagged('claude', 'failed')]
+  it('routes a role by the evals tagged with it, any case', () => {
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini')).toMatchObject({ agent: 'codex', why: 'best on your evals: 2/3 passed (codex)' })
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'reviewer')).toEqual({ agent: 'claude', model: undefined, why: 'best reviewer on your evals: 1/1 passed (claude)' })
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'Reviewer').why).toBe('best Reviewer on your evals: 1/1 passed (claude)')
+  })
+  it('falls back from the role to all evals, then to the default, and says which', () => {
+    expect(routeAgent(mixed, ['claude', 'codex'], 'gemini', 'QA')).toMatchObject({ agent: 'codex', why: 'best on your evals overall (no QA eval results yet): 2/3 passed (codex)' })
+    // the role's best isn't installed, nor did anything else of the role pass
+    expect(routeAgent(mixed, ['codex'], 'gemini', 'Reviewer')).toMatchObject({ agent: 'codex', why: expect.stringContaining('overall (no Reviewer eval results yet)') })
+    expect(routeAgent([tagged('codex', 'failed', 'QA')], ['codex'], 'gemini', 'QA')).toMatchObject({ agent: 'gemini', why: expect.stringContaining('your default agent') })
+  })
+  it('a profile that pins an agent, or the Lead\'s own pick, is never re-routed', () => {
+    const base = { attempts: mixed, installed: ['claude', 'codex'], fallback: 'gemini' }
+    expect(workerAgent({ ...base, role: { name: 'Reviewer', agent: 'codex' } })).toEqual({ agent: 'codex', why: "the Reviewer role's agent" })
+    expect(workerAgent({ ...base, named: 'gemini', role: { name: 'Reviewer' } })).toEqual({ agent: 'gemini', why: 'chosen by the Lead' })
+    expect(workerAgent({ ...base, role: { name: 'Reviewer' } })).toMatchObject({ agent: 'claude', why: expect.stringContaining('best Reviewer') })
+    expect(workerAgent(base).agent).toBe('codex')
+  })
+  it('ignores prompt variants for a role too', () => {
+    const a = [tagged('codex', 'passed', 'Reviewer', { name: 'p', text: 't' }), tagged('claude', 'passed')]
+    expect(routeAgent(a, ['claude', 'codex'], 'gemini', 'Reviewer')).toMatchObject({ agent: 'claude', why: expect.stringContaining('overall') })
   })
   it('falls back to the default without results', () => {
     expect(routeAgent([], ['codex'], 'claude')).toMatchObject({ agent: 'claude', why: expect.stringContaining('no eval results') })
@@ -48,5 +75,87 @@ describe('what the Lead and its workers are told', () => {
     expect(p.startsWith('Lead: Teams\n\nBuild teams.')).toBe(true)
     for (const tool of ['sldev_delegate', 'sldev_wait', 'sldev_mission_diff', 'sldev_followup', 'sldev_integrate']) expect(LEAD_METHOD).toContain(tool)
     expect(p).toContain('Do not push')
+  })
+})
+
+describe('roles', () => {
+  const ids = ['claude', 'codex', 'gemini']
+  const qa: AgentProfile = { id: 'project:qa', name: 'QA', description: 'Tries it like a user', agent: 'codex', model: 'gpt-5', role: 'You test like a user.', scope: 'project' }
+  const profiles = [qa, ...STARTER_PROFILES]
+  it('resolves a profile by name, any case, and Profile@cli', () => {
+    expect(resolveRole('reviewer', profiles, ids)).toMatchObject({ profile: { name: 'Reviewer' }, agent: undefined })
+    expect(resolveRole('QA', profiles, ids)).toMatchObject({ profile: qa, agent: 'codex' })
+    expect(resolveRole('Reviewer@gemini', profiles, ids)).toMatchObject({ profile: { name: 'Reviewer' }, agent: 'gemini' })
+  })
+  it('refuses an unknown role, or an agent given as a role, with the roles there are', () => {
+    const r = resolveRole('Designer', profiles, ids)
+    expect(r).toEqual({ error: expect.stringContaining('No role called "Designer". Roles: QA, Implementer, Spec writer, Reviewer, Test writer, Fixer.') })
+    expect(resolveRole('codex', profiles, ids)).toEqual({ error: expect.stringContaining('No role called "codex"') })
+    expect(resolveRole('Reviewer@aider', profiles, ids)).toEqual({ error: expect.stringMatching(/^Unknown agent "aider" in "Reviewer@aider"\. Roles: QA/) })
+  })
+  it('the Lead is told the roles, with what each does and where it runs', () => {
+    const t = leadRoles(profiles)
+    expect(t).toContain('role in sldev_delegate')
+    expect(t).toContain('- QA: Tries it like a user (runs on codex gpt-5)')
+    expect(t).toContain('- Reviewer: Reviews a diff')
+    expect(leadRoles([qa, { ...qa, id: 'user:qa' }]).match(/- QA/g)).toHaveLength(1)
+    expect(leadRoles([])).toBe('')
+    expect(LEAD_METHOD).toContain('role')
+  })
+  it('sldev_wait names each worker\'s role', () => {
+    const t = waitText([w('m-1', 'ended', { role: 'Reviewer' })], [w('m-2', 'working', { role: 'QA' }), w('m-3', 'working')])
+    expect(t).toContain('m-1 · Codex as Reviewer · finished')
+    expect(t).toContain('m-2 (Codex as QA, Task m-2); m-3 (Codex, Task m-3)')
+  })
+})
+
+describe('groupByRole', () => {
+  const w = (id: string, startedAt: number, role?: string) => ({ id, startedAt, role })
+  it('groups workers by role, groups and workers in the order they started, "No role" last', () => {
+    const g = groupByRole([w('d', 4, 'QA'), w('a', 1), w('b', 2, 'Reviewer'), w('c', 3, 'QA'), w('e', 5, '  ')])
+    expect(g.map((x) => x.label)).toEqual(['Reviewer', 'QA', NO_ROLE])
+    expect(g.map((x) => x.workers.map((y) => y.id))).toEqual([['b'], ['c', 'd'], ['a', 'e']])
+    expect(g[2].role).toBeNull()
+  })
+  it('has no "No role" group when every worker has a role, and nothing for no workers', () => {
+    expect(groupByRole([w('a', 1, 'QA')]).map((x) => x.label)).toEqual(['QA'])
+    expect(groupByRole([])).toEqual([])
+  })
+})
+
+describe('spent per role', () => {
+  const m = (spent?: MissionSpent): { spent?: MissionSpent } => ({ spent })
+  const min = 60_000
+
+  it('sums each role from its measured workers and follow-ups', () => {
+    const groups = groupByRole([
+      { role: 'QA', startedAt: 1, passes: [m({ ms: 4 * min, tokens: 100_000, cost: 0.5 }), m({ ms: 2 * min, tokens: 20_000, cost: 0.1 })] },
+      { role: 'Reviewer', startedAt: 2, passes: [m({ ms: 3 * min, tokens: 400_000, cost: 1.2 })] },
+      { role: 'QA', startedAt: 3, passes: [m({ ms: 1 * min, tokens: 30_000, cost: 0.2 })] }
+    ])
+    const by = Object.fromEntries(groups.map((g) => [g.label, sumSpent(g.workers.flatMap((w) => w.passes))]))
+    expect(by.QA).toMatchObject({ ms: 7 * min, tokens: 150_000, measured: 3, timeOnly: 0, pending: 0 })
+    expect(by.QA.cost).toBeCloseTo(0.8)
+    expect(spentLine(by.QA)).toBe('7 min · 150k tokens · $0.80')
+    expect(spentLine(by.Reviewer)).toBe('3 min · 400k tokens · $1.20')
+    // the Lead's total: every worker, and the Lead itself
+    const total = sumSpent([m({ ms: 10 * min, tokens: 1_000_000, cost: 2 }), ...groups.flatMap((g) => g.workers.flatMap((w) => w.passes))])
+    expect(spentLine(total)).toBe('20 min · 1.6M tokens · $4.00')
+  })
+
+  it('shows nothing until one finishes, then counts the rest as unfinished', () => {
+    expect(spentLine(sumSpent([m(), m()]))).toBeNull()
+    expect(spentLine(sumSpent([m({ ms: 90_000, tokens: 1200 }), m()]))).toBe('2 min · 1k tokens · 1 unfinished')
+  })
+
+  it('says time only, and why, for agents without readable logs', () => {
+    const why = 'Cursor Agent keeps no token log sldev can read'
+    const only = sumSpent([m({ ms: 5 * min, noTokens: why }), m({ ms: 1 * min, noTokens: why })])
+    expect(spentLine(only)).toBe('6 min · time only')
+    expect(only.notes).toEqual([why])
+    expect(spentTitle(only)).toContain(`Time only: ${why}`)
+    // mixed: the tokens are a part, and the line says so
+    const mixed = sumSpent([m({ ms: 2 * min, tokens: 50_000 }), m({ ms: 2 * min, noTokens: why })])
+    expect(spentLine(mixed)).toBe('4 min · 50k tokens (1 time only)')
   })
 })

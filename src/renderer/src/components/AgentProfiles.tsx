@@ -16,7 +16,7 @@ export function AgentProfiles(): React.JSX.Element {
   const [message, setMessage] = useState('')
 
   const blank = (): AgentProfile => ({ id: `user:${Date.now().toString(36)}`, name: '', description: '', role: '', scope: 'user' })
-  const copyOf = (p: AgentProfile): AgentProfile => ({ ...p, id: `user:${Date.now().toString(36)}`, name: `${p.name} (copy)`, scope: 'user', path: undefined })
+  const copyOf = (p: AgentProfile): AgentProfile => ({ ...p, id: `user:${Date.now().toString(36)}`, name: `${p.name} (copy)`, scope: 'user', path: undefined, team: undefined })
   const edit = (p: AgentProfile): void => {
     setMessage('')
     setDraft(p.scope === 'builtin' ? copyOf(p) : { ...p })

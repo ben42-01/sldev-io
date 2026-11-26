@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseDiff } from '@shared/diff'
-import { addedDeps, askPrompt, buildCockpit, criteriaOf, fileNoise, hunkNoise, hunksOf, parseWalkthrough, sendBackText, unusedNew, walkthroughPrompt } from '@shared/review'
+import { addedDeps, askPrompt, buildCockpit, criteriaOf, fileNoise, fileOrder, formatMinutes, partMinutes, reviewMinutes, reviewOrder, type Flag, type Part, hunkNoise, hunksOf, parseWalkthrough, sendBackText, unusedNew, walkthroughPrompt } from '@shared/review'
 
 const file = (path: string, body: string, head = ''): string => `diff --git a/${path} b/${path}\n${head}--- a/${path}\n+++ b/${path}\n${body}`
 
@@ -119,5 +119,52 @@ describe('prompts', () => {
   it('reads criteria from the field or the story', () => {
     expect(criteriaOf({ criteria: '- [ ] one\n- two' })).toEqual(['one', 'two'])
     expect(criteriaOf({ brief: 'Story\n\n## Acceptance criteria\n- a\n- b' })).toEqual(['a', 'b'])
+  })
+})
+
+describe('review order and time', () => {
+  const flag = (id: Flag['id']): Flag => ({ id, label: id, why: '' })
+  const p = (id: string, lines: number, o: Partial<Part> = {}): Part => ({ id, title: id, need: 'asked', serves: [], hunks: [{ id: `${o.title ?? id}#1`, path: o.title ?? `src/${id}.ts`, n: 1, header: '@@', lines: [], additions: lines, deletions: 0, status: 'modified' }], flags: [], lines, source: 'agent', ...o })
+  // a fixed cockpit, in the agent's reading order
+  const parts = [
+    p('core', 120),
+    p('helper', 40, { need: 'extra', title: 'a/helper.ts' }),
+    p('tests', 16, { flags: [flag('tests')], title: 'test/x.test.ts' }),
+    p('session', 8, { flags: [flag('auth')], title: 'src/auth/session.ts' }),
+    p('docs', 24, { flags: [flag('unused')], title: 'docs/x.md' }),
+    p('key', 2, { flags: [flag('secret'), flag('deps')], title: 'src/config.ts' }),
+    p('option', 10, { need: 'extra', title: 'src/option.ts' })
+  ]
+  const c = { parts }
+  it('puts risky flags first, then parts nobody asked for, then size', () => {
+    expect(reviewOrder(c).map((x) => x.id)).toEqual(['key', 'tests', 'session', 'helper', 'option', 'core', 'docs'])
+  })
+  it('keeps the cockpit order on a tie and leaves the cockpit alone', () => {
+    expect(reviewOrder({ parts: [p('a', 5), p('b', 5)] }).map((x) => x.id)).toEqual(['a', 'b'])
+    expect(parts[0].id).toBe('core')
+  })
+  it('orders by file too', () => {
+    expect(fileOrder(c).map((x) => x.id)).toEqual(['helper', 'docs', 'session', 'key', 'core', 'option', 'tests'])
+  })
+  it('estimates each part and the whole review', () => {
+    expect(partMinutes(parts[0])).toBe(15)
+    expect(partMinutes(parts[5])).toBe(2.75) // 2 lines, a secret (2 min) and a new dependency (0.5)
+    const t = reviewMinutes(c)
+    expect(t.total).toBe(15 + 5 + 4 + 3 + 3.5 + 2.75 + 1.25)
+    expect(reviewMinutes(c, (x) => x.id === 'core').left).toBe(t.total - 15)
+    expect(formatMinutes(t.total)).toBe('about 35 min')
+  })
+  it('says the time plainly', () => {
+    expect(formatMinutes(0)).toBe('nothing to read')
+    expect(formatMinutes(0.4)).toBe('under a minute')
+    expect(formatMinutes(12.4)).toBe('about 12 min')
+    expect(formatMinutes(60)).toBe('about 1 h')
+    expect(formatMinutes(83)).toBe('about 1 h 25 min')
+  })
+  it('ranks a built cockpit: removed tests before auth, noise not a part', () => {
+    const built = buildCockpit(parseDiff(DIFF), null, [])
+    const order = reviewOrder(built)
+    expect(order[0].flags.map((f) => f.id)).toContain('tests')
+    expect(order.flatMap((x) => x.hunks).some((h) => h.noise)).toBe(false)
   })
 })

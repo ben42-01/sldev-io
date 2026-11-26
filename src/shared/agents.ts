@@ -45,6 +45,11 @@ export interface AgentDef {
   asks?: RegExp
   /** reports status through Claude Code hooks; other agents are tracked from terminal activity */
   hooks: boolean
+  /**
+   * keeps a log on this machine that sldev reads token usage from (src/main/usage.ts: Claude's transcript, Codex's
+   * session logs); for other agents only the time they took is known
+   */
+  tokenLog?: boolean
   /** runs skills and commands from ~/.claude and .claude as `/name` */
   claudeSkills?: boolean
   canPrint: boolean
@@ -91,6 +96,7 @@ const promptArg = (prompt: string | undefined): string[] => flag(prompt?.trim(),
 const claude: AgentDef = {
   id: 'claude',
   name: 'Claude Code',
+  tokenLog: true,
   bin: 'claude',
   install: 'npm i -g @anthropic-ai/claude-code',
   models: ['opus', 'sonnet', 'haiku', 'fable'],
@@ -130,6 +136,7 @@ const claude: AgentDef = {
 const codex: AgentDef = {
   id: 'codex',
   name: 'Codex',
+  tokenLog: true,
   bin: 'codex',
   install: 'npm i -g @openai/codex',
   models: [],

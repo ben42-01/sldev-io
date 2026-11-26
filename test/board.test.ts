@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { approveItem, parseStories, storiesPrompt, storyDraft, boardLabels, columnItems, followPr, importableIssues, issueCard, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
+import { BUILTIN_KINDS, findKind, renderKind } from '@shared/missionKinds'
+import { approveItem, cardBrief, parseStories, storiesPrompt, storyDraft, boardLabels, columnItems, followPr, importableIssues, issueCard, defaultBoardSettings, followWork, isActive, itemIntent, matchesItem, moveItem, nextKey, nextPickups, parseLabels, type BoardItem } from '@shared/board'
 
 let n = 0
 const item = (patch: Partial<BoardItem> = {}): BoardItem => {
@@ -71,6 +72,20 @@ describe('items', () => {
   it('tells the agent the title, the details and the labels', () => {
     expect(itemIntent({ key: 7, title: 'Dark mode toggle', body: 'In settings.\n', labels: ['ui', 'feature'] })).toBe('#7 Dark mode toggle\n\nIn settings.\n\nLabels: ui, feature')
     expect(itemIntent({ key: 1, title: 'x', body: '  ', labels: [] })).toBe('#1 x')
+  })
+
+  it('tells a picked-up card in a worktree to merge its base and re-run the checks before it reports', () => {
+    const card = { key: 13, title: 'Merge the base', body: 'Do it.', labels: [] }
+    const brief = cardBrief(card, ' Follow the plan. ')
+    expect(brief).toBe('Follow the plan.\n\n#13 Merge the base\n\nDo it.')
+    expect(cardBrief(card)).toBe(itemIntent(card))
+    const build = findKind(BUILTIN_KINDS, 'build')
+    const sent = renderKind(build, { title: '#13 Merge the base', brief, worktree: true, base: 'origin/master' })
+    expect(sent).toContain('merge `origin/master`')
+    expect(sent).toMatch(/re-run the checks/)
+    expect(sent).toMatch(/never push/)
+    // a card worked in place (no git repo) is on the user's checkout: nothing to merge
+    expect(renderKind(build, { title: '#13 Merge the base', brief, worktree: false })).not.toMatch(/git fetch/)
   })
   it('cleans labels', () => {
     expect(parseLabels('Bug, UI ,  bug, needs design')).toEqual(['bug', 'ui', 'needs-design'])

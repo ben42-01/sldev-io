@@ -1,6 +1,7 @@
 import { existsSync, promises as fsp } from 'fs'
 import { dirname, join, resolve, sep } from 'path'
-import { claudeSubagentFile, opencodeAgentFile, parseProfileFile, profileSlug, serializeProfile } from '@shared/profiles'
+import { claudeSubagentFile, opencodeAgentFile, parseProfileFile, profileSlug, serializeProfile, TEAM_TEMPLATES, teamFiles } from '@shared/profiles'
+import type { TeamTemplate } from '@shared/profiles'
 import type { AgentProfile } from '@shared/types'
 
 /** Project agent profiles: `.sldev/agents/*.md` in the project, so they can be committed. */
@@ -27,6 +28,29 @@ export async function saveProfile(root: string, profile: AgentProfile): Promise<
   if (!profile.path) for (let i = 2; existsSync(p); i++) p = join(dir, `${profileSlug(profile.name)}-${i}.md`)
   await fsp.writeFile(p, serializeProfile(profile))
   return p
+}
+
+/** Installs a team's profiles; a role whose file already exists is skipped, never overwritten. Returns absolute paths. */
+export async function installTeam(root: string, team: TeamTemplate | string): Promise<{ written: string[]; skipped: string[] }> {
+  const template = typeof team === 'string' ? TEAM_TEMPLATES.find((t) => t.id === team) : team
+  if (!template) throw new Error(`Unknown team template: ${String(team)}`)
+  const dir = agentsDir(root)
+  await fsp.mkdir(dir, { recursive: true })
+  const { write, skipped } = teamFiles(template, await fsp.readdir(dir))
+  const written: string[] = []
+  const skippedPaths = skipped.map((f) => join(root, f.path))
+  for (const f of write) {
+    const p = join(root, f.path)
+    try {
+      // 'wx' fails if the file appeared since the listing, so a hand-made copy still wins
+      await fsp.writeFile(p, f.text, { flag: 'wx' })
+      written.push(p)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+      skippedPaths.push(p)
+    }
+  }
+  return { written, skipped: skippedPaths }
 }
 
 /** `trash` moves the file to the OS trash (Electron's shell.trashItem in the app), so a removal can be undone. */

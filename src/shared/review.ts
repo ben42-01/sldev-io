@@ -1,5 +1,6 @@
 import { acceptanceCriteria } from './board'
 import type { DiffFile, DiffLine } from './diff'
+import type { PrReview, ReviewState, ReviewTarget } from './types'
 
 /**
  * The review cockpit: a diff read by what each part is for, not by file name. An agent (any agent, in
@@ -24,7 +25,7 @@ export interface Hunk {
   noise?: string
 }
 
-export type FlagId = 'auth' | 'money' | 'migration' | 'deps' | 'tests' | 'secret' | 'ci' | 'deletes' | 'suppressed' | 'unused'
+export type FlagId = 'auth' | 'money' | 'migration' | 'deps' | 'tests' | 'secret' | 'ci' | 'deletes' | 'suppressed' | 'unused' | 'signature'
 
 export interface Flag {
   id: FlagId
@@ -176,6 +177,8 @@ export function hunkFlags(h: Hunk): Flag[] {
   if (!test && (h.status === 'deleted' || h.deletions >= 150)) add('deletes', h.status === 'deleted' ? 'File deleted' : 'Large deletion', h.status === 'deleted' ? 'removes a whole file' : `removes ${h.deletions} lines`)
   const sup = added.find((t) => SUPPRESS.test(t))
   if (sup) add('suppressed', test && /\.(skip|only)\(/.test(sup) ? 'Test skipped' : 'Check silenced', `"${sup.trim().slice(0, 60)}"`)
+  const sig = signatureChanges(h)
+  if (sig.length) add('signature', 'Signature changed', `${sig.map((x) => x.name).slice(0, 3).join(', ')}${sig.length > 3 ? '…' : ''}: ${sig[0].why}, callers may need updating`)
   return flags
 }
 
@@ -208,6 +211,171 @@ export function unusedNew(hunks: Hunk[]): Array<{ name: string; hunk: string }> 
       return text.filter((t) => word.test(t)).length <= 1
     })
     .map(({ name, hunk }) => ({ name, hunk }))
+}
+
+// ── blast radius: callers of changed code the change left alone ──────
+
+/** The top-level name a line defines (exported for TS/JS, any def for Python, exported funcs for Go), or undefined. */
+export function definedName(path: string, text: string): string | undefined {
+  const m = EXPORTED.exec(text) ?? (/\.py$/.test(path) ? PY_DEF.exec(text) : null) ?? (/\.go$/.test(path) ? GO_FUNC.exec(text) : null)
+  return m && m[1].length > 2 ? m[1] : undefined
+}
+
+const reEsc = (s: string): string => s.replace(/[$]/g, '\\$')
+
+/**
+ * The parameter list of `name`'s definition starting at line `i`, read on one side of the hunk (old: removed
+ * and context lines, new: added and context lines), whitespace squeezed. Undefined when it isn't a function
+ * (a type, a class, a plain constant) or the list doesn't close within a few lines.
+ */
+function paramsAt(lines: DiffLine[], i: number, side: 'old' | 'new', name: string): string | undefined {
+  const skip = side === 'old' ? 'add' : 'del'
+  const text = lines
+    .slice(i)
+    .filter((l) => l.kind !== skip && l.kind !== 'hunk' && l.kind !== 'meta')
+    .slice(0, 12)
+    .map((l) => l.text)
+    .join('\n')
+  // types, interfaces and classes have no parameter list of their own (a class's bases aren't one)
+  if (new RegExp(`\\b(?:class|interface|type|enum)\\s+${reEsc(name)}(?![\\w$])`).test(text)) return undefined
+  const at = new RegExp(`(^|[^\\w$])${reEsc(name)}(?![\\w$])`).exec(text)
+  if (!at) return undefined
+  const rest = text.slice(at.index + at[0].length)
+  // a constant is a function only when an arrow or function expression is assigned
+  if (/^\s*[:=]/.test(rest) && !/^\s*(?::[^=]*)?=\s*(?:async\s*)?(?:function\b[^(]*)?(?:<[^>]*>)?\s*\(/.test(rest)) return undefined
+  const open = rest.indexOf('(')
+  if (open < 0 || /[{;]/.test(rest.slice(0, open))) return undefined
+  let depth = 0
+  for (let j = open; j < rest.length; j++) {
+    const c = rest[j]
+    if (c === '(' || c === '[' || c === '{' || c === '<') depth++
+    else if ((c === ')' || c === ']' || c === '}' || c === '>') && rest[j - 1] !== '=') depth--
+    if (depth === 0) return rest.slice(open + 1, j).replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*/g, '').replace(/\s+/g, ' ').replace(/\s*([,:=()<>[\]{}|?])\s*/g, '$1').replace(/,$/, '').trim()
+  }
+  return undefined
+}
+
+const paramCount = (p: string): number => {
+  if (!p) return 0
+  let depth = 0
+  let n = 1
+  for (const c of p) {
+    if ('([{<'.includes(c)) depth++
+    else if (')]}>'.includes(c)) depth--
+    else if (c === ',' && depth === 0) n++
+  }
+  return n
+}
+
+/** Functions whose parameter list a hunk changed (added, removed, renamed or retyped a parameter); a body-only change isn't one. */
+export function signatureChanges(h: Pick<Hunk, 'path' | 'lines' | 'noise'>): Array<{ name: string; before: string; after: string; why: string }> {
+  if (h.noise) return []
+  const out: Array<{ name: string; before: string; after: string; why: string }> = []
+  const dels = new Map<string, number>()
+  const adds = new Map<string, number>()
+  h.lines.forEach((l, i) => {
+    const n = l.kind === 'del' || l.kind === 'add' ? definedName(h.path, l.text) : undefined
+    if (n) (l.kind === 'del' ? dels : adds).has(n) || (l.kind === 'del' ? dels : adds).set(n, i)
+  })
+  // a parameter on its own line changes inside a definition whose first line is context
+  h.lines.forEach((l, i) => {
+    const n = l.kind === 'ctx' ? definedName(h.path, l.text) : undefined
+    if (n && !dels.has(n) && !adds.has(n)) (dels.set(n, i), adds.set(n, i))
+  })
+  for (const [name, di] of dels) {
+    const ai = adds.get(name)
+    if (ai === undefined) continue
+    const before = paramsAt(h.lines, di, 'old', name)
+    const after = paramsAt(h.lines, ai, 'new', name)
+    if (before === undefined || after === undefined || before === after) continue
+    const [b, a] = [paramCount(before), paramCount(after)]
+    out.push({ name, before, after, why: a > b ? `${a - b === 1 ? 'a parameter' : `${a - b} parameters`} added` : a < b ? `${b - a === 1 ? 'a parameter' : `${b - a} parameters`} removed` : 'its parameters changed' })
+  }
+  return out
+}
+
+export interface ChangedName {
+  name: string
+  /** the hunk that changed it */
+  hunk: string
+  path: string
+  /** signature: its parameters changed; removed: the definition is gone; body: it changed inside */
+  kind: 'signature' | 'removed' | 'body'
+}
+
+/**
+ * Names that existed before the change and that it changed: their signature, their body (the hunk sits in
+ * them, by git's @@ context or a definition line in the hunk) or removed them. New names aren't here
+ * (nothing outside the change can call them yet; unusedNew covers those), nor tests, docs and noise.
+ */
+export function changedNames(hunks: Hunk[]): ChangedName[] {
+  const out = new Map<string, ChangedName>()
+  const addedAnywhere = new Set<string>()
+  for (const h of hunks) for (const l of h.lines) if (l.kind === 'add') { const n = definedName(h.path, l.text); if (n) addedAnywhere.add(n) }
+  const put = (c: ChangedName): void => {
+    const was = out.get(c.name)
+    const rank = { signature: 2, removed: 1, body: 0 }
+    if (!was || rank[c.kind] > rank[was.kind]) out.set(c.name, c)
+  }
+  for (const h of hunks) {
+    if (h.noise || h.status === 'added' || isTest(h.path) || isDocs(h.path) || !h.lines.some((l) => l.kind === 'add' || l.kind === 'del')) continue
+    for (const s of signatureChanges(h)) put({ name: s.name, hunk: h.id, path: h.path, kind: 'signature' })
+    for (const l of h.lines) {
+      const n = definedName(h.path, l.text)
+      if (!n) continue
+      if (l.kind === 'del') put({ name: n, hunk: h.id, path: h.path, kind: addedAnywhere.has(n) ? 'body' : 'removed' })
+      else if (l.kind === 'ctx') put({ name: n, hunk: h.id, path: h.path, kind: 'body' })
+    }
+    // git names the enclosing function in the @@ line: the hunk changed its body
+    const ctx = definedName(h.path, /^@@[^@]*@@\s?(.*)$/.exec(h.header)?.[1] ?? '')
+    if (ctx) put({ name: ctx, hunk: h.id, path: h.path, kind: 'body' })
+  }
+  return [...out.values()]
+}
+
+/** One place a name is used: a line of `git grep`. */
+export interface Use {
+  path: string
+  line: number
+  text: string
+}
+
+/** `git grep -z -n` output: path NUL line NUL text. */
+export function parseGrep(out: string, max = 2000): Use[] {
+  const uses: Use[] = []
+  for (const row of out.split('\n')) {
+    const [path, line, ...text] = row.split('\0')
+    if (!path || !/^\d+$/.test(line ?? '')) continue
+    uses.push({ path: path.replace(/\\/g, '/'), line: Number(line), text: text.join('\0').slice(0, 300) })
+    if (uses.length >= max) break
+  }
+  return uses
+}
+
+export interface Radius {
+  name: string
+  hunk: string
+  kind: ChangedName['kind']
+  /** places outside its own definition */
+  uses: number
+  /** of those, on lines the change wrote */
+  changed: number
+  untouched: Use[]
+}
+
+const IMPORT_LINE = /^\s*(?:import\b|from\s+\S+\s+import\b|export\s+(?:type\s+)?\{[^}]*\}\s*from\b|(?:const|let|var)\s+\{[^}]*\}\s*=\s*require\(|use\s)/
+
+/** What `git grep` found per changed name: how many other places use it, how many the change touched, and the rest. */
+export function blastRadius(names: ChangedName[], hunks: Hunk[], found: Use[]): Radius[] {
+  const written = new Set<string>()
+  for (const h of hunks) for (const l of h.lines) if (l.kind === 'add' && l.newNo) written.add(`${h.path}:${l.newNo}`)
+  return names.map((n) => {
+    const word = new RegExp(`(^|[^\\w$])${reEsc(n.name)}([^\\w$]|$)`)
+    // an import isn't a caller: it needs no change when the parameters or the body do (it does when the name is gone)
+    const uses = found.filter((u) => word.test(u.text) && definedName(u.path, u.text) !== n.name && (n.kind === 'removed' || !IMPORT_LINE.test(u.text)))
+    const untouched = uses.filter((u) => !written.has(`${u.path}:${u.line}`))
+    return { name: n.name, hunk: n.hunk, kind: n.kind, uses: uses.length, changed: uses.length - untouched.length, untouched }
+  })
 }
 
 // ── the walkthrough an agent writes ──────────────────────────────────
@@ -369,7 +537,11 @@ export interface ReviewSubject {
   criteria: string[]
   /** git diff <base> shows the work */
   base: string
+  /** how to see the change when it isn't `git diff <base>` in this folder (a pull request: gh pr diff) */
+  diff?: string
 }
+
+const changeOf = (s: ReviewSubject): string => (s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\` plus untracked files in this folder`)
 
 /** What a walkthrough agent is asked: read-only, the JSON to one file. */
 export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string; hunks: number; lines: number }>, file: string): string {
@@ -379,7 +551,7 @@ export function walkthroughPrompt(s: ReviewSubject, files: Array<{ path: string;
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 4000)}` : '',
     s.criteria.length ? `Acceptance criteria (numbered):\n${s.criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2500)}` : '',
-    `The change is \`git diff ${s.base}\` plus untracked files in this folder. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
+    `The change is ${changeOf(s)}. Read it, and whatever code around it you need. The changed files (hunks are counted by their @@ headers, from 1):\n${files.map((f) => `- ${f.path} (${f.hunks} hunk${f.hunks === 1 ? '' : 's'}, ${f.lines} lines)`).join('\n')}`,
     [
       'Split the change into 2 to 8 parts in reading order: the core change first, then what it needs, then tests and the rest. For each part:',
       '- title: what it does, in a few words',
@@ -416,7 +588,7 @@ export function askPrompt(s: ReviewSubject, p: Pick<Part, 'title' | 'why' | 'hun
     s.brief?.trim() ? `What was asked:\n\n${s.brief.trim().slice(0, 3000)}` : '',
     s.report?.trim() ? `What the agent that did the work said:\n\n${s.report.trim().slice(0, 2000)}` : '',
     `The reviewer is looking at this part, "${p.title}"${p.why ? ` (${p.why})` : ''}:\n\n\`\`\`diff\n${partText(p)}\n\`\`\``,
-    `The whole change is \`git diff ${s.base}\`; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
+    `The whole change is ${s.diff ? `\`${s.diff}\`` : `\`git diff ${s.base}\``}; read any code you need. Answer the question in at most six sentences, plainly, naming files and lines. If the honest answer is that it isn't needed, say so, and say what to remove.`,
     `Write the answer as Markdown to ${file} (the one file you may create; do not change anything else and do not commit), then say in one line that it is written.`
   ]
     .filter(Boolean)
@@ -435,3 +607,89 @@ export function sendBackText(items: Array<{ part: Pick<Part, 'title' | 'hunks'>;
 
 /** The note a "Cut it" button writes for a part nobody asked for. */
 export const CUT_NOTE = 'Remove this part: it wasn\'t asked for. Keep the change to what the task needs.'
+
+// ── review order and time ────────────────────────────────────────────
+
+/** Flags that send a part to the front: the spots where a missed line costs the most. */
+const RISKY: Partial<Record<FlagId, number>> = { secret: 6, tests: 5, suppressed: 4, auth: 3, money: 3, migration: 3 }
+
+/** Lines a reviewer reads in a minute, carefully (code review studies put it at 300 to 500 an hour). */
+export const LINES_PER_MINUTE = 8
+/** Minutes a risky flag adds to its part (a second look), and any other flag. */
+export const RISKY_FLAG_MINUTES = 2
+export const FLAG_MINUTES = 0.5
+
+const riskOf = (p: Pick<Part, 'flags'>): number => p.flags.reduce((a, f) => a + (RISKY[f.id] ?? 0), 0)
+
+/**
+ * The parts in the order to read them: risky flags first (the riskiest ahead), then parts nobody asked
+ * for, then the rest, biggest first in each. Ties keep the cockpit's own order. Noise isn't a part: it
+ * stays folded at the end.
+ */
+export function reviewOrder(c: Pick<Cockpit, 'parts'>): Part[] {
+  const tier = (p: Part): number => (riskOf(p) ? 0 : p.need === 'extra' ? 1 : 2)
+  return c.parts
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => tier(a.p) - tier(b.p) || riskOf(b.p) - riskOf(a.p) || b.p.lines - a.p.lines || a.i - b.i)
+    .map((x) => x.p)
+}
+
+/** The parts by the first file they touch, as a file list reads. */
+export function fileOrder(c: Pick<Cockpit, 'parts'>): Part[] {
+  const key = (p: Part): string => p.hunks.map((h) => `${h.path}\0${String(h.n).padStart(5, '0')}`).sort()[0] ?? ''
+  return c.parts
+    .map((p, i) => ({ p, i, k: key(p) }))
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i))
+    .map((x) => x.p)
+}
+
+/** Minutes to review one part: its lines at a set pace, plus a second look per flag. */
+export function partMinutes(p: Pick<Part, 'lines' | 'flags'>): number {
+  const flags = p.flags.reduce((a, f) => a + (RISKY[f.id] ? RISKY_FLAG_MINUTES : FLAG_MINUTES), 0)
+  return p.lines / LINES_PER_MINUTE + flags
+}
+
+/** Minutes for the whole review (noise is folded, so it isn't counted), and for the parts still without a verdict. */
+export function reviewMinutes(c: Pick<Cockpit, 'parts'>, done: (p: Part) => boolean = () => false): { total: number; left: number } {
+  let total = 0
+  let left = 0
+  for (const p of c.parts) {
+    const m = partMinutes(p)
+    total += m
+    if (!done(p)) left += m
+  }
+  return { total, left }
+}
+
+/** "about 12 min", "about 1 h 25 min", "under a minute". */
+export function formatMinutes(min: number): string {
+  if (min <= 0) return 'nothing to read'
+  if (min < 1) return 'under a minute'
+  if (min < 60) return `about ${Math.round(min)} min`
+  const m = Math.round(min / 5) * 5
+  const h = Math.floor(m / 60)
+  return `about ${h} h${m % 60 ? ` ${m % 60} min` : ''}`
+}
+
+// ── review state of pull requests (prReviews.json) ───────────────────
+
+/** A pull request's key: the repository it was opened in and its number. */
+export const prReviewKey = (root: string, number: number): string => `${root.replace(/\/+$/, '')}#${number}`
+
+export function findPrReview(list: PrReview[], root: string, number: number): PrReview | undefined {
+  const key = prReviewKey(root, number)
+  return list.find((r) => prReviewKey(r.root, r.number) === key)
+}
+
+/** The list with one PR's review state changed; `head` (when known) is the commit the marks are now about. */
+export function putPrReview(list: PrReview[], root: string, number: number, f: (r: ReviewState) => ReviewState, head?: string, at = Date.now()): PrReview[] {
+  const old = findPrReview(list, root, number)
+  const next: PrReview = { root: old?.root ?? root, number, head: head ?? old?.head, review: f(old?.review ?? {}), updatedAt: at }
+  return old ? list.map((r) => (r === old ? next : r)) : [...list, next]
+}
+
+/** A saved Review tab's params: newer ones carry a target, layouts saved before targets only a missionId. */
+export function targetOf(params: { target?: ReviewTarget; missionId?: string } | undefined): ReviewTarget | undefined {
+  if (params?.target) return params.target
+  return params?.missionId ? { kind: 'mission', id: params.missionId } : undefined
+}

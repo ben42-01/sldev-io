@@ -4,6 +4,9 @@ import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
 import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
+import { parseGrep, type Use } from '@shared/review'
+import type { BaseMoved } from '@shared/ship'
+import { checkPrNumber, planPrWorktree, prFolder, prRef, type PrWorktree } from '@shared/prs'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
 interface ExecResult {
@@ -240,6 +243,15 @@ export async function baseVersion(cwd: string, base: string, path: string): Prom
   return r.code === 0 ? r.stdout : ''
 }
 
+/** The files a branch changed since it left `base` (committed, uncommitted and new), for the board's "shares files" flag. */
+export async function changedFiles(cwd: string, base: string): Promise<string[]> {
+  if (!base || base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
+  const [tracked, untracked] = await Promise.all([git(['diff', '--name-only', '--no-renames', mergeBase, '--'], cwd), git(['ls-files', '--others', '--exclude-standard'], cwd)])
+  if (tracked.code !== 0) throw new Error(tracked.stderr.trim() || 'git diff failed')
+  return [...new Set([...tracked.stdout.split('\n'), ...untracked.stdout.split('\n')].filter(Boolean))].sort()
+}
+
 export async function diffStat(cwd: string, base: string): Promise<DiffStat> {
   const mergeBase = (await git(['merge-base', base, 'HEAD'], cwd)).stdout.trim() || base
   const r = await git(['diff', '--shortstat', mergeBase], cwd)
@@ -292,6 +304,30 @@ export async function push(cwd: string, branch: string): Promise<void> {
   await ok(['push', 'origin', branch], cwd)
 }
 
+const SKIP_DIRS = ['node_modules', 'dist', 'build', 'out', 'vendor', 'coverage', '.next', 'target', '__pycache__']
+
+/**
+ * Where names are used in the checkout, for the review's blast radius: `git grep -w` over tracked and
+ * untracked (not ignored) files, local only. Capped (names, output, time) so a huge repo can't stall the
+ * review; `capped` says the list is cut short.
+ */
+export function uses(cwd: string, names: string[]): Promise<{ uses: Use[]; capped: boolean }> {
+  const words = [...new Set(names.filter((n) => /^[A-Za-z_$][\w$]{2,80}$/.test(n)))].slice(0, 25)
+  if (!words.length) return Promise.resolve({ uses: [], capped: false })
+  const args = ['grep', '-z', '-n', '-I', '-w', '-F', '--untracked', '--no-color', ...words.flatMap((w) => ['-e', w]), '--', '.', ...SKIP_DIRS.map((d) => `:(exclude,glob)**/${d}/**`)]
+  const MAX = 2000
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd, timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err, stdout) => {
+      const e = err as { code?: string | number; killed?: boolean } | null
+      // 1 is "nothing found"; a timeout or too much output keeps what came so far
+      const cut = !!e && (e.killed || e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
+      if (e && !cut && e.code !== 1) return resolve({ uses: [], capped: false })
+      const found = parseGrep(String(stdout ?? ''), MAX)
+      resolve({ uses: found, capped: cut || found.length >= MAX })
+    })
+  })
+}
+
 export async function listFiles(cwd: string): Promise<string[]> {
   const r = await git(['ls-files', '--cached', '--others', '--exclude-standard'], cwd)
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean).slice(0, 50000) : []
@@ -331,4 +367,141 @@ export async function graphLog(cwd: string, limit = 300): Promise<GraphLog> {
 export async function showCommit(cwd: string, sha: string): Promise<string> {
   if (!/^[0-9a-f]{7,64}$/.test(sha)) throw new Error(`Not a commit: "${sha}"`)
   return ok(['show', '--no-color', '--no-ext-diff', '--format=', '--first-parent', '-m', sha], cwd)
+}
+
+/** when each remote was last fetched for the ship bar, so a Review tab polling every 15 s doesn't fetch every time */
+const lastFetch = new Map<string, number>()
+const FETCH_EVERY_MS = 5 * 60_000
+
+/**
+ * How far the base moved since the branch in `cwd` left it, before anything is pushed: the commits on the base
+ * that HEAD doesn't have, and a trial merge (`git merge-tree --write-tree`, git 2.38+) that names the files that
+ * would conflict without touching the worktree, the index or any ref. The base is compared as it is on its
+ * upstream when the local branch is only behind it (fetched at most every 5 minutes), like `freshBase`.
+ */
+export async function baseMoved(cwd: string, base: string): Promise<BaseMoved> {
+  if (!base || base.startsWith('-')) throw new Error(`Not a valid base: "${base}"`)
+  const remote = (await git(['config', '--get', `branch.${base}.remote`], cwd)).stdout.trim()
+  if (remote && remote !== '.') {
+    const key = `${(await git(['rev-parse', '--git-common-dir'], cwd)).stdout.trim()}\0${remote}`
+    if (Date.now() - (lastFetch.get(key) ?? 0) > FETCH_EVERY_MS) {
+      lastFetch.set(key, Date.now())
+      await git(['fetch', '--quiet', '--prune', remote], cwd, 60000)
+    }
+  }
+  const ref = await upstreamIfBehind(cwd, base)
+  const [count, log] = await Promise.all([
+    git(['rev-list', '--count', `HEAD..${ref}`, '--'], cwd),
+    git(['log', '--no-color', '--max-count=50', '--format=%H%x00%s', `HEAD..${ref}`, '--'], cwd)
+  ])
+  if (log.code !== 0 || count.code !== 0) throw new Error((log.stderr || count.stderr).trim() || `git log HEAD..${ref} failed`)
+  const commits = log.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [sha, subject = ''] = l.split('\0')
+      return { sha, subject }
+    })
+  const behind = Number(count.stdout.trim()) || commits.length
+  return { base, ref, behind, commits, conflicts: behind ? await trialMerge(cwd, ref) : [] }
+}
+
+/** `base`'s upstream when the local branch only lags it (no fetch here), else `base` itself */
+async function upstreamIfBehind(cwd: string, base: string): Promise<string> {
+  const upstream = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${base}@{upstream}`], cwd)).stdout.trim()
+  if (!upstream) return base
+  const [local, up] = await Promise.all([git(['rev-parse', base], cwd), git(['rev-parse', upstream], cwd)])
+  if (local.code !== 0 || up.code !== 0 || local.stdout.trim() === up.stdout.trim()) return base
+  return (await git(['merge-base', '--is-ancestor', base, upstream], cwd)).code === 0 ? upstream : base
+}
+
+/** Files that would conflict merging `ref` into HEAD, computed in memory; null when this git can't tell (before 2.38). */
+export async function trialMerge(cwd: string, ref: string): Promise<string[] | null> {
+  const r = await git(['merge-tree', '--write-tree', '--name-only', '--no-messages', ref, 'HEAD'], cwd)
+  // 0: clean, 1: conflicts; anything else (an old git without --write-tree) says nothing either way
+  if (r.code === 0) return []
+  if (r.code !== 1) return null
+  // the first line is the tree git would write; the conflicted files follow
+  return [...new Set(r.stdout.split('\n').slice(1).filter(Boolean))]
+}
+
+/**
+ * Merge `ref` (the base) into the branch checked out in the worktree `cwd`, for the ship bar's Update and check.
+ * Refused while tracked files have uncommitted changes. A conflict is undone (`merge --abort`) and its files
+ * returned, so the worktree is left exactly as it was. Nothing is pushed.
+ */
+export async function mergeBaseInto(cwd: string, ref: string): Promise<{ merged: boolean; conflicts: string[]; output: string }> {
+  if (!ref || ref.startsWith('-')) throw new Error(`Not a valid base: "${ref}"`)
+  const dirty = (await ok(['status', '--porcelain', '--untracked-files=no'], cwd)).split('\n').filter(Boolean)
+  if (dirty.length) throw new Error(`${dirty.length} changed file${dirty.length === 1 ? '' : 's'} not committed in the worktree. Commit them first, then update.`)
+  const r = await git(['merge', '--no-ff', '--no-edit', ref], cwd, 120000)
+  const output = (r.stdout + r.stderr).trim()
+  if (r.code === 0) return { merged: true, conflicts: [], output }
+  if (/CONFLICT|Automatic merge failed/.test(output)) {
+    const files = (await git(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.split('\n').filter(Boolean)
+    await git(['merge', '--abort'], cwd)
+    return { merged: false, conflicts: files, output }
+  }
+  throw new Error(output || 'git merge failed')
+}
+
+/** The main checkout of the repository `cwd` belongs to (also from inside one of its worktrees). */
+async function mainCheckout(cwd: string): Promise<string> {
+  const main = (await listWorktrees(cwd)).find((w) => w.isMain && !w.bare)
+  return main?.path ?? (await ok(['rev-parse', '--show-toplevel'], cwd)).trim()
+}
+
+const prWorktreePath = (top: string, n: number): string => join(dirname(top), '.sldev-worktrees', basename(top), prFolder(n))
+
+/**
+ * Check out the head of pull request `n` for review: fetch `pull/<n>/head` from `remote` (GitHub serves it for
+ * every PR, forks included) into refs/sldev/pr/<n>, outside the user's branches, then a detached worktree at
+ * ../.sldev-worktrees/<repo>/pr-<n>. Asked again at the same commit, the worktree is reused; when the PR has new
+ * commits, it is moved to them (not when files were changed there). `headSha` (gh's headRefOid from the list) is
+ * only compared: the fetched head is what GitHub has now, and `listedOther` says the list was out of date. Nothing is pushed, and the main checkout is never touched.
+ */
+export async function prWorktree(root: string, n: number, headSha?: string, remote = 'origin'): Promise<PrWorktree> {
+  checkPrNumber(n)
+  if (!remote || remote.startsWith('-')) throw new Error(`Not a remote: "${remote}"`)
+  const top = await mainCheckout(root)
+  const ref = prRef(n)
+  const f = await git(['fetch', '--quiet', '--no-tags', remote, `+refs/pull/${n}/head:${ref}`], top, 120000)
+  if (f.code !== 0) {
+    const why = f.stderr.trim().split('\n').pop() || 'git fetch failed'
+    throw new Error(/couldn't find remote ref/i.test(why) ? `${remote} has no pull request #${n}.` : `Couldn't fetch PR #${n} from ${remote}: ${why}`)
+  }
+  const sha = (await ok(['rev-parse', '--verify', `${ref}^{commit}`], top)).trim()
+  // the list the user picked from can be older than a push or a force push: what GitHub serves now wins
+  const listedOther = !!headSha && !sha.startsWith(headSha)
+  const path = prWorktreePath(top, n)
+  let existing = (await listWorktrees(top)).find((w) => w.path === path)
+  if (existing?.prunable || (existing && !existsSync(path))) {
+    await git(['worktree', 'prune'], top)
+    existing = undefined
+  }
+  if (!existing && existsSync(path)) throw new Error(`${path} already exists and isn't a worktree of this repository. Move it away, then check out PR #${n} again.`)
+  const dirty = existing ? (await ok(['status', '--porcelain', '--untracked-files=no'], path)).split('\n').filter(Boolean).length : 0
+  const plan = planPrWorktree(existing ? { head: existing.head, branch: existing.branch, dirty } : null, sha, n)
+  if (plan.do === 'refuse') throw new Error(plan.reason)
+  if (plan.do === 'create') {
+    mkdirSync(dirname(path), { recursive: true })
+    await ok(['worktree', 'add', '--detach', path, sha], top)
+    return { number: n, path, head: sha, repo: top, action: 'created', listedOther }
+  }
+  if (plan.do === 'move') await ok(['checkout', '--quiet', '--detach', sha], path)
+  return { number: n, path, head: sha, repo: top, action: plan.do === 'move' ? 'moved' : 'reused', listedOther }
+}
+
+/**
+ * Remove PR `n`'s review worktree and its fetched ref. Without `discard`, git refuses when the folder has
+ * changed or untracked files. Whether something still runs there is the caller's check, as for any worktree.
+ */
+export async function removePrWorktree(root: string, n: number, opts: { discard: boolean } = { discard: false }): Promise<void> {
+  checkPrNumber(n)
+  const top = await mainCheckout(root)
+  const path = prWorktreePath(top, n)
+  const listed = (await listWorktrees(top)).some((w) => w.path === path)
+  if (listed && existsSync(path)) await ok(['worktree', 'remove', ...(opts.discard ? ['--force'] : []), path], top)
+  else await git(['worktree', 'prune'], top)
+  await git(['update-ref', '-d', prRef(n)], top)
 }

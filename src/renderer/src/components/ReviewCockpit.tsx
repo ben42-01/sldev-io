@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, ExternalLink, Lightbulb, ListChecks, LoaderCircle, MessageCircleQuestion, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
-import { buildCockpit, criteriaOf, CUT_NOTE, type Cockpit, type Hunk, type Need, type Part, type Walkthrough } from '@shared/review'
+import { ArrowDownUp, ArrowLeft, ArrowRight, Bot, Check, ChevronDown, CircleHelp, CircleX, Circle, Clock, ExternalLink, FileText, Lightbulb, ListChecks, LoaderCircle, MapPin, MessageCircleQuestion, Network, RotateCcw, Scissors, ShieldAlert, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { blastRadius, buildCockpit, changedNames, CUT_NOTE, fileOrder, formatMinutes, hunksOf, LINES_PER_MINUTE, partMinutes, reviewMinutes, reviewOrder, type Cockpit, type Hunk, type Need, type Part, type Radius, type Use, type Walkthrough } from '@shared/review'
 import type { DiffFile } from '@shared/diff'
-import type { Mission } from '@shared/types'
 import { allAgents } from '../lib/agents'
 import { openFileAt } from '../lib/actions'
 import { scrollToTop } from '../lib/scroll'
 import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
 import { askAboutPart, diffSignature, explainChanges, markPart, readWalkthrough, sendBack, settleReview } from '../state/review'
-import { workspace } from '../state/workspace'
+import { firstAgent, workingOn, type ReviewSource } from '../state/reviewTargets'
+import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
 import { DiffLines } from './DiffTables'
@@ -32,11 +32,13 @@ const NOISE_ID = '__noise'
  * whether it was asked for and if there is a simpler way. Each part gets a verdict, and what was sent back
  * goes to the agent that did the work as one follow-up.
  */
-export function ReviewCockpit({ mission, files, layout }: { mission: Mission; files: DiffFile[]; layout: 'split' | 'unified' }): React.JSX.Element {
-  const review = mission.review
+export function ReviewCockpit({ source, files, layout }: { source: ReviewSource; files: DiffFile[]; layout: 'split' | 'unified' }): React.JSX.Element {
+  const review = source.review
+  const target = source.target
   const walkState = review?.walk
   const [walk, setWalk] = useState<Walkthrough | null>(null)
-  const [sel, setSel] = useState(0)
+  /** the part on screen, by id (NOISE_ID for the noise), so switching the order keeps it */
+  const [sel, setSel] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ part: string; note: string } | null>(null)
   const [asking, setAsking] = useState<{ part: string; q: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -44,30 +46,55 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null)
   const listWidth = useStore(workspace, (w) => reviewListWidth(w.reviewListWidth))
+  const order = useStore(workspace, (w) => w.reviewOrder ?? 'review')
 
-  useEffect(() => void settleReview(mission.id), [mission.id])
+  useEffect(() => void settleReview(target), [target])
   useEffect(() => {
     let live = true
-    void readWalkthrough(mission.id).then((w) => live && setWalk(w))
+    void readWalkthrough(target).then((w) => live && setWalk(w))
     return () => {
       live = false
     }
-  }, [mission.id, walkState?.status, walkState?.file])
+  }, [target, walkState?.status, walkState?.file])
 
-  const criteria = useMemo(() => criteriaOf(mission), [mission])
+  const criteria = source.criteria
   const c: Cockpit = useMemo(() => buildCockpit(files, walk, criteria), [files, walk, criteria])
+  // blast radius: where the names this change touched are used, found once per version of the diff
+  const sig = useMemo(() => diffSignature(files), [files])
+  const real = useMemo(() => hunksOf(files).filter((h) => !h.noise), [files])
+  const changed = useMemo(() => changedNames(real), [real])
+  const [usesFound, setUsesFound] = useState<{ sig: string; uses: Use[]; capped: boolean } | null>(null)
+  useEffect(() => {
+    if (!changed.length) return
+    let live = true
+    void window.api.git
+      .uses(source.cwd, changed.map((n) => n.name))
+      .then((r) => live && setUsesFound({ sig, ...r }))
+      .catch(() => live && setUsesFound({ sig, uses: [], capped: false }))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source.cwd, sig])
+  const radius = useMemo(() => (usesFound && changed.length ? blastRadius(changed, real, usesFound.uses).filter((x) => x.uses > 0) : []), [usesFound, changed, real])
   const stale = !!walk && !!walkState?.diff && walkState.diff !== diffSignature(files)
-  const parts = c.parts
-  const index = Math.min(sel, parts.length)
+  const ranked = useMemo(() => reviewOrder(c), [c])
+  const parts = useMemo(() => (order === 'file' ? fileOrder(c) : ranked), [order, c, ranked])
+  const startHere = ranked[0]?.id
+  const found = sel === NOISE_ID ? parts.length : parts.findIndex((p) => p.id === sel)
+  // nothing picked yet (or the part is gone): open where the review starts
+  const index = found >= 0 ? found : Math.max(0, parts.findIndex((p) => p.id === startHere))
   const current: Part | undefined = parts[index]
   const marks = review?.marks ?? {}
+  const time = reviewMinutes(c, (p) => !!marks[p.id])
   const back = parts.filter((p) => marks[p.id]?.note)
   const seen = parts.filter((p) => marks[p.id]).reduce((a, p) => a + p.lines, 0)
   const writing = walkState?.status === 'writing'
-  const agentName = getAgent(mission.options.agent).name
+  const agentName = getAgent(source.agent).name
 
   const go = (i: number): void => {
-    setSel(Math.max(0, Math.min(parts.length, i)))
+    const j = Math.max(0, Math.min(c.noise.length ? parts.length : parts.length - 1, i))
+    setSel(j === parts.length ? NOISE_ID : (parts[j]?.id ?? null))
     setEditing(null)
     setAsking(null)
     requestAnimationFrame(() => scrollToTop(main.current))
@@ -78,12 +105,12 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
     go(after >= 0 ? after : Math.min(parts.length, index + 1))
   }
   const ok = (p: Part): void => {
-    markPart(mission.id, p.id, marks[p.id]?.ok ? null : { ok: true })
+    markPart(target, p.id, marks[p.id]?.ok ? null : { ok: true })
     if (!marks[p.id]?.ok) next()
   }
   const saveNote = (): void => {
     if (!editing) return
-    markPart(mission.id, editing.part, editing.note.trim() ? { note: editing.note.trim() } : null)
+    markPart(target, editing.part, editing.note.trim() ? { note: editing.note.trim() } : null)
     setEditing(null)
     if (editing.note.trim()) next()
   }
@@ -91,7 +118,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const explain = async (agentId: string): Promise<void> => {
     setError('')
     try {
-      await explainChanges(mission.id, agentId)
+      await explainChanges(target, agentId)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -101,7 +128,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
       { type: 'header', label: 'Explain with' },
       ...allAgents(workspace.get().customAgents)
         .filter((a) => a.canPrint)
-        .map((a) => ({ label: a.id === mission.options.agent ? `${a.name} (did the work)` : a.name, icon: <Bot size={13} />, run: () => void explain(a.id) }))
+        .map((a) => ({ label: a.id === source.agent ? `${a.name} (did the work)` : a.name, icon: <Bot size={13} />, run: () => void explain(a.id) }))
     ])
   const ask = async (): Promise<void> => {
     if (!asking || !current || !asking.q.trim()) return
@@ -109,7 +136,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
     setAsking(null)
     setError('')
     try {
-      await askAboutPart(mission.id, current, q, mission.options.agent ?? 'claude')
+      await askAboutPart(target, current, q, firstAgent(source))
     } catch (e) {
       setError((e as Error).message)
     }
@@ -117,7 +144,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
   const send = async (): Promise<void> => {
     setBusy(true)
     try {
-      const m = await sendBack(mission.id, back.map((p) => ({ part: p, note: marks[p.id]!.note! })))
+      const m = await sendBack(target, back.map((p) => ({ part: p, note: marks[p.id]!.note! })))
       if (m) toast(`Sent ${back.length === 1 ? 'one part' : `${back.length} parts`} back to ${getAgent(m.options.agent).name}`)
     } catch (e) {
       setError((e as Error).message)
@@ -147,7 +174,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
       <header className="rc-head">
         <section className="rc-ask">
           <div className="field-label">The ask</div>
-          <p className="rc-ask-text selectable">{(mission.brief ?? mission.prompt).trim().split('\n').find((l) => l.trim())?.replace(/^#+\s*/, '').slice(0, 220)}</p>
+          <p className="rc-ask-text selectable">{source.ask.trim().split('\n').find((l) => l.trim())?.replace(/^#+\s*/, '').slice(0, 220)}</p>
           {c.criteria.length > 0 && (
             <ul className="rc-criteria">
               {c.criteria.map((k) => (
@@ -197,7 +224,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
                 Grouped by folder for now. An agent can explain each part: why it is there, whether it was asked for, and a simpler way if there is one.
               </p>
               <div className="rc-explain-actions">
-                <button className="btn primary sm" onClick={() => void explain(mission.options.agent ?? 'claude')}>
+                <button className="btn primary sm" onClick={() => void explain(firstAgent(source))}>
                   <Wand2 size={13} /> Explain the change
                 </button>
                 <button className="btn sm" title="Pick the agent that explains it" aria-label="Pick the agent that explains it" onClick={explainMenu}>
@@ -217,6 +244,10 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
             <span>
               <strong>{t.lines.toLocaleString()}</strong> lines to read
             </span>
+            <span className="rc-time" title={`At about ${LINES_PER_MINUTE} lines a minute, plus a second look for each flagged spot; noise isn't counted`}>
+              <Clock size={11} /> <strong>{formatMinutes(time.total)}</strong>
+              {time.left < time.total && time.left > 0 ? ` · ${formatMinutes(time.left).replace(/^about /, '')} left` : ''}
+            </span>
             {(['asked', 'supports', 'extra'] as Need[]).map((n) =>
               t[n] ? (
                 <span key={n} className={`rc-key ${n}`}>
@@ -235,7 +266,17 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
       </header>
 
       <div className="rc-body">
-        <nav className="rc-parts" aria-label="Parts in reading order" style={{ width: listWidth }}>
+        <nav className="rc-parts" aria-label={order === 'file' ? 'Parts in file order' : 'Parts in review order'} style={{ width: listWidth }}>
+          {parts.length > 1 && (
+            <div className="seg sm rc-order" role="group" aria-label="Order of the parts">
+              <button type="button" className={order === 'review' ? 'on' : ''} aria-pressed={order === 'review'} title="Risky spots first, then what nobody asked for, then the biggest parts" onClick={() => updateSettings({ reviewOrder: 'review' })}>
+                <ArrowDownUp size={12} /> Review order
+              </button>
+              <button type="button" className={order === 'file' ? 'on' : ''} aria-pressed={order === 'file'} title="By the first file each part touches" onClick={() => updateSettings({ reviewOrder: 'file' })}>
+                <FileText size={12} /> File order
+              </button>
+            </div>
+          )}
           {parts.map((p, i) => {
             const mk = marks[p.id]
             return (
@@ -244,8 +285,14 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
                 <span className="rc-part-name">
                   <span className="rc-part-title">{p.title}</span>
                   <span className="rc-part-meta">
+                    {p.id === startHere && parts.length > 1 && (
+                      <span className="rc-start" title="Read this part first">
+                        <MapPin size={10} /> Start here
+                      </span>
+                    )}
                     <span className={`rc-need ${p.need}`}>{NEED[p.need].label}</span>
                     <span>{p.lines} lines</span>
+                    <span>{formatMinutes(partMinutes(p)).replace(/^about /, '~')}</span>
                     {p.flags.length > 0 && (
                       <span className={`rc-flag-dot${p.flags.some((f) => f.id === 'secret' || f.id === 'tests') ? ' bad' : ''}`} title={p.flags.map((f) => f.label).join(', ')}>
                         <ShieldAlert size={11} /> {p.flags.length}
@@ -274,13 +321,17 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
           {current ? (
             <PartView
               key={current.id}
-              mission={mission}
+              source={source}
               part={current}
               n={index + 1}
               of={parts.length}
+              start={current.id === startHere && parts.length > 1}
+              last={index === parts.length - 1 && !c.noise.length}
               layout={layout}
               criteria={c.criteria}
               mark={marks[current.id]}
+              radius={radius.filter((x) => current.hunks.some((h) => h.id === x.hunk))}
+              capped={!!usesFound?.capped}
               editing={editing?.part === current.id ? editing.note : null}
               asking={asking?.part === current.id ? asking.q : null}
               onEdit={(note) => setEditing(note === null ? null : { part: current.id, note })}
@@ -292,7 +343,7 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
               onNext={() => go(index + 1)}
             />
           ) : (
-            <NoiseView id={NOISE_ID} hunks={c.noise} mission={mission} layout={layout} />
+            <NoiseView id={NOISE_ID} hunks={c.noise} cwd={source.cwd} layout={layout} />
           )}
         </div>
       </div>
@@ -308,10 +359,10 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
         </span>
         <span className="spacer" />
         <span className="rc-keys muted">
-          <kbd>J</kbd>/<kbd>K</kbd> parts · <kbd>A</kbd> looks good · <kbd>S</kbd> send back · <kbd>Q</kbd> ask
+          <kbd>J</kbd>/<kbd>K</kbd> next/previous · <kbd>A</kbd> looks good · <kbd>S</kbd> send back · <kbd>Q</kbd> ask
         </span>
-        {back.length > 0 ? (
-          <button className="btn primary sm" disabled={busy || isLive(mission.status)} title={isLive(mission.status) ? 'The agent is still working' : `One follow-up to ${agentName} with each part's note`} onClick={() => void send()}>
+        {back.length > 0 && source.mission ? (
+          <button className="btn primary sm" disabled={busy || workingOn(source)} title={workingOn(source) ? 'The agent is still working' : `One follow-up to ${agentName} with each part's note`} onClick={() => void send()}>
             <Undo2 size={13} /> Send {back.length === 1 ? '1 part' : `${back.length} parts`} back to {agentName}
           </button>
         ) : parts.length > 0 && parts.every((p) => marks[p.id]?.ok) ? (
@@ -325,13 +376,18 @@ export function ReviewCockpit({ mission, files, layout }: { mission: Mission; fi
 }
 
 interface PartViewProps {
-  mission: Mission
+  source: ReviewSource
   part: Part
   n: number
   of: number
+  /** the first part of the review order */
+  start: boolean
+  last: boolean
   layout: 'split' | 'unified'
   criteria: Cockpit['criteria']
   mark?: { ok?: boolean; note?: string }
+  radius: Radius[]
+  capped: boolean
   editing: string | null
   asking: string | null
   onEdit: (note: string | null) => void
@@ -344,14 +400,22 @@ interface PartViewProps {
 }
 
 function PartView(p: PartViewProps): React.JSX.Element {
-  const { part, mission } = p
-  const asks = (mission.review?.asks ?? []).filter((a) => a.part === part.id)
+  const { part, source } = p
+  const asks = (source.review.asks ?? []).filter((a) => a.part === part.id)
   const byFile = groupByFile(part.hunks)
   return (
     <article className="rc-part" data-part={part.id}>
       <div className="rc-part-head">
         <span className="muted">
           Part {p.n} of {p.of}
+        </span>
+        {p.start && (
+          <span className="rc-start" title="The review order puts this part first">
+            <MapPin size={11} /> Start here
+          </span>
+        )}
+        <span className="muted" title="Its lines at a reading pace, plus a second look for each flag">
+          {formatMinutes(partMinutes(part))}
         </span>
         <span className={`rc-need ${part.need}`} title={NEED[part.need].hint}>
           {NEED[part.need].label}
@@ -402,6 +466,8 @@ function PartView(p: PartViewProps): React.JSX.Element {
         </div>
       )}
 
+      {p.radius.length > 0 && <BlastRadius radius={p.radius} capped={p.capped} cwd={source.cwd} />}
+
       {asks.length > 0 && (
         <div className="rc-asks">
           {asks.map((a) => (
@@ -437,15 +503,15 @@ function PartView(p: PartViewProps): React.JSX.Element {
             <Scissors size={13} /> Cut it
           </button>
         )}
-        <button className="btn sm" onClick={() => p.onAsk('')} title={`Ask ${getAgent(mission.options.agent).name} about this part (Q)`}>
+        <button className="btn sm" onClick={() => p.onAsk('')} title={`Ask ${getAgent(firstAgent(source)).name} about this part (Q)`}>
           <CircleHelp size={13} /> Ask why
         </button>
         <span className="spacer" />
         <button className="icon-btn" disabled={p.n === 1} onClick={p.onPrev} title="Previous part (K)" aria-label="Previous part">
           <ArrowLeft size={14} />
         </button>
-        <button className="icon-btn" onClick={p.onNext} title="Next part (J)" aria-label="Next part">
-          <ArrowRight size={14} />
+        <button className="btn sm" disabled={p.last} onClick={p.onNext} title="Next part (J)">
+          Next <ArrowRight size={13} />
         </button>
       </div>
       {p.mark?.note && p.editing === null && (
@@ -501,7 +567,7 @@ function PartView(p: PartViewProps): React.JSX.Element {
             onKeyDown={(e) => e.key === 'Escape' && p.onAsk(null)}
           />
           <div className="rc-form-row">
-            <span className="muted">A read-only {getAgent(mission.options.agent).name} answers with this part and the task; nothing changes.</span>
+            <span className="muted">A read-only {getAgent(firstAgent(source)).name} answers with this part and the task; nothing changes.</span>
             <button className="btn sm ghost" type="button" onClick={() => p.onAsk(null)}>
               Cancel
             </button>
@@ -513,13 +579,57 @@ function PartView(p: PartViewProps): React.JSX.Element {
       )}
 
       {byFile.map(([path, hunks]) => (
-        <HunkFile key={path} path={path} hunks={hunks} mission={mission} layout={p.layout} />
+        <HunkFile key={path} path={path} hunks={hunks} cwd={source.cwd} layout={p.layout} />
       ))}
     </article>
   )
 }
 
-function HunkFile({ path, hunks, mission, layout }: { path: string; hunks: Hunk[]; mission: Mission; layout: 'split' | 'unified' }): React.JSX.Element {
+const SHOWN = 30
+
+/** Callers of what this part changed that the change didn't touch: where a changed signature or a removed name may still be used the old way. */
+function BlastRadius({ radius, capped, cwd }: { radius: Radius[]; capped: boolean; cwd: string }): React.JSX.Element {
+  return (
+    <section className="rc-blast" aria-label="Blast radius">
+      <div className="field-label">
+        <Network size={11} /> Blast radius
+      </div>
+      {radius.map((r) => {
+        const risky = r.kind !== 'body' && r.untouched.length > 0
+        return (
+          <details key={r.name} className={`rc-blast-name${risky ? ' risky' : ''}`} open={risky}>
+            <summary>
+              <code>{r.name}</code>
+              {r.kind === 'removed' ? ' was removed but ' : ' '}
+              {r.kind === 'removed' ? 'is still named in' : 'is used in'} {r.uses} other {r.uses === 1 ? 'place' : 'places'}, {r.changed} changed
+              {r.kind === 'signature' && <span className="rc-blast-kind">signature changed</span>}
+            </summary>
+            {r.untouched.length > 0 ? (
+              <ul>
+                {r.untouched.slice(0, SHOWN).map((u: Use) => (
+                  <li key={`${u.path}:${u.line}`}>
+                    <button className="rc-blast-use" title="Open in the editor" onClick={() => void openFileAt(`${cwd}/${u.path}`, u.line)}>
+                      <span className="mono rc-blast-at">
+                        {u.path}:{u.line}
+                      </span>
+                      <span className="mono rc-blast-text">{u.text.trim()}</span>
+                    </button>
+                  </li>
+                ))}
+                {r.untouched.length > SHOWN && <li className="muted">and {r.untouched.length - SHOWN} more</li>}
+              </ul>
+            ) : (
+              <p className="muted">Every place that uses it was changed too.</p>
+            )}
+          </details>
+        )
+      })}
+      {capped && <p className="muted">The search stopped early; there may be more.</p>}
+    </section>
+  )
+}
+
+function HunkFile({ path, hunks, cwd, layout }: { path: string; hunks: Hunk[]; cwd: string; layout: 'split' | 'unified' }): React.JSX.Element {
   const add = hunks.reduce((a, h) => a + h.additions, 0)
   const del = hunks.reduce((a, h) => a + h.deletions, 0)
   const lines = useMemo(() => hunks.flatMap((h) => [{ kind: 'hunk' as const, text: h.header }, ...h.lines]), [hunks])
@@ -533,17 +643,17 @@ function HunkFile({ path, hunks, mission, layout }: { path: string; hunks: Hunk[
         <span className="del">−{del}</span>
         <span className="spacer" />
         {status !== 'deleted' && (
-          <button className="icon-btn" title="Open the file" aria-label="Open the file" onClick={() => void openFileAt(`${mission.cwd}/${path}`, hunks[0].lines.find((l) => l.newNo)?.newNo)}>
+          <button className="icon-btn" title="Open the file" aria-label="Open the file" onClick={() => void openFileAt(`${cwd}/${path}`, hunks[0].lines.find((l) => l.newNo)?.newNo)}>
             <ExternalLink size={13} />
           </button>
         )}
       </header>
-      {lines.length > 1 && <DiffLines lines={lines} layout={layout} open={(n) => void openFileAt(`${mission.cwd}/${path}`, n)} />}
+      {lines.length > 1 && <DiffLines lines={lines} layout={layout} open={(n) => void openFileAt(`${cwd}/${path}`, n)} />}
     </section>
   )
 }
 
-function NoiseView({ hunks, mission, layout }: { id: string; hunks: Hunk[]; mission: Mission; layout: 'split' | 'unified' }): React.JSX.Element {
+function NoiseView({ hunks, cwd, layout }: { id: string; hunks: Hunk[]; cwd: string; layout: 'split' | 'unified' }): React.JSX.Element {
   const [open, setOpen] = useState<string | null>(null)
   const files = groupByFile(hunks)
   return (
@@ -561,7 +671,7 @@ function NoiseView({ hunks, mission, layout }: { id: string; hunks: Hunk[]; miss
               <span className="add">+{hs.reduce((a, h) => a + h.additions, 0)}</span>
               <span className="del">−{hs.reduce((a, h) => a + h.deletions, 0)}</span>
             </button>
-            {open === path && <HunkFile path={path} hunks={hs} mission={mission} layout={layout} />}
+            {open === path && <HunkFile path={path} hunks={hs} cwd={cwd} layout={layout} />}
           </li>
         ))}
       </ul>

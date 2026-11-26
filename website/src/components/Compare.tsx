@@ -17,6 +17,7 @@ const rows: { what: string; cells: [Cell, Cell, Cell, Cell] }[] = [
   { what: 'Pipelines from an idea to a pull request, with your approvals', cells: [false, false, 'One agent, task to PR', 'Software Factory, with your own skills'] },
   { what: 'Starts work on a schedule, a CI failure or a labelled issue', cells: ['With cron scripts', false, 'Varies', 'While the app is open'] },
   { what: 'One agent plans a goal and delegates the parts to agents from other vendors', cells: [false, 'Subagents of its own model', 'Varies', 'Lead missions, each worker in its own worktree'] },
+  { what: 'Agents in the roles of a software team, a person approving and pushing', cells: [false, false, false, 'Teams: a role per Markdown file, any agent in any role'] },
   { what: 'Measure agents and models on your own code', cells: [false, false, false, 'Evals with tests, diff limits and a judge'] },
   { what: 'A board where agents write the stories and pick up approved work', cells: [false, false, 'Varies', true] },
   { what: 'One task on several agents, keep the best diff', cells: [false, false, 'Varies', true] },

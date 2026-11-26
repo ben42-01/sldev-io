@@ -3,6 +3,7 @@ import { FreeBand, Loop, Shift } from './components/Flagship'
 import { Hero } from './components/Hero'
 import { Bento, ProofBand, Showcase } from './components/Home'
 import { Nav } from './components/Nav'
+import { TeamsSpotlight } from './components/Team'
 import { HomeFaq } from './components/Faq'
 
 /**
@@ -20,6 +21,7 @@ export function AppLanding() {
         <ProofBand />
         <Shift />
         <Loop />
+        <TeamsSpotlight />
         <Showcase />
         <Bento />
         <FreeBand />

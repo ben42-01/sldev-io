@@ -245,13 +245,19 @@ function registerIpc(): void {
   ipcMain.handle('git:addWorktree', (_e, root: string, slug: string, base: string, opts?: git.AddWorktreeOptions) => git.addWorktree(root, slug, base, opts))
   ipcMain.handle('git:pruneWorktrees', (_e, cwd: string) => git.pruneWorktrees(cwd))
   ipcMain.handle('git:worktreeStatus', (_e, wt: WorktreeInfo) => git.worktreeStatus(wt))
+  ipcMain.handle('git:prWorktree', (_e, root: string, n: number, headSha?: string, remote?: string) => git.prWorktree(root, Number(n), headSha ? String(headSha) : undefined, remote ? String(remote) : undefined))
+  ipcMain.handle('git:removePrWorktree', (_e, root: string, n: number, opts?: { discard: boolean }) => git.removePrWorktree(root, Number(n), { discard: !!opts?.discard }))
   ipcMain.handle('git:removeWorktree', (_e, wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }) => git.removeWorktree(wt, opts))
   ipcMain.handle('git:graphLog', (_e, cwd: string, limit: number) => git.graphLog(cwd, limit))
   ipcMain.handle('git:showCommit', (_e, cwd: string, sha: string) => git.showCommit(cwd, sha))
   ipcMain.handle('git:diff', (_e, cwd: string, base: string) => git.diff(cwd, base))
+  ipcMain.handle('git:uses', (_e, cwd: string, names: string[]) => git.uses(cwd, Array.isArray(names) ? names.map(String) : []))
+  ipcMain.handle('git:changedFiles', (_e, cwd: string, base: string) => git.changedFiles(cwd, String(base)))
   ipcMain.handle('git:diffStat', (_e, cwd: string, base: string) => git.diffStat(cwd, base))
   ipcMain.handle('git:commitAll', (_e, cwd: string, msg: string) => git.commitAll(cwd, msg))
   ipcMain.handle('git:merge', (_e, repo: string, branch: string, into?: string) => git.merge(repo, String(branch), into ? String(into) : undefined))
+  ipcMain.handle('git:baseMoved', (_e, cwd: string, base: string) => git.baseMoved(cwd, String(base)))
+  ipcMain.handle('git:mergeBaseInto', (_e, cwd: string, ref: string) => git.mergeBaseInto(cwd, String(ref)))
   ipcMain.handle('git:push', (_e, cwd: string, branch: string) => git.push(cwd, branch))
   ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
 
@@ -293,6 +299,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:rerun', (_e, cwd: string, runId: number, failed: boolean) => gh.rerun(cwd, runId, failed))
   ipcMain.handle('gh:cancel', (_e, cwd: string, runId: number) => gh.cancelRun(cwd, runId))
   ipcMain.handle('gh:pr', (_e, cwd: string) => gh.currentPr(cwd))
+  ipcMain.handle('gh:prReview', (_e, cwd: string, n: number) => gh.prReview(cwd, n))
   ipcMain.handle('gh:stats', (_e, cwd: string) => gh.repoStats(cwd))
   ipcMain.handle('gh:activity', (_e, cwd: string, days: number) => gh.repoActivity(cwd, days))
   ipcMain.handle('gh:issues', (_e, cwd: string, label?: string) => gh.listIssues(cwd, label))
@@ -300,6 +307,8 @@ function registerIpc(): void {
   ipcMain.handle('gh:ship', (_e, cwd: string, branch: string) => gh.shipStatus(cwd, String(branch)))
   ipcMain.handle('gh:mergePr', (_e, cwd: string, n: number, method: MergeMethod, headSha: string, auto: boolean) => gh.mergePr(cwd, Number(n), method, String(headSha), !!auto))
   ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
+  ipcMain.handle('gh:prs', (_e, cwd: string) => gh.openPrs(cwd))
+  ipcMain.handle('gh:prDetail', (_e, cwd: string, n: number) => gh.prDetail(cwd, Number(n)))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes
@@ -313,6 +322,7 @@ function registerIpc(): void {
   // agent profiles (project scope; user profiles live in settings)
   ipcMain.handle('profiles:list', (_e, root: string) => profiles.listProfiles(root))
   ipcMain.handle('profiles:save', (_e, root: string, p: AgentProfile) => profiles.saveProfile(root, p))
+  ipcMain.handle('profiles:installTeam', (_e, root: string, team: string) => profiles.installTeam(root, team))
   ipcMain.handle('profiles:remove', (_e, root: string, path: string) => profiles.removeProfile(root, path, (p) => shell.trashItem(p)))
   ipcMain.handle('memory:info', (_e, root: string) => memory.memoryInfo(root))
   ipcMain.handle('memory:ensure', (_e, root: string) => memory.ensureMemory(root))
@@ -435,7 +445,8 @@ app.whenReady().then(async () => {
     automations: new JsonStore<StoreFiles['automations']>(userData(), 'automations', { automations: [] }),
     savedMissions: new JsonStore<StoreFiles['savedMissions']>(userData(), 'saved-missions', { saved: [] }),
     board: new JsonStore<StoreFiles['board']>(userData(), 'board', { items: [], settings: [] }),
-    evals: new JsonStore<StoreFiles['evals']>(userData(), 'evals', { runs: [] })
+    evals: new JsonStore<StoreFiles['evals']>(userData(), 'evals', { runs: [] }),
+    prReviews: new JsonStore<StoreFiles['prReviews']>(userData(), 'prReviews', { reviews: [] })
   }
   vault.initVault()
   context.initContext(app.getPath('userData'))

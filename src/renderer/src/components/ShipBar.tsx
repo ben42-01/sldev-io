@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDownToLine, Check, ChevronDown, ExternalLink, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, RotateCcw, Trash2, Upload, Wrench } from 'lucide-react'
-import { currentRuns, isMergeMethod, mergeBlock, METHOD_LABEL, nextStep, shipBusy, summarizeChecks, type MergeMethod, type ShipRun, type ShipStatus } from '@shared/ship'
+import { ArrowDownToLine, Check, ChevronDown, ExternalLink, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, LoaderCircle, MoreHorizontal, RefreshCw, RotateCcw, Send, Trash2, Upload, Wrench, X } from 'lucide-react'
+import { resolveRun } from '@shared/factory'
+import { baseMovedLine, baseMovedSignal, checkPassed, currentRuns, isMergeMethod, mergeBlock, METHOD_LABEL, nextStep, sendBackText, shipBusy, summarizeChecks, tailOutput, UPDATE_CHECKS, updateVerdict, type BaseMoved, type MergeMethod, type ShipRun, type ShipStatus, type UpdateCheck, type UpdateResult } from '@shared/ship'
 import { ghRunSignal } from '@shared/status'
 import type { Mission, WorktreeInfo } from '@shared/types'
 import { removeMissionFlow } from '../lib/removals'
-import { followUpMission, getMission, isLive } from '../state/missions'
+import { followUpMission, isLive, missions } from '../state/missions'
 import { getAgent } from '../state/agents'
 import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
@@ -18,6 +19,11 @@ import { toast } from './Toast'
 /** while a run is going (or GitHub is still working out mergeability), and otherwise */
 const FAST_MS = 15_000
 const SLOW_MS = 60_000
+/** a project's typecheck or test suite, run by Update and check */
+const CHECK_TIMEOUT_MS = 15 * 60_000
+
+/** Update and check, from the click to its verdict */
+type Update = { phase: 'merging' | 'checking'; doing: string } | { phase: 'done'; ref: string; result: UpdateResult }
 
 interface Props {
   mission: Mission
@@ -44,19 +50,24 @@ export function ShipBar({ mission, wt, visible, stamp, onChanged, onCommit }: Pr
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [open, setOpen] = useState(false)
+  const [moved, setMoved] = useState<BaseMoved | null>(null)
+  const [upd, setUpd] = useState<Update | null>(null)
   const runsHeight = useStore(workspace, (w) => shipRunsHeight(w.shipRunsHeight))
   const method = useStore(workspace, (w) => (isMergeMethod(w.mergeMethod) ? w.mergeMethod : 'squash'))
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setS(await window.api.gh.ship(wt.path, wt.branch))
+      // the base is local git (plus a fetch now and then): its failure never hides the PR
+      const [ship, base] = await Promise.all([window.api.gh.ship(wt.path, wt.branch), window.api.git.baseMoved(wt.path, wt.base).catch(() => null)])
+      setS(ship)
+      setMoved(base)
     } catch (e) {
       setError(clean(e))
     } finally {
       setLoading(false)
     }
-  }, [wt.path, wt.branch])
+  }, [wt.path, wt.branch, wt.base])
 
   const sha = s?.pr?.state === 'OPEN' && s.pr.headSha ? s.pr.headSha : (s?.localSha ?? '')
   const cur = useMemo(() => currentRuns(s?.runs ?? [], sha), [s, sha])
@@ -160,7 +171,65 @@ export function ShipBar({ mission, wt, visible, stamp, onChanged, onCommit }: Pr
       setError(clean(e))
     }
   }
-  const live = isLive(getMission(mission.id)?.status ?? 'ended')
+  // a follow-up (Fix with, Send back) is a mission of its own in the same worktree: any live one counts
+  const live = useStore(missions, (st) => st.list.some((m) => m.cwd === wt.path && isLive(m.status)))
+
+  /**
+   * Update and check, on a click only: merge the base into the worktree (a conflict is undone), then run the
+   * project's typecheck and test there, as factory recipes resolve them. The merge commit stays local.
+   */
+  const updateAndCheck = async (): Promise<void> => {
+    if (!moved || live) return
+    const ref = moved.ref
+    setError('')
+    setUpd({ phase: 'merging', doing: `Merging ${ref}` })
+    let merged: { merged: boolean; conflicts: string[] }
+    try {
+      merged = await window.api.git.mergeBaseInto(wt.path, ref)
+    } catch (e) {
+      setUpd(null)
+      setError(clean(e))
+      return
+    }
+    if (!merged.merged) {
+      setUpd({ phase: 'done', ref, result: { merged: false, conflicts: merged.conflicts, checks: [], skipped: [] } })
+      void load()
+      return
+    }
+    onChanged()
+    const checks: UpdateCheck[] = []
+    const skipped: string[] = []
+    try {
+      const detected = await window.api.runtimes.detect(wt.path).catch(() => [])
+      const refs = detected.map((d) => ({ name: d.name, command: d.command, rel: d.cwd === wt.path ? '' : d.cwd.slice(wt.path.length + 1) }))
+      for (const entry of UPDATE_CHECKS) {
+        const { command, skipped: none } = resolveRun([entry], refs)
+        skipped.push(...none)
+        if (!command) continue
+        const name = entry.replace(/\?$/, '')
+        setUpd({ phase: 'checking', doing: `Running ${name}` })
+        const r = await window.api.evals.check(wt.path, command, CHECK_TIMEOUT_MS)
+        checks.push({ name, command, ...r })
+      }
+    } catch (e) {
+      checks.push({ name: 'checks', command: '', code: null, output: clean(e) })
+    }
+    setUpd({ phase: 'done', ref, result: { merged: true, conflicts: [], checks, skipped } })
+    void load()
+  }
+
+  const sendBack = async (result: UpdateResult, ref: string): Promise<void> => {
+    const agent = getAgent(mission.options.agent).name
+    try {
+      const m = await followUpMission(mission.id, sendBackText(result, ref, wt.branch))
+      if (m) {
+        toast(`Sent back to ${agent}`)
+        setUpd(null)
+      }
+    } catch (e) {
+      setError(clean(e))
+    }
+  }
 
   const pr = s?.pr
   /** the runs list only means something before the merge */
@@ -259,6 +328,10 @@ export function ShipBar({ mission, wt, visible, stamp, onChanged, onCommit }: Pr
 
       {error && <pre className="ship-error selectable">{error}</pre>}
 
+      {pr?.state !== 'MERGED' && (moved?.behind || upd) ? (
+        <BaseRow moved={moved} upd={upd} live={live} busy={!!busy} agent={getAgent(mission.options.agent).name} onUpdate={() => void updateAndCheck()} onSendBack={(r, ref) => void sendBack(r, ref)} onDismiss={() => setUpd(null)} />
+      ) : null}
+
       {open && canRuns && (
         <ul className="ship-runs" aria-label="Workflow runs" style={{ height: runsHeight }}>
           {cur.runs.length === 0 && <li className="muted ship-run-empty">{loading ? 'Asking GitHub…' : 'No workflow runs on this branch yet. They start when it is pushed, if the repository has workflows.'}</li>}
@@ -307,6 +380,88 @@ export function ShipBar({ mission, wt, visible, stamp, onChanged, onCommit }: Pr
           }}
           onReset={() => setOpen((o) => !o)}
         />
+      )}
+    </div>
+  )
+}
+
+interface BaseRowProps {
+  moved: BaseMoved | null
+  upd: Update | null
+  live: boolean
+  busy: boolean
+  agent: string
+  onUpdate: () => void
+  onSendBack: (r: UpdateResult, ref: string) => void
+  onDismiss: () => void
+}
+
+/** "master has 2 new commits since this branch", the trial merge's conflicts, Update and check and its verdict */
+function BaseRow({ moved, upd, live, busy, agent, onUpdate, onSendBack, onDismiss }: BaseRowProps): React.JSX.Element {
+  const line = moved ? baseMovedLine(moved) : null
+  const running = upd?.phase === 'merging' || upd?.phase === 'checking'
+  const done = upd?.phase === 'done' ? upd : null
+  const verdict = done ? updateVerdict(done.result, done.ref) : null
+  const failed = done ? done.result.checks.filter((c) => !checkPassed(c)) : []
+  return (
+    <div className="ship-base" data-testid="ship-base">
+      {line && moved && (
+        <div className="ship-base-row">
+          <StatusDot signal={baseMovedSignal(moved)} />
+          <span className="ship-base-line" title={moved.commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}`).join('\n')}>
+            {line}
+          </span>
+          {moved.conflicts?.length ? (
+            <span className="ship-base-conflicts" title={moved.conflicts.join('\n')}>
+              · conflicts in {moved.conflicts.slice(0, 3).join(', ')}
+              {moved.conflicts.length > 3 ? ` and ${moved.conflicts.length - 3} more` : ''}
+            </span>
+          ) : moved.conflicts ? (
+            <span className="muted">· merges without conflicts</span>
+          ) : null}
+          <span className="spacer" />
+          {running && <span className="ship-busy muted">{upd.doing}…</span>}
+          <button
+            className="btn sm"
+            disabled={live || busy || running}
+            title={live ? `${agent} is still working in this worktree` : `Merge ${moved.ref} into this branch here (nothing is pushed), then run the project's typecheck and test`}
+            onClick={onUpdate}
+          >
+            {running ? <LoaderCircle size={13} className="spin" /> : <GitMerge size={13} />} Update and check
+          </button>
+        </div>
+      )}
+      {done && verdict && (
+        <div className={`ship-update${verdict.ok ? ' passed' : ' failed'}`} data-testid="ship-update">
+          <div className="ship-base-row">
+            <StatusPill signal={{ tone: verdict.ok ? 'done' : 'error', label: verdict.ok ? 'Passed' : 'Failed', pulse: false }} />
+            <span className="ship-base-line">{verdict.label}</span>
+            <span className="spacer" />
+            {!verdict.ok && (
+              <button className="btn sm" disabled={live} title={live ? `${agent} is still working` : `A follow-up to ${agent} with ${done.result.conflicts.length ? 'the conflicting files' : 'the failing output'}`} onClick={() => onSendBack(done.result, done.ref)}>
+                <Send size={12} /> Send back
+              </button>
+            )}
+            <button className="icon-btn" title="Hide" aria-label="Hide the update result" onClick={onDismiss}>
+              <X size={12} />
+            </button>
+          </div>
+          {done.result.conflicts.length > 0 && <pre className="ship-error selectable">{done.result.conflicts.join('\n')}</pre>}
+          {done.result.checks.map((c) => (
+            <div key={c.name} className="ship-check">
+              <StatusDot signal={{ tone: checkPassed(c) ? 'done' : 'error', label: checkPassed(c) ? 'Passed' : 'Failed', pulse: false }} />
+              <span className="ship-run-name">{c.name}</span>
+              <span className="muted mono ship-run-title" title={c.command}>{c.command}</span>
+              <span className="muted">{checkPassed(c) ? 'passed' : c.timedOut ? 'timed out' : `exit ${c.code ?? '?'}`}</span>
+            </div>
+          ))}
+          {failed.map((c) => (
+            <pre key={c.name} className="ship-error selectable" aria-label={`${c.name} output`}>
+              {tailOutput(c.output) || '(no output)'}
+            </pre>
+          ))}
+          {done.result.skipped.length > 0 && <div className="muted ship-check">No {done.result.skipped.join(' or ')} in this project</div>}
+        </div>
       )}
     </div>
   )

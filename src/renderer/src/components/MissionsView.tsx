@@ -5,6 +5,8 @@ import { Bookmark, ChartGantt, FilePlus2, LayoutGrid, Plus, Rocket, Rows3, Stret
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { isLive, missionMemory, missions, type MissionDraft } from '../state/missions'
 import { withMemory } from '@shared/memory'
+import { applyProfile } from '@shared/profiles'
+import { getProfile } from '../state/profiles'
 import { createStore, useStore } from '../state/store'
 import { updateSettings, workspace } from '../state/workspace'
 import { AgentOptionsFields } from './AgentOptionsFields'
@@ -121,7 +123,11 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   // the id, not the object: a kind file edited while the form is open applies straight away
   const [kindId, setKindId] = useState(() => getKind(was?.kind ?? draft?.kind).id)
   const kind = kinds.find((k) => k.id === kindId) ?? getKind(kindId)
-  const [options, setOptions] = useState<AgentOptions>(() => was?.options ?? withAccess({ agent: workspace.get().defaultAgent }, kind))
+  const [options, setOptions] = useState<AgentOptions>(() => {
+    if (was?.options) return was.options
+    const o = withAccess({ agent: workspace.get().defaultAgent }, kind)
+    return draft?.profile ? applyProfile(o, getProfile(draft.profile)) : o
+  })
   const [isRepo, setIsRepo] = useState(false)
   /** the git check for the folder has answered (until then the folder hint stays quiet) */
   const [checked, setChecked] = useState(false)
@@ -175,7 +181,7 @@ function NewMissionForm({ root: projectRoot, draft, onDone }: { root: string; dr
   const ready = !!prompt.trim() || briefOptional
   const shownTitle = title.trim() || prompt.trim().split('\n')[0].slice(0, 60) || (briefOptional ? 'Map this project' : '')
   /** exactly what the agent receives as its first message (the profile's role goes in separately) */
-  const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria })
+  const sent = renderKind(kind, { title: shownTitle, brief: prompt, criteria, worktree: worktree && isRepo, base })
   // startMission adds the memory line itself; this is only so the preview shows it
   const [memory, setMemory] = useState('')
   useEffect(() => {
@@ -415,7 +421,7 @@ function KindPicker({ kinds, value, onChange, root }: { kinds: MissionKind[]; va
           </select>
           <button type="button" className="btn sm" disabled={!name.trim()} onClick={() => void create()}>Create and edit</button>
           {error && <div className="form-error" role="alert">{error}</div>}
-          <div className="field-hint">A Markdown file: front matter for the defaults, then the prompt template with {'{title}'}, {'{brief}'} and {'{criteria}'}. It opens in your editor.</div>
+          <div className="field-hint">A Markdown file: front matter for the defaults, then the prompt template with {'{title}'}, {'{brief}'}, {'{criteria}'} and {'{sync}'} (merge the base and re-run the checks, worktree missions only). It opens in your editor.</div>
         </div>
       )}
     </div>

@@ -23,12 +23,15 @@ export function startTheme(): void {
     if (!w.ready) return
     const theme = resolveTheme(w.theme, media.matches)
     const zoom = clampZoom(w.uiZoom)
-    if (Number.isNaN(shown.zoom)) shown.zoom = zoom
+    // the first look at the settings only puts right what the window opened with (a reload keeps main's first theme)
+    const first = Number.isNaN(shown.zoom)
+    if (first) shown.zoom = zoom
     if (theme === shown.theme && zoom === shown.zoom) return
     if (theme !== shown.theme) {
       // one cross-fade of the whole window rather than every element's own colour transition
+      // but not at startup: a transition started before the first frame never finishes, and the window stays black
       const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown }
-      if (doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(() => paint(theme))
+      if (!first && doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(() => paint(theme))
       else paint(theme)
     }
     shown = { theme, zoom }

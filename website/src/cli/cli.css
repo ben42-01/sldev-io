@@ -217,7 +217,9 @@
     center / 1px 100% no-repeat;
 }
 
-.cli .tui-side { grid-area: side; display: flex; flex-direction: column; padding-top: 1.6em; }
+.cli .tui-side { grid-area: side; display: flex; flex-direction: column; }
+.cli .tui-side-new { display: flex; gap: 1ch; padding: 0 1ch; height: 1.6em; line-height: 1.6em; margin-bottom: 1.6em; }
+.cli .tui-side-new .dim { margin-left: auto; }
 .cli .tui-side-body { flex: 1; }
 .cli .tui-group + .tui-group { margin-top: 1.6em; }
 .cli .tui-group-head { padding-left: 1ch; }

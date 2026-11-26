@@ -128,5 +128,55 @@ stages:
       title: "Fix CI: {intent}"
       body: "{diagnose.out}"
 `
+  },
+  {
+    slug: 'software-team',
+    text: `name: Software team
+description: The Software team's roles at work. Product owner specs it, implementer builds, reviewer and QA check it side by side, implementer fixes what they found, release manager drafts the PR. You approve the spec and push.
+stages:
+  - id: spec
+    agent: Product owner
+    prompt: |
+      Write a short spec for this change, not board stories: {intent}
+      Goal, scope and non-goals, the files likely to change, acceptance criteria as a checklist, and how to check it.
+      Save it to {out}. Don't change any code.
+    gate: approve
+  - id: build
+    agent: Implementer
+    prompt: |
+      Implement the spec in {spec.out}.
+      Run the project checks and commit your work when they pass.
+  - id: review
+    needs: [build]
+    agent: Reviewer
+    prompt: |
+      Review the changes on this branch since {base} against the spec in {spec.out}.
+      Write your findings and your verdict to {out}. Don't edit any other file.
+  - id: qa
+    needs: [build]
+    agent: QA
+    prompt: |
+      Check the changes on this branch against the acceptance criteria in {spec.out}.
+      Run the project's checks and add tests for behaviour nothing covers yet; commit them.
+      Write each check (command, pass or fail, the failing output) and any product bugs to {out}.
+  - id: fix
+    needs: [review, qa]
+    agent: Implementer
+    prompt: |
+      Fix what the reviewer found in {review.out} and what QA found in {qa.out}.
+      Run the project checks and commit when they pass.
+      Write what you fixed, and what you left and why, to {out}.
+  - id: release
+    agent: Release manager
+    prompt: |
+      Draft the pull request description for this branch: {intent}
+      Read the spec in {spec.out}, the review in {review.out}, the QA report in {qa.out}, the fixes in {fix.out}
+      and the commits since {base}. Write it to {out} as Markdown: what changed and why, how it was checked,
+      and the risks for the reviewer. Don't edit any other file.
+  - id: pr
+    pr:
+      title: "{intent}"
+      body: "{release.out}"
+`
   }
 ]

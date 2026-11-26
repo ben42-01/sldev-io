@@ -9,7 +9,8 @@ import { acceptPass } from '../state/automations'
 import { useStore } from '../state/store'
 import { getAgent } from '../state/agents'
 import { allAgents } from '../lib/agents'
-import { workspace } from '../state/workspace'
+import { setRootFolder, workspace } from '../state/workspace'
+import { basename } from '../lib/paths'
 import { useProfiles } from '../state/profiles'
 import { saveAsEval } from '../state/evals'
 import { openInEditor } from '../lib/actions'
@@ -17,6 +18,7 @@ import { openTerminal } from '../dock/dockApi'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { StatusDot, StatusPill } from './StatusDot'
 import { missionSignal } from '@shared/status'
+import { groupByRole, spentLine, spentTitle, sumSpent, type SpentSum } from '@shared/lead'
 import { removeMissionFlow } from '../lib/removals'
 import { openMissionDetails } from './MissionDetails'
 import { TimeAgo } from './TimeAgo'
@@ -26,7 +28,8 @@ export function MissionStatusPill({ status }: { status: Mission['status'] }): Re
 }
 
 /** `large` for wide boards; `compact` is one row (status, title, agent, time), the rest on hover and in the menu. */
-export function MissionCard({ mission: m, large = false, compact = false }: { mission: Mission; large?: boolean; compact?: boolean }): React.JSX.Element {
+/** `project`: say which project the mission is in (Mission Control's All projects columns). */
+export function MissionCard({ mission: m, large = false, compact = false, project = false }: { mission: Mission; large?: boolean; compact?: boolean; project?: boolean }): React.JSX.Element {
   const hasPanel = useStore(missions, (s) => !!s.panels[m.id])
   const live = isLive(m.status)
   const profileName = useProfiles().find((p) => p.id === m.options.profile)?.name
@@ -103,6 +106,7 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
     <div className={`mission-card ${m.status}${large ? ' large' : ''}`} onDoubleClick={() => focusOrResume(m.id)} onContextMenu={(e) => showContextMenu(e, menu())}>
       <div className="mission-head">
         <MissionStatusPill status={m.status} />
+        {project && <ProjectChip root={m.root} />}
         {m.kind && m.kind.id !== 'build' && <span className="mission-kind">{m.kind.name}</span>}
         <span className="mission-agent">{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}</span>
         <TimeAgo t={m.updatedAt} className="mission-time" />
@@ -115,7 +119,7 @@ export function MissionCard({ mission: m, large = false, compact = false }: { mi
       )}
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}
-      {m.kind?.id === 'lead' && <LeadWorkers lead={m.id} />}
+      {m.kind?.id === 'lead' && <LeadWorkers lead={m} />}
       {/* where it runs and what it changed share a line, so the footer has room for the actions in a narrow column */}
       <div className="mission-where">
         <span className="mission-branch" title={m.worktree?.path ?? m.cwd}>
@@ -240,35 +244,99 @@ export function ago(t: number): string {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-/** A Lead's workers inside its card: who does which part, how it's going, and whether it's merged. */
-function LeadWorkers({ lead }: { lead: string }): React.JSX.Element | null {
+/** A Lead's workers inside its card, as a small org chart: the Lead, then its workers by role, with status, agent and branch. */
+function LeadWorkers({ lead }: { lead: Mission }): React.JSX.Element | null {
   const list = useStore(missions, (s) => s.list)
-  const workers = useMemo(() => {
-    const mine = list.filter((x) => x.delegate?.lead === lead).sort((a, b) => a.createdAt - b.createdAt)
+  const groups = useMemo(() => {
+    const mine = list.filter((x) => x.delegate?.lead === lead.id).sort((a, b) => a.createdAt - b.createdAt)
     // a follow-up stands for its task: show the newest pass of each
     const tasks = mine.filter((x) => !(x.parent?.kind === 'follow-up' && mine.some((y) => y.id === x.parent!.id)))
-    return tasks.map((t) => {
-      let cur = t
-      for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) cur = next
-      return { task: t, cur }
-    })
-  }, [list, lead])
+    return groupByRole(
+      tasks.map((t) => {
+        let cur = t
+        const passes = [t]
+        for (let next = mine.find((y) => y.parent?.id === cur.id); next; next = mine.find((y) => y.parent?.id === cur.id)) passes.push((cur = next))
+        return { task: t, cur, passes, role: t.delegate?.role, startedAt: t.createdAt }
+      })
+    )
+  }, [list, lead.id])
+  const workers = groups.flatMap((g) => g.workers)
+  // what each role took, and the Lead's total: its workers' passes and the Lead itself
+  const total = sumSpent([lead, ...workers.flatMap((w) => w.passes)])
   if (!workers.length) return <div className="lead-workers empty muted small">No workers yet: the Lead is planning.</div>
   const merged = workers.filter((w) => w.task.delegate?.merged).length
   return (
     <div className="lead-workers" aria-label="Workers">
       <div className="lead-workers-head muted small">{workers.length} worker{workers.length === 1 ? '' : 's'}{merged ? ` · ${merged} merged` : ''}</div>
-      {workers.map(({ task, cur }) => {
-        const signal = missionSignal(cur.status)
-        return (
-          <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
-            <StatusDot signal={signal} small />
-            <span className="lead-worker-title">{task.title}</span>
-            <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{cur !== task ? ' · fixing' : ''}</span>
-            {task.delegate?.merged && <span className="lead-merged" title="Merged into the Lead's branch"><GitMerge size={11} /></span>}
-          </button>
-        )
-      })}
+      <div className="lead-org-lead" data-lead={lead.id}>
+        <StatusDot signal={missionSignal(lead.status)} small />
+        <span className="lead-worker-body">
+          <span className="lead-worker-title">Lead</span>
+          <span className="lead-worker-meta">
+            <span className="lead-worker-agent">{getAgent(lead.options.agent).name}</span>
+            <LeadBranch branch={lead.worktree?.branch} />
+          </span>
+          <LeadSpent sum={total} label="Total" />
+        </span>
+      </div>
+      <div className="lead-org">
+        {groups.map((g) => (
+          <div key={g.label} className={`lead-org-role${g.role ? '' : ' none'}`} data-role={g.label}>
+            <div className="lead-org-role-name">
+              {g.label}
+              <span className="lead-org-count">{g.workers.length}</span>
+            </div>
+            <LeadSpent sum={sumSpent(g.workers.flatMap((w) => w.passes))} />
+            {g.workers.map(({ task, cur }) => (
+              <button key={task.id} type="button" className="lead-worker" data-worker={task.id} onClick={() => openMissionDetails(cur.id)} title={`${task.title}${task.delegate?.why ? `\n${getAgent(cur.options.agent).name}: ${task.delegate.why}` : ''}`}>
+                <StatusDot signal={missionSignal(cur.status)} small />
+                <span className="lead-worker-body">
+                  <span className="lead-worker-title">{task.title}</span>
+                  <span className="lead-worker-meta">
+                    <span className="lead-worker-agent">{getAgent(cur.options.agent).name}{cur !== task ? ' · fixing' : ''}</span>
+                    <LeadBranch branch={cur.worktree?.branch ?? task.worktree?.branch} />
+                  </span>
+                </span>
+                {task.delegate?.merged && <span className="lead-merged" title="Merged into the Lead's branch"><GitMerge size={11} /></span>}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
+  )
+}
+
+/** What a role's workers, or the whole Lead, took so far; nothing until one of them has finished. */
+function LeadSpent({ sum, label }: { sum: SpentSum; label?: string }): React.JSX.Element | null {
+  const line = spentLine(sum)
+  if (!line) return null
+  return (
+    <span className={`lead-spent${sum.timeOnly ? ' time-only' : ''}`} title={spentTitle(sum)}>
+      {label && <span className="lead-spent-label">{label}</span>}
+      {line}
+      {/* the total's hover says why; a role says it under its numbers */}
+      {!label && sum.notes.map((n) => <span key={n} className="lead-spent-note">{n}</span>)}
+    </span>
+  )
+}
+
+function LeadBranch({ branch }: { branch?: string }): React.JSX.Element | null {
+  if (!branch) return null
+  return (
+    <span className="lead-branch" title={branch}>
+      <GitBranch size={10} />
+      <span>{branch}</span>
+    </span>
+  )
+}
+
+/** The project a mission works in; a click opens that project. */
+function ProjectChip({ root }: { root: string }): React.JSX.Element {
+  const open = useStore(workspace, (w) => w.rootFolder === root)
+  return (
+    <button type="button" className={`mission-project${open ? ' open' : ''}`} title={open ? `${root} (open)` : `${root}\nClick to switch to this project`} onClick={() => !open && setRootFolder(root)}>
+      {basename(root)}
+    </button>
   )
 }

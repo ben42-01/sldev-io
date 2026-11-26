@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILTIN_KINDS, findKind, kindDraft, parseKindFile, renderKind } from '@shared/missionKinds'
+import { BUILTIN_KINDS, findKind, kindDraft, parseKindFile, renderKind, syncStep } from '@shared/missionKinds'
 import { missionPrompt } from '@shared/missionPrompt'
 
 const kind = (id: string) => findKind(BUILTIN_KINDS, id)
@@ -28,6 +28,28 @@ describe('mission kinds', () => {
     expect(renderKind({ template: 'A\n\n{criteria}\n\nB' }, { title: 't', brief: 'b' })).toBe('A\n\nB\n\nb')
     expect(renderKind({ template: 'Role: auditor.' }, { title: 't', brief: 'check it', criteria: 'no secrets' })).toBe('Role: auditor.\n\ncheck it')
     expect(renderKind({ template: 'T: {title} / {brief}' }, { title: 'x', brief: 'y' })).toBe('T: x / y')
+  })
+
+  it('tells only worktree missions of kinds that change code to merge the base and re-run the checks', () => {
+    const o = { title: 't', brief: 'b' }
+    const inPlace = renderKind(kind('build'), o)
+    expect(inPlace).not.toMatch(/git fetch|\{sync\}/)
+    expect(inPlace.endsWith('Do not commit, push or merge unless the task explicitly asks.')).toBe(true)
+    const wt = renderKind(kind('build'), { ...o, worktree: true, base: 'master' })
+    expect(wt.startsWith(inPlace)).toBe(true)
+    expect(wt.slice(inPlace.length)).toBe(`\n${syncStep('master')}`)
+    expect(syncStep('master')).toMatch(/git fetch.*merge `master`.*resolve any conflicts, re-run the checks and commit the merge/)
+    expect(syncStep('master')).toMatch(/never push/)
+    expect(syncStep()).toContain('the branch this worktree was made from')
+    for (const id of ['investigate', 'lead']) {
+      expect(renderKind(kind(id), o)).not.toMatch(/git fetch|\{sync\}/)
+      expect(renderKind(kind(id), { ...o, worktree: true })).toContain(syncStep())
+    }
+    for (const id of ['research', 'plan', 'review']) expect(renderKind(kind(id), { ...o, worktree: true, base: 'master' })).toBe(renderKind(kind(id), o))
+    // a read-only custom kind that uses {sync} still gets nothing to merge
+    expect(renderKind({ template: 'Go: {brief}\n{sync}', readOnly: true }, { ...o, worktree: true })).toBe('Go: b')
+    expect(renderKind(kind('freeform'), { title: 'x', brief: ' just this ', worktree: true, base: 'master' })).toBe('just this')
+    expect(renderKind(kind('map'), { ...o, worktree: true })).toBe(renderKind(kind('map'), o))
   })
 
   it('falls back to Build for an unknown kind', () => {

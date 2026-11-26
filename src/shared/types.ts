@@ -60,12 +60,16 @@ export interface AppSettings {
   rightPanelTab: RightTab
   /** how Mission Control lays out missions: status columns, a grid of cards, or one row each */
   missionLayout: 'columns' | 'grid' | 'list'
+  /** Mission Control's missions: the open project's, or every project's, grouped by project */
+  missionScope: 'project' | 'all'
   /** mission cards in the right sidebar: full cards or one compact row each */
   missionCards: 'cards' | 'compact'
   /** the review tab: old and new side by side, or one column */
   diffLayout?: 'split' | 'unified'
   /** the Review tab opens on the walkthrough (the review cockpit) or on every file */
   reviewView?: 'walk' | 'files'
+  /** the walkthrough's parts: in review order (risky first, then not asked for, then by size) or by file (default review) */
+  reviewOrder?: 'review' | 'file'
   /** the sidebars hide while a review tab is on screen (default on) */
   reviewFocus?: boolean
   /** width of the Review tab's list (walkthrough parts, changed files), dragged by its edge */
@@ -126,6 +130,8 @@ export interface AgentProfile {
   scope: 'builtin' | 'user' | 'project'
   /** project profiles: the .md file */
   path?: string
+  /** the team template it was installed from (its name), so the UI can group a team's roles */
+  team?: string
 }
 
 export interface RulesState {
@@ -166,6 +172,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   rightPanelVisible: true,
   rightPanelTab: 'overview',
   missionLayout: 'columns',
+  missionScope: 'project',
   missionCards: 'cards',
   terminalFontSize: 13,
   terminalFontFamily:
@@ -254,6 +261,8 @@ export interface StoreFiles {
   board: { items: BoardItem[]; settings: BoardSettings[]; jobs?: StoryJob[] }
   /** eval suites run against agents (src/shared/evals.ts); the eval files themselves live in .sldev/evals */
   evals: { runs: EvalRun[] }
+  /** the Review tab's state for pull requests (a mission keeps its own on the mission), keyed by prReviewKey in src/shared/review.ts */
+  prReviews: { reviews: PrReview[] }
 }
 
 /** a mission written in the New mission form and kept to launch later (Save for later) */
@@ -389,6 +398,17 @@ export interface StatusChange {
   at: number
 }
 
+/** What a finished mission took: the time it ran and, from the agent's own log on this machine, its tokens. */
+export interface MissionSpent {
+  /** time it was running (starting, working, waiting or needing you) */
+  ms: number
+  tokens?: number
+  /** USD at API list prices, for the tokens with a known price */
+  cost?: number
+  /** why there are no tokens: the agent keeps no log sldev reads, or no log was found for this run */
+  noTokens?: string
+}
+
 export interface Mission {
   id: string
   title: string
@@ -435,8 +455,10 @@ export interface Mission {
   factory?: { run: string; node: string }
   /** a Lead mission (kind 'lead'): how many workers it may start, and at once */
   lead?: { maxWorkers: number; parallel: number }
-  /** a worker a Lead started with sldev_delegate; the Lead was told it finished, and merged it */
-  delegate?: { lead: string; reported?: boolean; merged?: boolean; why?: string }
+  /** a worker a Lead started with sldev_delegate (in a profile's role); the Lead was told it finished, and merged it */
+  delegate?: { lead: string; reported?: boolean; merged?: boolean; why?: string; role?: string }
+  /** what a Lead or one of its workers took, measured once it finished (src/shared/lead.ts) */
+  spent?: MissionSpent
   /** an eval attempt's agent or judge: like a factory stage, it reports to its run, not to you */
   eval?: { run: string; attempt: string; judge?: boolean }
   /** a pass of a repeated mission (src/shared/repeat.ts): its automation (app) or loop (CLI), its number, the total (0 = open-ended) */
@@ -447,6 +469,31 @@ export interface Mission {
   review?: ReviewState
   /** a helper of the review cockpit (a walkthrough or a question about another mission): hidden from the boards, no notifications */
   explains?: { mission: string }
+}
+
+/** What the Review tab reviews: a mission's change, or a pull request of the repository at `root`. */
+export type ReviewTarget = { kind: 'mission'; id: string } | { kind: 'pr'; number: number; root: string }
+
+/** A pull request's review state in prReviews.json; `head` is the commit the marks were made on. */
+export interface PrReview {
+  root: string
+  number: number
+  head?: string
+  review: ReviewState
+  updatedAt: number
+}
+
+/** A pull request as the Review tab reads it (gh pr view + gh pr diff). */
+export interface GhPrReview {
+  number: number
+  title: string
+  body: string
+  url: string
+  /** head commit, head branch and the branch it goes into */
+  head: string
+  branch: string
+  base: string
+  diff: string
 }
 
 export interface ReviewState {

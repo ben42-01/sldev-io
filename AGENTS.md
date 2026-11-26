@@ -66,7 +66,7 @@ src/shared/     types.ts shared by all processes (settings, Task, Mission, Agent
                   Research, Plan… templates), failover.ts (usage-limit handoff), context.ts (context parsing, ranking, staleness, prompt lines), screenReport.ts (terminal screen as a report), diagram.ts (import/Prisma/SQL parsers, Files tree, layered and tree layouts, Mermaid export), diagramLangs.ts (per-language import parsers and resolvers over one index), attention.ts (approval prompts on screen), automations.ts (schedules, CI and
                   issue triggers), memory.ts,
                   board.ts (the work board: columns, pick-up order and dependencies, how a card follows its run, story prompts and parsing, PR descriptions, release notes, retro prompts, the board file and its merge), recap.ts (Mission Control's Recap: standup/today/week Markdown from missions, local only),
-                  review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing), gitGraph.ts (the commit graph: log parsing, lane layout, PR numbers),
+                  review.ts (the review cockpit: hunks, noise, risk flags, unused new code, the walkthrough an agent writes over the real diff, its prompts), diff.ts (git diff parsing), prs.ts (open PRs and PR detail from gh's JSON, the PR review worktree's create/reuse/move plan), gitGraph.ts (the commit graph: log parsing, lane layout, PR numbers),
                   gitStats.ts (the GitHub stats panel's activity charts: commits and PRs per local day/week),
                   sldevSkills.ts (sldev's own skills: their SKILL.md texts and versions, and the mission/story drafts agents leave in .sldev/drafts),
                   evals.ts (eval files, checks, judge verdicts, the scoreboard), lead.ts (Lead missions: limits, routing by eval results, what workers and sldev_wait say), repeat.ts (repeat loops: when a pass is over, what stops the loop, what the next pass is told; app and CLI),
@@ -101,7 +101,8 @@ test/           vitest (node env; test/setup.ts stubs window.api)
 cli/            the free, open-source sldev CLI (Apache-2.0, its own package.json, bin `sldev`): daemon.ts owns the
                   ptys (src/main/pty.ts with a headless-screen sink), the hook/MCP server (src/main/hooks.ts in the CLI's own data folder, cli/src/paths.ts)
                   and a Unix socket; tracker.ts is the mission status logic for panes; tui.ts the tabbed view (top tabs, grouped sidebar, popups; render.ts draws it);
-                  loops.ts the repeat loops (`sldev new --repeat`); briefs.ts the CLI's project folder `.sldev-cli/` (briefs launched by `sldev launch`/Ctrl-b b, project kinds in `kinds/`; the app never reads it, the CLI never touches `.sldev/drafts`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; skills.ts the CLI's own skills (sldev-conductor: an agent in an `--allow-spawn` pane runs others and merges their branches), installed by `sldev skills install` next to the app's; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
+                  loops.ts the repeat loops (`sldev new --repeat`); runtimes.ts the project's runtimes (`.sldev-cli/runtimes.json` plus src/main/runtimes.ts's detected scripts; started as a shell
+                  tab with the command typed in once its prompt is up, never again on restore: `sldev runtime`, Ctrl-b r); briefs.ts the CLI's project folder `.sldev-cli/` (briefs launched by `sldev launch`/Ctrl-b b, project kinds in `kinds/`; the app never reads it, the CLI never touches `.sldev/drafts`); workflows.ts (gh runs), editor.ts (sldev open), clean.ts; skills.ts the CLI's own skills (sldev-conductor: an agent in an `--allow-spawn` pane runs others and merges their branches), installed by `sldev skills install` next to the app's; repo.ts and usage.ts the rules, memory, recall and usage commands. Tests in cli/test (run by npm test)
 scripts/e2e/    Electron harness, fake agent CLIs (fakebin/), scenarios/
 ```
 
@@ -195,6 +196,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   `eval`): print mode with the unattended mode, told to write one file under the project's `.sldev/runs` and change nothing else,
   kept off the missions lists and Recap, no notifications or failover. Send back is one follow-up to the mission's own agent; nothing
   is committed or pushed.
+  The tab reviews a `ReviewTarget` (a mission, or a PR: `{ kind: 'pr', number, root }`), resolved in one place,
+  `state/reviewTargets.ts` (diff, folder, base, where the state lives: on the mission, or `prReviews.json` with the PR's head);
+  components get a `ReviewSource` and never check the kind. Old layouts with only `missionId` still open.
 - **Ship bar** (`src/shared/ship.ts`, `components/ShipBar.tsx`, the Review tab of a worktree mission): checks come from the branch's
   Actions runs (`gh run list`), not `statusCheckRollup`, which fine-grained tokens can't read. GitHub is asked only while the tab is on
   screen (15 s while a run is going, 60 s otherwise). Push, PR, re-run and merge happen only on a click; merging is `gh pr merge
@@ -232,7 +236,7 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Shell strings (`command: string`) are for user-typed runtime/task commands; on Windows they run in cmd.exe,
   except a command starting with a `.ps1`, which goes to PowerShell (cmd.exe would open it in Notepad).
 - **The CLI** (`cli/`) is open source: it may import only `src/shared/*` and the Electron-free `src/main/` modules it
-  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills), never the UI.
+  already uses (pty, launch, hooks, mcp, git, github, editors, rules, memory, context, missionKinds, sldevSkills, runtimes), never the UI.
   Keep those modules free of `electron` imports (they take a data dir or a sink instead). The client checks the
   daemon's version on connect (`connect` in `cli/src/client.ts`): a daemon left by an older sldev is replaced when nothing
   runs in it, and the daemon answers every command, an unknown one with an error, because a silent one hung `sldev` after

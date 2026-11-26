@@ -34,18 +34,30 @@ export interface Layout {
 }
 
 export const SIDEBAR_W = 28
+/** the narrowest and widest a dragged sidebar gets */
+export const SIDEBAR_MIN_W = 18
+export const SIDEBAR_MAX_W = 60
 /** the sidebar is worth its 29 columns only when the pane keeps a usable 70-plus beside it */
 export const SIDEBAR_MIN_COLS = 100
+/** the columns a pane keeps beside a widened sidebar */
+const PANE_MIN_W = 70
 
-/** The sidebar goes away on narrow terminals; a split needs room for two usable panes. */
-export function layout(cols: number, rows: number, split: boolean): Layout {
+/** A sidebar width as asked for (dragging its edge), held between its limits and the room the pane needs. */
+export function sidebarWidth(cols: number, want = SIDEBAR_W): number {
+  const w = Math.round(Number.isFinite(want) ? want : SIDEBAR_W)
+  return Math.max(SIDEBAR_MIN_W, Math.min(w, SIDEBAR_MAX_W, cols - PANE_MIN_W - 1))
+}
+
+/** The sidebar goes away on narrow terminals; a split needs room for two usable panes. `sideW`: a dragged width. */
+export function layout(cols: number, rows: number, split: boolean, sideW = SIDEBAR_W): Layout {
   cols = Math.max(1, cols)
   rows = Math.max(3, rows)
   const status: Rect = { x: 0, y: rows - 1, w: cols, h: 1 }
   const side = cols >= SIDEBAR_MIN_COLS
-  const sidebar = side ? { x: 0, y: 2, w: SIDEBAR_W, h: Math.max(0, rows - 3) } : null
-  const brand = side ? { x: 0, y: 0, w: SIDEBAR_W, h: 1 } : null
-  const x = side ? SIDEBAR_W + 1 : 0
+  const sw = sidebarWidth(cols, sideW)
+  const sidebar = side ? { x: 0, y: 2, w: sw, h: Math.max(0, rows - 3) } : null
+  const brand = side ? { x: 0, y: 0, w: sw, h: 1 } : null
+  const x = side ? sw + 1 : 0
   const w = cols - x
   const tabs: Rect = { x, y: 0, w, h: 1 }
   const h = rows - 2
@@ -338,10 +350,13 @@ export interface Tab {
 
 const TAB_TITLE_MAX = 22
 
+/** the close button the tab in front ends with */
+const CLOSE = '× '
+
 /** The plain text of tab `i` (1-based number, its title cut to `max` columns); the marker is its second character. */
 function tabText(t: Tab, i: number, max: number): string {
   const title = width(t.title) > max ? fit(t.title, Math.max(1, max - 1)).trimEnd() + '…' : t.title
-  return ` ${t.glyph ?? '●'} ${i + 1} ${title} `
+  return ` ${t.glyph ?? '●'} ${i + 1} ${title} ${t.active ? CLOSE : ''}`
 }
 
 /**
@@ -367,6 +382,8 @@ export interface TabSpan {
   index: number
   from: number
   to: number
+  /** the × that closes it (the tab in front only, when it wasn't cut off) */
+  close?: { from: number; to: number }
 }
 
 export interface TabBar {
@@ -407,15 +424,18 @@ export function tabBarLayout(tabs: Tab[], w: number): TabBar {
     if (!text.trim()) break
     const style = t.active ? BOLD : t.shown ? '' : DIM
     const color = `\x1b[${t.tone === 'attention' || t.tone === 'error' ? '1;' : ''}${TONE_SGR[t.tone]}m`
-    const tabText = style + text[0] + RESET + color + text.slice(1, 2) + RESET + style + text.slice(2) + RESET
+    const closes = t.active && text.endsWith(CLOSE)
+    const body = closes ? text.slice(0, -CLOSE.length) : text
+    const tabText = style + body[0] + RESET + color + body.slice(1, 2) + RESET + style + body.slice(2) + RESET + (closes ? DIM + CLOSE + RESET : '')
     // the tab in front is lifted onto the raised tone, like the app's active tab
     out += t.active ? onFill(LIFT, tabText) : tabText
-    spans.push({ index: i, from: used, to: used + width(text) })
+    const end = used + width(text)
+    spans.push({ index: i, from: used, to: end, ...(closes ? { close: { from: end - CLOSE.length, to: end } } : {}) })
     used += width(text)
   }
   out += ' '.repeat(Math.max(0, room - used - (clipped ? 1 : 0)))
   if (clipped) out += DIM + (end < tabs.length ? '›' : ' ') + RESET
-  if (plusW) out += `${DIM}${PLUS}${RESET}`
+  if (plusW) out += `${ACCENT}${PLUS}${RESET}`
   return { text: onFill(SURFACE, out), spans, plus: plusW ? { from: room, to: w } : null }
 }
 
@@ -477,6 +497,14 @@ export interface Sidebar {
   lines: string[]
   /** the pane a row belongs to, for clicks */
   hits: Array<string | null>
+  /** the "+ New tab" row, for clicks (null when the sidebar has no room for it) */
+  plus: number | null
+  /** the rows of the card saying a newer sldev is out, [from, to): a click on them updates */
+  update: { from: number; to: number } | null
+  /** the row of the footer's rule, where the sidebar's edge gets a ┤ */
+  rule: number | null
+  /** the project a heading row is for: a click opens New tab there */
+  projects: Array<string | null>
 }
 
 export interface SidebarInput {
@@ -489,6 +517,8 @@ export interface SidebarInput {
   loops?: LoopInfo[]
   frame?: number
   home?: string
+  /** a newer sldev on npm */
+  update?: string
 }
 
 /**
@@ -501,11 +531,9 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
   const { order, active, shown, frame = 0, home = '' } = input
   const byId = new Map(input.panes.map((p) => [p.id, p]))
   const panes = order.flatMap((id) => byId.get(id) ?? [])
-  const rows: Array<{ text: string; hit: string | null; focus?: boolean }> = []
-  const push = (text: string, hit: string | null = null, focus = false): void => void rows.push({ text, hit, focus })
+  const rows: Array<{ text: string; hit: string | null; focus?: boolean; project?: string }> = []
+  const push = (text: string, hit: string | null = null, focus = false, project?: string): void => void rows.push({ text, hit, focus, project })
 
-  // a row of air under the brand line
-  push('')
   // groups in the order their first tab comes
   const groups = new Map<string, PaneInfo[]>()
   for (const p of panes) {
@@ -522,8 +550,9 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     const tone = rollup(list)
     const count = String(list.length)
     // like the app's labels: the project in capitals, quiet, with its most urgent state and its count
-    const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 3)
-    push(`${BOLD}${DIM}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET}`)
+    // and a + that opens New tab in it
+    const name = fit(` ${basename(root).toUpperCase()}`, w - count.length - 5)
+    push(`${BOLD}${DIM}${name}${RESET} \x1b[${TONE_SGR[tone]}m${tone === 'neutral' ? ' ' : '●'}${RESET} ${DIM}${count}${RESET} ${ACCENT}+${RESET}`, null, false, root)
     // agents first, then shells, each in tab order
     for (const { pane: p, child } of paneTree([...list.filter((x) => !x.shell), ...list.filter((x) => x.shell)])) {
       const n = order.indexOf(p.id) + 1
@@ -533,14 +562,15 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
       const tree = child ? `${DIM}└${RESET}` : ''
       const title = ellipsis(p.title, w - 5 - num.length - (child ? 1 : 0))
       push(`${bar} ${tree}${marker(p, frame)} ${DIM}${num}${RESET} ${focus ? BOLD : ''}${title}${RESET}`, p.id, focus)
-      const sub = p.shell ? tilde(p.cwd, home) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
+      // a runtime's tab says what it ran, a plain shell where it is
+      const sub = p.shell ? (p.command ? `$ ${p.command}` : tilde(p.cwd, home)) : [p.agentName, shortState(p), p.worktree?.branch].filter(Boolean).join(' · ')
       // the diff stat, only the parts that aren't zero
       const ins = !p.shell && p.stats?.insertions ? `+${p.stats.insertions}` : ''
       const del = !p.shell && p.stats?.deletions ? `-${p.stats.deletions}` : ''
       const stat = [ins, del].filter(Boolean).join(' ')
       const subW = w - 4 - (stat ? stat.length + 1 : 0)
       const statText = stat ? ' ' + [ins && `\x1b[32m${ins}${RESET}`, del && `\x1b[31m${del}${RESET}`].filter(Boolean).join(' ') : ''
-      push(`${bar}   ${DIM}${p.shell ? tailFit(sub, subW) : ellipsis(sub, subW)}${RESET}${statText}`, p.id, focus)
+      push(`${bar}   ${DIM}${p.shell && !p.command ? tailFit(sub, subW) : ellipsis(sub, subW)}${RESET}${statText}`, p.id, focus)
     }
   }
 
@@ -564,27 +594,62 @@ export function sidebar(input: SidebarInput, w: number, h: number): Sidebar {
     foot.push(`   ${DIM}${fit(l.label, w - 3)}${RESET}`)
   }
   if (foot.length) foot.unshift(RULE + '─'.repeat(w) + RESET)
+  // a newer sldev: one card at the very bottom, its own fill and no lines of its own, with a button that updates
+  const card = input.update ? updateCard(input.update, w) : []
 
+  // the first row, under the brand line, opens the New tab popup; it stays put while the tabs scroll
+  const head = h >= 4 ? [` ${ACCENT}+${RESET} ${fit('New tab', Math.max(0, w - 8))}${DIM}^b c${RESET} `, ''] : []
   // rows that don't fit scroll so the one in focus stays in view; the footer goes first when it's tight
-  const footer = foot.length && h - foot.length >= 6 ? foot : []
-  const room = Math.max(0, h - footer.length - (footer.length ? 1 : 0))
+  const fits = (n: number): boolean => h - head.length - n >= 6
+  const cards = card.length && fits(card.length) ? card : []
+  const footer = [...(foot.length && fits(foot.length + cards.length) ? foot : []), ...cards]
+  const room = Math.max(0, h - head.length - footer.length - (footer.length ? 1 : 0))
   const focusRow = rows.findIndex((r) => r.hit === active)
   const start = rows.length <= room ? 0 : Math.max(0, Math.min(focusRow - Math.floor(room / 2), rows.length - room))
   const body = rows.slice(start, start + room)
   const lines: string[] = []
   const hits: Array<string | null> = []
-  for (let i = 0; i < h; i++) {
-    const fromFoot = i - (h - footer.length)
+  const projects: Array<string | null> = []
+  for (const line of head) {
+    lines.push(onFill(SURFACE, pad(line, w)))
+    hits.push(null)
+    projects.push(null)
+  }
+  for (let i = 0; i < h - head.length; i++) {
+    const fromFoot = i - (h - head.length - footer.length)
     if (fromFoot >= 0) {
-      lines.push(onFill(SURFACE, pad(footer[fromFoot], w)))
+      lines.push(onFill(fromFoot >= footer.length - cards.length ? LIFT : SURFACE, pad(footer[fromFoot], w)))
       hits.push(null)
+      projects.push(null)
     } else {
       // the tab in focus: both its rows on the raised tone, beside the accent bar
       lines.push(onFill(body[i]?.focus ? LIFT : SURFACE, pad(body[i]?.text ?? '', w)))
       hits.push(body[i]?.hit ?? null)
+      projects.push(body[i]?.project ?? null)
     }
   }
-  return { lines, hits }
+  const footTop = h - footer.length
+  return {
+    lines,
+    hits,
+    projects,
+    plus: head.length ? 0 : null,
+    update: cards.length ? { from: h - cards.length, to: h } : null,
+    rule: footer.length > cards.length ? footTop : null
+  }
+}
+
+/** the update button's label, also what a test clicks */
+export const UPDATE_BUTTON = 'Update now'
+
+/** The update card's two rows: what's out, and a button (a chip on the muted tone) with its key. */
+function updateCard(version: string, w: number): string[] {
+  const bar = gradient('▌', 0, 0)
+  const title = ellipsis(`sldev ${version} is out`, Math.max(0, w - 4))
+  const key = '^b u'
+  const button = ` ${UPDATE_BUTTON} `
+  const gap = Math.max(1, w - 3 - button.length - key.length - 1)
+  return [`${bar} ${ACCENT}↑${RESET} ${BOLD}${title}${RESET}`, `${bar} ${MUTED}${BOLD}${button}${RESET}${' '.repeat(gap)}${DIM}${key}${RESET}`]
 }
 
 /** a pane's state in a word or two, for the sidebar's narrow second line */
@@ -651,17 +716,40 @@ export function box(x: number, y: number, w: number, h: number, body: string[], 
   return s
 }
 
-/** A box with rounded corners and a title, `w` wide, centred in `r`; returns its rows positioned with at(). */
-export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, footer = ''): string {
+/** The first row a popup shows: rows that don't fit scroll so the one picked stays in view. */
+export function popupStart(count: number, shown: number, sel: number): number {
+  if (count <= shown || sel < 0) return 0
+  return Math.max(0, Math.min(sel - Math.floor(shown / 2), count - shown))
+}
+
+/** Where popup() puts its box in `r`, and how many of its rows fit; null when there's no room for it. */
+export function popupRect(r: Rect, title: string, rows: PopupRow[], footer = ''): (Rect & { shown: number }) | null {
   const w = Math.min(r.w - 2, 64, Math.max(36, ...rows.map((x) => width(x.text) + width(x.key ?? '') + width(x.note ?? '') + 10), width(title) + 6, width(footer) + 4))
   const h = Math.min(r.h - 1, rows.length + 2 + (footer ? 2 : 0))
-  if (w < 10 || h < 3) return ''
-  const x = r.x + Math.floor((r.w - w) / 2)
-  const y = r.y + Math.max(1, Math.floor((r.h - h) / 3))
+  if (w < 10 || h < 3) return null
+  return { x: r.x + Math.floor((r.w - w) / 2), y: r.y + Math.max(1, Math.floor((r.h - h) / 3)), w, h, shown: Math.max(0, Math.min(rows.length, h - 2 - (footer ? 2 : 0))) }
+}
+
+/** The popup row under a click: its index, -1 inside the box but on no row, null outside the box. */
+export function popupHit(r: Rect, title: string, rows: PopupRow[], footer: string, x: number, y: number, sel = -1): number | null {
+  const b = popupRect(r, title, rows, footer)
+  if (!b || x < b.x || x >= b.x + b.w || y < b.y || y >= b.y + b.h) return null
+  const row = y - b.y - 1
+  const i = popupStart(rows.length, b.shown, sel) + row
+  return x > b.x && x < b.x + b.w - 1 && row >= 0 && row < b.shown && rows[i] && !rows[i].head ? i : -1
+}
+
+/** A box with rounded corners and a title, `w` wide, centred in `r`; returns its rows positioned with at(). */
+export function popup(r: Rect, title: string, rows: PopupRow[], sel: number, footer = ''): string {
+  const b = popupRect(r, title, rows, footer)
+  if (!b) return ''
+  const { x, y, w, h } = b
   const keyW = Math.max(0, ...rows.map((x) => width(x.key ?? '')))
   const inner = w - 2
   const lines: string[] = []
-  rows.slice(0, h - 2 - (footer ? 2 : 0)).forEach((row, i) => {
+  const start = popupStart(rows.length, b.shown, sel)
+  rows.slice(start, start + b.shown).forEach((row, j) => {
+    const i = start + j
     // a heading like the app's field labels: capitals, quiet
     if (row.head) return void lines.push(' ' + BOLD + DIM + fit(painted() ? row.text.toUpperCase() : row.text, inner - 1) + RESET)
     const focus = i === sel

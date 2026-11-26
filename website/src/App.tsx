@@ -62,7 +62,7 @@ export function App() {
                 </div>
                 <h3>{site.name}</h3>
                 <p>
-                  A workspace for a team of agents: a Lead that delegates in parallel, a board they pick work from, evals on your own code,
+                  A workspace for a team of agents in the roles of a software team: a Lead that delegates to them in parallel, a board they pick work from, evals on your own code,
                   and review by purpose before anything ships. Not an IDE.
                 </p>
                 <div className="product-cta">
