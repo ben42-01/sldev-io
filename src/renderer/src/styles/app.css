@@ -9321,6 +9321,87 @@ button.cg-pr:focus-visible {
 .mc-elsewhere span:not(.sdot) {
   flex: 1;
 }
+
+/* review cockpit: blast radius (callers the change didn't touch) */
+.rc-blast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  max-width: 90ch;
+}
+.rc-blast .field-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rc-blast-name {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font-size: 12.5px;
+}
+.rc-blast-name.risky {
+  border-left: 2px solid var(--status-attention);
+}
+.rc-blast-name > summary {
+  padding: 7px 12px;
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+.rc-blast-name > summary code {
+  color: var(--fg);
+}
+.rc-blast-kind {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--status-attention);
+}
+.rc-blast-name ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 6px;
+}
+.rc-blast-name p {
+  margin: 0;
+  padding: 0 12px 8px;
+}
+.rc-blast-use {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: 11.5px;
+  text-align: left;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.rc-blast-use:hover {
+  background: var(--tint);
+  color: var(--fg);
+}
+.rc-blast-use:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.rc-blast-at {
+  flex-shrink: 0;
+  color: var(--fg);
+}
+.rc-blast-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .rc-order {
   align-self: stretch;
   display: flex;

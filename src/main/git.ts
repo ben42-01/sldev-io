@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
 import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
+import { parseGrep, type Use } from '@shared/review'
 import type { BaseMoved } from '@shared/ship'
 import { checkPrNumber, planPrWorktree, prFolder, prRef, type PrWorktree } from '@shared/prs'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
@@ -310,6 +311,30 @@ export async function pushAndCreatePr(cwd: string, branch: string, base: string,
 /** Pushes new commits to a branch that already has a pull request. */
 export async function push(cwd: string, branch: string): Promise<void> {
   await ok(['push', 'origin', branch], cwd)
+}
+
+const SKIP_DIRS = ['node_modules', 'dist', 'build', 'out', 'vendor', 'coverage', '.next', 'target', '__pycache__']
+
+/**
+ * Where names are used in the checkout, for the review's blast radius: `git grep -w` over tracked and
+ * untracked (not ignored) files, local only. Capped (names, output, time) so a huge repo can't stall the
+ * review; `capped` says the list is cut short.
+ */
+export function uses(cwd: string, names: string[]): Promise<{ uses: Use[]; capped: boolean }> {
+  const words = [...new Set(names.filter((n) => /^[A-Za-z_$][\w$]{2,80}$/.test(n)))].slice(0, 25)
+  if (!words.length) return Promise.resolve({ uses: [], capped: false })
+  const args = ['grep', '-z', '-n', '-I', '-w', '-F', '--untracked', '--no-color', ...words.flatMap((w) => ['-e', w]), '--', '.', ...SKIP_DIRS.map((d) => `:(exclude,glob)**/${d}/**`)]
+  const MAX = 2000
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd, timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err, stdout) => {
+      const e = err as { code?: string | number; killed?: boolean } | null
+      // 1 is "nothing found"; a timeout or too much output keeps what came so far
+      const cut = !!e && (e.killed || e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
+      if (e && !cut && e.code !== 1) return resolve({ uses: [], capped: false })
+      const found = parseGrep(String(stdout ?? ''), MAX)
+      resolve({ uses: found, capped: cut || found.length >= MAX })
+    })
+  })
 }
 
 export async function listFiles(cwd: string): Promise<string[]> {
