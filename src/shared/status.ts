@@ -2,6 +2,7 @@ import type { MissionStatus } from './types'
 import type { NodeStatus, RunStatus } from './factory'
 import type { ContextStale } from './context'
 import type { PassOutcome } from './repeat'
+import type { PrChecks } from './prs'
 
 /**
  * Every state in the app maps through here to one of six tones, so a colour always means the same
@@ -59,6 +60,14 @@ export function ghRunSignal(r: { status: string; conclusion: string }): Signal {
   if (r.conclusion === 'success') return sig('done', 'Passed')
   if (r.conclusion === 'cancelled' || r.conclusion === 'skipped' || r.conclusion === 'neutral') return sig('neutral', r.conclusion === 'skipped' ? 'Skipped' : 'Cancelled')
   return sig('error', 'Failed')
+}
+
+/** The CI runs on a pull request's head commit (the review list's dot). */
+export function prChecksSignal(c: PrChecks): Signal {
+  if (c === 'passed') return sig('done', 'Checks passed')
+  if (c === 'failed') return sig('error', 'Checks failed')
+  if (c === 'running') return sig('working', 'Checks running', true)
+  return sig('neutral', 'No checks on the head commit')
 }
 
 /** Ctrl+C, not a crash: the user stopped it. */

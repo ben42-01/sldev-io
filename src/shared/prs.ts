@@ -1,10 +1,16 @@
 // A repository's open pull requests, read through the user's gh, and the detached worktree a PR's head is
 // checked out in for review. Pure: parsing gh's JSON and deciding what to do with an existing worktree.
 
+import { currentRuns, summarizeChecks, type ShipRun } from './ship'
+
 /** How many open PRs are asked for: enough for a review list, never a whole busy repository. */
 export const OPEN_PR_LIMIT = 50
 
 export const OPEN_PR_FIELDS = 'number,title,author,headRefName,headRefOid,baseRefName,isDraft,additions,deletions,changedFiles,reviewDecision,reviewRequests,createdAt,updatedAt,body,url'
+/** The runs the list matches to PR heads: one read-only `gh run list` for the whole repository, never statusCheckRollup. */
+export const PR_RUN_LIMIT = 100
+export const PR_RUN_FIELDS = 'databaseId,workflowName,status,conclusion,headSha,createdAt,event'
+
 export const PR_DETAIL_FIELDS = `${OPEN_PR_FIELDS},closingIssuesReferences`
 
 export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null
@@ -29,7 +35,12 @@ export interface OpenPr {
   updatedAt: string
   body: string
   url: string
+  /** the CI runs on its head commit; absent when they couldn't be read */
+  checks?: PrChecks
 }
+
+/** What the Actions runs on a PR's head commit say: a failure wins, then anything still going, then all passed. */
+export type PrChecks = 'passed' | 'failed' | 'running' | 'none'
 
 export interface LinkedIssue {
   number: number
@@ -184,3 +195,31 @@ export function reviewOrder(prs: OpenPr[], me: string | undefined, filter: PrFil
 
 /** The Review tab of PR `n`: its title as the tab's. */
 export const prTabTitle = (pr: { number: number; title: string }): string => `#${pr.number} ${pr.title}`.trim()
+
+// ── CI on each PR's head ─────────────────────────────────────────────
+
+/** `gh run list --json …` → runs in the ship bar's shape; anything that isn't one is dropped. */
+export function parsePrRuns(json: unknown): ShipRun[] {
+  if (!Array.isArray(json)) return []
+  return json.flatMap((v): ShipRun[] => {
+    const r = obj(v)
+    const headSha = str(r.headSha)
+    if (!headSha) return []
+    return [{ id: num(r.databaseId), workflow: str(r.workflowName), title: '', status: str(r.status), conclusion: str(r.conclusion), event: str(r.event), url: '', createdAt: str(r.createdAt), headSha }]
+  })
+}
+
+/**
+ * The checks of a PR's head: only runs on that exact commit count (an older commit's green run says nothing about
+ * the new one), the newest of each workflow, summed up as the ship bar does.
+ */
+export function prChecks(runs: ShipRun[], headSha: string): PrChecks {
+  if (!headSha) return 'none'
+  const on = runs.filter((r) => r.headSha === headSha)
+  if (!on.length) return 'none'
+  const c = summarizeChecks(currentRuns(on, headSha).runs)
+  return c.failed ? 'failed' : c.pending ? 'running' : 'passed'
+}
+
+/** Each PR with the checks of its head commit. */
+export const withChecks = (prs: OpenPr[], runs: ShipRun[]): OpenPr[] => prs.map((p) => ({ ...p, checks: prChecks(runs, p.headSha) }))

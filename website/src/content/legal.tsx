@@ -90,7 +90,8 @@ const privacy: LegalPage = {
       </p>
       <p>
         Reviewing a pull request reads your repository's open pull requests (title, author, size, description, linked issues and who
-        is asked to review them) and your GitHub login through your GitHub CLI: when you open the Pull requests section of the
+        is asked to review them), your repository's latest 100 workflow runs (to show whether each pull request's checks pass on its
+        latest commit) and your GitHub login through your GitHub CLI: when you open the Pull requests section of the
         Workflows tab or the "Review a pull request" command, every minute while that section stays open, and when you refresh it;
         never while the section is closed or the window is hidden. Opening one runs git fetch for that pull request's commits
         from your remote and checks them out in a separate folder of its own, and reads the issues it closes for their acceptance

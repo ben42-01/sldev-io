@@ -5,7 +5,7 @@ import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, reviewPayload, type MergeMethod, type ReviewPayload, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
-import { checkPrNumber, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, PR_DETAIL_FIELDS, type OpenPrList, type PrDetail } from '@shared/prs'
+import { checkPrNumber, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, parsePrRuns, PR_DETAIL_FIELDS, PR_RUN_FIELDS, PR_RUN_LIMIT, withChecks, type OpenPrList, type PrDetail } from '@shared/prs'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -405,8 +405,14 @@ export async function openPrs(cwd: string): Promise<OpenPrList> {
   const problem = await ghProblem(cwd)
   if (problem) return { prs: [], error: problem }
   try {
-    const [json, me] = await Promise.all([ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, []), viewer(cwd)])
-    return { prs: parseOpenPrs(json), ...(me ? { me } : {}) }
+    const [json, me, runs] = await Promise.all([
+      ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, []),
+      viewer(cwd),
+      // CI on each head: a repo without Actions (or a token that can't read them) still lists its PRs, without dots
+      ghJson<unknown>(['run', 'list', '--limit', String(PR_RUN_LIMIT), '--json', PR_RUN_FIELDS], cwd, []).then(parsePrRuns, () => null)
+    ])
+    const prs = parseOpenPrs(json)
+    return { prs: runs ? withChecks(prs, runs) : prs, ...(me ? { me } : {}) }
   } catch (e) {
     return { prs: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
   }

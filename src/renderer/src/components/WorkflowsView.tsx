@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { reviewOrder, waitingForMe, type OpenPr } from '@shared/prs'
-import { prReviewSignal } from '@shared/status'
+import { prChecksSignal, prReviewSignal } from '@shared/status'
 import type { GhPr, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput } from '@shared/types'
 import { ChevronRight, CircleCheck, CircleDashed, CircleX, ExternalLink, GitPullRequest, Loader, Play, RefreshCw, RotateCw, ScrollText, Square, Eye, CircleSlash } from 'lucide-react'
 import { openTerminal } from '../dock/dockApi'
@@ -12,7 +12,7 @@ import { ago } from './MissionCard'
 import { ViewShell } from './RuntimesView'
 import { showNotice } from './Modal'
 import { Empty, ErrorBanner, Loading } from './States'
-import { StatusPill } from './StatusDot'
+import { StatusDot, StatusPill } from './StatusDot'
 import { loadPullRequests, pullRequests } from '../state/pullRequests'
 import { openPrReview } from '../state/reviewTargets'
 
@@ -223,6 +223,7 @@ function PrRow({ pr: p, root, asksMe }: { pr: OpenPr; root: string; asksMe: bool
     >
       <div className="rt-main">
         <div className="rt-name" title={p.title}>
+          {p.checks && <span className="pr-checks" data-checks={p.checks}><StatusDot signal={prChecksSignal(p.checks)} /></span>}
           <span className="pr-num">#{p.number}</span> {p.title}
         </div>
         <div className="rt-meta">

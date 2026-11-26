@@ -3336,6 +3336,11 @@ body.resizing-y * {
 .pr-row .spill {
   flex-shrink: 0;
 }
+.pr-checks {
+  display: inline-flex;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
 .pr-num {
   color: var(--fg-muted);
   font-family: var(--font-mono);

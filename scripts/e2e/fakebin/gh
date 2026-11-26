@@ -63,6 +63,12 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
         echo '[{"databaseId":701,"displayTitle":"Rate limit the API","workflowName":"CI","status":"in_progress","conclusion":"","headBranch":"main","event":"push","createdAt":"2026-11-13T10:00:00Z","url":"https://github.com/acme/shop/actions/runs/701","number":88},{"databaseId":700,"displayTitle":"Fix flaky login test","workflowName":"CI","status":"completed","conclusion":"failure","headBranch":"main","event":"push","createdAt":"2026-11-12T16:00:00Z","url":"https://github.com/acme/shop/actions/runs/700","number":87},{"databaseId":699,"displayTitle":"Bump deps","workflowName":"CI","status":"completed","conclusion":"success","headBranch":"main","event":"push","createdAt":"2026-11-12T09:00:00Z","url":"https://github.com/acme/shop/actions/runs/699","number":86}]'
         exit 0 ;;
       esac
+      # the Pull requests list matches runs to PR heads: #128 failed on its head (an older commit of it passed, which
+      # doesn't count), #131's only run is on a commit that isn't its head, so it has none
+      case " $* " in *headSha*)
+        echo "[{\"databaseId\":811,\"workflowName\":\"CI\",\"status\":\"completed\",\"conclusion\":\"failure\",\"headSha\":\"${FAKE_GH_PR_128_HEAD:-}\",\"createdAt\":\"2026-11-21T10:00:00Z\",\"event\":\"pull_request\"},{\"databaseId\":810,\"workflowName\":\"CI\",\"status\":\"completed\",\"conclusion\":\"success\",\"headSha\":\"0000000000000000000000000000000000000128\",\"createdAt\":\"2026-11-20T10:00:00Z\",\"event\":\"pull_request\"},{\"databaseId\":812,\"workflowName\":\"CI\",\"status\":\"completed\",\"conclusion\":\"success\",\"headSha\":\"0000000000000000000000000000000000000131\",\"createdAt\":\"2026-11-22T10:00:00Z\",\"event\":\"pull_request\"}]"
+        exit 0 ;;
+      esac
       printf '['
       for i in $(seq 1 29); do printf '{"databaseId":%d,"displayTitle":"Commit %d","workflowName":"CI","status":"completed","conclusion":"%s","headBranch":"main","event":"push","createdAt":"2026-01-02T10:00:00Z","url":"https://github.com/acme/shop/actions/runs/%d","number":%d},' "$((500 + i))" "$i" "$([ $((i % 5)) -eq 0 ] && echo failure || echo success)" "$((500 + i))" "$i"; done
       echo '{"databaseId":999,"displayTitle":"Deploy to staging","workflowName":"Deploy","status":"in_progress","conclusion":"","headBranch":"main","event":"workflow_dispatch","createdAt":"2026-01-02T11:00:00Z","url":"https://github.com/acme/shop/actions/runs/999","number":212}]'
