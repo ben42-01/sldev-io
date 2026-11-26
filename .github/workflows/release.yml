@@ -16,6 +16,9 @@ on:
 
 permissions:
   contents: write
+  # build provenance attestations for the installers (gh attestation verify <file> --repo <this repo>)
+  id-token: write
+  attestations: write
 
 env:
   KEEP_DAYS: 3
@@ -72,6 +75,10 @@ jobs:
           Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
           right-click the app and choose **Open** the first time.
 
+          To check a download came from this repository's build: compare it with \`SHA256SUMS\`
+          (\`sha256sum -c SHA256SUMS --ignore-missing\`), or verify its build attestation with
+          \`gh attestation verify <file> --repo ${{ github.repository }}\`. install.sh checks the checksum itself.
+
           sldev-io is free and open source. If it saves you time, star the repo or sponsor it.
           EOF
           gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "sldev-io $TAG" --notes-file notes.md --generate-notes $PRE
@@ -87,12 +94,17 @@ jobs:
           - os: ubuntu-22.04
             name: linux
             args: --linux
+            installers: dist/*.deb
           - os: windows-latest
             name: windows
             args: --win
+            installers: dist/*.exe
           - os: macos-latest
             name: macos
             args: --mac --x64 --arm64
+            installers: |
+              dist/*.dmg
+              dist/*.zip
     runs-on: ${{ matrix.os }}
     steps:
       - name: Skip macOS when not requested
@@ -129,6 +141,13 @@ jobs:
           max=$(find dist/linux-unpacked -name '*.node' -path '*/build/Release/*' -exec objdump -T {} + | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
           echo "highest glibc symbol: $max"
           [ "$(printf '%s\n' "$max" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35 ]
+      # signed by GitHub with this workflow run as the source, so anyone can check a download came from here:
+      #   gh attestation verify sldev-io-1.0.4-amd64.deb --repo ben42-01/sldev-io
+      - name: Attest the installers' provenance
+        if: env.skip != '1'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ matrix.installers }}
       # straight onto the draft release, not through artifacts: artifact storage counts against the
       # account's quota for hours after the files expire, and a full quota blocked beta.6 and beta.7
       - name: Upload to the draft release
@@ -143,8 +162,13 @@ jobs:
           # electron-updater reads: latest*.yml, .blockmap, and the macOS zip
           files=(dist/*.deb dist/*.dmg dist/*.exe dist/*.zip dist/*.blockmap dist/latest*.yml)
           [ ${#files[@]} -gt 0 ] || { echo "::error::no installers in dist/"; exit 1; }
-          if command -v sha256sum >/dev/null; then sha256sum "${files[@]}"; else shasum -a 256 "${files[@]}"; fi
-          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          # this OS's part of SHA256SUMS (the release job joins them): the installers, by the name they have on the release
+          installers=()
+          for f in dist/*.deb dist/*.dmg dist/*.exe dist/*.zip; do installers+=("$(basename "$f")"); done
+          sums="sha256-${{ matrix.name }}.txt"
+          (cd dist && if command -v sha256sum >/dev/null; then sha256sum "${installers[@]}"; else shasum -a 256 "${installers[@]}"; fi) | sed 's/ \*/  /' > "$sums"
+          cat "$sums"
+          gh release upload "$TAG" "${files[@]}" "$sums" --clobber --repo "$GITHUB_REPOSITORY"
 
   release:
     needs: [check, build]
@@ -154,6 +178,16 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: v${{ needs.check.outputs.version }}
     steps:
+      # one SHA256SUMS for every installer (install.sh checks downloads against it), from the parts each build uploaded
+      - name: SHA256SUMS
+        run: |
+          mkdir sums && cd sums
+          gh release download "$TAG" --pattern 'sha256-*.txt'
+          cat sha256-*.txt | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          [ -s SHA256SUMS ] || { echo "::error::no checksums were uploaded"; exit 1; }
+          gh release upload "$TAG" SHA256SUMS --clobber
+          for f in sha256-*.txt; do gh release delete-asset "$TAG" "$f" --yes; done
       - name: Publish
         run: |
           gh release view "$TAG" --json assets -q '.assets[].name'

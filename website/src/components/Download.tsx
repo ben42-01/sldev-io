@@ -2,6 +2,7 @@ import { Check, Copy, Download as DownloadIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { DownloadStats } from '../../api/stats'
 import { detectPlatform, downloadHref, installCommand, platformLabels, type Platform } from '../lib/download'
+import { site } from '../lib/site'
 
 /** "Download for Windows" on desktops we build for; otherwise a jump to the download section. */
 export function DownloadButton({ className = 'btn primary lg', size = 16 }: { className?: string; size?: number }) {
@@ -112,6 +113,12 @@ export function DownloadOptions() {
         <p className="download-note">
           Builds aren't code-signed yet. Windows: <b>More info → Run anyway</b>. macOS: right-click the app and choose{' '}
           <b>Open</b> the first time (the terminal install skips this).
+        </p>
+        <p className="download-note">
+          To check a download came from this project's own build, compare it with <code>SHA256SUMS</code> on its{' '}
+          <a href={`${site.sourceUrl}/releases`}>release</a> (<code>sha256sum -c SHA256SUMS --ignore-missing</code>), or verify its
+          build attestation with <code>gh attestation verify &lt;file&gt; --repo {site.sourceUrl.replace('https://github.com/', '')}</code>. The terminal install
+          checks the checksum for you and stops on a mismatch.
         </p>
       </div>
     </section>

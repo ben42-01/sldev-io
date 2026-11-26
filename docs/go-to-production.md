@@ -286,6 +286,19 @@ Unsigned works, but signing removes the scary warnings that put new users off.
   so tell Claude which one you choose; the CI setup differs.
 - Without signing, Windows SmartScreen warns until the app builds up reputation.
 
+### Verifiable downloads (done, no account needed)
+
+Every release has a `SHA256SUMS` asset (joined from each build job's sums by the release job) and a GitHub build
+provenance attestation per installer (`actions/attest-build-provenance`, free for public repos). Check one with:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify sldev-io-1.0.4-amd64.deb --repo ben42-01/sldev-io
+```
+
+`website/public/install.sh` checks the downloaded .deb/.dmg against `SHA256SUMS` and stops on a mismatch; releases from
+before the checksums still install (it says so). /download explains both checks.
+
 ---
 
 ## 8. Phase 7: Launch day

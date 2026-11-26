@@ -13,9 +13,34 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
+# Downloads the installer for platform $1 to $2 and checks it against the SHA256SUMS of the same release.
+# A release from before the checksums (no SHA256SUMS) still installs, with a note.
 fetch() {
-  say "Downloading $1"
-  curl -fL --progress-bar "$SITE/download/$1" -o "$2" || die "download failed"
+  # where /download/<platform> points: the installer on this repo's GitHub release
+  url=$(curl -fsS -o /dev/null -w '%{redirect_url}' "$SITE/download/$1") || die "couldn't reach $SITE"
+  case "$url" in
+    */releases/download/*) ;;
+    *) die "no installer for this system right now; see $SITE/download" ;;
+  esac
+  name=${url##*/}
+  say "Downloading $name"
+  curl -fL --progress-bar "$url" -o "$2" || die "download failed"
+  if curl -fsSL "${url%/*}/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>/dev/null; then
+    want=$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")
+    [ -n "$want" ] || die "$name is not in the release's SHA256SUMS; not installing it"
+    got=$(sha256 "$2")
+    [ -n "$got" ] || die "sha256sum or shasum is needed to check the download"
+    [ "$got" = "$want" ] || die "$name doesn't match the release's SHA256SUMS (got $got, expected $want); not installing it"
+    say "Checksum matches the release's SHA256SUMS"
+  else
+    say "This release has no SHA256SUMS (it predates them); installing without the check"
+  fi
 }
 
 case "$(uname -s)" in
