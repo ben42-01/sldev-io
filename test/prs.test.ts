@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isMine, parseOpenPrs, parsePrDetail, planPrWorktree, prTabTitle, reviewOrder, waitingForMe } from '@shared/prs'
-import { prReviewSignal } from '@shared/status'
+import { isMine, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, waitingForMe, withChecks } from '@shared/prs'
+import { prChecksSignal, prReviewSignal } from '@shared/status'
 import { listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
 
 const RAW = {
@@ -243,5 +243,39 @@ describe('prWorktree', () => {
     expect((await prWorktree(work, 7, sha)).action).toBe('created')
     await removePrWorktree(work, 7)
     expect(existsSync(wtPath(7))).toBe(false)
+  })
+})
+
+describe('prChecks', () => {
+  const run = (headSha: string, status: string, conclusion: string, createdAt: string, workflowName = 'CI') => ({ databaseId: 1, workflowName, status, conclusion, headSha, createdAt, event: 'pull_request' })
+
+  it('counts only runs on the head commit, not an older one of the PR', () => {
+    const runs = parsePrRuns([run('old', 'completed', 'success', '2026-11-20T10:00:00Z'), run('head', 'completed', 'failure', '2026-11-21T10:00:00Z')])
+    expect(prChecks(runs, 'head')).toBe('failed')
+    expect(prChecks(parsePrRuns([run('old', 'completed', 'success', '2026-11-20T10:00:00Z')]), 'head')).toBe('none')
+    expect(prChecks(runs, '')).toBe('none')
+  })
+
+  it('passed, running or failed from the newest run of each workflow', () => {
+    expect(prChecks(parsePrRuns([run('h', 'completed', 'success', '1'), run('h', 'completed', 'success', '2', 'Lint')]), 'h')).toBe('passed')
+    expect(prChecks(parsePrRuns([run('h', 'completed', 'success', '1'), run('h', 'in_progress', '', '2', 'Lint')]), 'h')).toBe('running')
+    // a re-run that passed replaces the failure it re-ran
+    expect(prChecks(parsePrRuns([run('h', 'completed', 'failure', '1'), run('h', 'completed', 'success', '2')]), 'h')).toBe('passed')
+    expect(prChecks(parsePrRuns([run('h', 'in_progress', '', '2'), run('h', 'completed', 'failure', '1', 'Lint')]), 'h')).toBe('failed')
+  })
+
+  it('gives each PR its own head\'s checks and drops runs without a commit', () => {
+    expect(parsePrRuns('nope')).toEqual([])
+    expect(parsePrRuns([{ databaseId: 3 }])).toEqual([])
+    const prs = parseOpenPrs([RAW, { ...RAW, number: 131, headRefOid: 'def456', createdAt: '2026-11-22T10:00:00Z' }])
+    const out = withChecks(prs, parsePrRuns([run('abc123', 'completed', 'failure', '1')]))
+    expect(out.map((p) => [p.number, p.checks])).toEqual([[131, 'none'], [128, 'failed']])
+  })
+
+  it('maps to tones, pulsing only while running', () => {
+    expect(prChecksSignal('passed')).toMatchObject({ tone: 'done', pulse: false })
+    expect(prChecksSignal('failed')).toMatchObject({ tone: 'error', pulse: false })
+    expect(prChecksSignal('running')).toMatchObject({ tone: 'working', pulse: true })
+    expect(prChecksSignal('none')).toMatchObject({ tone: 'neutral', pulse: false })
   })
 })

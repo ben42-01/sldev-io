@@ -25,6 +25,22 @@ describe('openPrs', () => {
     expect(list[list.indexOf('--json') + 1].split(',')).toEqual(expect.arrayContaining(['author', 'isDraft', 'reviewDecision', 'additions', 'headRefOid', 'body']))
   })
 
+  it('reads CI with one read-only run list and leaves checks out when it fails', async () => {
+    const pr = { number: 7, title: 'A', headRefOid: 'h1', createdAt: '2026-01-01' }
+    run.mockImplementation(async (_c: string, args: string[]) =>
+      args[0] === 'auth' ? ok('') : args[0] === 'run' ? ok([{ databaseId: 1, workflowName: 'CI', status: 'completed', conclusion: 'success', headSha: 'h1', createdAt: '2026-01-02' }]) : args[0] === 'pr' ? ok([pr]) : ok('')
+    )
+    expect((await openPrs('/repo')).prs[0].checks).toBe('passed')
+    const runList = ghCalls().find((a) => a[0] === 'run')!
+    expect(runList.slice(0, 4)).toEqual(['run', 'list', '--limit', '100'])
+    expect(runList[runList.indexOf('--json') + 1].split(',')).toEqual(expect.arrayContaining(['headSha', 'status', 'conclusion', 'workflowName', 'createdAt']))
+    expect(ghCalls().some((a) => a.join(' ').includes('statusCheckRollup'))).toBe(false)
+    run.mockImplementation(async (_c: string, args: string[]) => (args[0] === 'auth' ? ok('') : args[0] === 'run' ? fail('HTTP 403') : args[0] === 'pr' ? ok([pr]) : ok('')))
+    const r = await openPrs('/repo')
+    expect(r.error).toBeUndefined()
+    expect(r.prs[0].checks).toBeUndefined()
+  })
+
   it('says who is signed in, and leaves it out when gh won\'t say', async () => {
     run.mockImplementation(async (_c: string, args: string[]) => (args[0] === 'auth' ? ok('') : args[0] === 'api' ? ok('ben42-01\n') : ok([])))
     expect(await openPrs('/repo')).toEqual({ prs: [], me: 'ben42-01' })

@@ -1,5 +1,6 @@
 // The Workflows tab's Pull requests section: closed, nothing is asked; open, the fake gh's two PRs are listed in
-// review order (the one asking e2e for a review first), with author, draft, size, age and review decision. A click
+// review order (the one asking e2e for a review first), with author, draft, size, age, review decision and a dot for
+// the CI on each head commit (#128 failed on its head; #131 has a green run only on an older commit, so none). A click
 // opens a Review tab "#<n> <title>" with the PR's diff and its head checked out; again, the same tab comes forward.
 // The palette's "Review a pull request…" opens the other one. Closing the section stops the asking.
 const fs = require('fs')
@@ -31,7 +32,7 @@ module.exports = async (h) => {
 
   const log = path.join(tmp, 'gh-calls.log')
   process.env.FAKE_GH_LOG = log
-  const asked = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter((l) => /^pr list --state open|^api user/.test(l)).length : 0)
+  const asked = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter((l) => /^pr list --state open|^api user|^run list --limit 100 /.test(l)).length : 0)
 
   // focus off: the right panel stays next to the Review tab, so the row can be clicked again
   await h.openFixture({ rightPanelVisible: true, rightPanelTab: 'workflows', rightPanelWidth: 380, reviewFocus: false })
@@ -48,6 +49,10 @@ module.exports = async (h) => {
   h.expect(/#128/.test(rows[0].text) && /Rate limit the API/.test(rows[0].text) && /maria/.test(rows[0].text) && /\+120/.test(rows[0].text) && /−8/.test(rows[0].text) && /d ago/.test(rows[0].text) && /asks you/.test(rows[0].text), `number, title, author, size, age (${rows[0].text})`)
   h.expect(/tone-attention/.test(rows[0].pill) && /Changes requested/.test(rows[0].pill), `the review decision as a pill (${rows[0].pill})`)
   h.expect(/Draft/.test(rows[1].text) && /tone-neutral/.test(rows[1].pill) && /No review/.test(rows[1].pill), 'the draft has its badge and no review')
+  const dots = await h.js(`[...document.querySelectorAll('.pr-row')].map(r => { const c = r.querySelector('.pr-checks'), d = c?.querySelector('.sdot'); return { checks: c?.dataset.checks, cls: d?.className, title: d?.title } })`)
+  h.expect(dots[0].checks === 'failed' && /tone-error/.test(dots[0].cls) && !/pulse/.test(dots[0].cls) && dots[0].title === 'Checks failed', `#128: its head failed, the older green run doesn't count (${JSON.stringify(dots[0])})`)
+  h.expect(dots[1].checks === 'none' && /tone-neutral/.test(dots[1].cls) && /No checks/.test(dots[1].title), `#131: a run on another commit isn't its head's (${JSON.stringify(dots[1])})`)
+  h.expect(fs.readFileSync(log, 'utf8').split('\n').every((l) => !/statusCheckRollup/.test(l) || !/^pr list --state open/.test(l)), 'the list never asks for statusCheckRollup')
   h.expect((await h.js(`document.querySelector('.wf-section.prs .wf-section-header .rt-source')?.textContent`)) === '2', 'the header counts them')
   h.expect(asked() >= 1, 'opening the section asked once')
   await h.wait(400)
