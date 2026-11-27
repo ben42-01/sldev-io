@@ -1,8 +1,10 @@
 // Walkthrough and Ask why on a pull request: the criteria come from the issue the PR closes, opening it checks
 // nothing out, Explain the change checks the PR out first ("Checking out #128…") and the agent explains the PR part
 // by part working in the PR's own worktree (and writes only its file, under the main checkout's .sldev/runs), Ask why
-// answers about a part, and once the PR gets a new commit the walkthrough says which head it was written for. Then
-// with an older gh that refuses closingIssuesReferences, the PR still opens with its diff and walkthrough.
+// answers about a part, and once the PR gets a new commit the walkthrough says which head it was written for. A question
+// asked while the (slowed) checkout runs waits for that one checkout; a failed one runs no helper anywhere, and
+// Explain reads no second `gh pr diff` while the head hasn't moved. Then with an older gh that refuses
+// closingIssuesReferences, the PR still opens with its diff and walkthrough.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -45,16 +47,39 @@ module.exports = async (h) => {
   await h.click('.rc-explain .btn.primary', 'Explain the change')
   h.expect(await h.until(() => h.js(`document.querySelector('.rc-error')?.textContent.includes("Couldn't check out #128")`), 10000), `a failed checkout shows on Explain (${await h.js(`document.querySelector('.rc-error')?.textContent`)})`)
   h.expect(await h.js(`!!document.querySelector('.rc .rc-part')`), 'and the diff stays usable')
+  const helpers = async () => (await h.js(`window.api.store.get('missions').then(s => s.missions)`)).filter((m) => m.explains)
+  await h.wait(500)
+  h.expect((await helpers()).length === 0, 'a failed checkout starts no helper (never in the main checkout)')
   await h.shot('0-checkout-failed')
   fs.rmSync(wt, { recursive: true, force: true })
 
-  // the label is brief (a local fetch): record whether it ever showed
+  // a slow checkout (a big repository), with a question asked while it runs: both wait for the one checkout, which
+  // fetches once and adds the worktree once; git is wrapped to log those and take 2.5 s over each fetch
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+  const wrap = path.join(tmp, 'slowgit')
+  const gitLog = path.join(tmp, 'git-calls.log')
+  fs.mkdirSync(wrap, { recursive: true })
+  fs.writeFileSync(path.join(wrap, 'git'), `#!/bin/sh\ncase "$1" in fetch) echo fetch >> "${gitLog}"; sleep 2.5;; worktree) [ "$2" = add ] && echo "worktree add" >> "${gitLog}";; esac\nexec "${realGit}" "$@"\n`, { mode: 0o755 })
+  const pathBefore = process.env.PATH
+  const ghLog = path.join(tmp, 'gh-calls.log')
+  process.env.FAKE_GH_LOG = ghLog
+  process.env.PATH = `${wrap}${path.delimiter}${process.env.PATH}`
+  await h.click('.rc-actions .btn', 'Ask why')
+  await h.setValue('.rc-form input', 'What does this folder do?')
   await h.js(`window.__sawCheckout = false; new MutationObserver(() => { if ([...document.querySelectorAll('.rc button')].some((b) => b.textContent.includes('Checking out #128'))) window.__sawCheckout = true }).observe(document.body, { subtree: true, childList: true, characterData: true })`)
   await h.click('.rc-explain .btn.primary', 'Explain the change')
-  h.expect(await h.until(() => fs.existsSync(path.join(wt, 'limiter.js')), 10000), "Explain the change checks the PR's head out first")
-  h.expect(await h.until(() => h.js('window.__sawCheckout'), 3000), 'and the button says "Checking out #128…" meanwhile')
+  h.expect(await h.until(() => h.js('window.__sawCheckout'), 3000), 'the button says "Checking out #128…" meanwhile')
+  await h.click('.rc-form .btn.primary', 'Ask')
+  h.expect(await h.until(() => fs.existsSync(path.join(wt, 'limiter.js')), 15000), "Explain the change checks the PR's head out first")
+  const asked = await h.until(async () => (await h.js(`window.api.store.get('missions').then(s => s.missions)`)).find((m) => m.explains && m.prompt.includes('What does this folder do?')), 15000)
+  h.expect(asked?.cwd === wt, `the question asked during the checkout ran in the PR's worktree too (${asked?.cwd})`)
+  const calls = fs.readFileSync(gitLog, 'utf8').trim().split('\n')
+  h.expect(calls.filter((c) => c === 'fetch').length === 1 && calls.filter((c) => c === 'worktree add').length === 1, `one fetch and one worktree add for both (${calls})`)
+  process.env.PATH = pathBefore
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.rc-part-item:not(.noise) .rc-part-title')].some(t => t.textContent === 'The asked change')`), 20000), "the agent's walkthrough replaces the folders")
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.rc-criteria li.met')].length >= 1`), 3000), 'criteria it meets are ticked')
+  const ghCalls = fs.existsSync(ghLog) ? fs.readFileSync(ghLog, 'utf8') : ''
+  h.expect(!/^pr diff/m.test(ghCalls), `Explain reused the diff the tab read: no second gh pr diff (${ghCalls.trim().split('\n')})`)
   const missions = await h.js(`window.api.store.get('missions').then(s => s.missions)`)
   const walk = missions.find((m) => m.explains && m.prompt.startsWith('Walkthrough:'))
   h.expect(walk?.cwd === wt, `the helper worked in the PR's worktree (${walk?.cwd})`)
@@ -77,6 +102,8 @@ module.exports = async (h) => {
   await h.js(`document.querySelector('.diff-panel [title^="Refresh"], .diff-panel [aria-label^="Refresh"]')?.click()`)
   h.expect(await h.until(() => h.js(`document.querySelector('.rc-stale')?.textContent.includes(${JSON.stringify(`Written for ${first.slice(0, 7)}`)})`), 10000), `a walkthrough of an older head says so (${await h.js(`document.querySelector('.rc-stale')?.textContent`)})`)
   h.expect(await h.js(`!!document.querySelector('.rc-stale .btn')`), 'with Explain again')
+  h.expect(/^pr diff 128/m.test(fs.readFileSync(ghLog, 'utf8')), "the refresh did read gh pr diff (so the log above is live)")
+  delete process.env.FAKE_GH_LOG
   await h.wait(300)
   await h.shot('2-moved-on')
 

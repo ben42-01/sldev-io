@@ -494,6 +494,25 @@ export async function prWorktree(root: string, n: number, headSha?: string, remo
   checkPrNumber(n)
   if (!remote || remote.startsWith('-')) throw new Error(`Not a remote: "${remote}"`)
   const top = await mainCheckout(root)
+  return onePerPr(top, n, () => checkOutPrHead(top, n, headSha, remote))
+}
+
+const prBusy = new Map<string, Promise<unknown>>()
+
+/**
+ * Run `f` once the last checkout or removal of PR `n` in repository `top` is over: two at once (two windows, or
+ * a helper started while the tab checks out) both fetched and ran `git worktree add`, and one failed on the lock.
+ */
+function onePerPr<T>(top: string, n: number, f: () => Promise<T>): Promise<T> {
+  const key = `${top}#${n}`
+  const mine = (prBusy.get(key) ?? Promise.resolve()).then(f)
+  const tail = mine.catch(() => undefined)
+  prBusy.set(key, tail)
+  void tail.then(() => prBusy.get(key) === tail && prBusy.delete(key))
+  return mine
+}
+
+async function checkOutPrHead(top: string, n: number, headSha: string | undefined, remote: string): Promise<PrWorktree> {
   const ref = prRef(n)
   const f = await git(['fetch', '--quiet', '--no-tags', remote, `+refs/pull/${n}/head:${ref}`], top, 120000)
   if (f.code !== 0) {
@@ -543,8 +562,10 @@ export async function removePrWorktree(root: string, n: number, opts: { discard:
   checkPrNumber(n)
   const top = await mainCheckout(root)
   const path = prWorktreePath(top, n)
-  const listed = (await listWorktrees(top)).some((w) => w.path === path)
-  if (listed && existsSync(path)) await ok(['worktree', 'remove', ...(opts.discard ? ['--force'] : []), path], top)
-  else await git(['worktree', 'prune'], top)
-  await git(['update-ref', '-d', prRef(n)], top)
+  return onePerPr(top, n, async () => {
+    const listed = (await listWorktrees(top)).some((w) => w.path === path)
+    if (listed && existsSync(path)) await ok(['worktree', 'remove', ...(opts.discard ? ['--force'] : []), path], top)
+    else await git(['worktree', 'prune'], top)
+    await git(['update-ref', '-d', prRef(n)], top)
+  })
 }
