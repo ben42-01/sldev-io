@@ -51,6 +51,8 @@ export interface AppSettings {
   uiZoom?: number
   rootFolder: string | null
   recentFolders: string[]
+  /** New project → Clone: the folder new clones go into, the last one used */
+  cloneParent?: string
   preferredEditor: string | null
   sidebarWidth: number
   sidebarVisible: boolean

@@ -8,6 +8,7 @@ import {
   Factory,
   FlaskConical,
   FolderOpen,
+  FolderPlus,
   Gauge,
   Home,
   ListChecks,
@@ -25,6 +26,7 @@ import { openNewRun } from '../components/FactoryView'
 import { openRecipes } from './RecipesPanel'
 import { basename, tildify } from '../lib/paths'
 import { pickRootFolder, setRootFolder, workspace } from '../state/workspace'
+import { openNewProject } from '../components/NewProjectDialog'
 import { loadRemote, openSshTerminal, remote } from '../state/remote'
 import { focusOrResume, missions } from '../state/missions'
 import { getAgent } from '../state/agents'
@@ -154,6 +156,9 @@ export function Welcome(): React.JSX.Element {
             <div className="launch-actions">
               <button className="btn primary" onClick={() => void pickRootFolder()}>
                 <FolderOpen size={14} /> Open a project…
+              </button>
+              <button className="btn" onClick={openNewProject}>
+                <FolderPlus size={14} /> Clone from GitHub…
               </button>
             </div>
             {others.length > 0 && (

@@ -52,6 +52,8 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
   case "$1 $2" in
     "auth status") echo "Logged in to github.com as e2e"; exit 0 ;;
     "repo view") echo '{"nameWithOwner":"acme/shop","url":"https://github.com/acme/shop","defaultBranchRef":{"name":"main"},"stargazerCount":128,"forkCount":9,"issues":{"totalCount":17},"pullRequests":{"totalCount":4}}'; exit 0 ;;
+    # New project → Clone: the user's repositories; acme/shop clones from FAKE_GH_REPO_URL (a local bare repo in the scenario)
+    "repo list") echo "[{\"nameWithOwner\":\"acme/shop\",\"description\":\"The web shop\",\"isPrivate\":true,\"updatedAt\":\"2026-11-26T10:00:00Z\",\"url\":\"${FAKE_GH_REPO_URL:-https://github.com/acme/shop}\"},{\"nameWithOwner\":\"acme/docs\",\"description\":\"Handbook and guides\",\"isPrivate\":false,\"updatedAt\":\"2026-10-02T10:00:00Z\",\"url\":\"https://github.com/acme/docs\"},{\"nameWithOwner\":\"e2e/dotfiles\",\"description\":\"\",\"isPrivate\":false,\"updatedAt\":\"2025-06-01T10:00:00Z\",\"url\":\"https://github.com/e2e/dotfiles\"}]"; exit 0 ;;
     "release list") echo '[{"tagName":"v2.3.0","name":"Spring","publishedAt":"2026-11-01T09:00:00Z","isPrerelease":false}]'; exit 0 ;;
     "pr list")
       # the stats panel's activity chart asks for every state; FAKE_GH_ACTIVITY is the scenario's PR history

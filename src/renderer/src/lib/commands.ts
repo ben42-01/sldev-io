@@ -23,6 +23,7 @@ import { openRecipes } from '../dock/RecipesPanel'
 import { openDiagrams } from '../dock/DiagramPanel'
 import { openCommitGraph, openGitHubStats } from '../dock/GitHubStatsPanel'
 import { openRecap } from '../components/RecapDialog'
+import { openNewProject } from '../components/NewProjectDialog'
 import { gitFetch, gitPull } from '../state/git'
 
 const isMac = window.api.platform === 'darwin'
@@ -249,6 +250,7 @@ export function staticCommands(): Command[] {
       void checkForUpdates()
     } },
     { id: 'setup.open', category: 'Preferences', title: 'Check setup (git, gh, agent CLIs…)', run: openSetup },
+    { id: 'project.new', category: 'Workspace', title: 'New project… (clone a repository from GitHub)', run: openNewProject },
     { id: 'folder.open', category: 'Workspace', title: 'Open folder…', keys: { mac: 'Cmd+O', other: 'Ctrl+Shift+O' }, run: () => void pickRootFolder() },
     {
       id: 'folder.openInEditor',

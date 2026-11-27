@@ -11,6 +11,7 @@ import { NewMissionHost } from './components/MissionsView'
 import { AddTeamHost } from './components/AgentTeams'
 import { NewRunHost } from './components/FactoryView'
 import { ImportRecipeHost } from './dock/RecipesPanel'
+import { NewProjectHost } from './components/NewProjectDialog'
 import './lib/actions'
 import { Sidebar } from './components/Sidebar'
 import { RightPanel } from './components/RightPanel'
@@ -76,6 +77,7 @@ export function App(): React.JSX.Element {
       <AddTeamHost />
       <NewRunHost />
       <ImportRecipeHost />
+      <NewProjectHost />
       <ConfirmHost />
       <ToastHost />
       <RecapHost />
