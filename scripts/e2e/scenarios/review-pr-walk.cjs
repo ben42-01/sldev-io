@@ -1,7 +1,8 @@
-// Walkthrough and Ask why on a pull request: the criteria come from the issue the PR closes, an agent explains
-// the PR part by part working in the PR's own worktree (and writes only its file, under the main checkout's
-// .sldev/runs), Ask why answers about a part, and once the PR gets a new commit the walkthrough says which head
-// it was written for.
+// Walkthrough and Ask why on a pull request: the criteria come from the issue the PR closes, opening it checks
+// nothing out, Explain the change checks the PR out first ("Checking out #128…") and the agent explains the PR part
+// by part working in the PR's own worktree (and writes only its file, under the main checkout's .sldev/runs), Ask why
+// answers about a part, and once the PR gets a new commit the walkthrough says which head it was written for. Then
+// with an older gh that refuses closingIssuesReferences, the PR still opens with its diff and walkthrough.
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
@@ -36,9 +37,22 @@ module.exports = async (h) => {
   const crit = () => h.js(`[...document.querySelectorAll('.rc-criteria li')].map(l => l.textContent)`)
   h.expect(await h.until(async () => (await crit()).some((c) => c.includes('11th request in a minute gets a 429')) && (await crit()).some((c) => c.includes('per API key')), 5000), `the criteria come from the issue it closes (${await crit()})`)
   const wt = path.join(tmp, '.sldev-worktrees', path.basename(h.fixture), 'pr-128')
-  h.expect(await h.until(() => fs.existsSync(path.join(wt, 'limiter.js')), 10000), "the PR's head is checked out")
+  await h.wait(1000)
+  h.expect(!fs.existsSync(wt) && !g(h.fixture, 'for-each-ref', 'refs/sldev'), 'opening the PR fetches and checks out nothing')
 
+  // a checkout that fails (a stray folder where the worktree goes) says so on the action, and the diff stays
+  fs.mkdirSync(wt, { recursive: true })
   await h.click('.rc-explain .btn.primary', 'Explain the change')
+  h.expect(await h.until(() => h.js(`document.querySelector('.rc-error')?.textContent.includes("Couldn't check out #128")`), 10000), `a failed checkout shows on Explain (${await h.js(`document.querySelector('.rc-error')?.textContent`)})`)
+  h.expect(await h.js(`!!document.querySelector('.rc .rc-part')`), 'and the diff stays usable')
+  await h.shot('0-checkout-failed')
+  fs.rmSync(wt, { recursive: true, force: true })
+
+  // the label is brief (a local fetch): record whether it ever showed
+  await h.js(`window.__sawCheckout = false; new MutationObserver(() => { if ([...document.querySelectorAll('.rc button')].some((b) => b.textContent.includes('Checking out #128'))) window.__sawCheckout = true }).observe(document.body, { subtree: true, childList: true, characterData: true })`)
+  await h.click('.rc-explain .btn.primary', 'Explain the change')
+  h.expect(await h.until(() => fs.existsSync(path.join(wt, 'limiter.js')), 10000), "Explain the change checks the PR's head out first")
+  h.expect(await h.until(() => h.js('window.__sawCheckout'), 3000), 'and the button says "Checking out #128…" meanwhile')
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.rc-part-item:not(.noise) .rc-part-title')].some(t => t.textContent === 'The asked change')`), 20000), "the agent's walkthrough replaces the folders")
   h.expect(await h.until(() => h.js(`[...document.querySelectorAll('.rc-criteria li.met')].length >= 1`), 3000), 'criteria it meets are ticked')
   const missions = await h.js(`window.api.store.get('missions').then(s => s.missions)`)
@@ -65,6 +79,15 @@ module.exports = async (h) => {
   h.expect(await h.js(`!!document.querySelector('.rc-stale .btn')`), 'with Explain again')
   await h.wait(300)
   await h.shot('2-moved-on')
+
+  // an older gh that refuses closingIssuesReferences: the PR still opens, its diff and walkthrough work, only the
+  // criteria from the issue it closes are missing
+  process.env.FAKE_GH_OLD = '1'
+  await h.reload()
+  h.expect(await h.until(() => h.js(`!!document.querySelector('.rc .rc-part') && !!document.querySelector('.rc-stale')`), 10000), 'with an older gh, the PR opens with its diff and walkthrough')
+  h.expect(!(await crit()).some((c) => c.includes('429')), `only the issue's criteria are missing (${await crit()})`)
+  await h.shot('3-older-gh')
+  delete process.env.FAKE_GH_OLD
 
   await h.js(`window.api.git.removePrWorktree(${JSON.stringify(h.fixture)}, 128, { discard: true })`)
   delete process.env.FAKE_GH_PR_128_HEAD

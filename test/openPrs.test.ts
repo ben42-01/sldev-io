@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const run = vi.fn()
 vi.mock('../src/main/git', () => ({ run: (...a: unknown[]) => run(...a) }))
 
-const { openPrs, prDetail } = await import('../src/main/github')
+const { openPrs, prDetail, prReview, prShip } = await import('../src/main/github')
 
 const ok = (stdout: unknown): { code: number; stdout: string; stderr: string } => ({ code: 0, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr: '' })
 const fail = (stderr: string): { code: number; stdout: string; stderr: string } => ({ code: 1, stdout: '', stderr })
@@ -76,5 +76,53 @@ describe('prDetail', () => {
   it('throws a readable reason without gh', async () => {
     run.mockResolvedValue(fail('spawn gh ENOENT'))
     await expect(prDetail('/repo', 5)).rejects.toThrow('The GitHub CLI (gh) is not installed.')
+  })
+})
+
+// gh before closingIssuesReferences (and the like) refuses the whole call: `Unknown JSON field: "…"` with the list it has
+const OLD_GH = new Set(['closingIssuesReferences', 'reviewRequests', 'mergeStateStatus'])
+const oldGh = (answer: (args: string[]) => unknown) =>
+  async (_c: string, args: string[]) => {
+    if (args[0] === 'auth') return ok('')
+    const i = args.indexOf('--json')
+    const bad = i < 0 ? undefined : args[i + 1].split(',').find((f) => OLD_GH.has(f))
+    if (bad) return fail(`Unknown JSON field: "${bad}"\nAvailable fields:\n  number\n  title`)
+    return ok(answer(args))
+  }
+const jsonOf = (args: string[]): string[] => args[args.indexOf('--json') + 1].split(',')
+
+describe('an older gh that refuses newer fields', () => {
+  it('opens a PR for review without the issues it closes, keeping its commits', async () => {
+    run.mockImplementation(oldGh((a) => (a[1] === 'diff' ? 'diff --git a/x b/x\n' : { number: 9, title: 'T', body: 'Fixes #1', headRefOid: 'h', commits: [{ oid: 'c1' }, { oid: 'h' }] })))
+    const r = await prReview('/repo', 9)
+    expect(r).toMatchObject({ number: 9, title: 'T', head: 'h', commits: ['c1', 'h'], issues: [], diff: 'diff --git a/x b/x\n' })
+    const views = ghCalls().filter((a) => a[1] === 'view')
+    expect(views).toHaveLength(2)
+    expect(jsonOf(views[1])).not.toContain('closingIssuesReferences')
+    expect(jsonOf(views[1])).toContain('commits')
+  })
+
+  it('asks without every optional field when gh does not say which one', async () => {
+    run.mockImplementation(async (_c: string, args: string[]) =>
+      args[0] === 'auth' ? ok('') : args[1] === 'diff' ? ok('') : jsonOf(args).includes('commits') ? fail('Unknown JSON field') : ok({ number: 9 })
+    )
+    expect((await prReview('/repo', 9)).commits).toEqual([])
+    expect(jsonOf(ghCalls().filter((a) => a[1] === 'view')[1])).toEqual(['number', 'title', 'body', 'url', 'headRefOid', 'headRefName', 'baseRefName'])
+  })
+
+  it('still fails on a required field, or on any other error', async () => {
+    run.mockImplementation(async (_c: string, args: string[]) => (args[0] === 'auth' ? ok('') : fail('Unknown JSON field: "headRefOid"')))
+    await expect(prReview('/repo', 9)).rejects.toThrow(/headRefOid/)
+    run.mockImplementation(async (_c: string, args: string[]) => (args[0] === 'auth' ? ok('') : fail('HTTP 404')))
+    await expect(prReview('/repo', 9)).rejects.toThrow('HTTP 404')
+    expect(ghCalls().filter((a) => a[1] === 'view')).toHaveLength(2)
+    expect(ghCalls().filter((a) => a[1] === 'view').map(jsonOf)[0]).toContain('commits')
+  })
+
+  it('lists open PRs, shows the ship bar and the PR detail', async () => {
+    run.mockImplementation(oldGh((a) => (a[0] === 'run' ? [] : a[1] === 'list' ? [{ number: 3, title: 'A', createdAt: '2026-01-01' }] : { number: 3, title: 'A', state: 'OPEN', headRefName: 'b', headRefOid: 'h' })))
+    expect((await openPrs('/repo')).prs.map((p) => p.number)).toEqual([3])
+    expect((await prShip('/repo', 3)).pr).toMatchObject({ number: 3, mergeState: 'UNKNOWN', headSha: 'h' })
+    expect((await prDetail('/repo', 3)).linkedIssues).toEqual([])
   })
 })

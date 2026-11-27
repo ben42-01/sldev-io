@@ -5,7 +5,7 @@ import type { ReviewCheck } from '@shared/types'
 import { focusPanel } from '../dock/dockApi'
 import { terminalInfo } from '../lib/terminals'
 import { runChecks, runningChecks } from '../state/reviewChecks'
-import type { ReviewSource } from '../state/reviewTargets'
+import { useCheckingOut, type ReviewSource } from '../state/reviewTargets'
 import { useStore } from '../state/store'
 import { StatusDot, StatusPill } from './StatusDot'
 
@@ -17,6 +17,7 @@ import { StatusDot, StatusPill } from './StatusDot'
 export function ReviewChecks({ source, diff }: { source: ReviewSource; diff: string }): React.JSX.Element {
   const c = source.review.checks
   const live = useStore(runningChecks, (s) => !!s.keys[source.key])
+  const checkingOut = useCheckingOut(source)
   const head = useHead(source, diff)
   const state = checksState(c, head, diff, live)
   const sum = checksSummary(c, state, head, diff)
@@ -52,11 +53,12 @@ export function ReviewChecks({ source, diff }: { source: ReviewSource; diff: str
         <button
           type="button"
           className={`btn sm${state === 'none' || state === 'stale' ? ' primary' : ''}`}
-          disabled={live}
+          disabled={live || !!checkingOut}
           title={source.mission ? `Run the project's typecheck and test in ${source.cwd}` : 'Check out the head in its own worktree, install its dependencies once, then run the project\'s typecheck and test there. Nothing is pushed.'}
           onClick={run}
         >
-          {live ? <LoaderCircle size={13} className="spin" /> : state === 'none' ? <Play size={13} /> : <RotateCcw size={13} />} {state === 'none' ? 'Run checks' : live ? 'Running' : 'Run again'}
+          {live || checkingOut ? <LoaderCircle size={13} className="spin" /> : state === 'none' ? <Play size={13} /> : <RotateCcw size={13} />}{' '}
+          {checkingOut ?? (state === 'none' ? 'Run checks' : live ? 'Running' : 'Run again')}
         </button>
       </div>
       {error && <div className="rc-error">{error}</div>}

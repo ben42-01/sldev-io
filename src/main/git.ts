@@ -523,6 +523,19 @@ export async function prWorktree(root: string, n: number, headSha?: string, remo
 }
 
 /**
+ * PR `n`'s review worktree when one is there already, and the commit it is at; null when there is none. Read-only:
+ * no fetch and no checkout, so opening a PR's Review tab costs nothing on a big repository (prWorktree makes it
+ * the first time something needs the PR's files).
+ */
+export async function findPrWorktree(root: string, n: number): Promise<{ path: string; head: string | null } | null> {
+  checkPrNumber(n)
+  const top = await mainCheckout(root)
+  const path = prWorktreePath(top, n)
+  const w = (await listWorktrees(top)).find((x) => x.path === path)
+  return w && !w.prunable && existsSync(path) ? { path, head: w.head } : null
+}
+
+/**
  * Remove PR `n`'s review worktree and its fetched ref. Without `discard`, git refuses when the folder has
  * changed or untracked files. Whether something still runs there is the caller's check, as for any worktree.
  */

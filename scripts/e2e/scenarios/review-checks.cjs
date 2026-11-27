@@ -1,6 +1,7 @@
 // Run checks in the review cockpit, on a pull request: the PR's head (pushed from a fork as refs/pull/128/head)
-// gets a passing typecheck and a failing test. Opening it checks the head out in its own worktree; nothing is
-// installed or run until the click; then its dependencies are installed once, and each check runs in a terminal of its own: pass/fail per
+// gets a passing typecheck and a failing test, and gh is an older one that refuses closingIssuesReferences. Opening
+// it checks nothing out and nothing is installed or run until the click; then the head is checked out in its own
+// worktree ("Checking out #128…" on the button), its dependencies are installed once, and each check runs in a terminal of its own: pass/fail per
 // command, the failing one's output, a Log button for the whole of it. Run again skips the install; a new commit
 // on the PR makes the result stale. Nothing is pushed.
 const fs = require('fs')
@@ -51,13 +52,15 @@ module.exports = async (h) => {
   h.expect((await strip()).includes('Not run'), `nothing has run (${await strip()})`)
   const wtPath = path.join(path.dirname(h.fixture), '.sldev-worktrees', path.basename(h.fixture), 'pr-128')
   await h.wait(1500)
-  // opening the PR checks its head out (so files open from it), but nothing is installed or run before the click
-  h.expect(!fs.existsSync(path.join(wtPath, '.sldev/runs/.setup-done')) && !fs.existsSync(path.join(wtPath, 'node_modules')), 'nothing is installed or run without the click')
+  // the diff is GitHub's: opening the PR fetches nothing and makes no worktree
+  h.expect(!fs.existsSync(wtPath) && !g(h.fixture, 'for-each-ref', 'refs/sldev'), 'no worktree and no fetch until Run checks')
   h.expect((await checks0()) === null, 'no check result before the click')
   await h.shot('1-not-run')
 
   const checks = () => h.js(`window.api.store.get('prReviews').then((f) => f?.reviews?.find((r) => r.number === 128)?.review?.checks ?? null)`)
+  await h.js(`window.__sawCheckout = false; new MutationObserver(() => { if (document.querySelector('[data-testid="review-checks"]')?.textContent.includes('Checking out #128')) window.__sawCheckout = true }).observe(document.body, { subtree: true, childList: true, characterData: true })`)
   await h.js(`[...document.querySelectorAll('[data-testid="review-checks"] button')].find((b) => b.textContent.includes('Run checks')).click()`)
+  h.expect(await h.until(() => h.js('window.__sawCheckout'), 5000), 'the button says "Checking out #128…" while the head is checked out')
   const done = await h.until(async () => {
     const c = await checks()
     return c?.status === 'done' && c
@@ -104,4 +107,4 @@ module.exports = async (h) => {
   await h.js(`window.api.git.removePrWorktree(${JSON.stringify(h.fixture)}, 128, { discard: true })`)
 }
 
-module.exports.env = { FAKE_GH_AUTHED: '1' }
+module.exports.env = { FAKE_GH_AUTHED: '1', FAKE_GH_OLD: '1' }

@@ -5,7 +5,7 @@ import { parse as parseYaml } from 'yaml'
 import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, reviewPayload, type MergeMethod, type ReviewPayload, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
-import { checkPrNumber, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, parsePrRuns, PR_DETAIL_FIELDS, PR_RUN_FIELDS, PR_RUN_LIMIT, withChecks, type OpenPrList, type PrDetail } from '@shared/prs'
+import { checkPrNumber, fieldsWithout, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, parsePrRuns, PR_DETAIL_FIELDS, PR_RUN_FIELDS, PR_RUN_LIMIT, withChecks, type OpenPrList, type PrDetail } from '@shared/prs'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -19,6 +19,23 @@ async function ghJson<T>(args: string[], cwd: string, empty?: T): Promise<T> {
     return JSON.parse(r.stdout) as T
   } catch {
     throw new Error(`Unexpected output from gh ${args.slice(0, 2).join(' ')}. Check that gh is up to date (gh --version).`)
+  }
+}
+
+/**
+ * `gh <args> --json <fields>`, asked again without the optional fields an older gh refuses (`Unknown JSON field`,
+ * fieldsWithout in src/shared/prs.ts): the answer then just lacks them. Any other failure throws as ghJson does.
+ */
+async function ghFields<T>(args: string[], fields: string, cwd: string, empty?: T): Promise<T> {
+  let ask = fields.split(',')
+  for (;;) {
+    try {
+      return await ghJson<T>([...args, '--json', ask.join(',')], cwd, empty)
+    } catch (e) {
+      const next = fieldsWithout(e instanceof Error ? e.message : String(e), ask)
+      if (!next) throw e
+      ask = next
+    }
   }
 }
 
@@ -110,8 +127,9 @@ export async function currentPr(cwd: string): Promise<GhPr | null> {
 
 /** Pull request `n` for the Review tab: what it says, the issues it closes, where it goes and its diff. */
 export async function prReview(cwd: string, n: number): Promise<GhPrReview> {
-  const pr = await ghJson<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string; commits?: Array<{ oid?: string }>; closingIssuesReferences?: Array<{ number?: number; url?: string }> }>(
-    ['pr', 'view', String(n), '--json', 'number,title,body,url,headRefOid,headRefName,baseRefName,commits,closingIssuesReferences'],
+  const pr = await ghFields<{ number: number; title?: string; body?: string; url?: string; headRefOid?: string; headRefName?: string; baseRefName?: string; commits?: Array<{ oid?: string }>; closingIssuesReferences?: Array<{ number?: number; url?: string }> }>(
+    ['pr', 'view', String(n)],
+    'number,title,body,url,headRefOid,headRefName,baseRefName,commits,closingIssuesReferences',
     cwd
   )
   const [d, issues] = await Promise.all([gh(['pr', 'diff', String(n)], cwd, 60000), linkedIssues(cwd, pr.closingIssuesReferences ?? [])])
@@ -279,8 +297,9 @@ export async function shipStatus(cwd: string, branch: string): Promise<ShipStatu
   if (problem) return { ...local, error: problem }
   try {
     const [prs, runs] = await Promise.all([
-      ghJson<Array<Omit<ShipPr, 'mergeState' | 'base' | 'headSha'> & { mergeStateStatus?: string; baseRefName?: string; headRefOid?: string }>>(
-        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '5', '--json', 'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid'],
+      ghFields<Array<Omit<ShipPr, 'mergeState' | 'base' | 'headSha'> & { mergeStateStatus?: string; baseRefName?: string; headRefOid?: string }>>(
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '5'],
+        'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid',
         cwd,
         []
       ),
@@ -326,8 +345,9 @@ export async function prShip(cwd: string, n: number): Promise<{ pr: ShipPr | nul
   const problem = await ghProblem(cwd)
   if (problem) return { pr: null, runs: [], error: problem }
   try {
-    const p = await ghJson<{ number: number; title?: string; state?: string; url?: string; isDraft?: boolean; mergeable?: string; mergeStateStatus?: string; reviewDecision?: string; baseRefName?: string; headRefOid?: string; headRefName?: string }>(
-      ['pr', 'view', String(n), '--json', 'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid,headRefName'],
+    const p = await ghFields<{ number: number; title?: string; state?: string; url?: string; isDraft?: boolean; mergeable?: string; mergeStateStatus?: string; reviewDecision?: string; baseRefName?: string; headRefOid?: string; headRefName?: string }>(
+      ['pr', 'view', String(n)],
+      'number,title,state,url,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefOid,headRefName',
       cwd
     )
     const runs = p.headRefName ? await ghJson<Array<GhRun & { headSha?: string }>>(['run', 'list', '--branch', p.headRefName, '--limit', '30', '--json', `${RUN_FIELDS},headSha`], cwd, []) : []
@@ -406,7 +426,7 @@ export async function openPrs(cwd: string): Promise<OpenPrList> {
   if (problem) return { prs: [], error: problem }
   try {
     const [json, me, runs] = await Promise.all([
-      ghJson<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT), '--json', OPEN_PR_FIELDS], cwd, []),
+      ghFields<unknown>(['pr', 'list', '--state', 'open', '--limit', String(OPEN_PR_LIMIT)], OPEN_PR_FIELDS, cwd, []),
       viewer(cwd),
       // CI on each head: a repo without Actions (or a token that can't read them) still lists its PRs, without dots
       ghJson<unknown>(['run', 'list', '--limit', String(PR_RUN_LIMIT), '--json', PR_RUN_FIELDS], cwd, []).then(parsePrRuns, () => null)
@@ -423,7 +443,7 @@ export async function prDetail(cwd: string, n: number): Promise<PrDetail> {
   checkPrNumber(n)
   const problem = await ghProblem(cwd)
   if (problem) throw new Error(problem)
-  const pr = parsePrDetail(await ghJson<unknown>(['pr', 'view', String(n), '--json', PR_DETAIL_FIELDS], cwd))
+  const pr = parsePrDetail(await ghFields<unknown>(['pr', 'view', String(n)], PR_DETAIL_FIELDS, cwd))
   if (!pr) throw new Error(`GitHub has no pull request #${n} here.`)
   return pr
 }

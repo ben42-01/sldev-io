@@ -2,11 +2,11 @@ import { useEffect, useMemo } from 'react'
 import { criteriaOf, findPrReview, prAsk, prCriteria, prReviewKey, putPrReview, type ReviewSubject } from '@shared/review'
 export { targetOf } from '@shared/review'
 import type { GhPrReview, Mission, PrReview, ReviewState, ReviewTarget } from '@shared/types'
+import type { PrWorktree } from '@shared/prs'
 import { getMission, isLive, missionBase, refreshStats, update, useMission } from './missions'
 import { createStore, useStore } from './store'
 import { prTabTitle } from '@shared/prs'
 import { openPanel } from '../dock/dockApi'
-import { toast } from '../components/Toast'
 import { updateSettings, workspace } from './workspace'
 
 /**
@@ -145,10 +145,16 @@ const missionResolver: Resolver<Extract<ReviewTarget, { kind: 'mission' }>> = {
 type PrMeta = Omit<GhPrReview, 'diff'>
 
 /**
- * prReviews.json, read once, what gh said about each PR this session, and the folder each PR's head is checked
- * out in for review (git:prWorktree), all by prReviewKey
+ * prReviews.json, read once, what gh said about each PR this session, the folder each PR's head is checked out in
+ * for review (git:prWorktree, or one found already at its head), and the PRs being checked out now, all by prReviewKey
  */
-export const prReviews = createStore<{ list: PrReview[]; loaded: boolean; meta: Record<string, PrMeta>; worktrees: Record<string, string> }>({ list: [], loaded: false, meta: {}, worktrees: {} })
+export const prReviews = createStore<{ list: PrReview[]; loaded: boolean; meta: Record<string, PrMeta>; worktrees: Record<string, string>; checkingOut: Record<string, true> }>({
+  list: [],
+  loaded: false,
+  meta: {},
+  worktrees: {},
+  checkingOut: {}
+})
 
 let loading: Promise<void> | null = null
 export function loadPrReviews(): Promise<void> {
@@ -201,8 +207,8 @@ const prResolver: Resolver<PrTarget> = {
     await loadPrReviews()
     const { diff, ...meta } = await window.api.gh.prReview(t.root, t.number)
     prReviews.set((s) => ({ meta: { ...s.meta, [keyOf(t)]: meta } }))
-    // a tab restored from the layout has no checkout yet this session
-    if (!prReviews.get().worktrees[keyOf(t)]) void checkOutPr(t, meta.head)
+    // the diff is GitHub's: nothing is fetched or checked out to show it; a worktree left at this head is used for files
+    if (!prReviews.get().worktrees[keyOf(t)]) void findCheckout(t, meta.head)
     return diff
   },
   patch(t, f) {
@@ -230,48 +236,73 @@ const prResolver: Resolver<PrTarget> = {
   },
   async checkFolder(t) {
     // the PR's own worktree, at what GitHub has now: never the user's checkout
-    const wt = await window.api.git.prWorktree(t.root, t.number, prReviews.get().meta[keyOf(t)]?.head)
-    prReviews.set((s) => ({ worktrees: { ...s.worktrees, [keyOf(t)]: wt.path } }))
+    const wt = await checkOutPr(t)
     const note = wt.action === 'created' ? `Checked out #${t.number}` : wt.action === 'moved' ? `Moved #${t.number}'s worktree to its new commits` : undefined
     return { path: wt.path, head: wt.head, worktree: true, note }
   }
 }
 
-const checkingOut = new Map<string, Promise<void>>()
+const checkingOut = new Map<string, Promise<PrWorktree>>()
+const ipcError = (e: unknown): string => String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')
 
 /**
- * Check PR `t`'s head out in its own detached worktree (reused, or moved to new commits) so the review has the
- * PR's files. The diff comes from GitHub either way, so a failed checkout (no remote, changed files there) only
- * leaves the review in the main checkout, and says why once.
+ * Check PR `t`'s head out in its own detached worktree (made, reused, or moved to new commits): only when something
+ * needs the PR's files (Run checks, Explain the change, Ask why), never on open, since a big repository's checkout
+ * takes minutes. One at a time per PR; `checkingOut` says so meanwhile, and a failure throws for the action to show.
  */
-function checkOutPr(t: PrTarget, headSha?: string): Promise<void> {
+function checkOutPr(t: PrTarget): Promise<PrWorktree> {
   const key = keyOf(t)
   const busy = checkingOut.get(key)
   if (busy) return busy
+  prReviews.set((s) => ({ checkingOut: { ...s.checkingOut, [key]: true } }))
   const p = window.api.git
-    .prWorktree(t.root, t.number, headSha || undefined)
+    .prWorktree(t.root, t.number, prReviews.get().meta[key]?.head || undefined)
     .then(
-      (wt) => prReviews.set((s) => ({ worktrees: { ...s.worktrees, [key]: wt.path } })),
-      (e) => toast(`PR #${t.number} wasn't checked out, so files open in the main checkout: ${String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '')}`, 6000, 'error')
+      (wt) => {
+        prReviews.set((s) => ({ worktrees: { ...s.worktrees, [key]: wt.path } }))
+        return wt
+      },
+      (e) => {
+        throw new Error(`Couldn't check out #${t.number}: ${ipcError(e)}`)
+      }
     )
-    .finally(() => checkingOut.delete(key))
+    .finally(() => {
+      checkingOut.delete(key)
+      prReviews.set((s) => {
+        const busy = { ...s.checkingOut }
+        delete busy[key]
+        return { checkingOut: busy }
+      })
+    })
   checkingOut.set(key, p)
   return p
+}
+
+/** A worktree of PR `t` left from before, used for its files when it is at `head` already (read-only: no fetch, no checkout). */
+async function findCheckout(t: PrTarget, head: string): Promise<void> {
+  const found = await window.api.git.findPrWorktree(t.root, t.number).catch(() => null)
+  if (!found || !head || found.head !== head) return
+  prReviews.set((s) => (s.worktrees[keyOf(t)] ? {} : { worktrees: { ...s.worktrees, [keyOf(t)]: found.path } }))
+}
+
+/** "Checking out #n…" while a PR's head is being checked out for the action that needs it, else null. */
+export function useCheckingOut(s: ReviewSource): string | null {
+  const busy = useStore(prReviews, (st) => !!s.pr && !!st.checkingOut[prReviewKey(s.pr.root, s.pr.number)])
+  return busy && s.pr ? `Checking out #${s.pr.number}…` : null
 }
 
 /** The Review tab's id for a target, so opening the same thing again focuses its tab. */
 export const reviewTabId = (t: ReviewTarget): string => (t.kind === 'mission' ? `diff-${t.id}` : `diff-${prKey(t)}`)
 
 /**
- * Open PR `pr` of the project at `root` in a Review tab titled `#<n> <title>` (focused when it is already open), and
- * check its head out for review in the background. `sinceReview` opens the walkthrough on "Since last review".
+ * Open PR `pr` of the project at `root` in a Review tab titled `#<n> <title>` (focused when it is already open). Nothing
+ * is checked out: the diff comes from GitHub. `sinceReview` opens the walkthrough on "Since last review".
  */
 export function openPrReview(root: string, pr: { number: number; title: string; headSha?: string }, opts: { sinceReview?: boolean } = {}): void {
   const t: PrTarget = { kind: 'pr', number: pr.number, root }
   if (opts.sinceReview && workspace.get().reviewView === 'files') updateSettings({ reviewView: 'walk' })
   // a new stamp each time, so a tab that is already open turns the filter on again
   openPanel('diff', reviewTabId(t), prTabTitle(pr), opts.sinceReview ? { target: t, sinceReview: Date.now() } : { target: t })
-  if (!prReviews.get().worktrees[keyOf(t)]) void checkOutPr(t, pr.headSha)
 }
 
 // ── the one switch ────────────────────────────────────────────────────

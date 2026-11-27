@@ -15,6 +15,27 @@ export const PR_RUN_FIELDS = 'databaseId,workflowName,status,conclusion,headSha,
 
 export const PR_DETAIL_FIELDS = `${OPEN_PR_FIELDS},closingIssuesReferences`
 
+/**
+ * Fields an older gh may not know (`Unknown JSON field`): asked for, but the answer does without them, so a gh
+ * from before them still lists and opens PRs, only without that detail (newer fields first).
+ */
+export const PR_OPTIONAL_FIELDS = ['closingIssuesReferences', 'reviewRequests', 'commits', 'mergeStateStatus', 'reviewDecision', 'changedFiles'] as const
+
+/**
+ * The fields to ask again with after gh refused `asked` with `error`: without the field it named when that one is
+ * optional, without every optional one when it named none we asked for; null when the error isn't an unknown field,
+ * it named a required one, or nothing optional is left.
+ */
+export function fieldsWithout(error: string, asked: readonly string[], optional: readonly string[] = PR_OPTIONAL_FIELDS): string[] | null {
+  const m = /Unknown JSON field:?\s*"?([A-Za-z_]*)/i.exec(error)
+  if (!m) return null
+  const named = m[1]
+  // a field the answer can't do without: asking again won't help
+  if (named && asked.includes(named) && !optional.includes(named)) return null
+  const drop = named && asked.includes(named) ? [named] : asked.filter((f) => optional.includes(f))
+  return drop.length ? asked.filter((f) => !drop.includes(f)) : null
+}
+
 export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null
 
 export interface OpenPr {
