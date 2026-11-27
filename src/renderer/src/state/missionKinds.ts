@@ -10,9 +10,10 @@ export async function loadKinds(root: string | null): Promise<void> {
 
 export const allKinds = (): MissionKind[] => [...BUILTIN_KINDS, ...custom.get().list]
 
+/** the kinds a form offers: a kind with `listed: false` (New project) is started from its own place */
 export function useKinds(): MissionKind[] {
   const list = useStore(custom, (s) => s.list)
-  return [...BUILTIN_KINDS, ...list]
+  return [...BUILTIN_KINDS, ...list].filter((k) => k.listed !== false)
 }
 
 export const getKind = (id: string | undefined): MissionKind => findKind(allKinds(), id)

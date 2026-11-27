@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cloneError, cloneProgress, filterRepos, folderNameProblem, parseCloneInput, parseRepoList, repoFolderName } from '@shared/newProject'
+import { cloneError, cloneProgress, filterRepos, folderNameProblem, newProjectBrief, parseCloneInput, parseRepoList, projectSlug, repoFolderName } from '@shared/newProject'
 import { cloneRepo, cloneTarget } from '../src/main/git'
+import { createProjectFolder, readNewProjectResult } from '../src/main/newProject'
 
 describe('parseCloneInput', () => {
   it('reads URLs, scp-style, local paths and owner/name', () => {
@@ -129,5 +130,33 @@ describe('cloneTarget and cloneRepo', () => {
     const dest = join(tmp, 'parent', 'cancelled')
     await expect(cloneRepo(bare, dest, () => undefined, ac.signal)).rejects.toThrow('Cancelled.')
     expect(existsSync(dest)).toBe(false)
+  })
+})
+
+describe('Start from scratch', () => {
+  it('names the folder from the description when no name is given', () => {
+    expect(projectSlug('A command-line weather app in Rust that prints the forecast')).toBe('command-line-weather-rust')
+    expect(projectSlug('Invoice API\nwith Postgres')).toBe('invoice-api')
+    expect(projectSlug('!!!')).toBe('new-project')
+    expect(folderNameProblem(projectSlug('Ein Tool für Ärzte: Termine'))).toBeNull()
+  })
+  it('tells the agent the name and license picked', () => {
+    expect(newProjectBrief({ description: ' A Go API \n', name: 'pets-api', license: 'MIT' })).toBe('A Go API\n\nName: pets-api (use it as the repository name)\nLicense: MIT')
+    expect(newProjectBrief({ description: 'A Go API', license: 'Apache-2.0' })).toMatch(/Name: none given; suggest one/)
+  })
+  it('creates only a missing or empty folder, and reads the result the mission leaves', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'sldev-scratch-'))
+    const dest = join(base, 'fresh')
+    expect(await createProjectFolder(dest)).toBe(dest)
+    expect(readdirSync(dest)).toEqual([])
+    expect(await createProjectFolder(dest)).toBe(dest)
+    writeFileSync(join(dest, 'keep.txt'), 'mine')
+    await expect(createProjectFolder(dest)).rejects.toThrow(/isn’t empty/)
+    await expect(createProjectFolder('relative/x')).rejects.toThrow(/full path/)
+    expect(await readNewProjectResult(dest)).toBeNull()
+    mkdirSync(join(dest, '.sldev', 'runs'), { recursive: true })
+    writeFileSync(join(dest, '.sldev', 'runs', 'new-project.json'), '{"name":"fresh"}')
+    expect(await readNewProjectResult(dest)).toBe('{"name":"fresh"}')
+    rmSync(base, { recursive: true, force: true })
   })
 })

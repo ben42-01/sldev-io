@@ -21,9 +21,16 @@ export interface MissionKind {
   /** what the brief field suggests */
   placeholder?: string
   scope: 'builtin' | 'project' | 'user'
+  /** routine work a low-cost model does well: it runs on the agent's cheap model (cheapModel in agents.ts) unless one is picked */
+  cheap?: boolean
+  /** false: started from elsewhere (New project → Start from scratch), not offered in the New mission form */
+  listed?: boolean
   /** the file a custom kind came from */
   path?: string
 }
+
+/** the skill a New project mission runs (src/shared/sldevSkills.ts) */
+export const NEW_PROJECT_SKILL = 'sldev-new-project'
 
 const WORK_HERE = 'Work only in your current working folder.'
 const NO_EDITS = 'Do not create, modify or delete any files, and do not commit.'
@@ -140,6 +147,25 @@ export const BUILTIN_KINDS: MissionKind[] = [
     template: ['Lead: {title}', '{brief}', '{criteria}', LEAD_METHOD, '{sync}'].join('\n\n')
   },
   {
+    id: 'new-project',
+    name: 'New project',
+    description: 'Sets up an empty folder as a new project with the sldev-new-project skill: the stack’s own generator, README, license, build, tests, CI and a first commit. Never pushes.',
+    // there is no repository yet to make a worktree of: the folder is the project
+    worktree: false,
+    readOnly: false,
+    cheap: true,
+    listed: false,
+    placeholder: 'e.g. A command-line weather app in Rust that reads a city and prints the forecast',
+    scope: 'builtin',
+    template: [
+      'New project: {title}',
+      '{brief}',
+      '{criteria}',
+      `Set this project up with the ${NEW_PROJECT_SKILL} skill: read \`.agents/skills/${NEW_PROJECT_SKILL}/SKILL.md\` in this folder completely and follow it. Your current folder is the new project's root; work only in it. Never create a git remote and never push.`,
+      'End with: the repository name, the stack, the build and test commands and whether they pass, and anything you could not set up.'
+    ].join('\n\n')
+  },
+  {
     id: 'freeform',
     name: 'Freeform',
     description: 'Your prompt exactly as you wrote it, with nothing added.',
@@ -199,13 +225,14 @@ export function parseKindFile(text: string, path: string, scope: 'project' | 'us
     worktree: meta.worktree === true,
     readOnly: meta.readOnly === true || meta.access === 'read',
     placeholder: str('placeholder'),
+    ...(meta.cheap === true ? { cheap: true } : {}),
     scope,
     path
   }
 }
 
-export function serializeKind(k: Pick<MissionKind, 'name' | 'description' | 'template' | 'worktree' | 'readOnly' | 'placeholder'>): string {
-  const meta: Record<string, unknown> = { name: k.name, description: k.description || undefined, worktree: k.worktree, access: k.readOnly ? 'read' : 'write', placeholder: k.placeholder || undefined }
+export function serializeKind(k: Pick<MissionKind, 'name' | 'description' | 'template' | 'worktree' | 'readOnly' | 'placeholder' | 'cheap'>): string {
+  const meta: Record<string, unknown> = { name: k.name, description: k.description || undefined, worktree: k.worktree, access: k.readOnly ? 'read' : 'write', cheap: k.cheap || undefined, placeholder: k.placeholder || undefined }
   for (const key of Object.keys(meta)) if (meta[key] === undefined) delete meta[key]
   const help = '<!-- The first message a mission of this kind sends. {title}, {brief} and {criteria} are filled in; without {brief} the brief goes at the end. {sync} is the "merge the base branch, re-run the checks" step, filled in only for worktree missions. -->'
   return `---\n${stringify(meta).trimEnd()}\n---\n\n${help}\n\n${k.template.trim()}\n`

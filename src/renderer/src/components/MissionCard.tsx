@@ -1,6 +1,6 @@
 import type { Mission } from '@shared/types'
 import { useMemo } from 'react'
-import { Bot, Check, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Repeat, Square, SquareTerminal, Trash2, FlaskConical, GitMerge } from 'lucide-react'
+import { Bot, Check, Cpu, Ellipsis, FileDiff, Factory, FolderGit2, GitBranch, Hammer, NotebookText, Play, Repeat, Square, SquareTerminal, Trash2, FlaskConical, GitMerge } from 'lucide-react'
 import { buildDraft, continueOnAgent, failoverAgent, focusOrResume, isLive, missions, reviewMission, reviewWithAgent, stopMission } from '../state/missions'
 import { openNewMission } from './MissionsView'
 import { openNewRun } from './FactoryView'
@@ -22,6 +22,7 @@ import { groupByRole, spentLine, spentTitle, sumSpent, type SpentSum } from '@sh
 import { removeMissionFlow } from '../lib/removals'
 import { openMissionDetails } from './MissionDetails'
 import { TimeAgo } from './TimeAgo'
+import { NewProjectResult } from './NewProjectResult'
 
 export function MissionStatusPill({ status }: { status: Mission['status'] }): React.JSX.Element {
   return <StatusPill signal={missionSignal(status)} />
@@ -85,6 +86,7 @@ export function MissionCard({ mission: m, large = false, compact = false, projec
           <div className={`mission-row-sub${alert ? ' alert' : ''}`} title={sub}>
             <span className={`tone-${signal.tone}`}>{signal.label}</span>
             {' · '}{profileName ? `${profileName} · ` : ''}{getAgent(m.options.agent).name}
+            {m.options.model ? ` (${m.options.model})` : ''}
             {m.kind && m.kind.id !== 'build' ? ` · ${m.kind.name}` : ''}
             {sub ? ` · ${sub}` : ''}
           </div>
@@ -120,11 +122,13 @@ export function MissionCard({ mission: m, large = false, compact = false, projec
       {live && m.activity && m.status === 'working' && <div className="mission-activity">{m.activity}</div>}
       {m.lastMessage && (m.status !== 'working' || large) && <div className={`mission-message${large ? ' large' : ''}`}>{m.lastMessage}</div>}
       {m.kind?.id === 'lead' && <LeadWorkers lead={m} />}
+      {m.kind?.id === 'new-project' && <NewProjectResult mission={m} />}
       {/* where it runs and what it changed share a line, so the footer has room for the actions in a narrow column */}
       <div className="mission-where">
         <span className="mission-branch" title={m.worktree?.path ?? m.cwd}>
           {m.worktree ? <><GitBranch size={11} /> {m.worktree.branch}</> : <><FolderGit2 size={11} /> in place</>}
         </span>
+        {m.options.model && <span className="mission-model" title={`${getAgent(m.options.agent).name} runs on ${m.options.model}`}><Cpu size={11} /> {m.options.model}</span>}
         {m.stats && (m.stats.files > 0 ? (
           <span className="stats">
             <span className="add">+{m.stats.insertions}</span> <span className="del">−{m.stats.deletions}</span>

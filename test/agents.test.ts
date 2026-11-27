@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ClaudeAsset } from '@shared/types'
 import { COLLAPSE_OVER, groupAssets, isGroupOpen } from '@renderer/lib/assets'
-import { agentCommand as agentArgv, BUILTIN_AGENTS, commandText, customAgentDef, findAgent, skillPrompt, slugify, stageMode } from '@renderer/lib/agents'
+import { agentCommand as agentArgv, BUILTIN_AGENTS, commandText, cheapModelOf, customAgentDef, findAgent, skillPrompt, slugify, stageMode, withKindModel } from '@renderer/lib/agents'
 
 const agent = (id: string) => findAgent(id)
 const agentCommand = (...a: Parameters<typeof agentArgv>): string => commandText(agentArgv(...a))
@@ -99,6 +99,27 @@ describe('stageMode', () => {
     expect(stageMode(agent('claude'), { claude: 'bypassPermissions' })).toBe('bypassPermissions')
     // '' = the CLI's own default
     expect(stageMode(agent('claude'), { claude: '' })).toBeUndefined()
+  })
+})
+
+describe('cheap models', () => {
+  const claude = findAgent('claude')
+  const codex = findAgent('codex')
+  it('are the agent’s own low-cost model unless settings change it', () => {
+    expect(cheapModelOf(claude, undefined)).toBe('haiku')
+    expect(cheapModelOf(claude, { claude: 'sonnet' })).toBe('sonnet')
+    // '' = the agent's default model
+    expect(cheapModelOf(claude, { claude: '' })).toBeUndefined()
+    expect(cheapModelOf(codex, {})).toBeUndefined()
+    expect(cheapModelOf(codex, { codex: 'small-model' })).toBe('small-model')
+  })
+  it('fill the model only for a cheap kind, and never over one the user picked', () => {
+    expect(withKindModel({ agent: 'claude' }, { cheap: true }, claude, {})).toEqual({ agent: 'claude', model: 'haiku' })
+    expect(withKindModel({ agent: 'claude', model: 'opus' }, { cheap: true }, claude, {})).toEqual({ agent: 'claude', model: 'opus' })
+    expect(withKindModel({ agent: 'claude' }, { cheap: false }, claude, {})).toEqual({ agent: 'claude' })
+    expect(withKindModel({ agent: 'claude' }, undefined, claude, {})).toEqual({ agent: 'claude' })
+    expect(withKindModel({ agent: 'codex' }, { cheap: true }, codex, {})).toEqual({ agent: 'codex' })
+    expect(agentArgv(claude, withKindModel({}, { cheap: true }, claude, {}), 'go', undefined)).toEqual(['claude', '--model', 'haiku', 'go'])
   })
 })
 

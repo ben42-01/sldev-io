@@ -23,6 +23,11 @@ export interface AgentDef {
   /** model suggestions; the field also accepts free text */
   models: string[]
   modelPlaceholder?: string
+  /**
+   * the agent's own low-cost model, for routine work (mission kinds with the `cheap` hint, like New project);
+   * unset = the agent's default model. Settings → Agents can change it per agent (`cheapModels`).
+   */
+  cheapModel?: string
   /** approval / permission modes ('' = the agent's default) */
   modes: AgentMode[]
   /**
@@ -100,6 +105,7 @@ const claude: AgentDef = {
   bin: 'claude',
   install: 'npm i -g @anthropic-ai/claude-code',
   models: ['opus', 'sonnet', 'haiku', 'fable'],
+  cheapModel: 'haiku',
   modes: [
     { value: 'acceptEdits', label: 'Accept edits' },
     { value: 'plan', label: 'Plan' },
@@ -339,6 +345,22 @@ export function findAgent(id: string | undefined, custom: CustomAgent[] = []): A
 export function stageMode(agent: AgentDef, settings: Record<string, string> | undefined): string | undefined {
   const picked = settings?.[agent.id]
   return (picked === undefined ? agent.unattendedMode : picked) || undefined
+}
+
+/**
+ * The model a `cheap` mission kind runs on: Settings → Agents (`cheapModels`), else the agent's cheapModel.
+ * '' in settings means the agent's default model; undefined back means the same.
+ */
+export function cheapModelOf(agent: AgentDef, settings: Record<string, string> | undefined): string | undefined {
+  const picked = settings?.[agent.id]
+  return (picked === undefined ? agent.cheapModel : picked)?.trim() || undefined
+}
+
+/** Options for a mission of this kind: a cheap kind fills in the agent's cheap model unless a model was picked. */
+export function withKindModel(o: AgentOptions, kind: { cheap?: boolean } | undefined, agent: AgentDef, settings: Record<string, string> | undefined): AgentOptions {
+  if (!kind?.cheap || o.model?.trim()) return o
+  const model = cheapModelOf(agent, settings)
+  return model ? { ...o, model } : o
 }
 
 let onPath: string[] | null = null

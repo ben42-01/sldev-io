@@ -22,6 +22,7 @@ import * as rules from './rules'
 import * as factory from './factory'
 import * as evals from './evals'
 import * as boardFile from './boardFile'
+import { createProjectFolder, readNewProjectResult } from './newProject'
 import { missionTokens, type UsageRequest } from './usage'
 import * as vault from './vault'
 import { createSkill, listClaudeAssets, listMcpServers } from './claudeAssets'
@@ -268,6 +269,9 @@ function registerIpc(): void {
   // New project → Clone: one git clone per id, its output pushed to the window as it comes; cancel kills it
   const clones = new Map<string, AbortController>()
   ipcMain.handle('git:cloneTarget', (_e, parent: string, name: string) => git.cloneTarget(String(parent), String(name)))
+  // New project → Start from scratch: an empty folder for the agent, and the result it leaves there
+  ipcMain.handle('newProject:create', (_e, dest: string) => createProjectFolder(String(dest)))
+  ipcMain.handle('newProject:result', (_e, root: string) => readNewProjectResult(String(root)))
   ipcMain.handle('git:clone', async (e, id: string, url: string, dest: string) => {
     if (!isAbsolute(String(dest))) throw new Error('The folder to clone into must be a full path.')
     const ac = new AbortController()

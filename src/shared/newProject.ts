@@ -121,3 +121,32 @@ export function cloneError(output: string): string {
   const lines = output.split(/[\r\n]+/).map((l) => l.trim()).filter((l) => l && !/^Cloning into/.test(l) && !/:\s+\d{1,3}%/.test(l))
   return lines.slice(-4).join('\n') || 'git clone failed.'
 }
+
+// ── Start from scratch ─────────────────────────────────────────────
+
+export const NEW_PROJECT_LICENSES = ['Apache-2.0', 'MIT'] as const
+export type NewProjectLicense = (typeof NEW_PROJECT_LICENSES)[number]
+
+const FILLER = new Set(['a', 'an', 'the', 'that', 'which', 'with', 'for', 'and', 'or', 'of', 'to', 'in', 'on', 'my', 'our', 'simple', 'small', 'new', 'build', 'create', 'make', 'write', 'app', 'i', 'want', 'we', 'need'])
+
+/**
+ * The folder a project from scratch gets when no name is given: a few words of its description in kebab-case
+ * ("A command-line weather app in Rust" → command-line-weather-rust). The agent may still suggest a better
+ * repository name; the folder stays.
+ */
+export function projectSlug(description: string): string {
+  const words = description
+    .toLowerCase()
+    .split('\n')[0]
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !FILLER.has(w))
+  const slug = words.slice(0, 3).join('-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/, '')
+  return slug || 'new-project'
+}
+
+/** What a New project mission is told: the description as written, then the name and license picked in the dialog. */
+export function newProjectBrief(o: { description: string; name?: string; license: string }): string {
+  const lines = [o.name?.trim() ? `Name: ${o.name.trim()} (use it as the repository name)` : 'Name: none given; suggest one (kebab-case).', `License: ${o.license}`]
+  return `${o.description.trim()}\n\n${lines.join('\n')}`
+}

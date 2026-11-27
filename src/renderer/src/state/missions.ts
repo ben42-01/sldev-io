@@ -4,7 +4,7 @@ import { closePanel, focusPanel, getDockApi, openPanel, openTerminal, type OpenT
 import { patchMission, pushStatus } from '@shared/missionHistory'
 import { branchName, cleanBranchName } from '@shared/branch'
 import { clipReport, followUpBrief, missionPrompt, secondOpinionBrief } from '@shared/missionPrompt'
-import { agentCommand, commandText, installedBin, sldevMcp, type McpServerCommand } from '../lib/agents'
+import { agentCommand, commandText, installedBin, sldevMcp, withKindModel, type McpServerCommand } from '../lib/agents'
 import { failoverBrief, limitLine, TAIL_ROWS, nextAgent } from '@shared/failover'
 import { screenReport } from '@shared/screenReport'
 import { ASK_GENERIC, askLine } from '@shared/attention'
@@ -12,7 +12,7 @@ import { playChime } from '../lib/sound'
 import { onTerminalEvent, restartTerminal, stopTerminal, terminalCursor, terminalStatus, terminalTail } from '../lib/terminals'
 import { getAgent } from './agents'
 import { getProfile, profilesFor, roleFor } from './profiles'
-import { getKind } from './missionKinds'
+import { allKinds, getKind } from './missionKinds'
 import { withMemory } from '@shared/memory'
 import { contextPointer } from '@shared/context'
 import { applyProfile } from '@shared/profiles'
@@ -147,6 +147,9 @@ const CONTEXT_HITS = 6
 export async function startMission(input: StartMissionInput): Promise<Mission> {
   if (!hook) hook = await window.api.missions.hookInfo()
   const agent = getAgent(input.options.agent)
+  // routine kinds (New project) run on the agent's low-cost model unless one was picked
+  const kindDef = input.kind && allKinds().find((k) => k.id === input.kind!.id)
+  input = { ...input, options: withKindModel(input.options, kindDef, agent, workspace.get().cheapModels) }
   // a Lead hears which roles (profiles) its workers can take on this project
   if (input.kind?.id === 'lead') {
     const roles = leadRoles(await profilesFor(input.root))

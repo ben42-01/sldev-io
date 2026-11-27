@@ -16,14 +16,14 @@ module.exports = async (h) => {
   await h.click('.sldev-skills .btn.primary', 'Add to this project')
   h.expect(await h.until(() => h.js(`document.querySelector('.sldev-skills')?.dataset.state === 'done'`), 5000), 'then says they are in this project')
   for (const dir of ['.claude/skills', '.agents/skills']) {
-    h.expect(['sldev-mission', 'sldev-stories', 'sldev-recipe', 'sldev-eval'].every((n) => fs.existsSync(path.join(f, dir, n, 'SKILL.md'))), `written to ${dir}`)
+    h.expect(['sldev-mission', 'sldev-stories', 'sldev-recipe', 'sldev-eval', 'sldev-new-project'].every((n) => fs.existsSync(path.join(f, dir, n, 'SKILL.md'))), `written to ${dir}`)
   }
   h.expect(fs.readFileSync(path.join(f, '.sldev/drafts/.gitignore'), 'utf8') === '*\n', 'the drafts folder stays out of git')
   const rows = await h.until(async () => {
     const names = await h.js(`[...document.querySelectorAll('.asset-group[data-group="project"] .asset-row .rt-name')].map(r => r.textContent.trim())`)
     return names.filter((n) => n.startsWith('sldev-')).length ? names : null
   }, 5000)
-  h.expect(rows && rows.filter((n) => n === 'sldev-mission').length === 1 && rows.filter((n) => n.startsWith('sldev-')).length === 4, `each skill is listed once, though it is in two folders (${rows})`)
+  h.expect(rows && rows.filter((n) => n === 'sldev-mission').length === 1 && rows.filter((n) => n.startsWith('sldev-')).length === 5, `each skill is listed once, though it is in two folders (${rows})`)
   await h.wait(300)
   await h.shot('1-installed')
 
