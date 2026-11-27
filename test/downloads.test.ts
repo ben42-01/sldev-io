@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AppInfo } from '@shared/types'
 import { isPlatform, pickAsset } from '../website/api/download'
 import { summarize } from '../website/api/stats'
-import { detectPlatform } from '../website/src/lib/download'
+import { detectPlatform, recommendedDownload } from '../website/src/lib/download'
 import { diagnostics } from '@renderer/state/updates'
 
 const asset = (name: string, downloads = 0) => ({ name, browser_download_url: `https://dl/${name}`, download_count: downloads })
@@ -16,7 +16,7 @@ const release = (version: string, names: string[], draft = false, downloads = 0)
 describe('website /download/<platform>', () => {
   const releases = [
     release('0.1.0-beta.4', ['-arm64.dmg'], true),
-    release('0.1.0-beta.3', ['-setup.exe', '-setup.exe.blockmap', '-arm64.dmg', '-x64.dmg', '-arm64-mac.zip', '_amd64.deb', '-latest-linux.yml']),
+    release('0.1.0-beta.3', ['-setup.exe', '-setup.exe.blockmap', '-arm64.dmg', '-x64.dmg', '-arm64-mac.zip', '_amd64.deb', '-x86_64.AppImage', '-latest-linux.yml']),
     release('0.1.0-beta.2', ['.Setup.exe', '-arm64.dmg', '.dmg', '_amd64.deb'])
   ]
 
@@ -25,6 +25,7 @@ describe('website /download/<platform>', () => {
     expect(pickAsset(releases, 'mac')).toBe('https://dl/sldev-io-0.1.0-beta.3-arm64.dmg')
     expect(pickAsset(releases, 'mac-intel')).toBe('https://dl/sldev-io-0.1.0-beta.3-x64.dmg')
     expect(pickAsset(releases, 'linux')).toBe('https://dl/sldev-io-0.1.0-beta.3_amd64.deb')
+    expect(pickAsset(releases, 'linux-appimage')).toBe('https://dl/sldev-io-0.1.0-beta.3-x86_64.AppImage')
   })
 
   it('understands the older file names and falls back to older releases', () => {
@@ -36,6 +37,7 @@ describe('website /download/<platform>', () => {
 
   it('accepts only known platforms', () => {
     expect(isPlatform('mac-intel')).toBe(true)
+    expect(isPlatform('linux-appimage')).toBe(true)
     expect(isPlatform('toString')).toBe(false)
     expect(isPlatform(null)).toBe(false)
   })
@@ -44,6 +46,9 @@ describe('website /download/<platform>', () => {
     expect(detectPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('windows')
     expect(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe('mac')
     expect(detectPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux')
+    // Linux visitors get the AppImage, which updates itself without a password
+    expect(recommendedDownload('linux')).toBe('linux-appimage')
+    expect(recommendedDownload('mac')).toBe('mac')
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 14)')).toBeNull()
     expect(detectPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)')).toBeNull()
   })
@@ -53,13 +58,13 @@ describe('website /api/stats', () => {
   it('counts installer downloads per platform and release, skipping drafts and update files', () => {
     const stats = summarize([
       release('0.2.0', ['-setup.exe'], true, 99),
-      release('0.1.0', ['-setup.exe', '-setup.exe.blockmap', '-arm64.dmg', '-x64.dmg', '-arm64-mac.zip', '_amd64.deb', '-latest-linux.yml'], false, 10),
+      release('0.1.0', ['-setup.exe', '-setup.exe.blockmap', '-arm64.dmg', '-x64.dmg', '-arm64-mac.zip', '_amd64.deb', '-x86_64.AppImage', '-latest-linux.yml'], false, 10),
       release('0.1.0-beta.2', ['.Setup.exe', '_amd64.deb'], false, 3)
     ])
-    expect(stats.platforms).toEqual({ windows: 13, mac: 20, linux: 13 })
-    expect(stats.total).toBe(46)
+    expect(stats.platforms).toEqual({ windows: 13, mac: 20, linux: 23 })
+    expect(stats.total).toBe(56)
     expect(stats.releases).toEqual([
-      { version: '0.1.0', publishedAt: '2026-10-01T00:00:00Z', downloads: 40 },
+      { version: '0.1.0', publishedAt: '2026-10-01T00:00:00Z', downloads: 50 },
       { version: '0.1.0-beta.2', publishedAt: '2026-10-01T00:00:00Z', downloads: 6 }
     ])
   })
@@ -68,8 +73,8 @@ describe('website /api/stats', () => {
 describe('About diagnostics', () => {
   it('summarises versions and update state for support', () => {
     const info: AppInfo = { name: 'sldev-io', version: '0.1.0-beta.3', channel: 'beta', electron: '45.0.0', chrome: '156', node: '24', platform: 'linux', arch: 'x64', os: 'Linux 6.8' }
-    expect(diagnostics(info, { state: 'error', version: null, percent: null, manual: false, error: 'offline', checkedAt: null })).toBe(
-      'sldev-io 0.1.0-beta.3 (beta)\nElectron 45.0.0 · Chromium 156 · Node 24\nLinux 6.8 (linux x64)\nUpdates: error (offline)'
+    expect(diagnostics(info, { state: 'error', version: null, percent: null, manual: false, install: 'deb', error: 'offline', checkedAt: null })).toBe(
+      'sldev-io 0.1.0-beta.3 (beta)\nElectron 45.0.0 · Chromium 156 · Node 24\nLinux 6.8 (linux x64)\nUpdates: error (offline) · install: Debian package (.deb)'
     )
   })
 })

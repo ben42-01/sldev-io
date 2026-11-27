@@ -9,9 +9,14 @@ files:
 asarUnpack:
   - node_modules/node-pty/**
 npmRebuild: true
+# The AppImage's static runtime (toolset 1.x) needs no libfuse2, which Ubuntu 24.04 no longer ships, and
+# its AppRun adds --no-sandbox only where unprivileged user namespaces are blocked (AppArmor on 24.04+).
+toolsets:
+  appimage: '1.0.3'
 linux:
-  # the website and install.sh offer one installer per OS: .deb, .dmg (per arch), .exe
-  target: [deb]
+  # AppImage: the recommended Linux install (install.sh puts it in ~/Applications); it replaces its own
+  # file on update, so no password. deb: system-wide under /opt, so updating it asks for the admin password.
+  target: [AppImage, deb]
   # one PNG per hicolor size; the theme has no 1024x1024 folder, so a single big icon is ignored
   icon: build/icons
   # window icon at runtime (also covers running the unpacked build without a .desktop entry)

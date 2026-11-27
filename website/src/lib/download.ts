@@ -9,7 +9,13 @@ export const platformLabels: Record<Platform, string> = {
   windows: 'Windows',
   mac: 'macOS',
   'mac-intel': 'macOS (Intel)',
-  linux: 'Linux'
+  linux: 'Linux',
+  'linux-appimage': 'Linux'
+}
+
+/** The file a visitor's "Download for …" button gets: on Linux the AppImage, which updates itself without a password. */
+export function recommendedDownload(platform: Platform): Platform {
+  return platform === 'linux' ? 'linux-appimage' : platform
 }
 
 /** Served by api/download.ts: redirects to the newest installer for the platform. */

@@ -69,7 +69,7 @@ confirmed on the provider's site when you get there.
 | Release workflow (builds all OSes, attaches to a GitHub release **in this private repo**) | ✅ |
 | Website with OS-aware downloads, `install.sh`, Star and Sponsor links | ✅ (sldev-io.vercel.app) |
 | Publishing installers to this repo's GitHub Releases (older than 3 days deleted) | ✅ |
-| Auto-update in the app (`src/main/updater.ts`) | ✅ Windows and Linux .deb install updates; macOS shows "Download" until it's signed |
+| Auto-update in the app (`src/main/updater.ts`) | ✅ Windows and the Linux AppImage update themselves (no password); the .deb asks for the admin password; macOS shows "Download" until it's signed |
 | Settings → About (version, updates, diagnostics, legal links) | ✅ |
 | Code signing (macOS / Windows) | 🧑 accounts + 🤖 wiring (Phase 6) |
 | Privacy policy | ✅ at `/privacy`; 🧑 fill in `site.json` → `legal` |
@@ -142,7 +142,7 @@ From now on, every push to `master` that touches `website/` redeploys the site.
    5. Generate and copy the token. It's shown only once.
 3. Save it in the **source** repo: `ben42-01/sldev-io` → **Settings → Secrets and variables →
    Actions → New repository secret**. Name: `RELEASES_TOKEN`. Value: the token.
-4. ✅ The website's download buttons go through `/download/<windows|mac|mac-intel|linux>`
+4. ✅ The website's download buttons go through `/download/<windows|mac|mac-intel|linux|linux-appimage>` (`linux` is the .deb)
    (`website/api/download.ts`, a Vercel function), which redirects to the matching installer of
    the newest release in this repo, betas included. Nothing to change per release. `install.sh`
    on the site uses the same redirects.
@@ -180,13 +180,25 @@ starts and ends.
 
 ✅ The release workflow publishes to this repo's GitHub Releases (pre-releases for `-beta`
 versions) and deletes releases older than 3 days. The website's download buttons and
-`install.sh` serve the installers (deb, exe, two dmgs); the release also carries what
+`install.sh` serve the installers (AppImage, deb, exe, two dmgs); the release also carries what
 electron-updater reads (`latest*.yml`, `.blockmap`, the macOS zip).
 
 ✅ Auto-update (`src/main/updater.ts`, electron-updater): checks 15 s after start and every 6 h.
 Beta builds follow pre-releases, stable builds only stable releases.
 - **Windows**: downloads in the background, installs on quit or via "restart to update".
-- **Linux (.deb)**: downloads in the background; "restart to update" asks for the password (pkexec).
+- **Linux AppImage** (recommended; what `install.sh` installs, into `~/Applications/sldev-io.AppImage`
+  with an app-menu entry): downloads in the background and replaces its own file on quit or via
+  "restart to update". No root, no password. Built with electron-builder's static AppImage runtime
+  (`toolsets.appimage` in `electron-builder.yml`), so it needs no libfuse2 (gone from Ubuntu 24.04);
+  its AppRun adds `--no-sandbox` only where AppArmor blocks user namespaces. An AppImage kept in a
+  folder the user can't write shows "Download" instead.
+- **Linux .deb** (`install.sh --deb`, or the second button on /download): dpkg installs it system-wide
+  under /opt, so electron-updater runs `dpkg -i` through pkexec. It downloads in the background; the
+  restart dialog says the password prompt is coming and how to switch to the AppImage. Without
+  gksudo/kdesudo/pkexec/beesu (sudo alone has no terminal to ask in) it's "Download" only.
+  Settings → About and the update toast say which kind of install it is and what an update does.
+  A signed apt repository (updates through the system's own updater, like VS Code) is not done:
+  it needs a signing key, hosting and a `Release` file per version; the .deb would then go notify-only.
 - **macOS**: Squirrel.Mac only installs signed apps, so unsigned builds show "update available",
   which opens the website download. After Phase 6 signing, set `manual` to false in `updater.ts`.
 - `0.1.0-beta.2` has no updater: its users install `beta.3` by hand once. The first automatic
@@ -216,7 +228,7 @@ asks before pushing.
 
 ### 3.4 🧑 Verify before announcing
 
-- [ ] The release in `sldev-io` lists the `.deb`, the `-setup.exe` and the `.dmg`s (x64 and
+- [ ] The release in `sldev-io` lists the `.AppImage`, the `.deb`, the `-setup.exe` and the `.dmg`s (x64 and
       arm64), plus the update files: `latest*.yml`, `.blockmap`s and the macOS `.zip`s
 - [ ] The website's Download button downloads the installer for your OS, and
       `curl -fsSL https://<site>/install.sh | sh` installs it on Linux and macOS
@@ -225,6 +237,9 @@ asks before pushing.
 - [ ] Set `endsAt` to yesterday on a test branch deploy (or ask Claude to run `npm run e2e -- beta`)
       to see the ended screen; then restore the real date
 - [ ] Install beta.3, release a `beta.4`, and confirm the app offers and installs the update (Settings → About)
+- [ ] Linux, as a normal user: install the previous version once with `install.sh` (AppImage) and once
+      with `install.sh --deb`; the AppImage updates with no password prompt, the .deb's restart dialog
+      explains the prompt before pkexec asks
 
 Unsigned builds show warnings: on Windows click "More info → Run anyway"; on macOS right-click
 the app → Open (or `xattr -cr /Applications/sldev-io.app`). The website FAQ already says so.

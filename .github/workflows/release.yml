@@ -70,7 +70,8 @@ jobs:
           | Windows | \`-setup.exe\` |
           | macOS (Apple Silicon) | \`-arm64.dmg\` |
           | macOS (Intel) | \`-x64.dmg\` |
-          | Linux (Debian/Ubuntu) | \`.deb\` |
+          | Linux (recommended, updates itself without a password) | \`.AppImage\` |
+          | Linux (Debian/Ubuntu, system-wide; updates ask for your password) | \`.deb\` |
 
           Builds are not code-signed yet: on Windows choose **More info → Run anyway**; on macOS
           right-click the app and choose **Open** the first time.
@@ -94,7 +95,9 @@ jobs:
           - os: ubuntu-22.04
             name: linux
             args: --linux
-            installers: dist/*.deb
+            installers: |
+              dist/*.AppImage
+              dist/*.deb
           - os: windows-latest
             name: windows
             args: --win
@@ -141,8 +144,16 @@ jobs:
           max=$(find dist/linux-unpacked -name '*.node' -path '*/build/Release/*' -exec objdump -T {} + | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
           echo "highest glibc symbol: $max"
           [ "$(printf '%s\n' "$max" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35 ]
+      # the AppImage packs the same linux-unpacked folder; check node-pty made it in, unpacked from the asar
+      - name: Check the AppImage carries node-pty
+        if: env.skip != '1' && matrix.name == 'linux'
+        run: |
+          image=$(ls dist/*.AppImage)
+          cd "$(mktemp -d)"
+          "$OLDPWD/$image" --appimage-extract 'resources/app.asar.unpacked/node_modules/node-pty/build/Release/*' >/dev/null
+          ls squashfs-root/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node
       # signed by GitHub with this workflow run as the source, so anyone can check a download came from here:
-      #   gh attestation verify sldev-io-1.0.4-amd64.deb --repo ben42-01/sldev-io
+      #   gh attestation verify sldev-io-1.0.4.AppImage --repo ben42-01/sldev-io
       - name: Attest the installers' provenance
         if: env.skip != '1'
         uses: actions/attest-build-provenance@v2
@@ -160,11 +171,12 @@ jobs:
           shopt -s nullglob
           # installers (the website's /download/<os> and install.sh pick from these) plus what
           # electron-updater reads: latest*.yml, .blockmap, and the macOS zip
-          files=(dist/*.deb dist/*.dmg dist/*.exe dist/*.zip dist/*.blockmap dist/latest*.yml)
+          # (latest-linux.yml lists the AppImage and the .deb: each updater picks its own file from it)
+          files=(dist/*.AppImage dist/*.deb dist/*.dmg dist/*.exe dist/*.zip dist/*.blockmap dist/latest*.yml)
           [ ${#files[@]} -gt 0 ] || { echo "::error::no installers in dist/"; exit 1; }
           # this OS's part of SHA256SUMS (the release job joins them): the installers, by the name they have on the release
           installers=()
-          for f in dist/*.deb dist/*.dmg dist/*.exe dist/*.zip; do installers+=("$(basename "$f")"); done
+          for f in dist/*.AppImage dist/*.deb dist/*.dmg dist/*.exe dist/*.zip; do installers+=("$(basename "$f")"); done
           sums="sha256-${{ matrix.name }}.txt"
           (cd dist && if command -v sha256sum >/dev/null; then sha256sum "${installers[@]}"; else shasum -a 256 "${installers[@]}"; fi) | sed 's/ \*/  /' > "$sums"
           cat "$sums"
