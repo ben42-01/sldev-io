@@ -1,7 +1,7 @@
 // The Workflows tab's Pull requests section: closed, nothing is asked; open, the fake gh's two PRs are listed in
 // review order (the one asking e2e for a review first), with author, draft, size, age, review decision and a dot for
 // the CI on each head commit (#128 failed on its head; #131 has a green run only on an older commit, so none). A click
-// opens a Review tab "#<n> <title>" with the PR's diff and its head checked out; again, the same tab comes forward.
+// opens a Review tab "#<n> <title>" with the PR's diff (nothing checked out: that waits for an action that needs it); again, the same tab comes forward.
 // The palette's "Review a pull request…" opens the other one. Closing the section stops the asking.
 const fs = require('fs')
 const path = require('path')
@@ -69,7 +69,8 @@ module.exports = async (h) => {
   h.expect(await h.until(async () => (await tabs('#128 Rate limit the API')) === 1, 5000), 'a click opens a Review tab titled #128 Rate limit the API')
   h.expect(await h.until(() => h.js(`document.querySelector('.diff-panel')?.textContent.includes('limiter.js')`), 8000), "the tab shows the PR's diff")
   const wt = path.join(path.dirname(h.fixture), '.sldev-worktrees', path.basename(h.fixture), 'pr-128')
-  h.expect(await h.until(() => fs.existsSync(path.join(wt, 'limiter.js')), 10000), "the PR's head is checked out in its own worktree")
+  await h.wait(1000)
+  h.expect(!fs.existsSync(wt), 'opening the PR checks nothing out')
   h.expect(g(h.fixture, 'rev-parse', '--abbrev-ref', 'HEAD') === 'main', 'the main checkout stays on its branch')
   await h.wait(800)
   await h.shot('2-review-tab')

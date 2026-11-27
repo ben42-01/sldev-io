@@ -3,9 +3,9 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isMine, nextToReview, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, sinceReviewed, waitingForMe, withChecks } from '@shared/prs'
+import { fieldsWithout, isMine, nextToReview, parseOpenPrs, parsePrDetail, parsePrRuns, planPrWorktree, prChecks, prTabTitle, reviewOrder, sinceReviewed, waitingForMe, withChecks } from '@shared/prs'
 import { prChecksSignal, prReviewSignal } from '@shared/status'
-import { listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
+import { findPrWorktree, listWorktrees, prWorktree, removePrWorktree } from '../src/main/git'
 
 const RAW = {
   number: 128,
@@ -254,6 +254,13 @@ describe('prWorktree', () => {
     expect((await listWorktrees(work)).find((w) => w.path === wt.path)).toMatchObject({ detached: true, head: sha })
   })
 
+  it('finds an existing worktree without fetching, and none for a PR never checked out', async () => {
+    const sha = g(work, 'rev-parse', 'refs/sldev/pr/7')
+    expect(await findPrWorktree(work, 7)).toEqual({ path: wtPath(7), head: sha })
+    expect(await findPrWorktree(work, 8)).toBeNull()
+    expect(() => g(work, 'rev-parse', '--verify', '--quiet', 'refs/sldev/pr/8')).toThrow()
+  })
+
   it('reuses the worktree at the same head, also when asked from inside a worktree', async () => {
     const sha = g(work, 'rev-parse', 'refs/sldev/pr/7')
     expect((await prWorktree(work, 7, sha)).action).toBe('reused')
@@ -333,5 +340,19 @@ describe('prChecks', () => {
     expect(prChecksSignal('failed')).toMatchObject({ tone: 'error', pulse: false })
     expect(prChecksSignal('running')).toMatchObject({ tone: 'working', pulse: true })
     expect(prChecksSignal('none')).toMatchObject({ tone: 'neutral', pulse: false })
+  })
+})
+
+describe('fieldsWithout', () => {
+  const asked = ['number', 'commits', 'closingIssuesReferences']
+  it('drops the optional field gh named, else every optional one', () => {
+    expect(fieldsWithout('Unknown JSON field: "closingIssuesReferences"\nAvailable fields:', asked)).toEqual(['number', 'commits'])
+    expect(fieldsWithout('Unknown JSON field: "somethingElse"', asked)).toEqual(['number'])
+    expect(fieldsWithout('unknown json field', asked)).toEqual(['number'])
+  })
+  it('gives up on other errors, and when nothing optional is left', () => {
+    expect(fieldsWithout('HTTP 502', asked)).toBeNull()
+    expect(fieldsWithout('Unknown JSON field: "number"', asked)).toBeNull()
+    expect(fieldsWithout('Unknown JSON field', ['number', 'title'])).toBeNull()
   })
 })

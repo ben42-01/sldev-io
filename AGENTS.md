@@ -208,6 +208,10 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Re-review compares hunk contents (`hunkKey`: file plus +/- lines, no line numbers), never commits, so it survives rebases,
   force pushes and uncommitted work: a mark keeps the hunks it was made on and holds only while they're the same (`carryMarks`),
   and `seen` (the diff at the last verdict, with its head) is what "Since last review" filters against.
+  Opening a PR fetches and checks out nothing (its diff is `gh pr diff`; a big repo's checkout takes minutes): the PR's worktree is made
+  by `checkFolder` the first time Run checks, Explain the change or Ask why needs it (`Checking out #n…` on that button, a failure shown
+  there), and one already at the PR's head is used for files from the start (`findPrWorktree`, read-only). gh fields an older gh may not
+  know (`PR_OPTIONAL_FIELDS`, `fieldsWithout` in src/shared/prs.ts) are asked through `ghFields` in src/main/github.ts, which asks again without them.
   Run checks (`src/shared/reviewChecks.ts`, `state/reviewChecks.ts`) runs only on its click, in the resolver's `checkFolder` (a PR's
   own worktree, never the main checkout), installs dependencies once per worktree (`setupPlan`'s marker), runs each check in its own
   terminal with `CI=1` (killed after 15 min), and keeps the result on the review keyed by head commit (and diff), so new commits make it stale.

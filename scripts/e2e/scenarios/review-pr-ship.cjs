@@ -137,4 +137,5 @@ module.exports = async (h) => {
   delete process.env.FAKE_GH_PR_131_DRAFT
 }
 
-module.exports.env = { FAKE_GH_AUTHED: '1' }
+// an older gh: the ship bar works without closingIssuesReferences (asked by the Review tab and the PR detail)
+module.exports.env = { FAKE_GH_AUTHED: '1', FAKE_GH_OLD: '1' }

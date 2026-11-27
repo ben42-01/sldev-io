@@ -8,7 +8,7 @@ import { scrollToTop } from '../lib/scroll'
 import { getAgent } from '../state/agents'
 import { focusOrResume, isLive } from '../state/missions'
 import { askAboutPart, diffSignature, explainChanges, markPart, openPostReview, readWalkthrough, sendBack, settleReview } from '../state/review'
-import { firstAgent, reviewHead, workingOn, type ReviewHead, type ReviewSource } from '../state/reviewTargets'
+import { firstAgent, reviewHead, useCheckingOut, workingOn, type ReviewHead, type ReviewSource } from '../state/reviewTargets'
 import { updateSettings, workspace } from '../state/workspace'
 import { useStore } from '../state/store'
 import { showContextMenu } from './ContextMenu'
@@ -53,6 +53,8 @@ export function ReviewCockpit({ source, files, layout, sinceAsked }: { source: R
   const [editing, setEditing] = useState<{ part: string; note: string } | null>(null)
   const [asking, setAsking] = useState<{ part: string; q: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  // a PR is checked out the first time a helper needs its files: say so on the button that started it
+  const checkingOut = useCheckingOut(source)
   const [error, setError] = useState('')
   /** "Since last review": only the hunks that changed since the last verdict */
   const [since, setSince] = useState(() => askSince(sinceAsked))
@@ -279,8 +281,8 @@ export function ReviewCockpit({ source, files, layout, sinceAsked }: { source: R
                 Grouped by folder for now. An agent can explain each part: why it is there, whether it was asked for, and a simpler way if there is one.
               </p>
               <div className="rc-explain-actions">
-                <button className="btn primary sm" onClick={() => void explain(firstAgent(source))}>
-                  <Wand2 size={13} /> Explain the change
+                <button className="btn primary sm" disabled={!!checkingOut} onClick={() => void explain(firstAgent(source))}>
+                  {checkingOut ? <LoaderCircle size={13} className="spin" /> : <Wand2 size={13} />} {checkingOut ?? 'Explain the change'}
                 </button>
                 <button className="btn sm" title="Pick the agent that explains it" aria-label="Pick the agent that explains it" onClick={explainMenu}>
                   {agentName} <ChevronDown size={12} />
@@ -495,6 +497,7 @@ interface PartViewProps {
 function PartView(p: PartViewProps): React.JSX.Element {
   const { part, source } = p
   const asks = (source.review.asks ?? []).filter((a) => a.part === part.id)
+  const checkingOut = useCheckingOut(source)
   const byFile = groupByFile(part.hunks)
   return (
     <article className="rc-part" data-part={part.id}>
@@ -606,8 +609,8 @@ function PartView(p: PartViewProps): React.JSX.Element {
             <Scissors size={13} /> Cut it
           </button>
         )}
-        <button className="btn sm" onClick={() => p.onAsk('')} title={`Ask ${getAgent(firstAgent(source)).name} about this part (Q)`}>
-          <CircleHelp size={13} /> Ask why
+        <button className="btn sm" disabled={!!checkingOut} onClick={() => p.onAsk('')} title={`Ask ${getAgent(firstAgent(source)).name} about this part (Q)`}>
+          {checkingOut ? <LoaderCircle size={13} className="spin" /> : <CircleHelp size={13} />} {checkingOut ?? 'Ask why'}
         </button>
         <span className="spacer" />
         <button className="icon-btn" disabled={p.n === 1} onClick={p.onPrev} title="Previous part (K)" aria-label="Previous part">

@@ -247,6 +247,7 @@ function registerIpc(): void {
   ipcMain.handle('git:pruneWorktrees', (_e, cwd: string) => git.pruneWorktrees(cwd))
   ipcMain.handle('git:worktreeStatus', (_e, wt: WorktreeInfo) => git.worktreeStatus(wt))
   ipcMain.handle('git:prWorktree', (_e, root: string, n: number, headSha?: string, remote?: string) => git.prWorktree(root, Number(n), headSha ? String(headSha) : undefined, remote ? String(remote) : undefined))
+  ipcMain.handle('git:findPrWorktree', (_e, root: string, n: number) => git.findPrWorktree(root, Number(n)))
   ipcMain.handle('git:removePrWorktree', (_e, root: string, n: number, opts?: { discard: boolean }) => git.removePrWorktree(root, Number(n), { discard: !!opts?.discard }))
   ipcMain.handle('git:removeWorktree', (_e, wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }) => git.removeWorktree(wt, opts))
   ipcMain.handle('git:graphLog', (_e, cwd: string, limit: number) => git.graphLog(cwd, limit))

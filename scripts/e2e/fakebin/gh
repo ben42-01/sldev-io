@@ -2,9 +2,15 @@
 # Fake GitHub CLI for e2e: installed but logged out, so the setup check offers `gh auth login`.
 # FAKE_GH_AUTHED=1 (a scenario's env) logs it in, with a repo, workflows and runs for the Workflows view.
 # FAKE_GH_NO_WORKFLOWS=1 adds a repo without Actions: real gh prints nothing for `workflow list --json`, and [] for runs.
-# FAKE_GH_MISSING=1 acts like gh isn't installed. FAKE_GH_SHIP=<dir>: the Review tab's PR and runs (below). FAKE_GH_LOG=<file> appends every call (one per line).
+# FAKE_GH_MISSING=1 acts like gh isn't installed. FAKE_GH_OLD=1 rejects closingIssuesReferences like an older gh. FAKE_GH_SHIP=<dir>: the Review tab's PR and runs (below). FAKE_GH_LOG=<file> appends every call (one per line).
 [ -n "$FAKE_GH_LOG" ] && echo "$*" >> "$FAKE_GH_LOG"
 if [ -n "$FAKE_GH_MISSING" ]; then echo "sh: 1: gh: not found" >&2; exit 127; fi
+# FAKE_GH_OLD=1: a gh from before closingIssuesReferences, which refuses the whole call when it is asked for
+if [ -n "$FAKE_GH_OLD" ]; then
+  case " $* " in *" --json "*closingIssuesReferences*)
+    printf 'Unknown JSON field: "closingIssuesReferences"\nAvailable fields:\n  number\n  title\n' >&2; exit 1 ;;
+  esac
+fi
 if [ -n "$FAKE_GH_NO_WORKFLOWS" ]; then
   case "$1 $2" in
     "workflow list") exit 0 ;;
@@ -82,10 +88,11 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
       if [ -n "$FAKE_GH_PR_DIFF_REAL" ]; then git fetch -q origin "+refs/pull/$3/head:refs/fake-gh/pr/$3" && git diff main "refs/fake-gh/pr/$3"; exit $?; fi
       printf 'diff --git a/limiter.js b/limiter.js\nnew file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/limiter.js\n@@ -0,0 +1,3 @@\n+// PR #%s\n+export const limit = 100\n+export const windowMs = 60000\n' "$3"; exit 0 ;;
   esac
-  # a PR for its Review tab: title, description, head and the branches
+  # a PR for its Review tab: title, description, head and the branches (and the issue it closes, when asked for)
   case "$1 $2 $4 $5" in "pr view --json number,title,body,url,headRefOid,headRefName,baseRefName"*)
+    case "$5" in *closingIssuesReferences*) refs=',"closingIssuesReferences":[{"number":42,"url":"https://github.com/acme/shop/issues/42"}]' ;; *) refs='' ;; esac
     case "$3" in
-      128) echo "{\"number\":128,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/128\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\",\"closingIssuesReferences\":[{\"number\":42,\"url\":\"https://github.com/acme/shop/issues/42\"}]}" ;;
+      128) echo "{\"number\":128,\"title\":\"Rate limit the API\",\"body\":\"Adds a limiter. Fixes #42\",\"url\":\"https://github.com/acme/shop/pull/128\",\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"headRefName\":\"rate-limit\",\"baseRefName\":\"main\"$refs}" ;;
       *) echo "{\"number\":$3,\"title\":\"Try a new cache\",\"body\":\"\",\"url\":\"https://github.com/acme/shop/pull/$3\",\"headRefOid\":\"\",\"headRefName\":\"cache\",\"baseRefName\":\"main\"}" ;;
     esac; exit 0 ;;
   esac
@@ -93,9 +100,10 @@ if [ -n "$FAKE_GH_AUTHED" ]; then
   if [ "$1 $2" = "issue view" ] && [ "$3" = "https://github.com/acme/shop/issues/42" ]; then
     printf '%s\n' '{"number":42,"title":"Too many requests","body":"Bots hammer the API.\n\n## Acceptance criteria\n- [ ] The 11th request in a minute gets a 429\n- [ ] Limits are per API key"}'; exit 0
   fi
-  # one PR with the issues it closes (the review list's detail)
-  case "$1 $2 $3 $4 $5" in "pr view 128 --json "*closingIssuesReferences*)
-    echo "{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\"},\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"body\":\"Adds a limiter. Fixes #42\",\"closingIssuesReferences\":[{\"number\":42,\"title\":\"Too many requests\",\"url\":\"https://github.com/acme/shop/issues/42\",\"repository\":{\"name\":\"shop\",\"owner\":{\"login\":\"acme\"}}}]}"; exit 0 ;;
+  # one PR with the issues it closes (the review list's detail; without them when not asked, as an older gh answers)
+  case "$1 $2 $3 $4 $5" in "pr view 128 --json number,title,author,"*)
+    case "$5" in *closingIssuesReferences*) refs=',"closingIssuesReferences":[{"number":42,"title":"Too many requests","url":"https://github.com/acme/shop/issues/42","repository":{"name":"shop","owner":{"login":"acme"}}}]' ;; *) refs='' ;; esac
+    echo "{\"number\":128,\"title\":\"Rate limit the API\",\"url\":\"https://github.com/acme/shop/pull/128\",\"isDraft\":false,\"author\":{\"login\":\"maria\"},\"headRefOid\":\"${FAKE_GH_PR_128_HEAD:-}\",\"baseRefName\":\"main\",\"body\":\"Adds a limiter. Fixes #42\"$refs}"; exit 0 ;;
   esac
   # the Review tab on a PR (gh pr view + gh pr diff): the head GitHub serves as refs/pull/<n>/head, diffed against main
   case "$1 $2 $4 $5" in "pr view --json number,title,body,url,headRefOid,headRefName,baseRefName")

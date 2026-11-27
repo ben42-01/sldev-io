@@ -1950,8 +1950,12 @@ const pullRequests: DocPage = {
             in the background. <b>Review a pull request…</b> in the command palette searches the same list.
           </p>
           <p>
-            A click opens the pull request in a Review tab titled with its number (again, the same tab comes forward). Its head is checked out
-            in a worktree of its own next to the project, so files open from the pull request's code and your main checkout stays on its branch.
+            A click opens the pull request in a Review tab titled with its number (again, the same tab comes forward). The diff comes from
+            GitHub, so opening it checks nothing out, however big the repository. The first time something needs the pull request's files
+            (<b>Run checks</b>, <b>Explain the change</b>, <b>Ask why</b>), its head is checked out in a worktree of its own next to the project,
+            and the button says <i>Checking out #n…</i> meanwhile; a worktree from an earlier review is reused, and moved to new commits. Your
+            main checkout stays on its branch. With an older GitHub CLI that doesn't know the issues a pull request closes, the review still
+            works, without the criteria from those issues.
           </p>
         </>
       )

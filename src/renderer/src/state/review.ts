@@ -44,8 +44,9 @@ const subjectOf = (t: ReviewTarget): ReviewSubject => {
 
 async function helper(t: ReviewTarget, s: ReviewSource, agentId: string, prompt: string, title: string): Promise<Mission> {
   const agent = getAgent(agentId)
-  // in the code under review (a PR's own worktree, checked out first if it isn't yet), never someone's checkout by accident
-  const cwd = (await checkFolder(t).catch(() => null))?.path ?? s.cwd
+  // in the code under review: a PR's own worktree, checked out first if it isn't yet (a failure stops here and says
+  // why, never someone's checkout by accident); a mission's own folder
+  const cwd = s.pr ? (await checkFolder(t)).path : ((await checkFolder(t).catch(() => null))?.path ?? s.cwd)
   return quietly(() =>
     startMission({
       prompt,

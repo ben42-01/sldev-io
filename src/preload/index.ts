@@ -157,6 +157,7 @@ const api = {
     /** fetch pull/<n>/head into refs/sldev/pr/<n> and check it out detached in its own worktree (reused, or moved to new commits) */
     prWorktree: (root: string, n: number, headSha?: string, remote?: string): Promise<PrWorktree> => ipcRenderer.invoke('git:prWorktree', root, n, headSha, remote),
     /** remove PR n's review worktree and fetched ref; git refuses changed files unless `discard` */
+    findPrWorktree: (root: string, n: number): Promise<{ path: string; head: string | null } | null> => ipcRenderer.invoke('git:findPrWorktree', root, n),
     removePrWorktree: (root: string, n: number, opts?: { discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removePrWorktree', root, n, opts),
     removeWorktree: (wt: WorktreeInfo, opts: { deleteBranch: boolean; discard: boolean }): Promise<void> => ipcRenderer.invoke('git:removeWorktree', wt, opts),
     /** every ref's last `limit` commits in topo order, for the commit graph */
