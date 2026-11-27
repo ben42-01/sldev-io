@@ -3,7 +3,7 @@
   "brand": "sldev",
   "brandTagline": "Tools for leading coding agents, free and open source.",
   "tagline": "The terminal-first workspace for agentic coding.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "url": "https://sldev-io.vercel.app",
   "downloadUrl": "https://sldev-io.vercel.app/download",
   "repoUrl": "https://github.com/ben42-01/downloads.sldev.io",
