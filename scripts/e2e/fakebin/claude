@@ -201,7 +201,7 @@ if (ip.startsWith('New project:')) {
   w('.sldev/rules.md', `# ${name}\n\nBuild: npm run build. Test: npm test.\n`)
   const git = (...a) => spawnSync('git', a, { stdio: 'ignore' })
   git('init', '-q', '-b', 'main'); git('add', '-A'); git('-c', 'user.name=Fake', '-c', 'user.email=fake@example.com', 'commit', '-qm', 'Initial project setup')
-  if (!ip.includes('NO_RESULT')) w('.sldev/runs/new-project.json', ip.includes('BAD_RESULT') ? '{"name": "broken",}' : JSON.stringify({ name, stack: 'Node.js (npm)', build: 'npm run build', test: 'npm test', license, by: 'claude' }, null, 2))
+  if (!ip.includes('NO_RESULT')) w('.sldev/runs/new-project.json', ip.includes('BAD_RESULT') ? '{"name": "broken",}' : JSON.stringify({ name, stack: 'Node.js (npm)', build: 'npm run build', test: 'npm test', license, checks: ip.includes('CHECKS_FAILED') ? 'failed' : 'passed', by: 'claude' }, null, 2))
   sleep(400)
   const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
   fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: `Set up ${name}: npm run build and npm test pass. ${ok ? 'Followed the sldev-new-project skill.' : 'SKILL NOT FOUND.'} Nothing pushed.` }] } }) + '\n')

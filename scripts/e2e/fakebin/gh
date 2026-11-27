@@ -35,6 +35,26 @@ if [ "$1 $2 $3" = "pr list --head" ]; then
   echo "[{\"number\":21,\"state\":\"$(cat "$f" 2>/dev/null || echo OPEN)\"}]"; exit 0
 fi
 if [ -n "$FAKE_GH_AUTHED" ]; then
+  # New project → Create repository: the owners, `repo view <owner>/<name>` answering from FAKE_GH_REMOTES/<owner>/<name>.git,
+  # and `repo create` appending its arguments to FAKE_GH_CREATE_LOG and, like gh, adding origin (a local bare repo) and pushing;
+  # a name ending in -boom fails before anything is made
+  case "$1 $2" in
+    "api user") echo '{"login":"e2e"}'; exit 0 ;;
+    "api user/orgs") echo '[{"login":"acme"},{"login":"oss-lab"}]'; exit 0 ;;
+  esac
+  if [ "$1 $2" = "repo view" ] && [ -n "$3" ] && [ "${3#-}" = "$3" ] && [ -n "$FAKE_GH_REMOTES" ]; then
+    [ -d "$FAKE_GH_REMOTES/$3.git" ] && { echo "{\"nameWithOwner\":\"$3\"}"; exit 0; }
+    echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2; exit 1
+  fi
+  if [ "$1 $2" = "repo create" ]; then
+    [ -n "$FAKE_GH_CREATE_LOG" ] && echo "$*" >> "$FAKE_GH_CREATE_LOG"
+    case "$3" in *-boom) echo "HTTP 422: Repository creation failed. (createRepository)" >&2; exit 1 ;; esac
+    bare="$FAKE_GH_REMOTES/$3.git"; mkdir -p "$bare" && git init -q --bare "$bare" || exit 1
+    git -C "$6" remote add origin "$bare" && git -C "$6" push -q -u origin HEAD 2>&1 >/dev/null || exit 1
+    # what the card shows is GitHub's URL, as after a real gh repo create (the push went to the bare repo)
+    git -C "$6" remote set-url origin "https://github.com/$3.git"
+    echo "https://github.com/$3"; exit 0
+  fi
   # PR #128 in its Review tab's ship bar: state from pr-128-state.txt (OPEN), head from FAKE_GH_PR_128_HEAD, a passing
   # run on that head; a posted review is saved to review-128.json, a merge's arguments to merge-128.txt (and it merges)
   case "$1 $2 $3 $4 $5" in "pr view 128 --json number,title,state,"*)

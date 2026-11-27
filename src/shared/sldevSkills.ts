@@ -11,7 +11,7 @@ import { parseRecipe } from './factory'
  */
 
 /** bumped when a skill's text changes, so projects with an older copy are offered the update */
-export const SKILLS_VERSION = 5
+export const SKILLS_VERSION = 6
 
 export const DRAFTS_DIR = '.sldev/drafts'
 /** where each skill is installed in a project: Claude Code reads .claude/skills, most other agents .agents/skills */
@@ -282,7 +282,7 @@ Say in one line that the eval is in sldev-io under Mission Control → Evals, re
 
 The folder you are in is empty and becomes a new project: set it up so it builds, tests and runs CI from its first commit. It may already hold sldev's own \`.claude/\`, \`.agents/\` and \`.sldev/\` folders; keep them.
 
-**Never create a remote, never push, never publish anything** (no \`gh repo create\`, no \`git remote add\`, no package publish). The person does that when they're ready.
+**Never create a remote, never push, never publish anything** (no \`gh repo create\`, no \`git remote add\`, no \`git push\`, no package publish). The person creates the GitHub repository with one click in sldev-io (**Create repository on GitHub…** on the mission's card) when they're ready.
 
 ## 1. Settle what to build
 
@@ -317,7 +317,11 @@ Use the stack's official generator, never a hand-written copy of what it makes:
 - \`.sldev/rules.md\`: rules for agents working here: the stack, the build and test commands, the layout, conventions. sldev-io copies it into AGENTS.md, CLAUDE.md and the other agents' files.
 - \`git init -b main\`, then one first commit of everything: \`Initial project setup\`.
 
-## 4. Write the result
+## 4. Check it
+
+Build and tests must pass: run the build command, then the test command, from the project folder. Fix what fails, run them again, and commit the fixes (amend the first commit while it is the only one). Don't report a project whose checks you haven't seen pass.
+
+## 5. Write the result
 
 \`.sldev/runs/new-project.json\` (git-ignored), which sldev-io shows when you finish:
 
@@ -328,21 +332,18 @@ Use the stack's official generator, never a hand-written copy of what it makes:
   "build": "cargo build",
   "test": "cargo test",
   "license": "Apache-2.0",
+  "checks": "passed",
   "by": "claude"
 }
 \`\`\`
 
-\`name\` is the repository name (kebab-case), \`build\` and \`test\` the exact commands, run from the project folder. \`by\` is your own agent id (${AGENT_IDS}).
-
-## 5. Check it
-
-Build and tests must pass: run the build command, then the test command, from the project folder. Fix what fails and run them again. Don't report a project whose checks you haven't seen pass.
+\`name\` is the repository name (kebab-case), \`build\` and \`test\` the exact commands, run from the project folder. \`checks\` is \`"passed"\` only when you saw both pass in step 4, else \`"failed"\`: sldev-io offers to create the GitHub repository only for a project whose checks passed. \`by\` is your own agent id (${AGENT_IDS}).
 
 ${checkStep('Then check the result file.', `${JSON_RULE}, and "name", "stack", "build" and "test" are non-empty strings`, 'sldev-io reads the file to show the project; one it can\'t read only says so.')}
 
 ## 6. Finish
 
-Say in a few lines: the name, the stack, the build and test commands and that they pass, and that nothing was pushed: there is no remote yet.
+Say in a few lines: the name, the stack, the build and test commands and that they pass, and that nothing was pushed: there is no remote yet. sldev-io offers **Create repository on GitHub…** on the card once the checks passed.
 `
   }
 ]
@@ -528,6 +529,13 @@ export interface NewProjectResult {
   test: string
   license?: string
   by?: string
+  /** the agent saw the build and the tests pass ("passed"), or couldn't make them ("failed"); unset: it didn't say */
+  checks?: 'passed' | 'failed'
+}
+
+const checksOf = (v: unknown): 'passed' | 'failed' | undefined => {
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  return t === 'passed' || t === 'failed' ? t : undefined
 }
 
 /** The result file of a new-project mission; `error` says what's wrong with it in a line. */
@@ -544,7 +552,7 @@ export function parseNewProjectResult(src: string): { result?: NewProjectResult;
   if (missing.length) return { error: `Missing ${missing.map((k) => `"${k}"`).join(', ')}: each must be a non-empty string.` }
   const name = text(o.name)!
   return {
-    result: { name, stack: text(o.stack)!, build: text(o.build)!, test: text(o.test)!, license: text(o.license), by: text(o.by)?.toLowerCase() },
+    result: { name, stack: text(o.stack)!, build: text(o.build)!, test: text(o.test)!, license: text(o.license), by: text(o.by)?.toLowerCase(), checks: checksOf(o.checks) },
     ...(/^[a-z0-9]+(?:[-._][a-z0-9]+)*$/.test(name) ? {} : { warning: `"${name}" isn't a kebab-case repository name (e.g. weather-cli).` })
   }
 }

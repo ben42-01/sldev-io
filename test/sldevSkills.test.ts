@@ -38,7 +38,14 @@ describe('the skills teach formats the app reads', () => {
     const r = parseNewProjectResult(example('sldev-new-project', 'json'))
     expect(r.error).toBeUndefined()
     expect(r.warning).toBeUndefined()
-    expect(r.result).toEqual({ name: 'weather-cli', stack: 'Rust (cargo)', build: 'cargo build', test: 'cargo test', license: 'Apache-2.0', by: 'claude' })
+    expect(r.result).toEqual({ name: 'weather-cli', stack: 'Rust (cargo)', build: 'cargo build', test: 'cargo test', license: 'Apache-2.0', checks: 'passed', by: 'claude' })
+  })
+  it('a result says whether the checks passed, and anything else is unset', () => {
+    const r = (checks: unknown) => parseNewProjectResult(JSON.stringify({ name: 'a', stack: 'b', build: 'c', test: 'd', checks })).result?.checks
+    expect(r('passed')).toBe('passed')
+    expect(r(' FAILED ')).toBe('failed')
+    expect(r('yes')).toBeUndefined()
+    expect(r(true)).toBeUndefined()
   })
   it('the new-project skill never pushes, uses the generators and ends with build and tests passing', () => {
     const b = skill('sldev-new-project').body
@@ -47,6 +54,10 @@ describe('the skills teach formats the app reads', () => {
     for (const g of ['npm create', 'cargo init', 'go mod init', 'dotnet new', 'gradle init', 'uv init', '--help']) expect(b).toContain(g)
     for (const f of ['README', '.gitignore', 'LICENSE', '.github/workflows/ci.yml', '.sldev/rules.md', 'git init', 'Apache-2.0', 'MIT', NEW_PROJECT_RESULT]) expect(b).toContain(f)
     expect(b).toMatch(/Build and tests must pass/)
+    expect(b).toContain('no `gh repo create`')
+    expect(b).toContain('Create repository on GitHub…')
+    // the checks are run before the result is written, so "passed" in it means they were seen passing
+    expect(b.indexOf('## 4. Check it')).toBeLessThan(b.indexOf('## 5. Write the result'))
   })
   it('every skill has a name the folder matches and a description agents can trigger on', () => {
     for (const s of SLDEV_SKILLS) {

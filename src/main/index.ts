@@ -30,6 +30,7 @@ import { installSkills, listDrafts, settleDraft, skillsState } from './sldevSkil
 import { hookInfo, knownTranscripts, lastAssistantText, startHookServer } from './hooks'
 import { importSshConfig, ping as pingHost, SshManager } from './ssh'
 import type { AgentProfile, CredentialInput, DockerAction, PortForward, SshConnection, WorktreeInfo } from '@shared/types'
+import type { CreateRepoRequest } from '@shared/newProject'
 import { JsonStore } from './store'
 import { detectRuntimes, detectScripts } from './runtimes'
 import { loadShellEnv } from './shellEnv'
@@ -335,6 +336,10 @@ function registerIpc(): void {
   ipcMain.handle('gh:prs', (_e, cwd: string) => gh.openPrs(cwd))
   ipcMain.handle('gh:prDetail', (_e, cwd: string, n: number) => gh.prDetail(cwd, Number(n)))
   ipcMain.handle('gh:repoList', () => gh.repoList(homedir()))
+  // New project → Create repository on GitHub: owners and the push plan for the dialog; creating only on its click
+  ipcMain.handle('gh:repoOwners', () => gh.listRepoOwners())
+  ipcMain.handle('gh:repoPushPlan', (_e, dir: string) => gh.repoPushPlan(String(dir)))
+  ipcMain.handle('gh:createRepo', (_e, req: CreateRepoRequest) => gh.createRepo(req))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes

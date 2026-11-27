@@ -6,7 +6,7 @@ import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, reviewPayload, type MergeMethod, type ReviewPayload, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
 import { checkPrNumber, fieldsWithout, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, parsePrRuns, PR_DETAIL_FIELDS, PR_RUN_FIELDS, PR_RUN_LIMIT, withChecks, type OpenPrList, type PrDetail } from '@shared/prs'
-import { parseRepoList, REPO_LIST_FIELDS, REPO_LIST_LIMIT, type GhRepoList } from '@shared/newProject'
+import { createdRepoUrl, createRepoArgs, isRepoNotFound, parseRepoList, REPO_LIST_FIELDS, REPO_LIST_LIMIT, repoNameProblem, repoOwners, type CreateRepoRequest, type GhRepoList, type RepoOwners, type RepoPushPlan } from '@shared/newProject'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -458,4 +458,65 @@ export async function repoList(cwd: string): Promise<GhRepoList> {
   } catch (e) {
     return { repos: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
   }
+}
+
+/** who a new repository can belong to: the signed-in user and their organizations (`gh api user/orgs`) */
+export async function listRepoOwners(): Promise<RepoOwners> {
+  const cwd = tmpdir()
+  const problem = await ghProblem(cwd)
+  if (problem) return { owners: [], error: problem }
+  try {
+    const user = await ghJson<{ login?: string }>(['api', 'user'], cwd)
+    // organizations are optional: a token without read:org still creates under the user
+    const orgs = await ghJson<unknown>(['api', 'user/orgs'], cwd, []).catch(() => [])
+    const owners = repoOwners(user.login ?? '', orgs)
+    return owners.length ? { owners } : { owners: [], error: 'GitHub didn’t say who you are signed in as. Run `gh auth status`.' }
+  } catch (e) {
+    return { owners: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
+}
+
+/** the branch and commits a first push of `dir` carries, and its `origin` if it already has one */
+export async function repoPushPlan(dir: string): Promise<RepoPushPlan> {
+  const [branch, count, origin] = await Promise.all([
+    run('git', ['symbolic-ref', '--short', 'HEAD'], dir),
+    run('git', ['rev-list', '--count', 'HEAD'], dir),
+    run('git', ['remote', 'get-url', 'origin'], dir)
+  ])
+  return {
+    branch: branch.code === 0 ? branch.stdout.trim() || null : null,
+    commits: count.code === 0 ? Number(count.stdout.trim()) || 0 : 0,
+    origin: origin.code === 0 ? origin.stdout.trim() || null : null
+  }
+}
+
+/**
+ * New project → Create repository on GitHub, on the dialog's click only: `gh repo create <owner>/<name>
+ * --private|--public --source <dir> --remote origin --push`. Everything that can be checked is checked before
+ * anything is created: gh signed in, the name, a commit to push, no `origin` yet, and no repository of that name
+ * (`gh repo view`). Returns the new repository's URL; throws gh's own error, and never touches the project's files.
+ */
+export async function createRepo(r: CreateRepoRequest): Promise<string> {
+  const req: CreateRepoRequest = { ...r, owner: String(r.owner ?? '').trim(), name: String(r.name ?? '').trim(), dir: String(r.dir ?? ''), description: String(r.description ?? '') }
+  const problem = await ghProblem(req.dir)
+  if (problem) throw new Error(problem)
+  const bad = repoNameProblem(req.name)
+  if (bad) throw new Error(bad)
+  if (!/^[A-Za-z0-9-]+$/.test(req.owner)) throw new Error('Pick the account to create it under.')
+  const plan = await repoPushPlan(req.dir)
+  if (plan.origin) throw new Error(`This project already has a remote: origin is ${plan.origin}.`)
+  if (!plan.commits) throw new Error('There is no commit to push yet: commit the project first.')
+  const full = `${req.owner}/${req.name}`
+  const seen = await gh(['repo', 'view', full, '--json', 'nameWithOwner'], req.dir)
+  if (seen.code === 0) throw new Error(`${full} already exists on GitHub. Pick another name.`)
+  if (!isRepoNotFound(seen.stderr)) throw new Error(`Couldn’t check whether ${full} exists: ${seen.stderr.trim() || 'gh repo view failed'}`)
+  // the push can take a while on a slow line; gh itself prompts for nothing (GH_PROMPT_DISABLED)
+  const made = await gh(createRepoArgs(req), req.dir, 5 * 60_000)
+  if (made.code !== 0) {
+    const err = (made.stderr || made.stdout).trim() || 'gh repo create failed.'
+    const after = await repoPushPlan(req.dir)
+    // created, but the push failed: the remote is there, so say how to finish instead of trying again
+    throw new Error(after.origin ? `${err}\n\nThe repository was created and origin set to ${after.origin}, but the push didn’t finish. Run \`git push -u origin ${after.branch ?? 'HEAD'}\` in the project.` : err)
+  }
+  return createdRepoUrl(made.stdout, req.owner, req.name)
 }

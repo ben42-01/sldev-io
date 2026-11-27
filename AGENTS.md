@@ -38,7 +38,7 @@ src/main/       Electron main process (Node): everything privileged
   mcpServer.ts    the stdio MCP server agents start (script string, installed in userData); mcp.ts answers its tools
   updater.ts      electron-updater from this repo's GitHub Releases: Windows and the Linux AppImage update themselves, the .deb
                   asks for the admin password (said first), macOS notifies only until signed; install kinds in src/shared/updates.ts
-  git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
+  git.ts, github.ts (gh CLI; createRepo: New project → Create repository on GitHub, only on the dialog's click), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   diagram.ts      code map (imports between folders: TS/JS, Python, Java/Kotlin/Scala, Go, C#, Rust, C/C++, Ruby, PHP), Files (folders
                   and source files of any language) and schema ERD (Prisma, SQL DDL) for the Diagrams panel; parsing in src/shared/diagram*.ts
