@@ -8,6 +8,7 @@ import type { GraphLog } from '@shared/gitGraph'
 import type { BaseMoved, MergeMethod, ReviewPayload, ShipPr, ShipRun, ShipStatus } from '@shared/ship'
 import type { Use } from '@shared/review'
 import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
+import type { GhRepoList } from '@shared/newProject'
 import type {
   AgentProfile,
   RulesState,
@@ -178,7 +179,13 @@ const api = {
     /** merge `ref` into the worktree's branch; a conflict is undone and its files returned. Never pushes */
     mergeBaseInto: (cwd: string, ref: string): Promise<{ merged: boolean; conflicts: string[]; output: string }> => ipcRenderer.invoke('git:mergeBaseInto', cwd, ref),
     push: (cwd: string, branch: string): Promise<void> => ipcRenderer.invoke('git:push', cwd, branch),
-    pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body)
+    pushAndPr: (cwd: string, branch: string, base: string, title: string, body?: string): Promise<string> => ipcRenderer.invoke('git:pushAndPr', cwd, branch, base, title, body),
+    /** where a clone of `name` under `parent` goes, and why it can't (an existing non-empty folder…) */
+    cloneTarget: (parent: string, name: string): Promise<{ dest: string; problem: string | null }> => ipcRenderer.invoke('git:cloneTarget', parent, name),
+    /** git clone into dest; resolves when done, rejects on failure or cancel (the partial folder is removed) */
+    clone: (id: string, url: string, dest: string): Promise<void> => ipcRenderer.invoke('git:clone', id, url, dest),
+    cloneCancel: (id: string): Promise<void> => ipcRenderer.invoke('git:cloneCancel', id),
+    onCloneOutput: (cb: (id: string, text: string) => void): Unsubscribe => on('git:cloneOutput', cb)
   },
   missions: {
     hookInfo: (): Promise<{ port: number; token: string; settingsPath: string; mcp: { command: string; script: string } } | null> => ipcRenderer.invoke('missions:hookInfo'),
@@ -228,6 +235,8 @@ const api = {
     /** one PR with its body and the issues it closes */
     prDetail: (cwd: string, n: number): Promise<PrDetail> => ipcRenderer.invoke('gh:prDetail', cwd, n),
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
+    /** the signed-in user's repositories (up to 200), for New project → Clone */
+    repoList: (): Promise<GhRepoList> => ipcRenderer.invoke('gh:repoList'),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),
     /** commits (git) and pull requests (gh) of the last `days` days, for the stats panel's charts */

@@ -265,6 +265,20 @@ function registerIpc(): void {
   ipcMain.handle('git:mergeBaseInto', (_e, cwd: string, ref: string) => git.mergeBaseInto(cwd, String(ref)))
   ipcMain.handle('git:push', (_e, cwd: string, branch: string) => git.push(cwd, branch))
   ipcMain.handle('git:pushAndPr', (_e, cwd: string, branch: string, base: string, title: string, body?: string) => git.pushAndCreatePr(cwd, branch, base, title, body))
+  // New project → Clone: one git clone per id, its output pushed to the window as it comes; cancel kills it
+  const clones = new Map<string, AbortController>()
+  ipcMain.handle('git:cloneTarget', (_e, parent: string, name: string) => git.cloneTarget(String(parent), String(name)))
+  ipcMain.handle('git:clone', async (e, id: string, url: string, dest: string) => {
+    if (!isAbsolute(String(dest))) throw new Error('The folder to clone into must be a full path.')
+    const ac = new AbortController()
+    clones.set(id, ac)
+    try {
+      await git.cloneRepo(String(url), String(dest), (text) => !e.sender.isDestroyed() && e.sender.send('git:cloneOutput', id, text), ac.signal)
+    } finally {
+      clones.delete(id)
+    }
+  })
+  ipcMain.handle('git:cloneCancel', (_e, id: string) => clones.get(id)?.abort())
 
   // missions (Claude Code hooks)
   ipcMain.handle('missions:hookInfo', () => hookInfo())
@@ -316,6 +330,7 @@ function registerIpc(): void {
   ipcMain.handle('gh:prForBranch', (_e, cwd: string, branch: string) => gh.prForBranch(cwd, String(branch)))
   ipcMain.handle('gh:prs', (_e, cwd: string) => gh.openPrs(cwd))
   ipcMain.handle('gh:prDetail', (_e, cwd: string, n: number) => gh.prDetail(cwd, Number(n)))
+  ipcMain.handle('gh:repoList', () => gh.repoList(homedir()))
   ipcMain.handle('gh:prComments', (_e, cwd: string, n: number) => gh.prComments(cwd, n))
 
   // notes

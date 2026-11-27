@@ -6,6 +6,7 @@ import { prSearch, rangeFrom } from '@shared/gitStats'
 import type { ActivityPr, GhIssue, GhPr, GhPrComment, GhPrReview, GhRepoInfo, GhRun, GhWorkflow, GhWorkflowInput, RepoBranchPr, RepoCommit, RepoGithub, RepoActivity, RepoRelease, RepoStats, StatsPart } from '@shared/types'
 import { pickPr, reviewPayload, type MergeMethod, type ReviewPayload, type ShipPr, type ShipRun, type ShipStatus } from '@shared/ship'
 import { checkPrNumber, fieldsWithout, OPEN_PR_FIELDS, OPEN_PR_LIMIT, parseOpenPrs, parsePrDetail, parsePrRuns, PR_DETAIL_FIELDS, PR_RUN_FIELDS, PR_RUN_LIMIT, withChecks, type OpenPrList, type PrDetail } from '@shared/prs'
+import { parseRepoList, REPO_LIST_FIELDS, REPO_LIST_LIMIT, type GhRepoList } from '@shared/newProject'
 import { activityCommits, run, status as gitStatus } from './git'
 
 const gh = (args: string[], cwd: string, timeout = 30000): ReturnType<typeof run> => run('gh', args, cwd, timeout)
@@ -446,4 +447,15 @@ export async function prDetail(cwd: string, n: number): Promise<PrDetail> {
   const pr = parsePrDetail(await ghFields<unknown>(['pr', 'view', String(n)], PR_DETAIL_FIELDS, cwd))
   if (!pr) throw new Error(`GitHub has no pull request #${n} here.`)
   return pr
+}
+
+/** the signed-in user's repositories for the New project dialog; `error` when gh is missing or logged out */
+export async function repoList(cwd: string): Promise<GhRepoList> {
+  const problem = await ghProblem(cwd)
+  if (problem) return { repos: [], error: problem }
+  try {
+    return { repos: parseRepoList(await ghJson<unknown>(['repo', 'list', '--limit', String(REPO_LIST_LIMIT), '--json', REPO_LIST_FIELDS], cwd, [])) }
+  } catch (e) {
+    return { repos: [], error: e instanceof Error ? e.message.split('\n')[0] : String(e) }
+  }
 }

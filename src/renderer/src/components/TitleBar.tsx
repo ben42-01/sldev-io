@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FolderOpen, Satellite, Search } from 'lucide-react'
+import { Check, ChevronDown, FolderOpen, FolderPlus, Satellite, Search } from 'lucide-react'
 import { projectMenu, workLabel } from '@shared/projects'
 import { pickRootFolder, setRootFolder, updateSettings, workspace } from '../state/workspace'
 import { showAbout, showCommandPalette } from '../lib/commands'
@@ -7,6 +7,7 @@ import { basename } from '../lib/paths'
 import { updates } from '../state/updates'
 import { openMissionControl } from '../dock/MissionControlPanel'
 import { Logo } from './Logo'
+import { openNewProject } from './NewProjectDialog'
 import { showContextMenu, type MenuItem } from './ContextMenu'
 import { useProjectWork, WorkDot } from './ProjectWork'
 
@@ -34,6 +35,7 @@ export function TitleBar(): React.JSX.Element {
         })
       ),
       { type: 'separator' },
+      { label: 'New project…', icon: <FolderPlus size={13} />, run: openNewProject },
       { label: 'Open folder…', icon: <FolderOpen size={13} />, shortcut: isMac ? '⌘O' : 'Ctrl+Shift+O', run: () => void pickRootFolder() },
       {
         label: 'Missions in all projects',

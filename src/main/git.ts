@@ -1,11 +1,13 @@
-import { execFile } from 'child_process'
-import { existsSync, mkdirSync } from 'fs'
+import { execFile, spawn } from 'child_process'
+import { existsSync, mkdirSync, promises as fsp } from 'fs'
+import { homedir } from 'os'
 import { basename, dirname, join } from 'path'
 import { BRANCH_LIST_FORMAT, parseBranchList, parseRemoteBranches, parseStatus, parseWorktrees } from '@shared/git'
 import { COMMIT_LOG_FORMAT, parseCommitLog, sinceArg } from '@shared/gitStats'
 import { GRAPH_LOG_FORMAT, githubWebUrl, parseGraphLog, type GraphLog } from '@shared/gitGraph'
 import { parseGrep, type Use } from '@shared/review'
 import type { BaseMoved } from '@shared/ship'
+import { cloneError, folderNameProblem } from '@shared/newProject'
 import { checkPrNumber, planPrWorktree, prFolder, prRef, type PrWorktree } from '@shared/prs'
 import type { ActivityCommit, DiffStat, GitBranchList, GitStatus, GitWorktree, WorktreeInfo, WorktreeStatus } from '@shared/types'
 
@@ -568,4 +570,68 @@ export async function removePrWorktree(root: string, n: number, opts: { discard:
     else await git(['worktree', 'prune'], top)
     await git(['update-ref', '-d', prRef(n)], top)
   })
+}
+
+/**
+ * Where a clone of `name` under `parent` would go, and why it can't (an existing non-empty folder, a file, a bad
+ * name): checked before cloning, so nothing of the user's is ever cloned into or removed.
+ */
+export async function cloneTarget(parent: string, name: string): Promise<{ dest: string; problem: string | null }> {
+  if (/^~(?=$|[\\/])/.test(parent)) parent = homedir() + parent.slice(1)
+  const dest = join(parent, name.trim())
+  const bad = folderNameProblem(name)
+  if (bad) return { dest, problem: bad }
+  const p = await fsp.stat(parent).catch(() => null)
+  if (!p?.isDirectory()) return { dest, problem: 'The parent folder doesn’t exist.' }
+  const d = await fsp.stat(dest).catch(() => null)
+  if (!d) return { dest, problem: null }
+  if (!d.isDirectory()) return { dest, problem: `${name.trim()} is a file in that folder.` }
+  const entries = await fsp.readdir(dest).catch(() => ['?'])
+  return { dest, problem: entries.length ? `${name.trim()} already exists there and isn’t empty.` : null }
+}
+
+/**
+ * `git clone --progress <url> <dest>`, its progress output passed to onOutput as it comes. Aborting kills git.
+ * A clone that fails or is cancelled leaves nothing behind: the folder is removed (an empty folder that was
+ * there before is kept, empty).
+ */
+export async function cloneRepo(url: string, dest: string, onOutput: (text: string) => void, signal?: AbortSignal): Promise<void> {
+  const target = await cloneTarget(dirname(dest), basename(dest))
+  if (target.problem) throw new Error(target.problem)
+  const existed = existsSync(dest)
+  const cleanUp = async (): Promise<void> => {
+    await fsp.rm(dest, { recursive: true, force: true }).catch(() => undefined)
+    if (existed) await fsp.mkdir(dest, { recursive: true }).catch(() => undefined)
+  }
+  let output = ''
+  const code = await new Promise<number | 'aborted'>((resolve) => {
+    // `--` so a URL can't be read as an option
+    const child = spawn('git', ['clone', '--progress', '--', url, dest], {
+      cwd: dirname(dest),
+      windowsHide: true,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    })
+    const take = (b: Buffer): void => {
+      const s = b.toString()
+      output += s
+      onOutput(s)
+    }
+    child.stdout.on('data', take)
+    child.stderr.on('data', take)
+    const abort = (): void => void child.kill()
+    if (signal?.aborted) abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    child.on('error', (e) => {
+      output += `\n${e.message}`
+      resolve(1)
+    })
+    child.on('close', (c) => {
+      signal?.removeEventListener('abort', abort)
+      resolve(signal?.aborted ? 'aborted' : (c ?? 1))
+    })
+  })
+  if (code === 0) return
+  await cleanUp()
+  if (code === 'aborted') throw new Error('Cancelled.')
+  throw new Error(/ENOENT/.test(output) ? 'git is not installed.' : cloneError(output))
 }

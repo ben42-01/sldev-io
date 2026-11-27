@@ -75,6 +75,12 @@ const privacy: LegalPage = {
         to GitHub (or wherever your remote is), signed in as you; nothing goes to us.
       </p>
       <p>
+        The New project dialog asks GitHub through your GitHub CLI for the list of your repositories (name, description, whether it
+        is private and when it last changed) each time you open it or press Retry. Cloning runs git on your computer, which downloads
+        the repository you picked or pasted from where it lives; nothing is pushed. That goes from your computer to GitHub (or the
+        host you pasted), signed in as you; nothing goes to us.
+      </p>
+      <p>
         The GitHub stats panel asks GitHub through your GitHub CLI for your repository's open pull requests and issues, latest release,
         recent CI runs and the pull requests opened or merged in the range its activity chart shows. It asks when the panel is on screen,
         again every minute while it stays there, and when you press Refresh or change the range; never while it is hidden. That goes from
