@@ -56,7 +56,9 @@ src/main/       Electron main process (Node): everything privileged
   memory.ts       project memory (.sldev/memory.md): read by missions, appended by sldev_remember and "Remember"
   context.ts      project context index: memory, .sldev/context docs, .sldev/pinned.md and skills in a per-project
                   SQLite db (node:sqlite, FTS5 + file edges) under <userData>/context; a cache, rebuilt when a source changes
-  stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics
+  stalls.ts       notes main-process stalls and an unresponsive window in <userData>/stalls.log and About diagnostics, each
+                  followed by the IPC calls and pty spawns just before it (traceIpc wraps ipcMain.handle; names, durations
+                  and sizes only, the ring buffer is src/shared/stalls.ts)
 src/preload/    index.ts = the whole window.api bridge (typed; api.d.ts re-exports the type)
 src/shared/     types.ts shared by all processes (settings, Task, Mission, AgentOptions, …) and pure,
                   unit-tested logic: agents.ts (the agent registry and command builders, used by the CLI too), factory.ts (recipe parse + run state machine), recipes.ts (built-ins),
@@ -208,6 +210,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
   Re-review compares hunk contents (`hunkKey`: file plus +/- lines, no line numbers), never commits, so it survives rebases,
   force pushes and uncommitted work: a mark keeps the hunks it was made on and holds only while they're the same (`carryMarks`),
   and `seen` (the diff at the last verdict, with its head) is what "Since last review" filters against.
+  One checkout per PR at a time: the renderer shares one in flight (`checkOutPr`) and main queues `prWorktree`/`removePrWorktree`
+  per repository and PR (`onePerPr`); a helper on a PR whose checkout failed stops with the reason, never runs in the main checkout,
+  and Explain reuses the diff the tab read while the PR is at the head just checked out (`readAt`).
   Opening a PR fetches and checks out nothing (its diff is `gh pr diff`; a big repo's checkout takes minutes): the PR's worktree is made
   by `checkFolder` the first time Run checks, Explain the change or Ask why needs it (`Checking out #n…` on that button, a failure shown
   there), and one already at the PR's head is used for files from the start (`findPrWorktree`, read-only). gh fields an older gh may not

@@ -7,7 +7,7 @@ import type { Mission, ReviewTarget } from '@shared/types'
 import { getAgent } from './agents'
 import { missionEnd, quietly } from './evals'
 import { followUpMission, getMission, isLive, startMission } from './missions'
-import { checkFolder, getReviewSource, patchReview, readReviewDiff, reviewSubject, type ReviewSource } from './reviewTargets'
+import { checkFolder, getReviewSource, patchReview, readReviewDiffAt, reviewSubject, type ReviewSource } from './reviewTargets'
 import { workspace } from './workspace'
 
 /**
@@ -42,11 +42,18 @@ const subjectOf = (t: ReviewTarget): ReviewSubject => {
   return s
 }
 
-async function helper(t: ReviewTarget, s: ReviewSource, agentId: string, prompt: string, title: string): Promise<Mission> {
+/**
+ * Where a helper works: in the code under review. A PR's own worktree, checked out first if it isn't yet (shared
+ * with the tab's other actions, so one checkout at a time); a failure stops the helper and says why, never falling
+ * back to the user's checkout. A mission's own folder.
+ */
+async function helperFolder(t: ReviewTarget, s: ReviewSource): Promise<{ path: string; head?: string }> {
+  if (s.pr) return checkFolder(t)
+  return (await checkFolder(t).catch(() => null)) ?? { path: s.cwd }
+}
+
+async function helper(s: ReviewSource, cwd: string, agentId: string, prompt: string, title: string): Promise<Mission> {
   const agent = getAgent(agentId)
-  // in the code under review: a PR's own worktree, checked out first if it isn't yet (a failure stops here and says
-  // why, never someone's checkout by accident); a mission's own folder
-  const cwd = s.pr ? (await checkFolder(t)).path : ((await checkFolder(t).catch(() => null))?.path ?? s.cwd)
   return quietly(() =>
     startMission({
       prompt,
@@ -67,8 +74,11 @@ const runDir = (s: ReviewSource): string => `${s.root}/.sldev/runs/review-${s.ke
 /** An agent explains the change part by part; resolves when the walkthrough is in (or failed). */
 export async function explainChanges(t: ReviewTarget, agentId: string): Promise<void> {
   const s = source(t)
-  const files = parseDiff(await readReviewDiff(t))
+  const folder = await helperFolder(t, s)
+  // the diff the tab already read, when the PR is still at the head just checked out
+  const files = parseDiff(await readReviewDiffAt(t, s.pr ? folder.head : undefined))
   if (!files.length) throw new Error('There are no changes to explain yet')
+  const head = s.pr ? (folder.head ?? s.head) : s.head
   const counts = new Map<string, { path: string; hunks: number; lines: number }>()
   for (const h of hunksOf(files)) {
     if (h.noise) continue
@@ -78,9 +88,9 @@ export async function explainChanges(t: ReviewTarget, agentId: string): Promise<
   const dir = runDir(s)
   await window.api.factory.prepare(dir)
   const file = `${dir}/walkthrough-${now().toString(36)}.json`
-  const h = await helper(t, s, agentId, walkthroughPrompt(subjectOf(t), [...counts.values()], file), `Walkthrough: ${s.title}`)
+  const h = await helper(s, folder.path, agentId, walkthroughPrompt(subjectOf(t), [...counts.values()], file), `Walkthrough: ${s.title}`)
   inflight.add(h.id)
-  patchReview(t, (r) => ({ ...r, walk: { file, mission: h.id, agent: agentId, status: 'writing', at: now(), diff: diffSignature(files), ...(s.head ? { head: s.head } : {}) } }))
+  patchReview(t, (r) => ({ ...r, walk: { file, mission: h.id, agent: agentId, status: 'writing', at: now(), diff: diffSignature(files), ...(head ? { head } : {}) } }))
   try {
     const end = await missionEnd(h.id, WALK_MS)
     await finishWalk(t, end === 'timeout' ? 'It took longer than 15 minutes' : undefined)
@@ -134,11 +144,12 @@ export function markPart(t: ReviewTarget, part: Pick<Part, 'id' | 'hunks'>, mark
 export async function askAboutPart(t: ReviewTarget, p: Part, question: string, agentId: string): Promise<void> {
   const s = getReviewSource(t)
   if (!s || !question.trim()) return
+  const folder = await helperFolder(t, s)
   const dir = runDir(s)
   await window.api.factory.prepare(dir)
   const askId = now().toString(36)
   const file = `${dir}/ask-${askId}.md`
-  const h = await helper(t, s, agentId, askPrompt(subjectOf(t), p, question, file), `Ask: ${question}`)
+  const h = await helper(s, folder.path, agentId, askPrompt(subjectOf(t), p, question, file), `Ask: ${question}`)
   inflight.add(h.id)
   patchReview(t, (r) => ({ ...r, asks: [...(r.asks ?? []), { id: askId, part: p.id, q: question.trim(), file, mission: h.id, agent: agentId, at: now() }] }))
   try {

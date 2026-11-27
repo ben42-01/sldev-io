@@ -187,6 +187,8 @@ export function hunkFlags(h: Hunk): Flag[] {
 const EXPORTED = /^\s*export\s+(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:class|interface|type|function\*?|const|let|enum)\s+([A-Za-z_$][\w$]*)/
 const PY_DEF = /^(?:class|def|async def)\s+([A-Za-z]\w*)/
 const GO_FUNC = /^func\s+(?:\([^)]*\)\s*)?([A-Z]\w*)/
+const WORDS = /[\w$]+/g
+const UNUSED_SHOWN = 5
 
 /**
  * Names a change exports or defines at the top level that nothing else in the change uses: new code
@@ -204,13 +206,16 @@ export function unusedNew(hunks: Hunk[]): Array<{ name: string; hunk: string }> 
       if (m && m[1].length > 2 && !h.lines.some((x) => x.kind === 'del' && x.text.includes(m[1]))) defs.push({ name: m[1], hunk: h.id, line: l.text })
     }
   }
-  const text = hunks.flatMap((h) => h.lines.filter((l) => l.kind !== 'del').map((l) => l.text))
-  return defs
-    .filter((d) => {
-      const word = new RegExp(`(^|[^\\w$])${d.name.replace(/\$/g, '\\$')}([^\\w$]|$)`)
-      return text.filter((t) => word.test(t)).length <= 1
-    })
-    .map(({ name, hunk }) => ({ name, hunk }))
+  // how many lines (not removed) each word is on, counted once: a regex per name over every line took seconds on a 20k-line diff
+  const wanted = new Set(defs.map((d) => d.name))
+  const lines = new Map<string, number>()
+  for (const h of hunks)
+    for (const l of h.lines) {
+      if (l.kind === 'del') continue
+      const seen = new Set<string>()
+      for (const w of l.text.match(WORDS) ?? []) if (wanted.has(w) && !seen.has(w)) (seen.add(w), lines.set(w, (lines.get(w) ?? 0) + 1))
+    }
+  return defs.filter((d) => (lines.get(d.name) ?? 0) <= 1).map(({ name, hunk }) => ({ name, hunk }))
 }
 
 // ── blast radius: callers of changed code the change left alone ──────
@@ -507,7 +512,11 @@ export function buildCockpit(files: DiffFile[], walk: Walkthrough | null, criter
   const noise = all.filter((h) => h.noise)
   const real = all.filter((h) => !h.noise)
   const byPath = new Map<string, Hunk[]>()
-  for (const h of real) byPath.set(h.path, [...(byPath.get(h.path) ?? []), h])
+  for (const h of real) {
+    const list = byPath.get(h.path)
+    if (list) list.push(h)
+    else byPath.set(h.path, [h])
+  }
   const claimed = new Set<string>()
   const parts: Part[] = []
   const used = new Set<string>()
@@ -534,12 +543,17 @@ export function buildCockpit(files: DiffFile[], walk: Walkthrough | null, criter
   if (!walk) for (const g of autoParts(left)) parts.push(part(g.id, g.title, g.hunks, 'auto', { need: 'unknown' }))
 
   // new names nothing in the change uses: a hint of building for later
+  const partOf = new Map<string, Part>()
+  for (const p of parts) for (const h of p.hunks) partOf.set(h.id, p)
+  const unused = new Map<Part, string[]>()
   for (const u of unusedNew(real)) {
-    const p = parts.find((x) => x.hunks.some((h) => h.id === u.hunk))
-    if (!p) continue
-    const f = p.flags.find((x) => x.id === 'unused')
-    if (f) f.why = `${f.why}, ${u.name}`
-    else p.flags.push({ id: 'unused', label: 'Unused new code', why: `nothing in this change uses ${u.name}` })
+    const p = partOf.get(u.hunk)
+    if (p) unused.set(p, [...(unused.get(p) ?? []), u.name])
+  }
+  // a generated or big new module has hundreds: a few names say it
+  for (const [p, names] of unused) {
+    const shown = names.length > UNUSED_SHOWN + 1 ? `${names.slice(0, UNUSED_SHOWN).join(', ')} and ${names.length - UNUSED_SHOWN} more` : names.join(', ')
+    p.flags.push({ id: 'unused', label: 'Unused new code', why: `nothing in this change uses ${shown}` })
   }
 
   const totals = { lines: 0, noise: noise.reduce((a, h) => a + h.additions + h.deletions, 0), asked: 0, supports: 0, extra: 0, unknown: 0 }

@@ -57,6 +57,31 @@ describe('unused new code', () => {
     const u = unusedNew(hunksOf(parseDiff(DIFF)))
     expect(u.map((x) => x.name)).toEqual(['InviteFactoryProvider'])
   })
+  it('counts a use only as a whole word, once per line, on lines that are not removed', () => {
+    const hunk = (body: string): string => file('src/lib/a.ts', `@@ -1,1 +1,4 @@\n ctx\n${body}`)
+    const names = (body: string): string[] => unusedNew(hunksOf(parseDiff(hunk(body)))).map((x) => x.name)
+    expect(names('+export const $store = 1\n+use($store)\n')).toEqual([])
+    expect(names('+export function makeIt() {}\n+makeItBetter(); makeIt.x; makeIt.y\n')).toEqual([])
+    expect(names('+export function makeIt() {}\n+makeItBetter()\n')).toEqual(['makeIt'])
+  })
+  it('stays fast on a 20k-line diff (a regex per name over every line froze the window for seconds)', () => {
+    const out: string[] = []
+    for (let f = 0; f < 200; f++) {
+      out.push(`diff --git a/src/m${f}/f.ts b/src/m${f}/f.ts`, '--- a/src/m' + f + '/f.ts', '+++ b/src/m' + f + '/f.ts')
+      for (let h = 0; h < 10; h++) {
+        out.push(`@@ -${h * 100 + 1},10 +${h * 100 + 1},10 @@`)
+        for (let l = 0; l < 10; l++) out.push(l % 2 ? `+export function added${f}_${h}_${l}(x: number) { return x }` : `   context ${l}`)
+      }
+    }
+    const files = parseDiff(out.join('\n') + '\n')
+    const t = performance.now()
+    const c = buildCockpit(files, null, [])
+    expect(performance.now() - t).toBeLessThan(2000)
+    const unused = c.parts.flatMap((p) => p.flags).filter((f) => f.id === 'unused')
+    expect(unused.length).toBeGreaterThan(0)
+    // fifty names in a part: five of them, and how many more
+    expect(unused[0].why).toMatch(/^nothing in this change uses added\d+_\d+_\d+(, added\d+_\d+_\d+){4} and 45 more$/)
+  })
   it('lands on the part as a flag', () => {
     const c = buildCockpit(parseDiff(DIFF), null, [])
     expect(c.parts.find((p) => p.hunks.some((h) => h.path === 'src/api/invites.ts'))?.flags.find((f) => f.id === 'unused')?.why).toContain('InviteFactoryProvider')

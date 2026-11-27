@@ -287,6 +287,16 @@ describe('prWorktree', () => {
     expect(await prWorktree(work, 7, rewritten)).toMatchObject({ action: 'moved', head: rewritten })
   })
 
+  it('runs one checkout of a PR at a time: calls at once all succeed, one creates and the rest reuse', async () => {
+    const sha = commit(fork, 'together.txt')
+    openPr(9, sha)
+    const all = await Promise.all([prWorktree(work, 9, sha), prWorktree(wtPath(7), 9, sha), prWorktree(work, 9)])
+    expect(all.map((w) => w.action).sort()).toEqual(['created', 'reused', 'reused'])
+    expect(new Set(all.map((w) => w.path))).toEqual(new Set([wtPath(9)]))
+    await removePrWorktree(work, 9, { discard: true })
+    expect(existsSync(wtPath(9))).toBe(false)
+  })
+
   it('says when there is no such PR', async () => {
     await expect(prWorktree(work, 999)).rejects.toThrow(/no pull request #999/)
     await expect(prWorktree(work, 0)).rejects.toThrow(/Not a pull request number/)

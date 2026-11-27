@@ -58,6 +58,8 @@ interface Resolver<T extends ReviewTarget> {
   get(t: T): ReviewSource | undefined
   /** the diff as git prints it */
   read(t: T): Promise<string>
+  /** the diff at commit `head` for a helper: the tab's last read when it is at that head, else read again */
+  readAt(t: T, head?: string): Promise<string>
   patch(t: T, f: (r: ReviewState) => ReviewState): void
   /** what the helper agents are told about it */
   subject(t: T): ReviewSubject | undefined
@@ -107,6 +109,10 @@ const missionResolver: Resolver<Extract<ReviewTarget, { kind: 'mission' }>> = {
     const text = await window.api.git.diff(m.cwd, missionBase(m))
     void refreshStats(m.id)
     return text
+  },
+  // a mission's diff includes uncommitted work, so the head doesn't say it's the same: read it again (it's local)
+  readAt(t) {
+    return missionResolver.read(t)
   },
   patch(t, f) {
     const m = getMission(t.id)
@@ -190,6 +196,9 @@ function fromPr(t: PrTarget, entry: PrReview | undefined, meta: PrMeta | undefin
   }
 }
 
+/** the diff each PR's tab read last and the head it was at (kept out of the store: it can be megabytes) */
+const lastRead = new Map<string, { head: string; diff: string }>()
+
 const prResolver: Resolver<PrTarget> = {
   use(t) {
     const key = keyOf(t)
@@ -209,7 +218,14 @@ const prResolver: Resolver<PrTarget> = {
     prReviews.set((s) => ({ meta: { ...s.meta, [keyOf(t)]: meta } }))
     // the diff is GitHub's: nothing is fetched or checked out to show it; a worktree left at this head is used for files
     if (!prReviews.get().worktrees[keyOf(t)]) void findCheckout(t, meta.head)
+    lastRead.set(keyOf(t), { head: meta.head, diff })
     return diff
+  },
+  async readAt(t, head) {
+    // a big PR's diff is megabytes through gh and IPC: the one the tab read is reused while the PR is at that head
+    const last = lastRead.get(keyOf(t))
+    if (last && head && last.head === head) return last.diff
+    return prResolver.read(t)
   },
   patch(t, f) {
     const list = putPrReview(prReviews.get().list, t.root, t.number, f, prReviews.get().meta[keyOf(t)]?.head)
@@ -314,6 +330,7 @@ const resolver = <T extends ReviewTarget>(t: T): Resolver<T> => RESOLVERS[t.kind
 export const useReviewSource = (t: ReviewTarget): ReviewSource | undefined => resolver(t).use(t)
 export const getReviewSource = (t: ReviewTarget): ReviewSource | undefined => resolver(t).get(t)
 export const readReviewDiff = (t: ReviewTarget): Promise<string> => resolver(t).read(t)
+export const readReviewDiffAt = (t: ReviewTarget, head?: string): Promise<string> => resolver(t).readAt(t, head)
 export const patchReview = (t: ReviewTarget, f: (r: ReviewState) => ReviewState): void => resolver(t).patch(t, f)
 export const reviewSubject = (t: ReviewTarget): ReviewSubject | undefined => resolver(t).subject(t)
 export const reviewHead = (t: ReviewTarget, since?: string): Promise<ReviewHead> => resolver(t).head(t, since)

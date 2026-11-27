@@ -8,7 +8,8 @@ import type { MergeMethod, ReviewPayload } from '@shared/ship'
 import { PtyManager, setShellOverride, type PtySink } from './pty'
 import { DirWatchers, existingFiles, readDir, walkFiles } from './fs'
 import { detectEditors, openDiffInEditor, openInEditor, terminalEditorCommand, terminalEditorGoto, whichAsync } from './editors'
-import { recentStalls, watchMainLoop, watchWindow } from './stalls'
+import { recentStalls, traceIpc, watchMainLoop, watchWindow } from './stalls'
+import { spawnName } from '@shared/stalls'
 import * as git from './git'
 import * as gh from './github'
 import * as notes from './notes'
@@ -139,6 +140,8 @@ function buildMenu(): void {
 }
 
 function registerIpc(): void {
+  // what main was doing before a stall: every handler's channel, time and result size (stalls.ts), a pty by its program's name
+  traceIpc(ipcMain, { 'pty:create': (_id: string, opts: PtyCreateOptions) => `pty:spawn ${spawnName(opts?.command)}` })
   // terminals
   ipcMain.handle('pty:create', (e, id: string, opts: PtyCreateOptions) => ptys.create(windowSink(e.sender), id, opts))
   // write/resize/ack/kill go to whichever backend (local pty or SSH shell) owns the id
