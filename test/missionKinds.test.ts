@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BUILTIN_KINDS, findKind, kindDraft, parseKindFile, renderKind, syncStep } from '@shared/missionKinds'
+import { BUILTIN_KINDS, findKind, kindDraft, NEW_PROJECT_SKILL, parseKindFile, renderKind, syncStep } from '@shared/missionKinds'
+import { SLDEV_SKILLS } from '@shared/sldevSkills'
 import { missionPrompt } from '@shared/missionPrompt'
 
 const kind = (id: string) => findKind(BUILTIN_KINDS, id)
@@ -67,5 +68,31 @@ describe('mission kinds', () => {
     expect(parseKindFile('---\nname: x\n---\n', 'p', 'user')).toBeNull()
     expect(parseKindFile('no front matter', 'p', 'user')).toBeNull()
     expect(parseKindFile('---\nname: Write\naccess: write\nworktree: true\n---\nGo: {brief}', 'p', 'user')).toMatchObject({ readOnly: false, worktree: true })
+  })
+})
+
+describe('the New project kind', () => {
+  const k = kind('new-project')
+  it('runs the sldev-new-project skill in place, on the cheap model, from its own dialog', () => {
+    expect(k.id).toBe('new-project')
+    expect(k.worktree).toBe(false)
+    expect(k.readOnly).toBe(false)
+    expect(k.cheap).toBe(true)
+    expect(k.listed).toBe(false)
+    const p = renderKind(k, { title: 'weather-cli', brief: 'A weather CLI in Rust', worktree: false })
+    expect(p.startsWith('New project: weather-cli\n\nA weather CLI in Rust')).toBe(true)
+    expect(p).toContain(`.agents/skills/${NEW_PROJECT_SKILL}/SKILL.md`)
+    expect(p).toMatch(/never push/)
+    expect(p).not.toMatch(/git fetch/)
+  })
+  it('is agent-agnostic: no agent named, and the skill exists', () => {
+    expect(k.template).not.toMatch(/Claude|Codex|Cursor|Copilot|OpenCode|Gemini|\.claude\//)
+    expect(SLDEV_SKILLS.some((s) => s.name === NEW_PROJECT_SKILL)).toBe(true)
+  })
+  it('a custom kind can take the cheap hint', () => {
+    const c = parseKindFile('---\nname: Docs pass\ncheap: true\n---\nFix typos', '/p/.sldev/missions/docs.md', 'project')!
+    expect(c.cheap).toBe(true)
+    expect(parseKindFile(kindDraft(c, 'Copy'), '/x.md', 'user')!.cheap).toBe(true)
+    expect(parseKindFile('---\nname: Plain\n---\nDo it', '/y.md', 'user')!.cheap).toBeUndefined()
   })
 })

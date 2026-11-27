@@ -35,7 +35,7 @@ export function TitleBar(): React.JSX.Element {
         })
       ),
       { type: 'separator' },
-      { label: 'New project…', icon: <FolderPlus size={13} />, run: openNewProject },
+      { label: 'New project…', icon: <FolderPlus size={13} />, run: () => openNewProject() },
       { label: 'Open folder…', icon: <FolderOpen size={13} />, shortcut: isMac ? '⌘O' : 'Ctrl+Shift+O', run: () => void pickRootFolder() },
       {
         label: 'Missions in all projects',

@@ -45,6 +45,8 @@ src/main/       Electron main process (Node): everything privileged
   docker.ts       container list and start/stop/rm through the docker CLI (shell/logs run in terminals)
   setup.ts        first-run tool check (git, gh, node, docker, ssh) with per-package-manager install commands
   factory.ts      recipe files (.sldev/factory) and run output files (.sldev/runs, git-ignored)
+  newProject.ts   New project → Start from scratch: the empty folder (same checks as a clone's target) and the
+                  .sldev/runs/new-project.json the New project mission (kind `new-project`, cheap model) leaves
   sldevSkills.ts  installs sldev's skills into a project (.claude/skills, .agents/skills) and lists/clears .sldev/drafts; no electron (the CLI's `sldev skills` uses it)
   evals.ts        eval files (.sldev/evals/*.yml), prompt variants (.sldev/evals/prompts/*.md) and the check commands of an eval attempt (exit code + output, killed on timeout)
   boardFile.ts    the work board shared through git: .sldev/board.json, written atomically (merging is in src/shared/board.ts)

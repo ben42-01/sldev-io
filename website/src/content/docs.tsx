@@ -792,6 +792,7 @@ const missions: DocPage = {
               <tr><td><code>/sldev-stories</code></td><td>Board stories with why, what to change, acceptance criteria and which story waits for which. They land in <b>Proposed</b>.</td></tr>
               <tr><td><code>/sldev-recipe</code></td><td>A factory recipe in <code>.sldev/factory</code>. It shows up in Recipes.</td></tr>
               <tr><td><code>/sldev-eval</code></td><td>An eval in <code>.sldev/evals</code>. It shows up in Mission Control → Evals.</td></tr>
+              <tr><td><code>/sldev-new-project</code></td><td>A new project in an empty folder: the stack's own generator, README, license, one build and one test command, CI, <code>.sldev/rules.md</code> and a first commit. It never creates a remote or pushes. <b>New project → Start from scratch</b> runs it for you.</td></tr>
             </tbody>
           </table>
           <p>

@@ -180,6 +180,36 @@ if (ip.startsWith('Write stories:') || ip.startsWith('Refine card #')) {
   process.stdin.resume()
   return
 }
+// a New project mission: read the skill it is pointed at, set up a small Node project, commit it, write the result
+// (BAD_RESULT in the description writes a broken one, NO_RESULT none)
+if (ip.startsWith('New project:')) {
+  fire('SessionStart', { source: 'startup' }); sleep(300)
+  fire('UserPromptSubmit', { prompt: ip }); sleep(400)
+  const skill = /read `([^`]+SKILL\.md)`/.exec(ip)
+  const ok = skill && fs.existsSync(skill[1]) && fs.readFileSync(skill[1], 'utf8').includes('never push')
+  const name = (/^Name: (\S+) \(use it/m.exec(ip) || [])[1] || 'fake-app'
+  const license = (/^License: (\S+)/m.exec(ip) || [])[1] || 'Apache-2.0'
+  fire('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm init -y', description: 'Generate the project' } }); sleep(500)
+  const w = (f, t) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, t) }
+  w('package.json', JSON.stringify({ name, version: '0.1.0', scripts: { build: 'node -e "require(\'./index.js\')"', test: 'node test.js' } }, null, 2) + '\n')
+  w('index.js', 'module.exports = (a, b) => a + b\n')
+  w('test.js', "const add = require('./index.js')\nif (add(1, 2) !== 3) process.exit(1)\nconsole.log('ok')\n")
+  w('README.md', `# ${name}\n\nnpm run build · npm test\n`)
+  w('.gitignore', 'node_modules/\n.sldev/runs/\n.sldev/drafts/\n')
+  w('LICENSE', `${license} License\n`)
+  w('.github/workflows/ci.yml', 'on: [push, pull_request]\njobs:\n  ci:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm run build\n      - run: npm test\n')
+  w('.sldev/rules.md', `# ${name}\n\nBuild: npm run build. Test: npm test.\n`)
+  const git = (...a) => spawnSync('git', a, { stdio: 'ignore' })
+  git('init', '-q', '-b', 'main'); git('add', '-A'); git('-c', 'user.name=Fake', '-c', 'user.email=fake@example.com', 'commit', '-qm', 'Initial project setup')
+  if (!ip.includes('NO_RESULT')) w('.sldev/runs/new-project.json', ip.includes('BAD_RESULT') ? '{"name": "broken",}' : JSON.stringify({ name, stack: 'Node.js (npm)', build: 'npm run build', test: 'npm test', license, by: 'claude' }, null, 2))
+  sleep(400)
+  const tp = path.join(os.tmpdir(), `sldev-io-fake-transcript-${process.pid}.jsonl`)
+  fs.writeFileSync(tp, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: `Set up ${name}: npm run build and npm test pass. ${ok ? 'Followed the sldev-new-project skill.' : 'SKILL NOT FOUND.'} Nothing pushed.` }] } }) + '\n')
+  fire('Stop', { transcript_path: tp })
+  console.log(`Set up ${name}.`)
+  process.stdin.resume()
+  return
+}
 fire('SessionStart', { source: 'startup' }); sleep(400)
 fire('UserPromptSubmit', { prompt: args[args.length - 1] }); sleep(400)
 fire('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path.join(process.cwd(), 'src/app.js') } }); sleep(800)

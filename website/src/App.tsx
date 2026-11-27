@@ -108,7 +108,7 @@ export function App() {
                     How they work <ArrowRight size={15} />
                   </a>
                 </div>
-                <p className="product-note">sldev-mission · sldev-stories · sldev-recipe · sldev-eval</p>
+                <p className="product-note">sldev-mission · sldev-stories · sldev-recipe · sldev-eval · sldev-new-project</p>
               </article>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
   Rocket,
   ScanEye,
   Server,
+  Sparkles,
   SquareTerminal
 } from 'lucide-react'
 import { openTerminal } from './dockApi'
@@ -157,8 +158,11 @@ export function Welcome(): React.JSX.Element {
               <button className="btn primary" onClick={() => void pickRootFolder()}>
                 <FolderOpen size={14} /> Open a project…
               </button>
-              <button className="btn" onClick={openNewProject}>
+              <button className="btn" onClick={() => openNewProject('clone')}>
                 <FolderPlus size={14} /> Clone from GitHub…
+              </button>
+              <button className="btn" onClick={() => openNewProject('scratch')}>
+                <Sparkles size={14} /> Start from scratch…
               </button>
             </div>
             {others.length > 0 && (

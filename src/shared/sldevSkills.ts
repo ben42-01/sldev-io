@@ -11,7 +11,7 @@ import { parseRecipe } from './factory'
  */
 
 /** bumped when a skill's text changes, so projects with an older copy are offered the update */
-export const SKILLS_VERSION = 4
+export const SKILLS_VERSION = 5
 
 export const DRAFTS_DIR = '.sldev/drafts'
 /** where each skill is installed in a project: Claude Code reads .claude/skills, most other agents .agents/skills */
@@ -38,9 +38,9 @@ const JSON_RULE = 'it must be valid JSON: double quotes, no trailing commas, quo
  * The step every skill ends with. The app reads a file once and sets one it can't read aside, so an agent
  * that reports "done" without checking leaves a draft the user never sees.
  */
-const checkStep = (heading: string, rule: string): string => `${heading}
+const checkStep = (heading: string, rule: string, intro = "The app reads the file once, and sets aside one it can't read: the user never sees it."): string => `${heading}
 
-The app reads the file once, and sets aside one it can't read: the user never sees it. So before you say it's done, check it the way sldev-io reads it:
+${intro} So before you say it's done, check it the way sldev-io reads it:
 
 - With the sldev tools: call \`sldev_check\` with the file's path.
 - Otherwise, if the \`sldev\` command is installed: run \`sldev skills check <file>\`.
@@ -272,6 +272,78 @@ ${checkStep('## Check it', `it is YAML, so ${YAML_RULE}; \`name\`, \`brief\` and
 
 Say in one line that the eval is in sldev-io under Mission Control → Evals, ready to run on the agents the user picks.
 `
+  },
+  {
+    name: 'sldev-new-project',
+    label: 'Set up a new project',
+    description:
+      "Set up a brand-new project in an empty folder with the stack's own generator and sldev's baseline: README, .gitignore, LICENSE, one build and one test command with a sample test, a GitHub Actions CI workflow, .sldev/rules.md and a first git commit. Use when asked to start, scaffold, bootstrap or create a new project, app, library or repository from scratch. It never creates a remote or pushes.",
+    body: `# Set up a new project
+
+The folder you are in is empty and becomes a new project: set it up so it builds, tests and runs CI from its first commit. It may already hold sldev's own \`.claude/\`, \`.agents/\` and \`.sldev/\` folders; keep them.
+
+**Never create a remote, never push, never publish anything** (no \`gh repo create\`, no \`git remote add\`, no package publish). The person does that when they're ready.
+
+## 1. Settle what to build
+
+- **Stack**: the one the description names. If it names none, pick the most common choice for that kind of project and say which in your summary.
+- **Name**: the one you were given. Otherwise suggest a short kebab-case repository name (\`weather-cli\`, \`invoice-api\`). Work in this folder as it is: don't make a subfolder for the project.
+- **License**: the one the description names. Otherwise ask, offering Apache-2.0 (the default) or MIT; when nobody can answer (you run unattended), use Apache-2.0.
+
+## 2. Generate with the stack's own tool
+
+Use the stack's official generator, never a hand-written copy of what it makes:
+
+| Stack | Generator |
+| --- | --- |
+| Node / TypeScript | \`npm create vite@latest\`, \`npm init -y\` |
+| Rust | \`cargo init\` |
+| Go | \`go mod init <module>\` |
+| .NET | \`dotnet new <template>\` |
+| Java / Kotlin | \`gradle init\` (or Maven's archetype) |
+| Python | \`uv init\` |
+
+- Read the generator's \`--help\` before you run it, and look up current versions (\`npm view <package> version\`, the toolchain's own \`--version\`, its release page) instead of versions from memory.
+- Use its non-interactive flags. A generator that refuses a folder that isn't empty: generate into a temporary subfolder, move its files up, and remove the subfolder.
+- If the toolchain isn't installed, stop and say so. Don't install toolchains system-wide without asking.
+
+## 3. The baseline every project gets
+
+- \`README.md\`: what it is, and how to build, test and run it.
+- \`.gitignore\` for the stack, plus \`.sldev/runs/\` and \`.sldev/drafts/\`.
+- \`LICENSE\`: the license's full text, with this year and the name from \`git config user.name\`.
+- **One build command and one test command**, with one small sample test that passes. Prefer the stack's own (\`cargo test\`, \`go test ./...\`, \`npm test\`).
+- \`.github/workflows/ci.yml\`: on push and pull request, set up the toolchain with its official setup action (current major version), install dependencies, run the build and the test command.
+- \`.sldev/rules.md\`: rules for agents working here: the stack, the build and test commands, the layout, conventions. sldev-io copies it into AGENTS.md, CLAUDE.md and the other agents' files.
+- \`git init -b main\`, then one first commit of everything: \`Initial project setup\`.
+
+## 4. Write the result
+
+\`.sldev/runs/new-project.json\` (git-ignored), which sldev-io shows when you finish:
+
+\`\`\`json
+{
+  "name": "weather-cli",
+  "stack": "Rust (cargo)",
+  "build": "cargo build",
+  "test": "cargo test",
+  "license": "Apache-2.0",
+  "by": "claude"
+}
+\`\`\`
+
+\`name\` is the repository name (kebab-case), \`build\` and \`test\` the exact commands, run from the project folder. \`by\` is your own agent id (${AGENT_IDS}).
+
+## 5. Check it
+
+Build and tests must pass: run the build command, then the test command, from the project folder. Fix what fails and run them again. Don't report a project whose checks you haven't seen pass.
+
+${checkStep('Then check the result file.', `${JSON_RULE}, and "name", "stack", "build" and "test" are non-empty strings`, 'sldev-io reads the file to show the project; one it can\'t read only says so.')}
+
+## 6. Finish
+
+Say in a few lines: the name, the stack, the build and test commands and that they pass, and that nothing was pushed: there is no remote yet.
+`
   }
 ]
 
@@ -444,15 +516,49 @@ export function draftKind(name: string): 'mission' | 'stories' | null {
   return null
 }
 
+// ── the result a new-project mission leaves ───────────────────────────
+
+/** where the sldev-new-project skill writes what it set up, relative to the project folder */
+export const NEW_PROJECT_RESULT = '.sldev/runs/new-project.json'
+
+export interface NewProjectResult {
+  name: string
+  stack: string
+  build: string
+  test: string
+  license?: string
+  by?: string
+}
+
+/** The result file of a new-project mission; `error` says what's wrong with it in a line. */
+export function parseNewProjectResult(src: string): { result?: NewProjectResult; error?: string; warning?: string } {
+  let v: unknown
+  try {
+    v = JSON.parse(src)
+  } catch (e) {
+    return { error: `Not valid JSON: ${(e as Error).message}. Escape quotes and newlines inside strings (\\" and \\n).` }
+  }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return { error: 'The file needs one object: {"name": "…", "stack": "…", "build": "…", "test": "…"}' }
+  const o = v as Record<string, unknown>
+  const missing = (['name', 'stack', 'build', 'test'] as const).filter((k) => !text(o[k]))
+  if (missing.length) return { error: `Missing ${missing.map((k) => `"${k}"`).join(', ')}: each must be a non-empty string.` }
+  const name = text(o.name)!
+  return {
+    result: { name, stack: text(o.stack)!, build: text(o.build)!, test: text(o.test)!, license: text(o.license), by: text(o.by)?.toLowerCase() },
+    ...(/^[a-z0-9]+(?:[-._][a-z0-9]+)*$/.test(name) ? {} : { warning: `"${name}" isn't a kebab-case repository name (e.g. weather-cli).` })
+  }
+}
+
 // ── checking a file an sldev skill wrote ──────────────────────────────
 
-export type SkillFileKind = 'mission' | 'stories' | 'recipe' | 'eval'
+export type SkillFileKind = 'mission' | 'stories' | 'recipe' | 'eval' | 'new-project'
 
 /** Which of the skills' files `path` is, from where it sits: a draft by its name, a recipe or eval by its folder. */
 export function skillFileKind(path: string): SkillFileKind | null {
   const p = path.replace(/\\/g, '/')
   if (/(^|\/)\.sldev\/factory\/[^/]+\.ya?ml$/i.test(p)) return 'recipe'
   if (/(^|\/)\.sldev\/evals\/[^/]+\.ya?ml$/i.test(p)) return 'eval'
+  if (/(^|\/)\.sldev\/runs\/new-project\.json$/i.test(p)) return 'new-project'
   if (/(^|\/)\.sldev\/drafts\/[^/]+$/i.test(p)) return draftKind(p.split('/').pop()!)
   return null
 }
@@ -470,7 +576,7 @@ export function checkSkillFile(path: string, src: string): SkillFileCheck {
     return {
       ok: false,
       kind,
-      error: `sldev-io doesn't read ${path}. Missions go to ${DRAFTS_DIR}/mission-<slug>.md, stories to ${DRAFTS_DIR}/stories-<slug>.json, recipes to .sldev/factory/<slug>.yml and evals to .sldev/evals/<slug>.yml, at the project root.`
+      error: `sldev-io doesn't read ${path}. Missions go to ${DRAFTS_DIR}/mission-<slug>.md, stories to ${DRAFTS_DIR}/stories-<slug>.json, recipes to .sldev/factory/<slug>.yml, evals to .sldev/evals/<slug>.yml and a new project's result to ${NEW_PROJECT_RESULT}, at the project root.`
     }
   if (kind === 'mission') {
     const r = parseMissionDraft(src)
@@ -501,6 +607,12 @@ export function checkSkillFile(path: string, src: string): SkillFileCheck {
       summary: `${stories.length} ${stories.length === 1 ? 'story' : 'stories'}: ${stories.map((st) => st.title).join('; ').slice(0, 300)}`,
       ...(dropped > 0 ? { warning: `${dropped} of the ${listed} entries were skipped: each story needs a "title".` } : {})
     }
+  }
+  if (kind === 'new-project') {
+    const r = parseNewProjectResult(src)
+    if (!r.result) return { ok: false, kind, error: r.error! }
+    const n = r.result
+    return { ok: true, kind, summary: `The project "${n.name}" (${n.stack}): build \`${n.build}\`, test \`${n.test}\`.`, ...(r.warning ? { warning: r.warning } : {}) }
   }
   if (kind === 'recipe') {
     const r = parseRecipe(src, path)

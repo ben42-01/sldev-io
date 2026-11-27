@@ -4,7 +4,7 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { parseRecipe } from '../src/shared/factory'
 import { parseEval } from '../src/shared/evals'
-import { SKILLS_VERSION, SLDEV_SKILLS, checkSkillFile, copyState, draftKind, parseMissionDraft, parseStoriesDraft, skillFileKind, skillText, skillVersionOf } from '../src/shared/sldevSkills'
+import { NEW_PROJECT_RESULT, SKILLS_VERSION, SLDEV_SKILLS, checkSkillFile, copyState, draftKind, parseMissionDraft, parseNewProjectResult, parseStoriesDraft, skillFileKind, skillText, skillVersionOf } from '../src/shared/sldevSkills'
 import { installSkills, listDrafts, settleDraft, skillsState } from '../src/main/sldevSkills'
 
 const skill = (name: string): (typeof SLDEV_SKILLS)[number] => SLDEV_SKILLS.find((s) => s.name === name)!
@@ -34,9 +34,23 @@ describe('the skills teach formats the app reads', () => {
     expect(stories.map((s) => s.title)).toEqual(['Store login attempts per IP', 'Rate-limit /api/login'])
     expect(stories[1].after).toEqual(['Store login attempts per IP'])
   })
+  it('the new-project example is a valid result', () => {
+    const r = parseNewProjectResult(example('sldev-new-project', 'json'))
+    expect(r.error).toBeUndefined()
+    expect(r.warning).toBeUndefined()
+    expect(r.result).toEqual({ name: 'weather-cli', stack: 'Rust (cargo)', build: 'cargo build', test: 'cargo test', license: 'Apache-2.0', by: 'claude' })
+  })
+  it('the new-project skill never pushes, uses the generators and ends with build and tests passing', () => {
+    const b = skill('sldev-new-project').body
+    expect(b).toMatch(/Never create a remote, never push/)
+    expect(skill('sldev-new-project').description).toMatch(/never creates a remote or pushes/)
+    for (const g of ['npm create', 'cargo init', 'go mod init', 'dotnet new', 'gradle init', 'uv init', '--help']) expect(b).toContain(g)
+    for (const f of ['README', '.gitignore', 'LICENSE', '.github/workflows/ci.yml', '.sldev/rules.md', 'git init', 'Apache-2.0', 'MIT', NEW_PROJECT_RESULT]) expect(b).toContain(f)
+    expect(b).toMatch(/Build and tests must pass/)
+  })
   it('every skill has a name the folder matches and a description agents can trigger on', () => {
     for (const s of SLDEV_SKILLS) {
-      expect(s.name).toMatch(/^sldev-[a-z]+$/)
+      expect(s.name).toMatch(/^sldev-[a-z]+(-[a-z]+)*$/)
       expect(s.description.length).toBeGreaterThan(80)
       expect(skillText(s)).toMatch(new RegExp(`^---\\nname: ${s.name}\\n`))
     }
@@ -155,12 +169,21 @@ describe('checking the files the skills write', () => {
     expect(skillFileKind('.sldev/evals/pages.yaml')).toBe('eval')
     expect(skillFileKind('/p/.sldev/evals/prompts/terse.md')).toBeNull()
     expect(skillFileKind('/p/mission-x.md')).toBeNull()
+    expect(skillFileKind('/p/.sldev/runs/new-project.json')).toBe('new-project')
+    expect(skillFileKind('/p/.sldev/runs/other.json')).toBeNull()
   })
   it('passes every skill’s own example', () => {
     expect(checkSkillFile('.sldev/drafts/mission-a.md', example('sldev-mission', 'markdown'))).toMatchObject({ ok: true, kind: 'mission' })
     expect(checkSkillFile('.sldev/drafts/stories-a.json', example('sldev-stories', 'json'))).toMatchObject({ ok: true, kind: 'stories' })
     expect(checkSkillFile('.sldev/factory/a.yml', example('sldev-recipe', 'yaml'))).toMatchObject({ ok: true, kind: 'recipe' })
     expect(checkSkillFile('.sldev/evals/a.yml', example('sldev-eval', 'yaml'))).toMatchObject({ ok: true, kind: 'eval' })
+    expect(checkSkillFile(NEW_PROJECT_RESULT, example('sldev-new-project', 'json'))).toMatchObject({ ok: true, kind: 'new-project', summary: expect.stringContaining('weather-cli') })
+  })
+  it('says what is wrong with a new project’s result', () => {
+    expect(parseNewProjectResult('{"name": "x",}').error).toMatch(/Not valid JSON/)
+    expect(parseNewProjectResult('[]').error).toMatch(/one object/)
+    expect(parseNewProjectResult('{"name": "app", "stack": "Go", "build": ""}').error).toBe('Missing "build", "test": each must be a non-empty string.')
+    expect(parseNewProjectResult('{"name": "My App", "stack": "Go", "build": "go build ./...", "test": "go test ./..."}')).toMatchObject({ result: { name: 'My App' }, warning: expect.stringMatching(/kebab-case/) })
   })
   it('says what is wrong in each format', () => {
     const fail = (path: string, src: string): string => {

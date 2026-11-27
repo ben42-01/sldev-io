@@ -82,6 +82,7 @@ export function SettingsPanel(): React.JSX.Element {
       <section>
         <h3>Agents</h3>
         <AgentSettings />
+        <CheapModelSettings />
         <FailoverSettings />
         <AgentProfiles />
         <label className="check">
@@ -263,6 +264,54 @@ function FailoverSettings(): React.JSX.Element {
         <span>Continue automatically, without asking (missions and factory stages). Off: the mission shows a Continue button.</span>
       </label>
     </>
+  )
+}
+
+/** The low-cost model each agent uses for routine kinds of work (New project), unless the mission picks one. */
+function CheapModelSettings(): React.JSX.Element {
+  const agents = useAgents().filter((a) => !a.custom || a.modelPlaceholder)
+  // selected as stored: `?? {}` inside the selector is a new object on every read, and React loops on it
+  const saved = useStore(workspace, (w) => w.cheapModels) ?? {}
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  const shown = (a: (typeof agents)[number]): string => draft[a.id] ?? saved[a.id] ?? a.cheapModel ?? ''
+  const save = (a: (typeof agents)[number]): void => {
+    const v = (draft[a.id] ?? '').trim()
+    if (draft[a.id] === undefined) return
+    const next = { ...saved }
+    // the agent's own suggestion is kept as "not set", so a better default in a later version still reaches it
+    if (v === (a.cheapModel ?? '')) delete next[a.id]
+    else next[a.id] = v
+    updateSettings({ cheapModels: next })
+    setDraft(({ [a.id]: _gone, ...rest }) => rest)
+  }
+  return (
+    <div className="field cheap-models">
+      <span>Low-cost model for routine work</span>
+      <div className="cheap-model-grid">
+        {agents.map((a) => (
+          <label key={a.id} className="cheap-model-row">
+            <span className="cheap-model-agent">{a.name}</span>
+            <input
+              className="mono"
+              aria-label={`${a.name} low-cost model`}
+              value={shown(a)}
+              list={a.models.length ? `cheap-${a.id}` : undefined}
+              placeholder="agent default"
+              onChange={(e) => setDraft((d) => ({ ...d, [a.id]: e.target.value }))}
+              onBlur={() => save(a)}
+            />
+            {a.models.length > 0 && (
+              <datalist id={`cheap-${a.id}`}>
+                {a.models.map((m) => <option key={m} value={m} />)}
+              </datalist>
+            )}
+          </label>
+        ))}
+      </div>
+      <span className="field-hint">
+        Used by kinds of work a small model does well, like setting up a new project, unless you pick a model for the mission. Empty uses the agent’s default model.
+      </span>
+    </div>
   )
 }
 

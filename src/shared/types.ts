@@ -97,6 +97,8 @@ export interface AppSettings {
   defaultAgent: string
   /** permission mode per agent id for Factory stages; missing = the agent's recommended one, '' = the CLI default */
   factoryModes: Record<string, string>
+  /** the low-cost model per agent id for cheap mission kinds (New project); missing = the agent's cheapModel, '' = its default model */
+  cheapModels?: Record<string, string>
   /** user-defined agent CLIs */
   customAgents: CustomAgent[]
   /** agents to continue on, in order, when one stops at its usage limit */

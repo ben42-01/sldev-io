@@ -250,7 +250,7 @@ export function staticCommands(): Command[] {
       void checkForUpdates()
     } },
     { id: 'setup.open', category: 'Preferences', title: 'Check setup (git, gh, agent CLIs…)', run: openSetup },
-    { id: 'project.new', category: 'Workspace', title: 'New project… (clone a repository from GitHub)', run: openNewProject },
+    { id: 'project.new', category: 'Workspace', title: 'New project… (clone a repository from GitHub, or start from scratch)', run: () => openNewProject() },
     { id: 'folder.open', category: 'Workspace', title: 'Open folder…', keys: { mac: 'Cmd+O', other: 'Ctrl+Shift+O' }, run: () => void pickRootFolder() },
     {
       id: 'folder.openInEditor',

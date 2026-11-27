@@ -41,7 +41,7 @@ module.exports = async (h) => {
   h.expect(await open(), 'New project… opens the dialog from the palette')
   h.expect(await h.until(() => h.js(`document.querySelector('.np-repos .empty-title')?.textContent.includes('can’t be listed')`), 5000), 'logged out, the list says the repos can’t be listed')
   h.expect(await h.js(`document.querySelector('.np-repos .empty-hint')?.textContent.includes('gh auth login')`), 'and how to sign in')
-  h.expect(await h.js(`!!document.querySelector('.np-choice:disabled')?.textContent.includes('coming next')`), 'Start from scratch is there but disabled, coming next')
+  h.expect(await h.js(`[...document.querySelectorAll('.np-choice')].some(b => b.textContent.includes('Start from scratch') && !b.disabled)`), 'Start from scratch is there to pick')
   await h.wait(500)
   await h.shot('0-logged-out')
   await h.setValue('.np-search', bare)

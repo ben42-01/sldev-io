@@ -187,6 +187,12 @@ const api = {
     cloneCancel: (id: string): Promise<void> => ipcRenderer.invoke('git:cloneCancel', id),
     onCloneOutput: (cb: (id: string, text: string) => void): Unsubscribe => on('git:cloneOutput', cb)
   },
+  newProject: {
+    /** creates the empty folder of a project started from scratch (refused when it exists and isn't empty); returns it */
+    create: (dest: string): Promise<string> => ipcRenderer.invoke('newProject:create', dest),
+    /** the text of the project's .sldev/runs/new-project.json, null when it has none */
+    result: (root: string): Promise<string | null> => ipcRenderer.invoke('newProject:result', root)
+  },
   missions: {
     hookInfo: (): Promise<{ port: number; token: string; settingsPath: string; mcp: { command: string; script: string } } | null> => ipcRenderer.invoke('missions:hookInfo'),
     briefFile: (id: string, text: string): Promise<string> => ipcRenderer.invoke('missions:briefFile', id, text),
