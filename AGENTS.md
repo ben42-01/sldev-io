@@ -36,7 +36,8 @@ src/main/       Electron main process (Node): everything privileged
   vault.ts        credentials encrypted with safeStorage async APIs; secrets never reach the renderer
   hooks.ts        loopback HTTP server receiving Claude Code hook events and sldev MCP tool calls (token-protected)
   mcpServer.ts    the stdio MCP server agents start (script string, installed in userData); mcp.ts answers its tools
-  updater.ts      electron-updater from this repo's GitHub Releases (macOS: notify only until builds are signed)
+  updater.ts      electron-updater from this repo's GitHub Releases: Windows and the Linux AppImage update themselves, the .deb
+                  asks for the admin password (said first), macOS notifies only until signed; install kinds in src/shared/updates.ts
   git.ts, github.ts (gh CLI), runtimes.ts (script detection), claudeAssets.ts (skills/MCP),
   notes.ts, fs.ts, editors.ts, shellEnv.ts (login-shell PATH), store.ts (atomic JSON files)
   diagram.ts      code map (imports between folders: TS/JS, Python, Java/Kotlin/Scala, Go, C#, Rust, C/C++, Ruby, PHP), Files (folders
@@ -308,6 +309,9 @@ typed in `StoreFiles` in `src/shared/types.ts`.
 - **Linux release builds run on `ubuntu-22.04`**, not `ubuntu-latest`: native modules link against the
   runner's glibc, and a newer runner makes the app fail to start on older distros. The release workflow
   rejects anything above glibc 2.35. It compiles with clang 15 there, because gcc 11/12 reject Electron's V8 headers.
+- **Linux ships an AppImage and a .deb**, both listed in one `latest-linux.yml` (each updater picks its own file). The
+  AppImage (`toolsets.appimage` pinned for the static runtime: no libfuse2 on Ubuntu 24.04+) is what install.sh installs and
+  updates without a password; the .deb installs under /opt, so electron-updater needs pkexec/gksudo and a password.
 - **ssh2 `hostVerifier`** is async (callback); the typings need a cast through `unknown`.
 
 ## Testing without side effects

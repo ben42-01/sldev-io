@@ -10,13 +10,15 @@
 const REPO = 'ben42-01/sldev-io'
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
 
-export type Platform = 'windows' | 'mac' | 'mac-intel' | 'linux'
+/** linux is the .deb (kept: older apps and install.sh copies link to it); linux-appimage is the recommended one */
+export type Platform = 'windows' | 'mac' | 'mac-intel' | 'linux' | 'linux-appimage'
 
 const matchers: Record<Platform, (name: string) => boolean> = {
   windows: (n) => n.endsWith('.exe'),
   mac: (n) => n.endsWith('.dmg') && n.includes('arm64'),
   'mac-intel': (n) => n.endsWith('.dmg') && !n.includes('arm64'),
-  linux: (n) => n.endsWith('.deb')
+  linux: (n) => n.endsWith('.deb'),
+  'linux-appimage': (n) => n.endsWith('.appimage')
 }
 
 export function isPlatform(value: string | null): value is Platform {

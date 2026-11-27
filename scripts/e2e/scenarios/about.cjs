@@ -25,4 +25,27 @@ module.exports = async (h) => {
   h.expect(sponsor.includes('Star on GitHub') && sponsor.includes('Sponsor'), 'About offers Star on GitHub and Sponsor')
   h.expect(await h.js(`!('license' in window.api) && !('beta' in window.api)`), 'no license or beta API in the preload bridge')
   await h.shot('1-about')
+  h.expect(status.install === 'dev', 'unpacked build reports a development install')
+
+  // what each Linux install says, with the status main would send (scenarios run in main)
+  const send = (s) => require('electron').BrowserWindow.getAllWindows()[0].webContents.send('update:changed', {
+    state: 'idle', version: null, percent: null, manual: false, error: null, checkedAt: null, ...s
+  })
+  send({ install: 'deb', state: 'downloading', version: '9.9.9', percent: 40 })
+  await h.wait(300)
+  h.expect((await text(h, '[data-testid=about-install]')).includes('administrator password'), '.deb: About says the update asks for the admin password')
+  send({ install: 'deb', state: 'ready', version: '9.9.9', percent: 100 })
+  await h.wait(400)
+  h.expect((await text(h, '.toast')).includes('administrator password'), '.deb: the ready toast says the password prompt is coming')
+  h.expect(await h.js(`document.querySelector('.statusbar .status-item.ok')?.title ?? ''`).then((t) => t.includes('administrator password')), '.deb: the restart chip says so too')
+  await h.shot('2-deb-ready')
+  send({ install: 'appimage', state: 'ready', version: '9.9.10', percent: 100 })
+  await h.wait(400)
+  h.expect((await text(h, '[data-testid=about-install]')).includes('No password needed'), 'AppImage: About says no password is needed')
+  h.expect((await text(h, '.toast')).includes('no password'), 'AppImage: the ready toast says no password')
+  await h.shot('3-appimage-ready')
+  send({ install: 'deb', manual: true, state: 'available', version: '9.9.11' })
+  await h.wait(400)
+  h.expect((await text(h, '#settings-about')).includes('Download'), '.deb without pkexec: About offers Download')
+  await h.shot('4-deb-manual')
 }

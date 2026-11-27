@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.5",
+    "date": null,
+    "changes": [
+      "Linux: an AppImage that updates itself without a password. The terminal install (curl -fsSL https://sldev-io.vercel.app/install.sh | sh) now puts it in ~/Applications with an app-menu entry and an icon, checked against the release's SHA256SUMS, and it runs on Ubuntu 24.04 without libfuse2. Updates download in the background and replace the file when you quit. The .deb is still there for a system-wide install (sh -s -- --deb, or the second button on /download); its restart dialog now says it will ask for your administrator password before it does, and without a graphical password prompt it tells you to download the new .deb instead of failing. Settings → About says how your copy updates. Your settings and missions are shared between the two."
+    ]
+  },
+  {
     "version": "1.0.4",
     "date": "2026-11-27",
     "changes": [

@@ -1,5 +1,6 @@
 import { Bug, Check, Copy, Download, ExternalLink, FolderOpen, Heart, MessageSquare, RefreshCw, RotateCw, Sparkles, Star } from 'lucide-react'
 import type { UpdateStatus } from '@shared/types'
+import { installText } from '@shared/updates'
 import { useState } from 'react'
 import { checkForUpdates, diagnostics, downloadUpdate, openSource, openSponsor, reportBug, siteLink, updates } from '../state/updates'
 import { openWhatsNew } from '../state/whatsNew'
@@ -19,9 +20,14 @@ function UpdateRow(): React.JSX.Element {
     await checkForUpdates()
     setBusy(false)
   }
-  if (!status || status.state === 'unsupported') {
-    return <div className="muted">Updates are installed by the packaged app (not in development builds).</div>
-  }
+  if (!status) return <div className="muted">Checking how this copy was installed…</div>
+  const kind = installText(status)
+  const how = (
+    <p className="muted small about-install" data-testid="about-install">
+      <b>{kind.label}.</b> {kind.update}
+    </p>
+  )
+  if (status.state === 'unsupported') return how
   const text: Record<UpdateStatus['state'], string> = {
     unsupported: '',
     idle: 'Checks for updates automatically.',
@@ -33,24 +39,27 @@ function UpdateRow(): React.JSX.Element {
     error: `Couldn't check for updates: ${status.error}`
   }
   return (
-    <div className="about-update">
-      <span className={status.state === 'error' ? 'bad' : status.state === 'ready' || status.state === 'available' ? 'ok' : undefined}>
-        {text[status.state]}
-      </span>
-      {status.state === 'ready' ? (
-        <button className="btn sm primary" onClick={() => void window.api.update.install()}>
-          <RotateCw size={13} /> Restart to update
-        </button>
-      ) : status.state === 'available' && status.manual ? (
-        <button className="btn sm primary" onClick={downloadUpdate}>
-          <Download size={13} /> Download
-        </button>
-      ) : (
-        <button className="btn sm" disabled={busy || status.state === 'checking' || status.state === 'downloading'} onClick={() => void check()}>
-          <RefreshCw size={13} /> Check for updates
-        </button>
-      )}
-    </div>
+    <>
+      <div className="about-update">
+        <span className={status.state === 'error' ? 'bad' : status.state === 'ready' || status.state === 'available' ? 'ok' : undefined}>
+          {text[status.state]}
+        </span>
+        {status.state === 'ready' ? (
+          <button className="btn sm primary" onClick={() => void window.api.update.install()}>
+            <RotateCw size={13} /> Restart to update
+          </button>
+        ) : status.state === 'available' && status.manual ? (
+          <button className="btn sm primary" onClick={downloadUpdate}>
+            <Download size={13} /> Download
+          </button>
+        ) : (
+          <button className="btn sm" disabled={busy || status.state === 'checking' || status.state === 'downloading'} onClick={() => void check()}>
+            <RefreshCw size={13} /> Check for updates
+          </button>
+        )}
+      </div>
+      {how}
+    </>
   )
 }
 
@@ -79,9 +88,7 @@ export function AboutSection(): React.JSX.Element {
         </div>
       </div>
       <div className="about-sponsor">
-        <p>
-          sldev-io is free and open source. If it saves you time, a star or a sponsorship keeps it going.
-        </p>
+        <p>sldev-io is free and open source. If it saves you time, a star or a sponsorship keeps it going.</p>
         <div className="about-actions">
           <button className="btn sm" onClick={openSource}>
             <Star size={13} /> Star on GitHub
@@ -137,7 +144,13 @@ export function UpdateChip(): React.JSX.Element | null {
   const status = useStore(updates, (u) => u.status)
   if (status?.state === 'ready') {
     return (
-      <button className="status-item clickable ok" title={`Restart to install ${status.version}`} onClick={() => void window.api.update.install()}>
+      <button
+        className="status-item clickable ok"
+        title={
+          status.install === 'deb' ? `Restart to install ${status.version} (asks for your administrator password)` : `Restart to install ${status.version}`
+        }
+        onClick={() => void window.api.update.install()}
+      >
         <RotateCw size={12} /> restart to update
       </button>
     )
