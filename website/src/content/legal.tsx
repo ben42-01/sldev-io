@@ -81,6 +81,12 @@ const privacy: LegalPage = {
         host you pasted), signed in as you; nothing goes to us.
       </p>
       <p>
+        When you open Create repository on GitHub for a new project, the app asks GitHub through your GitHub CLI for your login and
+        the organizations you belong to. Only when you click Create and push does it ask whether a repository of the name you chose
+        exists, create it with the name, owner, visibility and description you chose, and push your project's commits to it with
+        git. That goes from your computer to GitHub, signed in as you; nothing goes to us.
+      </p>
+      <p>
         The GitHub stats panel asks GitHub through your GitHub CLI for your repository's open pull requests and issues, latest release,
         recent CI runs and the pull requests opened or merged in the range its activity chart shows. It asks when the panel is on screen,
         again every minute while it stays there, and when you press Refresh or change the range; never while it is hidden. That goes from

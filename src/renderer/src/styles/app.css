@@ -9855,6 +9855,80 @@ button.cg-pr:focus-visible {
   margin-top: 2px;
 }
 
+.np-result-create {
+  align-self: flex-start;
+  margin-top: 3px;
+  height: 24px;
+  font-size: 11.5px;
+}
+.np-result-remote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.np-result-remote > .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np-result-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-size: 11px;
+  cursor: pointer;
+}
+.np-result-link:hover {
+  text-decoration: underline;
+}
+.np-result-link:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
+  border-radius: var(--radius-xs);
+}
+
+/* New project → Create repository on GitHub (components/CreateRepoDialog.tsx) */
+.field-row > .cr-owner {
+  flex: 0 0 38%;
+  min-width: 0;
+}
+.field-row > .cr-name {
+  flex: 1;
+  min-width: 0;
+}
+.cr-visibility .np-choice {
+  padding: 7px 10px;
+}
+.cr-summary {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.cr-summary b {
+  color: var(--fg);
+  font-weight: 500;
+}
+.cr-summary .np-problem {
+  color: var(--status-error);
+}
+.cr-error {
+  margin: 0 0 4px;
+  font: 11.5px var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Settings → Agents: the low-cost model per agent */
 .cheap-model-grid {
   display: grid;

@@ -82,7 +82,8 @@ describe('the New project kind', () => {
     const p = renderKind(k, { title: 'weather-cli', brief: 'A weather CLI in Rust', worktree: false })
     expect(p.startsWith('New project: weather-cli\n\nA weather CLI in Rust')).toBe(true)
     expect(p).toContain(`.agents/skills/${NEW_PROJECT_SKILL}/SKILL.md`)
-    expect(p).toMatch(/never push/)
+    expect(p).toMatch(/never `git push`/)
+    expect(p).toMatch(/never run `gh repo create`/)
     expect(p).not.toMatch(/git fetch/)
   })
   it('is agent-agnostic: no agent named, and the skill exists', () => {

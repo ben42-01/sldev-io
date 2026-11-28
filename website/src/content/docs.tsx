@@ -2028,4 +2028,98 @@ const pullRequests: DocPage = {
   ]
 }
 
-export const docs: DocPage[] = [lead, teams, board, pullRequests, evalsGuide, recipes, missions, context, workspace, agents, remote]
+const newProject: DocPage = {
+  id: 'new-project',
+  title: 'Starting a new project',
+  summary:
+    'New project… clones one of your GitHub repositories, or has an agent set up a project from scratch that builds, tests and runs CI from its first commit. When it is ready, one click creates its repository on GitHub and pushes it.',
+  sections: [
+    {
+      id: 'open',
+      title: 'Open the dialog',
+      body: (
+        <p>
+          Click the project name in the title bar and pick <b>New project…</b>, or run <b>New project…</b> from the command palette. It
+          offers two ways in: <b>Clone from GitHub</b> and <b>Start from scratch</b>. Either way, the new folder opens as the project when it
+          is ready.
+        </p>
+      )
+    },
+    {
+      id: 'clone',
+      title: 'Clone a repository',
+      body: (
+        <>
+          <p>
+            The list is your repositories on GitHub, read through your GitHub CLI each time the dialog opens, newest first, with private ones
+            marked. Type to filter by name or description, or paste any git URL (https, ssh, <code>git@host:owner/name</code>, a local path)
+            or GitHub's <code>owner/name</code>. Without the GitHub CLI, or signed out, the list says so and a pasted URL still clones.
+          </p>
+          <p>
+            Pick the parent folder (remembered for next time) and the folder name; a folder that exists and isn't empty is refused before
+            anything is written. <b>Clone</b> runs git on your computer and shows its progress. <b>Cancel clone</b> stops it and removes the
+            partial folder. Nothing is pushed.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'scratch',
+      title: 'Start from scratch',
+      body: (
+        <>
+          <p>
+            Describe the project in a sentence or two, with the stack if you have one in mind (<i>A command-line weather app in Rust</i>).
+            Give it a name, or leave it empty and the folder is named from the description and the agent suggests a repository name. Pick the
+            license (Apache-2.0 or MIT) and the agent. Setting up is routine work, so the agent runs on its low-cost model (Claude: haiku); you
+            can type another model, or change each agent's low-cost model in <b>Settings → Agents</b>.
+          </p>
+          <p>
+            <b>Create and start</b> creates the empty folder, opens it, installs sldev's skills into it and starts a <b>New project</b> mission
+            there. The agent follows the <code>sldev-new-project</code> skill:
+          </p>
+          <ul>
+            <li>the stack's own generator (<code>cargo init</code>, <code>npm create vite</code>, <code>go mod init</code>, <code>uv init</code>…), never a hand-written copy of it;</li>
+            <li>a README, a <code>.gitignore</code>, the license, one build and one test command with a sample test, a GitHub Actions CI workflow and <code>.sldev/rules.md</code> for agents;</li>
+            <li>one first commit, <i>Initial project setup</i>;</li>
+            <li>the build and the tests run until they pass, and the result written to <code>.sldev/runs/new-project.json</code>.</li>
+          </ul>
+          <p>
+            The mission's card shows the result: name, stack, build and test commands, license. A result that is missing or can't be read
+            says so. The agent never creates a remote, never runs <code>gh repo create</code> and never pushes; its instructions say so.
+          </p>
+        </>
+      )
+    },
+    {
+      id: 'create',
+      title: 'Create the repository on GitHub',
+      body: (
+        <>
+          <p>
+            Once the agent reports that the build and tests passed, the card offers <b>Create repository on GitHub…</b>. The dialog takes the
+            name from the result (edit it if you like), the owner (you or one of your organizations), private (the default) or public, and an
+            optional description. It says exactly what will happen: which repository is created, that it becomes <code>origin</code> in the
+            project folder, and which branch and how many commits are pushed.
+          </p>
+          <p>
+            Nothing is created or pushed before you click <b>Create and push</b>. Then the app, through your GitHub CLI and as you, first checks
+            that no repository of that name exists (<code>gh repo view</code>) and refuses with the reason if one does, then runs:
+          </p>
+          <Code>{`gh repo create <owner>/<name> --private --source <project> --remote origin --push`}</Code>
+          <p>
+            The card then shows the repository's address. If GitHub refuses, the dialog shows gh's error and the project stays as it was, so you
+            can fix the name or sign in (<code>gh auth login</code>) and try again. If the repository was made but the push didn't finish, it
+            says so and how to push yourself.
+          </p>
+          <Note>
+            Didn't pass? When the agent couldn't get the build and tests to pass, the card says so instead of offering the repository. Send it a
+            follow-up to fix them; the offer appears once its result says they pass.
+          </Note>
+        </>
+      )
+    }
+  ]
+}
+
+export const docs: DocPage[] = [newProject, lead, teams, board, pullRequests, evalsGuide, recipes, missions, context, workspace, agents, remote]

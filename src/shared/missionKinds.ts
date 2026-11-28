@@ -161,7 +161,7 @@ export const BUILTIN_KINDS: MissionKind[] = [
       'New project: {title}',
       '{brief}',
       '{criteria}',
-      `Set this project up with the ${NEW_PROJECT_SKILL} skill: read \`.agents/skills/${NEW_PROJECT_SKILL}/SKILL.md\` in this folder completely and follow it. Your current folder is the new project's root; work only in it. Never create a git remote and never push.`,
+      `Set this project up with the ${NEW_PROJECT_SKILL} skill: read \`.agents/skills/${NEW_PROJECT_SKILL}/SKILL.md\` in this folder completely and follow it. Your current folder is the new project's root; work only in it. Never create a git remote, never run \`gh repo create\` and never \`git push\`: the person creates the GitHub repository from sldev-io with a click when you're done.`,
       'End with: the repository name, the stack, the build and test commands and whether they pass, and anything you could not set up.'
     ].join('\n\n')
   },

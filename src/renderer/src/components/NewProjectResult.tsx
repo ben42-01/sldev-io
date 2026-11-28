@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { FileWarning, PackageCheck } from 'lucide-react'
+import { CloudUpload, ExternalLink, FileWarning, PackageCheck } from 'lucide-react'
 import type { Mission } from '@shared/types'
+import { CreateRepoDialog } from './CreateRepoDialog'
 import { NEW_PROJECT_RESULT, parseNewProjectResult, type NewProjectResult as Result } from '@shared/sldevSkills'
 
 type Read = { state: 'loading' } | { state: 'ok'; result: Result; warning?: string } | { state: 'missing' } | { state: 'bad'; error: string }
@@ -12,6 +13,9 @@ type Read = { state: 'loading' } | { state: 'ok'; result: Result; warning?: stri
 export function NewProjectResult({ mission: m }: { mission: Mission }): React.JSX.Element | null {
   const resting = m.status === 'waiting' || m.status === 'ended' || m.status === 'failed'
   const [read, setRead] = useState<Read>({ state: 'loading' })
+  // the project's origin: undefined while unknown, null when it has none (then it can be created on GitHub)
+  const [origin, setOrigin] = useState<string | null | undefined>(undefined)
+  const [creating, setCreating] = useState(false)
   useEffect(() => {
     if (!resting) return
     let live = true
@@ -28,6 +32,17 @@ export function NewProjectResult({ mission: m }: { mission: Mission }): React.JS
       live = false
     }
   }, [m.status, m.cwd, resting])
+  useEffect(() => {
+    if (!resting) return
+    let live = true
+    void window.api.gh.repoPushPlan(m.cwd).then(
+      (p) => live && setOrigin(p.origin),
+      () => live && setOrigin(undefined)
+    )
+    return () => {
+      live = false
+    }
+  }, [m.status, m.cwd, resting, creating])
   if (!resting || read.state === 'loading') return null
   if (read.state === 'ok') {
     const r = read.result
@@ -44,6 +59,29 @@ export function NewProjectResult({ mission: m }: { mission: Mission }): React.JS
           {r.license && <span>{r.license}</span>}
         </div>
         {read.warning && <div className="np-result-note">{read.warning}</div>}
+        {origin ? (
+          <div className="np-result-remote" data-testid="np-remote">
+            <span>origin</span>
+            {/^https:\/\//.test(origin) ? (
+              <button type="button" className="np-result-link mono" title={`Open ${origin}`} onClick={() => void window.api.shell.openExternal(origin)}>
+                {origin.replace(/^https:\/\//, '').replace(/\.git$/, '')} <ExternalLink size={10} />
+              </button>
+            ) : (
+              <span className="mono">{origin}</span>
+            )}
+          </div>
+        ) : origin === null && m.status !== 'failed' ? (
+          r.checks === 'passed' ? (
+            <button type="button" className="btn np-result-create" data-testid="np-create-repo" onClick={() => setCreating(true)}>
+              <CloudUpload size={12} /> Create repository on GitHub…
+            </button>
+          ) : (
+            <div className="np-result-note">
+              {r.checks === 'failed' ? 'The build or tests didn’t pass' : 'The agent didn’t say the build and tests pass'}, so it isn’t offered on GitHub yet. Ask it to fix them in a follow-up.
+            </div>
+          )
+        ) : null}
+        {creating && <CreateRepoDialog dir={m.cwd} suggested={r.name} onClose={() => setCreating(false)} onCreated={(url) => setOrigin(url)} />}
       </div>
     )
   }

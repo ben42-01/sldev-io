@@ -8,7 +8,7 @@ import type { GraphLog } from '@shared/gitGraph'
 import type { BaseMoved, MergeMethod, ReviewPayload, ShipPr, ShipRun, ShipStatus } from '@shared/ship'
 import type { Use } from '@shared/review'
 import type { OpenPrList, PrDetail, PrWorktree } from '@shared/prs'
-import type { GhRepoList } from '@shared/newProject'
+import type { CreateRepoRequest, GhRepoList, RepoOwners, RepoPushPlan } from '@shared/newProject'
 import type {
   AgentProfile,
   RulesState,
@@ -243,6 +243,12 @@ const api = {
     prComments: (cwd: string, n: number): Promise<GhPrComment[]> => ipcRenderer.invoke('gh:prComments', cwd, n),
     /** the signed-in user's repositories (up to 200), for New project → Clone */
     repoList: (): Promise<GhRepoList> => ipcRenderer.invoke('gh:repoList'),
+    /** the signed-in user and their organizations; `error` when gh is missing or logged out */
+    repoOwners: (): Promise<RepoOwners> => ipcRenderer.invoke('gh:repoOwners'),
+    /** the branch, commit count and origin of a project folder, for what a first push carries */
+    repoPushPlan: (dir: string): Promise<RepoPushPlan> => ipcRenderer.invoke('gh:repoPushPlan', dir),
+    /** gh repo create --source --remote origin --push, after checking the name is free; the new repository's URL */
+    createRepo: (req: CreateRepoRequest): Promise<string> => ipcRenderer.invoke('gh:createRepo', req),
     /** gh-stats as data: local git parts always, GitHub parts each with its own error */
     stats: (cwd: string): Promise<RepoStats> => ipcRenderer.invoke('gh:stats', cwd),
     /** commits (git) and pull requests (gh) of the last `days` days, for the stats panel's charts */

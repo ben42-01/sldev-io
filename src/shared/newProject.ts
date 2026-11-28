@@ -150,3 +150,65 @@ export function newProjectBrief(o: { description: string; name?: string; license
   const lines = [o.name?.trim() ? `Name: ${o.name.trim()} (use it as the repository name)` : 'Name: none given; suggest one (kebab-case).', `License: ${o.license}`]
   return `${o.description.trim()}\n\n${lines.join('\n')}`
 }
+
+// ── Create the repository on GitHub ───────────────────────────────
+
+export type RepoVisibility = 'private' | 'public'
+
+/** what the Create repository dialog asks main to do, on its click only */
+export interface CreateRepoRequest {
+  /** the project folder: its git repository becomes the new repository's first push */
+  dir: string
+  owner: string
+  name: string
+  visibility: RepoVisibility
+  description: string
+}
+
+/** the accounts a repository can be created under: the signed-in user first, then their organizations */
+export interface RepoOwners {
+  owners: string[]
+  /** no gh, or not signed in */
+  error?: string
+}
+
+/** what the push will carry, for the dialog to say before the click */
+export interface RepoPushPlan {
+  branch: string | null
+  commits: number
+  /** the `origin` already set, if any (then nothing is created) */
+  origin: string | null
+}
+
+/** why a repository name can't be used on GitHub, or null */
+export function repoNameProblem(name: string): string | null {
+  const n = name.trim()
+  if (!n) return 'Give the repository a name.'
+  if (n.length > 100) return 'GitHub repository names are at most 100 characters.'
+  if (n === '.' || n === '..') return 'Pick another repository name.'
+  if (!/^[A-Za-z0-9._-]+$/.test(n)) return 'Use only letters, digits, “-”, “_” and “.” in the name.'
+  return null
+}
+
+/** the signed-in login and their organizations, without duplicates or blanks, the login first */
+export function repoOwners(login: string, orgs: unknown): string[] {
+  const names = Array.isArray(orgs) ? orgs.map((o) => (o && typeof o === 'object' ? (o as Record<string, unknown>).login : o)) : []
+  const all = [login, ...names].filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim())
+  return [...new Set(all)]
+}
+
+/** `gh repo create`'s argv: the repository from the folder, `origin` set to it, and the current branch pushed */
+export function createRepoArgs(r: CreateRepoRequest): string[] {
+  const args = ['repo', 'create', `${r.owner.trim()}/${r.name.trim()}`, r.visibility === 'public' ? '--public' : '--private', '--source', r.dir, '--remote', 'origin', '--push']
+  return r.description.trim() ? [...args, '--description', r.description.trim().replace(/\s+/g, ' ')] : args
+}
+
+/** gh's "no such repository" answer to `gh repo view`, as opposed to a failure to ask at all */
+export function isRepoNotFound(stderr: string): boolean {
+  return /could not resolve to a repository|HTTP 404/i.test(stderr)
+}
+
+/** the repository's URL in what `gh repo create` printed, or the plain github.com one */
+export function createdRepoUrl(stdout: string, owner: string, name: string): string {
+  return /https:\/\/\S+/.exec(stdout)?.[0].replace(/\.git$/, '') ?? `https://github.com/${owner}/${name}`
+}
