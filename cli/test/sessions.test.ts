@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import { findAgent } from '@shared/agents'
 import { connect } from '../src/client'
 import { startDaemon } from '../src/daemon'
@@ -67,28 +67,35 @@ function readLog(file: string): string {
 }
 
 describe('a daemon restarted (a reboot, a crash)', () => {
-  const tmp = mkdtempSync(join(tmpdir(), 'sldev-restart-'))
-  const data = join(tmp, 'data')
-  const repo = join(tmp, 'repo')
-  const argvLog = join(tmp, 'argv.log')
+  const root = mkdtempSync(join(tmpdir(), 'sldev-restart-'))
   let restorePath: () => void
 
   beforeAll(() => {
     restorePath = useFakeAgents()
-    process.env.SLDEV_E2E_ARGV = argvLog
-    mkdirSync(join(repo, 'src'), { recursive: true })
-    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: repo })
   })
 
   afterAll(() => {
     delete process.env.SLDEV_E2E_ARGV
     restorePath()
-    removeTemp(tmp)
+    removeTemp(root)
   })
 
   it('reopens shell tabs in their folder and resumes the agent’s own session, without its prompt', async () => {
+    // a folder of its own per attempt: a retry must not find the last attempt's daemon, sessions or logs
+    const tmp = mkdtempSync(join(root, 'try-'))
+    const data = join(tmp, 'data')
+    const repo = join(tmp, 'repo')
+    const argvLog = join(tmp, 'argv.log')
+    process.env.SLDEV_E2E_ARGV = argvLog
+    mkdirSync(join(repo, 'src'), { recursive: true })
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: repo })
     let runtimeId = ''
     const first = await startDaemon({ dataDir: data, notify: () => undefined })
+    // a failed attempt must not leave its daemon running, or the retry finds it ("sldev is already running")
+    let firstOpen = true
+    onTestFinished(async () => {
+      if (firstOpen) await first.close()
+    })
     let c = await connect({ dataDir: data, script: '', start: false })
     const agent = await c.request('new', { agent: 'claude', brief: 'Fix the greeting', worktree: false, cwd: repo })
     expect((await c.request('wait', { pane: agent.id, for: 'ready', timeout: 20 }))?.sessionId).toBe('sess-123')
@@ -97,13 +104,15 @@ describe('a daemon restarted (a reboot, a crash)', () => {
     const ran = join(tmp, 'ran.log')
     const runtime = await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` })
     expect(runtime.command).toBe(`echo ran >> "${ran}"`)
-    for (let i = 0; i < 100 && !existsSync(ran); i++) await new Promise((r) => setTimeout(r, 100))
+    // the file can exist before the shell has written to it
+    for (let i = 0; i < 100 && !(existsSync(ran) && readLog(ran).trim()); i++) await new Promise((r) => setTimeout(r, 100))
     expect(readLog(ran).trim()).toBe('ran')
     await c.request('kill', { pane: runtime.id })
     await c.request('new', { shell: true, brief: '', cwd: repo, title: 'mark', run: `echo ran >> "${ran}"` }).then((p) => (runtimeId = p.id))
     for (let i = 0; i < 100 && readLog(ran).trim().split(/\r?\n/).length < 2; i++) await new Promise((r) => setTimeout(r, 100))
     await c.request('tabs', { active: shell.id, split: true })
     c.close()
+    firstOpen = false
     await first.close()
     expect(readSessions(data)?.panes.map((p) => [p.id, p.status])).toEqual([
       [agent.id, 'waiting'],
@@ -135,7 +144,7 @@ describe('a daemon restarted (a reboot, a crash)', () => {
       expect(runs[1]).toEqual(expect.arrayContaining(['--resume', 'sess-123']))
       expect(runs[1]).not.toContain('Fix the greeting')
       await new Promise((res) => setTimeout(res, 1000))
-      expect(readFileSync(join(tmp, 'ran.log'), 'utf8').trim().split(/\r?\n/)).toEqual(['ran', 'ran'])
+      expect(readLog(join(tmp, 'ran.log')).trim().split(/\r?\n/)).toEqual(['ran', 'ran'])
       c.close()
     } finally {
       await second.close()
